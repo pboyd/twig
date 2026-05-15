@@ -1,0 +1,1 @@
+-- Initial migration. Schema will be added in future features.
