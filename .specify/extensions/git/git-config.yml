@@ -43,7 +43,7 @@ auto_commit:
     enabled: false
     message: "[Spec Kit] Clarify specification"
   after_plan:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add implementation plan"
   after_tasks:
     enabled: false
