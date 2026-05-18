@@ -38,9 +38,9 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 **Purpose**: Project structure for the new binary and package
 
-- [ ] T001 Create the directory structure `services/todo/cmd/todo/` and `services/todo/internal/cli/` per plan.md
-- [ ] T002 [P] Add the built `todo` binary to `services/todo/.gitignore`
-- [ ] T003 Create the thin CLI entrypoint in `services/todo/cmd/todo/main.go` (`os.Exit(cli.Run(os.Args[1:]))`)
+- [X] T001 Create the directory structure `services/todo/cmd/todo/` and `services/todo/internal/cli/` per plan.md
+- [X] T002 [P] Add the built `todo` binary to `services/todo/.gitignore`
+- [X] T003 Create the thin CLI entrypoint in `services/todo/cmd/todo/main.go` (`os.Exit(cli.Run(os.Args[1:]))`)
 
 ---
 
@@ -50,9 +50,9 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Implement root dispatch, `TODO_ADDR` resolution (default `http://localhost:8080`), Connect client construction over a stock `http.Client`, the `task`-group router with an unknown-subcommand→usage default, top-level/group usage help, and exit-code translation in `services/todo/internal/cli/cli.go` — exposes `Run([]string) int`
-- [ ] T005 [P] Implement RPC and transport error mapping (`connect.CodeOf`: NotFound, InvalidArgument verbatim, dial/transport failures → "cannot reach backend") in `services/todo/internal/cli/render.go`
-- [ ] T006 [P] Create the in-memory fake `TaskService` (implements `taskv1connect.TaskServiceHandler`, map-backed) and the `httptest`-based command-test harness in `services/todo/internal/cli/task_test.go`
+- [X] T004 Implement root dispatch, `TODO_ADDR` resolution (default `http://localhost:8080`), Connect client construction over a stock `http.Client`, the `task`-group router with an unknown-subcommand→usage default, top-level/group usage help, and exit-code translation in `services/todo/internal/cli/cli.go` — exposes `Run([]string) int`
+- [X] T005 [P] Implement RPC and transport error mapping (`connect.CodeOf`: NotFound, InvalidArgument verbatim, dial/transport failures → "cannot reach backend") in `services/todo/internal/cli/render.go`
+- [X] T006 [P] Create the in-memory fake `TaskService` (implements `taskv1connect.TaskServiceHandler`, map-backed) and the `httptest`-based command-test harness in `services/todo/internal/cli/task_test.go`
 
 **Checkpoint**: `Run` compiles, prints usage and exits `1` for any unknown subcommand; user story implementation can now begin
 
@@ -66,13 +66,13 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Table-driven unit tests for `--due` parsing (RFC 3339, bare `YYYY-MM-DD`→`00:00:00Z`, rejection of malformed input) in `services/todo/internal/cli/render_test.go`
-- [ ] T008 [P] [US1] Command tests for `add` (name only, with `--due`, with `--parent`, missing name, unknown parent, malformed `--due`/`--parent`) in `services/todo/internal/cli/task_test.go`
+- [X] T007 [P] [US1] Table-driven unit tests for `--due` parsing (RFC 3339, bare `YYYY-MM-DD`→`00:00:00Z`, rejection of malformed input) in `services/todo/internal/cli/render_test.go`
+- [X] T008 [P] [US1] Command tests for `add` (name only, with `--due`, with `--parent`, missing name, unknown parent, malformed `--due`/`--parent`) in `services/todo/internal/cli/task_test.go`
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Implement the `parseDue` helper (try `time.RFC3339`, then `2006-01-02`; convert to `*timestamppb.Timestamp`; usage error naming both forms on failure) in `services/todo/internal/cli/render.go`
-- [ ] T010 [US1] Implement the `add` subcommand (`flag.FlagSet` for `--parent`/`--due`, required positional `<name>`, integer validation, `CreateTask` RPC, success line naming the new id) and wire its route into the `task`-group dispatch in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (depends on T009)
+- [X] T009 [US1] Implement the `parseDue` helper (try `time.RFC3339`, then `2006-01-02`; convert to `*timestamppb.Timestamp`; usage error naming both forms on failure) in `services/todo/internal/cli/render.go`
+- [X] T010 [US1] Implement the `add` subcommand (`flag.FlagSet` for `--parent`/`--due`, required positional `<name>`, integer validation, `CreateTask` RPC, success line naming the new id) and wire its route into the `task`-group dispatch in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (depends on T009)
 
 **Checkpoint**: `add` is fully functional and independently testable — MVP
 
@@ -86,13 +86,13 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Table-driven unit tests for render-tree construction and `tree`-style rendering (root ordering, nesting depth, `├──`/`└──`/`│` glyphs, blank due field) in `services/todo/internal/cli/render_test.go`
-- [ ] T012 [P] [US2] Command tests for `list` (multi-level tree, id-ascending siblings, task with no due date, empty `no tasks` result) in `services/todo/internal/cli/task_test.go`
+- [X] T011 [P] [US2] Table-driven unit tests for render-tree construction and `tree`-style rendering (root ordering, nesting depth, `├──`/`└──`/`│` glyphs, blank due field) in `services/todo/internal/cli/render_test.go`
+- [X] T012 [P] [US2] Command tests for `list` (multi-level tree, id-ascending siblings, task with no due date, empty `no tasks` result) in `services/todo/internal/cli/task_test.go`
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Implement render-tree construction from the flat `ListTasks` response (index by id, attach to parents, id-ascending order), `tree`-style depth-first rendering, and due-date display formatting (`UTC().Format(time.RFC3339)`) in `services/todo/internal/cli/render.go`
-- [ ] T014 [US2] Implement the `list` subcommand (`ListTasks` RPC, `no tasks` message on empty, print the rendered tree) and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (depends on T013)
+- [X] T013 [US2] Implement render-tree construction from the flat `ListTasks` response (index by id, attach to parents, id-ascending order), `tree`-style depth-first rendering, and due-date display formatting (`UTC().Format(time.RFC3339)`) in `services/todo/internal/cli/render.go`
+- [X] T014 [US2] Implement the `list` subcommand (`ListTasks` RPC, `no tasks` message on empty, print the rendered tree) and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (depends on T013)
 
 **Checkpoint**: `add` and `list` both work independently
 
@@ -106,11 +106,11 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 ### Tests for User Story 3
 
-- [ ] T015 [US3] Command tests for `mod` (rename, change `--due`, re-parent, unflagged fields preserved, unknown id not-found, self-ancestor cycle error) in `services/todo/internal/cli/task_test.go`
+- [X] T015 [US3] Command tests for `mod` (rename, change `--due`, re-parent, unflagged fields preserved, unknown id not-found, self-ancestor cycle error) in `services/todo/internal/cli/task_test.go`
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] Implement the `mod` subcommand using fetch-then-update — required positional `<id>`+`<name>`, `--parent`/`--due` flags, `GetTask` then `UpdateTask` carrying full state (description from fetch, `due`/`parent_id` from flag-or-fetch), success line naming the id — and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (reuses `parseDue` from T009)
+- [X] T016 [US3] Implement the `mod` subcommand using fetch-then-update — required positional `<id>`+`<name>`, `--parent`/`--due` flags, `GetTask` then `UpdateTask` carrying full state (description from fetch, `due`/`parent_id` from flag-or-fetch), success line naming the id — and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go` (reuses `parseDue` from T009)
 
 **Checkpoint**: `add`, `list`, and `mod` all work independently
 
@@ -124,11 +124,11 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 ### Tests for User Story 4
 
-- [ ] T017 [US4] Command tests for `rm` (delete a leaf, delete a parent with descendants, unknown id not-found, malformed id usage error) in `services/todo/internal/cli/task_test.go`
+- [X] T017 [US4] Command tests for `rm` (delete a leaf, delete a parent with descendants, unknown id not-found, malformed id usage error) in `services/todo/internal/cli/task_test.go`
 
 ### Implementation for User Story 4
 
-- [ ] T018 [US4] Implement the `rm` subcommand (required positional integer `<id>`, integer validation, `DeleteTask` RPC, success line naming the deleted id) and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go`
+- [X] T018 [US4] Implement the `rm` subcommand (required positional integer `<id>`, integer validation, `DeleteTask` RPC, success line naming the deleted id) and wire its dispatch route in `services/todo/internal/cli/task.go` and `services/todo/internal/cli/cli.go`
 
 **Checkpoint**: All four subcommands are independently functional
 
@@ -138,10 +138,10 @@ CLI is added to the existing `services/todo` Go module as a second binary:
 
 **Purpose**: Build ergonomics and end-to-end validation
 
-- [ ] T019 [P] Add a `make cli` target that builds `cmd/todo` (per quickstart.md §1) to the repository `Makefile`
-- [ ] T020 Run `gofmt -l` and `go vet ./...` in `services/todo` and fix any findings
-- [ ] T021 Run `go test ./internal/cli/...` from `services/todo` and confirm all unit and command tests pass
-- [ ] T022 Execute the quickstart.md manual validation (build the binary, start a backend, exercise each command and the error cases)
+- [X] T019 [P] Add a `make cli` target that builds `cmd/todo` (per quickstart.md §1) to the repository `Makefile`
+- [X] T020 Run `gofmt -l` and `go vet ./...` in `services/todo` and fix any findings
+- [X] T021 Run `go test ./internal/cli/...` from `services/todo` and confirm all unit and command tests pass
+- [X] T022 Execute the quickstart.md manual validation (build the binary, start a backend, exercise each command and the error cases)
 
 ---
 

@@ -1,10 +1,13 @@
-.PHONY: proto build dev migrate-up migrate-down
+.PHONY: proto build cli dev migrate-up migrate-down
 
 proto:
 	cd services/todo && buf generate
 
 build:
 	podman build -t todo-server services/todo
+
+cli:
+	cd services/todo && go build -o todo ./cmd/todo
 
 dev:
 	podman-compose up --build
