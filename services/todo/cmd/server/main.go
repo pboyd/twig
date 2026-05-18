@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/pboyd/todo/services/todo/gen/health/v1/healthv1connect"
+	"github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/db"
 	"github.com/pboyd/todo/services/todo/internal/handler"
 )
@@ -44,6 +45,9 @@ func main() {
 	mux := http.NewServeMux()
 	path, h := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
 	mux.Handle(path, h)
+
+	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})
+	mux.Handle(taskPath, taskH)
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", h2c.NewHandler(mux, &http2.Server{})); err != nil {

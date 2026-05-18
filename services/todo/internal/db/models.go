@@ -3,3 +3,15 @@
 //   sqlc v1.31.1
 
 package db
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Task struct {
+	ID          int64
+	Name        string
+	Description string
+	Due         pgtype.Timestamptz
+	ParentID    pgtype.Int8
+}

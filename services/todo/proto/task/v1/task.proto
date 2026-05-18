@@ -1,0 +1,93 @@
+// API contract for the Task CRUD feature (spec 001-task-crud-api).
+//
+// This file is the source of truth for the TaskService API. During
+// implementation it is copied to services/todo/proto/task/v1/task.proto
+// and code is generated from it by `buf generate`.
+
+syntax = "proto3";
+
+package task.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pboyd/todo/services/todo/gen/task/v1;taskv1";
+
+// TaskService provides CRUD operations over tasks.
+service TaskService {
+  // CreateTask stores a new task and returns it with its assigned id.
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+
+  // GetTask returns a single task by id.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // ListTasks returns every stored task, ordered by id ascending.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // UpdateTask replaces the editable fields of an existing task
+  // (full-replace semantics: omitted optional fields are cleared).
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+
+  // DeleteTask removes a task and, by cascade, all of its descendants.
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+}
+
+// Task is a single unit of work. Tasks form a hierarchy of unrestricted
+// depth via the optional parent_id; no task may appear in its own ancestry.
+message Task {
+  // Server-assigned, positive, increasing, never reused.
+  int64 id = 1;
+  // Required, non-empty (trimmed), at most 255 characters.
+  string name = 2;
+  // Optional longer text; empty string when absent.
+  string description = 3;
+  // Optional due timestamp (UTC); unset when absent.
+  google.protobuf.Timestamp due = 4;
+  // Optional parent task id; unset for a top-level task.
+  optional int64 parent_id = 5;
+}
+
+message CreateTaskRequest {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Timestamp due = 3;
+  optional int64 parent_id = 4;
+}
+
+message CreateTaskResponse {
+  Task task = 1;
+}
+
+message GetTaskRequest {
+  int64 id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+message ListTasksRequest {}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message UpdateTaskRequest {
+  // Identifies the task to update.
+  int64 id = 1;
+  // Full-replace: these become the task's new editable state.
+  string name = 2;
+  string description = 3;
+  google.protobuf.Timestamp due = 4;
+  // Unset clears the parent, making the task top-level.
+  optional int64 parent_id = 5;
+}
+
+message UpdateTaskResponse {
+  Task task = 1;
+}
+
+message DeleteTaskRequest {
+  int64 id = 1;
+}
+
+message DeleteTaskResponse {}

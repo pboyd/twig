@@ -35,7 +35,7 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 **Purpose**: Confirm tooling before code generation
 
-- [ ] T001 Verify the `buf`, `sqlc`, and `migrate` CLIs are available and confirm no new Go module dependencies are required for `services/todo` — the `google.protobuf.Timestamp` well-known type is provided by the existing `google.golang.org/protobuf` dependency and Buf's bundled WKT imports.
+- [X] T001 Verify the `buf`, `sqlc`, and `migrate` CLIs are available and confirm no new Go module dependencies are required for `services/todo` — the `google.protobuf.Timestamp` well-known type is provided by the existing `google.golang.org/protobuf` dependency and Buf's bundled WKT imports.
 
 ---
 
@@ -45,11 +45,11 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 Add the TaskService proto contract at `services/todo/proto/task/v1/task.proto` by copying `specs/001-task-crud-api/contracts/task.proto` (defines all five RPCs and message types).
-- [ ] T003 Generate Connect/proto code by running `make proto`; confirm `services/todo/gen/task/v1/` (`task.pb.go` and `taskv1connect/task.connect.go`) is created and committed.
-- [ ] T004 [P] Create the schema migration `services/todo/db/migrations/000002_tasks.up.sql` (the `tasks` table, `tasks_parent_id_idx` index) and `services/todo/db/migrations/000002_tasks.down.sql` (`DROP TABLE`), per data-model.md.
-- [ ] T005 Create the handler skeleton `services/todo/internal/handler/task.go` — a `Task` struct holding `*db.Queries`, with all five RPC methods (`CreateTask`, `GetTask`, `ListTasks`, `UpdateTask`, `DeleteTask`) implemented as stubs returning `connect.NewError(connect.CodeUnimplemented, ...)`.
-- [ ] T006 Register the `TaskService` handler in `services/todo/cmd/server/main.go` using `taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})` and mount it on the existing mux.
+- [X] T002 Add the TaskService proto contract at `services/todo/proto/task/v1/task.proto` by copying `specs/001-task-crud-api/contracts/task.proto` (defines all five RPCs and message types).
+- [X] T003 Generate Connect/proto code by running `make proto`; confirm `services/todo/gen/task/v1/` (`task.pb.go` and `taskv1connect/task.connect.go`) is created and committed.
+- [X] T004 [P] Create the schema migration `services/todo/db/migrations/000002_tasks.up.sql` (the `tasks` table, `tasks_parent_id_idx` index) and `services/todo/db/migrations/000002_tasks.down.sql` (`DROP TABLE`), per data-model.md.
+- [X] T005 Create the handler skeleton `services/todo/internal/handler/task.go` — a `Task` struct holding `*db.Queries`, with all five RPC methods (`CreateTask`, `GetTask`, `ListTasks`, `UpdateTask`, `DeleteTask`) implemented as stubs returning `connect.NewError(connect.CodeUnimplemented, ...)`.
+- [X] T006 Register the `TaskService` handler in `services/todo/cmd/server/main.go` using `taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})` and mount it on the existing mux.
 
 **Checkpoint**: `make dev` runs; migration `000002` applies; all five Task RPCs are reachable and return `Unimplemented`.
 
@@ -63,16 +63,16 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Write tests in `services/todo/internal/handler/task_test.go`: unit tests for name validation (empty, whitespace-only, >255 chars) and integration tests for CreateTask / GetTask / ListTasks against a real PostgreSQL (covers spec scenarios US1-1..US1-6). Confirm they fail before implementation.
+- [X] T007 [P] [US1] Write tests in `services/todo/internal/handler/task_test.go`: unit tests for name validation (empty, whitespace-only, >255 chars) and integration tests for CreateTask / GetTask / ListTasks against a real PostgreSQL (covers spec scenarios US1-1..US1-6). Confirm they fail before implementation.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Add `CreateTask`, `GetTask`, and `ListTasks` queries to `services/todo/db/queries/task.sql` per data-model.md.
-- [ ] T009 [US1] Regenerate the database layer: run `sqlc generate` in `services/todo` — produces `services/todo/internal/db/task.sql.go` and the `Task` struct in `models.go` (depends on T004, T008).
-- [ ] T010 [US1] Add a `db.Task` → `taskv1.Task` conversion helper in `services/todo/internal/handler/task.go` (maps nullable `due`/`parent_id` to proto presence).
-- [ ] T011 [US1] Implement `CreateTask` in `services/todo/internal/handler/task.go` — trim and validate the name (blank → `InvalidArgument`, >255 → `InvalidArgument`), insert via `CreateTask` query, return the created task (depends on T009, T010).
-- [ ] T012 [US1] Implement `GetTask` in `services/todo/internal/handler/task.go` — `pgx.ErrNoRows` → `CodeNotFound` (depends on T010).
-- [ ] T013 [US1] Implement `ListTasks` in `services/todo/internal/handler/task.go` — return all tasks ordered by id, empty list when none (depends on T010).
+- [X] T008 [P] [US1] Add `CreateTask`, `GetTask`, and `ListTasks` queries to `services/todo/db/queries/task.sql` per data-model.md.
+- [X] T009 [US1] Regenerate the database layer: run `sqlc generate` in `services/todo` — produces `services/todo/internal/db/task.sql.go` and the `Task` struct in `models.go` (depends on T004, T008).
+- [X] T010 [US1] Add a `db.Task` → `taskv1.Task` conversion helper in `services/todo/internal/handler/task.go` (maps nullable `due`/`parent_id` to proto presence).
+- [X] T011 [US1] Implement `CreateTask` in `services/todo/internal/handler/task.go` — trim and validate the name (blank → `InvalidArgument`, >255 → `InvalidArgument`), insert via `CreateTask` query, return the created task (depends on T009, T010).
+- [X] T012 [US1] Implement `GetTask` in `services/todo/internal/handler/task.go` — `pgx.ErrNoRows` → `CodeNotFound` (depends on T010).
+- [X] T013 [US1] Implement `ListTasks` in `services/todo/internal/handler/task.go` — return all tasks ordered by id, empty list when none (depends on T010).
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — the MVP.
 
@@ -86,13 +86,13 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Write integration tests in `services/todo/internal/handler/task_test.go` for UpdateTask: field updates, clearing optional fields, blank name → `InvalidArgument`, unknown id → `NotFound` (covers spec scenarios US2-1..US2-4). Confirm they fail before implementation.
+- [X] T014 [P] [US2] Write integration tests in `services/todo/internal/handler/task_test.go` for UpdateTask: field updates, clearing optional fields, blank name → `InvalidArgument`, unknown id → `NotFound` (covers spec scenarios US2-1..US2-4). Confirm they fail before implementation.
 
 ### Implementation for User Story 2
 
-- [ ] T015 [P] [US2] Add the `UpdateTask` query to `services/todo/db/queries/task.sql` (`UPDATE ... RETURNING *`).
-- [ ] T016 [US2] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T015).
-- [ ] T017 [US2] Implement `UpdateTask` in `services/todo/internal/handler/task.go` — full-replace of name/description/due/parent_id, validate the name, `RETURNING` 0 rows → `CodeNotFound` (depends on T016).
+- [X] T015 [P] [US2] Add the `UpdateTask` query to `services/todo/db/queries/task.sql` (`UPDATE ... RETURNING *`).
+- [X] T016 [US2] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T015).
+- [X] T017 [US2] Implement `UpdateTask` in `services/todo/internal/handler/task.go` — full-replace of name/description/due/parent_id, validate the name, `RETURNING` 0 rows → `CodeNotFound` (depends on T016).
 
 **Checkpoint**: User Stories 1 and 2 both work independently.
 
@@ -108,14 +108,14 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Write integration tests in `services/todo/internal/handler/task_test.go`: build a 3-level hierarchy, re-parent a task, reject self-parent and descendant-parent as cycles, reject unknown parent id (covers spec scenarios US3-1..US3-7). Confirm they fail before implementation.
+- [X] T018 [P] [US3] Write integration tests in `services/todo/internal/handler/task_test.go`: build a 3-level hierarchy, re-parent a task, reject self-parent and descendant-parent as cycles, reject unknown parent id (covers spec scenarios US3-1..US3-7). Confirm they fail before implementation.
 
 ### Implementation for User Story 3
 
-- [ ] T019 [P] [US3] Add the `TaskExists` and `ParentChainContains` (recursive CTE) queries to `services/todo/db/queries/task.sql` per data-model.md.
-- [ ] T020 [US3] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T019).
-- [ ] T021 [US3] Add a parent-existence pre-check to `CreateTask` in `services/todo/internal/handler/task.go` — when `parent_id` is set, `TaskExists` false → `CodeInvalidArgument` (depends on T020).
-- [ ] T022 [US3] Add parent-existence and cycle checks to `UpdateTask` in `services/todo/internal/handler/task.go` — when `parent_id` is set: `TaskExists` false → `InvalidArgument`; `ParentChainContains(new parent, this id)` true → `InvalidArgument` (depends on T020).
+- [X] T019 [P] [US3] Add the `TaskExists` and `ParentChainContains` (recursive CTE) queries to `services/todo/db/queries/task.sql` per data-model.md.
+- [X] T020 [US3] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T019).
+- [X] T021 [US3] Add a parent-existence pre-check to `CreateTask` in `services/todo/internal/handler/task.go` — when `parent_id` is set, `TaskExists` false → `CodeInvalidArgument` (depends on T020).
+- [X] T022 [US3] Add parent-existence and cycle checks to `UpdateTask` in `services/todo/internal/handler/task.go` — when `parent_id` is set: `TaskExists` false → `InvalidArgument`; `ParentChainContains(new parent, this id)` true → `InvalidArgument` (depends on T020).
 
 **Checkpoint**: Hierarchy is enforced — unknown parents and cycles are rejected on both create and update.
 
@@ -129,13 +129,13 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 ### Tests for User Story 4
 
-- [ ] T023 [P] [US4] Write integration tests in `services/todo/internal/handler/task_test.go` for DeleteTask: delete a leaf, delete a parent and assert the whole subtree is removed (cascade), unknown id → `NotFound` (covers spec scenarios US4-1..US4-4). Confirm they fail before implementation.
+- [X] T023 [P] [US4] Write integration tests in `services/todo/internal/handler/task_test.go` for DeleteTask: delete a leaf, delete a parent and assert the whole subtree is removed (cascade), unknown id → `NotFound` (covers spec scenarios US4-1..US4-4). Confirm they fail before implementation.
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] Add the `DeleteTask` query (`DELETE ... WHERE id = $1 RETURNING id`) to `services/todo/db/queries/task.sql`.
-- [ ] T025 [US4] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T024).
-- [ ] T026 [US4] Implement `DeleteTask` in `services/todo/internal/handler/task.go` — `RETURNING` 0 rows → `CodeNotFound`; descendants are removed automatically by the `ON DELETE CASCADE` foreign key (depends on T025).
+- [X] T024 [P] [US4] Add the `DeleteTask` query (`DELETE ... WHERE id = $1 RETURNING id`) to `services/todo/db/queries/task.sql`.
+- [X] T025 [US4] Regenerate the database layer: run `sqlc generate` in `services/todo` (depends on T024).
+- [X] T026 [US4] Implement `DeleteTask` in `services/todo/internal/handler/task.go` — `RETURNING` 0 rows → `CodeNotFound`; descendants are removed automatically by the `ON DELETE CASCADE` foreign key (depends on T025).
 
 **Checkpoint**: All four user stories are independently functional.
 
@@ -145,10 +145,10 @@ Connect-Go generates a `TaskServiceHandler` interface requiring all five RPC met
 
 **Purpose**: Verification across all stories
 
-- [ ] T027 Run `go build ./...` and `go vet ./...` in `services/todo`; fix any issues.
-- [ ] T028 Run the full test suite `go test ./...` in `services/todo` against a running PostgreSQL (`DATABASE_URL` from `compose.yaml`); all tests green.
-- [ ] T029 Execute the `specs/001-task-crud-api/quickstart.md` validation — every RPC plus each error case (`invalid_argument`, `not_found`) against `make dev`.
-- [ ] T030 [P] Confirm `gofmt` formatting on `services/todo/internal/handler/task.go` and `task_test.go`; verify `services/todo/gen/task/` and the `000002` migration are committed.
+- [X] T027 Run `go build ./...` and `go vet ./...` in `services/todo`; fix any issues.
+- [X] T028 Run the full test suite `go test ./...` in `services/todo` against a running PostgreSQL (`DATABASE_URL` from `compose.yaml`); all tests green.
+- [X] T029 Execute the `specs/001-task-crud-api/quickstart.md` validation — every RPC plus each error case (`invalid_argument`, `not_found`) against `make dev`.
+- [X] T030 [P] Confirm `gofmt` formatting on `services/todo/internal/handler/task.go` and `task_test.go`; verify `services/todo/gen/task/` and the `000002` migration are committed.
 
 ---
 
