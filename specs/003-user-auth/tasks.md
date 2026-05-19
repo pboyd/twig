@@ -27,7 +27,7 @@ should fail before that implementation exists.
 
 **Purpose**: Add the one new dependency the feature needs.
 
-- [ ] T001 Add `golang.org/x/crypto` and run `go mod tidy` in `services/todo/` so `golang.org/x/crypto/bcrypt` is available (research Decision 3)
+- [X] T001 Add `golang.org/x/crypto` and run `go mod tidy` in `services/todo/` so `golang.org/x/crypto/bcrypt` is available (research Decision 3)
 
 ---
 
@@ -38,18 +38,18 @@ and per-user task scoping — everything every user story consumes.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Create `services/todo/db/migrations/000003_auth.up.sql` — `users`, `sessions`, `api_keys` tables and the `tasks.user_id` column plus `tasks_user_id_idx`, `sessions` and `api_keys` `user_id` indexes (per data-model.md)
-- [ ] T003 [P] Create `services/todo/db/migrations/000003_auth.down.sql` — drop `tasks.user_id` and its index, then drop `api_keys`, `sessions`, `users`
-- [ ] T004 [P] Modify `services/todo/db/queries/task.sql` — add a `user_id` parameter and `WHERE`/`AND user_id = $n` predicate to `CreateTask`, `GetTask`, `ListTasks`, `UpdateTask`, `DeleteTask`, `TaskExists` (data-model.md "Query changes")
-- [ ] T005 [P] Create `services/todo/db/queries/auth.sql` — `CreateUser`, `GetUserByUsername`, `UpdateUserPassword`, `CreateSession`, `GetSession`, `DeleteSession`, `CreateApiKey`, `GetApiKeyByHash`, `DeleteApiKeysByUser` (data-model.md "auth.sql")
-- [ ] T006 Run `sqlc generate` in `services/todo/` to regenerate `internal/db/models.go` (adds `User`, `Session`, `ApiKey`; `Task.UserID`), `internal/db/task.sql.go`, and create `internal/db/auth.sql.go` — depends on T002, T004, T005
-- [ ] T007 [P] Write unit tests in `services/todo/internal/auth/credential_test.go` — bcrypt hash/verify round-trip, random token length/uniqueness, SHA-256 key hashing, constant-time compare
-- [ ] T008 Implement `services/todo/internal/auth/credential.go` — `HashPassword`/`VerifyPassword` (bcrypt cost 12), `GenerateToken` (32 bytes `crypto/rand`, hex), `HashAPIKey` (`crypto/sha256` hex), constant-time compare helper — make T007 pass
-- [ ] T009 Write tests in `services/todo/internal/auth/middleware_test.go` — `/auth/*` bypass, missing credential → 401, unknown/expired session → 401, unknown/revoked API key → 401, `Authorization` header wins when both present, resolved `user_id` reaches context
-- [ ] T010 Implement `services/todo/internal/auth/middleware.go` — `http.Handler` middleware: bypass `/auth/login` and `/auth/logout`, resolve `Authorization: Bearer` (SHA-256 → `GetApiKeyByHash`) then session cookie (`GetSession`, check `expires_at`), inject `user_id` via `context.WithValue`, exported `UserID(ctx)` accessor, 401 + rejection logging on failure — depends on T006, T008; make T009 pass
-- [ ] T011 Update `services/todo/internal/handler/task_test.go` — supply a `user_id` context (via `auth.UserID` seam) to existing handler tests and add cross-user isolation cases (a second user cannot get/update/delete the first user's task by id) — depends on T006, T010
-- [ ] T012 Modify `services/todo/internal/handler/task.go` — read `user_id` from context with `auth.UserID`, pass it to the user-scoped `db` queries in `CreateTask`/`GetTask`/`ListTasks`/`UpdateTask`/`DeleteTask` and the `parentChainContains`/`TaskExists` checks — make T011 pass
-- [ ] T013 [P] Wire the auth middleware around the task mux in `services/todo/cmd/server/main.go` — wrap the Connect handler mux with `auth.Middleware` before `h2c` — depends on T010
+- [X] T002 Create `services/todo/db/migrations/000003_auth.up.sql` — `users`, `sessions`, `api_keys` tables and the `tasks.user_id` column plus `tasks_user_id_idx`, `sessions` and `api_keys` `user_id` indexes (per data-model.md)
+- [X] T003 [P] Create `services/todo/db/migrations/000003_auth.down.sql` — drop `tasks.user_id` and its index, then drop `api_keys`, `sessions`, `users`
+- [X] T004 [P] Modify `services/todo/db/queries/task.sql` — add a `user_id` parameter and `WHERE`/`AND user_id = $n` predicate to `CreateTask`, `GetTask`, `ListTasks`, `UpdateTask`, `DeleteTask`, `TaskExists` (data-model.md "Query changes")
+- [X] T005 [P] Create `services/todo/db/queries/auth.sql` — `CreateUser`, `GetUserByUsername`, `UpdateUserPassword`, `CreateSession`, `GetSession`, `DeleteSession`, `CreateApiKey`, `GetApiKeyByHash`, `DeleteApiKeysByUser` (data-model.md "auth.sql")
+- [X] T006 Run `sqlc generate` in `services/todo/` to regenerate `internal/db/models.go` (adds `User`, `Session`, `ApiKey`; `Task.UserID`), `internal/db/task.sql.go`, and create `internal/db/auth.sql.go` — depends on T002, T004, T005
+- [X] T007 [P] Write unit tests in `services/todo/internal/auth/credential_test.go` — bcrypt hash/verify round-trip, random token length/uniqueness, SHA-256 key hashing, constant-time compare
+- [X] T008 Implement `services/todo/internal/auth/credential.go` — `HashPassword`/`VerifyPassword` (bcrypt cost 12), `GenerateToken` (32 bytes `crypto/rand`, hex), `HashAPIKey` (`crypto/sha256` hex), constant-time compare helper — make T007 pass
+- [X] T009 Write tests in `services/todo/internal/auth/middleware_test.go` — `/auth/*` bypass, missing credential → 401, unknown/expired session → 401, unknown/revoked API key → 401, `Authorization` header wins when both present, resolved `user_id` reaches context
+- [X] T010 Implement `services/todo/internal/auth/middleware.go` — `http.Handler` middleware: bypass `/auth/login` and `/auth/logout`, resolve `Authorization: Bearer` (SHA-256 → `GetApiKeyByHash`) then session cookie (`GetSession`, check `expires_at`), inject `user_id` via `context.WithValue`, exported `UserID(ctx)` accessor, 401 + rejection logging on failure — depends on T006, T008; make T009 pass
+- [X] T011 Update `services/todo/internal/handler/task_test.go` — supply a `user_id` context (via `auth.UserID` seam) to existing handler tests and add cross-user isolation cases (a second user cannot get/update/delete the first user's task by id) — depends on T006, T010
+- [X] T012 Modify `services/todo/internal/handler/task.go` — read `user_id` from context with `auth.UserID`, pass it to the user-scoped `db` queries in `CreateTask`/`GetTask`/`ListTasks`/`UpdateTask`/`DeleteTask` and the `parentChainContains`/`TaskExists` checks — make T011 pass
+- [X] T013 [P] Wire the auth middleware around the task mux in `services/todo/cmd/server/main.go` — wrap the Connect handler mux with `auth.Middleware` before `h2c` — depends on T010
 
 **Checkpoint**: Schema, generated code, credential helpers, middleware, and
 per-user task scoping are in place. Task RPCs now reject every request with
@@ -69,9 +69,9 @@ cookie; a task RPC carrying that cookie succeeds; `POST /auth/logout` deletes th
 session and the cookie then returns `401`. Wrong password returns a generic
 `401` with no cookie.
 
-- [ ] T014 [P] [US1] Write tests in `services/todo/internal/auth/handler_test.go` — `POST /auth/login` success (200 + cookie attributes), wrong password and unknown user (generic 401, no cookie), bad JSON (400), non-POST (405); `POST /auth/logout` deletes the session and clears the cookie, and is idempotent for a missing/expired cookie (per contracts/auth-http.md §2–§3)
-- [ ] T015 [US1] Implement `services/todo/internal/auth/handler.go` — `LoginHandler` (parse JSON, `GetUserByUsername` + `VerifyPassword`, `CreateSession` with configurable lifetime default 30 days, `Set-Cookie todo_session` with `HttpOnly; Secure; SameSite=Strict; Max-Age`) and `LogoutHandler` (`DeleteSession`, clear cookie), generic 401 message, login/logout event logging (FR-018) — make T014 pass
-- [ ] T016 [US1] Register `POST /auth/login` and `POST /auth/logout` on the mux in `services/todo/cmd/server/main.go`, before the middleware-wrapped task handlers — depends on T015, T013
+- [X] T014 [P] [US1] Write tests in `services/todo/internal/auth/handler_test.go` — `POST /auth/login` success (200 + cookie attributes), wrong password and unknown user (generic 401, no cookie), bad JSON (400), non-POST (405); `POST /auth/logout` deletes the session and clears the cookie, and is idempotent for a missing/expired cookie (per contracts/auth-http.md §2–§3)
+- [X] T015 [US1] Implement `services/todo/internal/auth/handler.go` — `LoginHandler` (parse JSON, `GetUserByUsername` + `VerifyPassword`, `CreateSession` with configurable lifetime default 30 days, `Set-Cookie todo_session` with `HttpOnly; Secure; SameSite=Strict; Max-Age`) and `LogoutHandler` (`DeleteSession`, clear cookie), generic 401 message, login/logout event logging (FR-018) — make T014 pass
+- [X] T016 [US1] Register `POST /auth/login` and `POST /auth/logout` on the mux in `services/todo/cmd/server/main.go`, before the middleware-wrapped task handlers — depends on T015, T013
 
 **Checkpoint**: Browser-style session login/logout works end to end and is the
 deployable MVP slice (a user must exist — insert directly, or provision via US3).
@@ -88,8 +88,8 @@ client side.
 task command with `TODO_API_KEY` set reaches the backend and operates on that
 key's user; an unset or wrong `TODO_API_KEY` fails with a clear error / `401`.
 
-- [ ] T017 [P] [US2] Write tests in `services/todo/internal/cli/cli_test.go` — a task command against an `httptest` fake server asserts the request carries `Authorization: Bearer <TODO_API_KEY>`; an unset `TODO_API_KEY` produces a clear non-zero-exit error
-- [ ] T018 [US2] Modify `services/todo/internal/cli/cli.go` — read `TODO_API_KEY`, attach `Authorization: Bearer <key>` to every task RPC via a Connect interceptor (or `http.RoundTripper` wrapper), and fail with a clear message when the variable is unset — make T017 pass
+- [X] T017 [P] [US2] Write tests in `services/todo/internal/cli/cli_test.go` — a task command against an `httptest` fake server asserts the request carries `Authorization: Bearer <TODO_API_KEY>`; an unset `TODO_API_KEY` produces a clear non-zero-exit error
+- [X] T018 [US2] Modify `services/todo/internal/cli/cli.go` — read `TODO_API_KEY`, attach `Authorization: Bearer <key>` to every task RPC via a Connect interceptor (or `http.RoundTripper` wrapper), and fail with a clear message when the variable is unset — make T017 pass
 
 **Checkpoint**: The CLI authenticates with an API key; US1 and US2 both work
 independently.
@@ -106,9 +106,9 @@ creates the `users` row and one `api_keys` row, prints the raw key exactly once,
 and exits without listening. Re-running for an existing username updates the
 password and issues a fresh key (old key stops working).
 
-- [ ] T019 [P] [US3] Write tests in `services/todo/internal/auth/provision_test.go` — provisioning a new user creates the account + one API key and returns the raw key once; provisioning an existing username updates the password and replaces the API key (FR-015, FR-019)
-- [ ] T020 [US3] Implement `services/todo/internal/auth/provision.go` — for each `name:password`: `GetUserByUsername` then `CreateUser` or `UpdateUserPassword` (bcrypt), `DeleteApiKeysByUser`, generate a key, `CreateApiKey` with its SHA-256 hash, return the raw key for one-time display — make T019 pass
-- [ ] T021 [US3] Add a repeatable `--provision-user=name:password` flag (custom `flag.Value`) to `services/todo/cmd/server/main.go`; when present, run migrations, call provisioning, print each raw key once, and exit before `ListenAndServe` — depends on T020
+- [X] T019 [P] [US3] Write tests in `services/todo/internal/auth/provision_test.go` — provisioning a new user creates the account + one API key and returns the raw key once; provisioning an existing username updates the password and replaces the API key (FR-015, FR-019)
+- [X] T020 [US3] Implement `services/todo/internal/auth/provision.go` — for each `name:password`: `GetUserByUsername` then `CreateUser` or `UpdateUserPassword` (bcrypt), `DeleteApiKeysByUser`, generate a key, `CreateApiKey` with its SHA-256 hash, return the raw key for one-time display — make T019 pass
+- [X] T021 [US3] Add a repeatable `--provision-user=name:password` flag (custom `flag.Value`) to `services/todo/cmd/server/main.go`; when present, run migrations, call provisioning, print each raw key once, and exit before `ListenAndServe` — depends on T020
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -118,9 +118,9 @@ password and issues a fresh key (old key stops working).
 
 **Purpose**: Verification across the whole feature.
 
-- [ ] T022 [P] Run `go build ./...` and `go vet ./...` in `services/todo/` and fix any issues
+- [X] T022 [P] Run `go build ./...` and `go vet ./...` in `services/todo/` and fix any issues
 - [ ] T023 Run the `specs/003-user-auth/quickstart.md` walkthrough end to end — provision, browser login, CLI with API key, and the cross-user isolation check
-- [ ] T024 [P] Verify FR-018 logging — confirm auth events (login success/failure, logout, middleware rejections) are logged and that passwords, raw API keys, and session IDs never appear in logs, across `handler.go` and `middleware.go`
+- [X] T024 [P] Verify FR-018 logging — confirm auth events (login success/failure, logout, middleware rejections) are logged and that passwords, raw API keys, and session IDs never appear in logs, across `handler.go` and `middleware.go`
 
 ---
 

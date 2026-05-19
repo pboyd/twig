@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -15,11 +19,25 @@ import (
 
 	"github.com/pboyd/todo/services/todo/gen/health/v1/healthv1connect"
 	"github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"github.com/pboyd/todo/services/todo/internal/auth"
 	"github.com/pboyd/todo/services/todo/internal/db"
 	"github.com/pboyd/todo/services/todo/internal/handler"
 )
 
+// provisionFlag is a repeatable --provision-user=name:password flag.
+type provisionFlag []string
+
+func (f *provisionFlag) String() string { return strings.Join(*f, ", ") }
+func (f *provisionFlag) Set(v string) error {
+	*f = append(*f, v)
+	return nil
+}
+
 func main() {
+	var provisions provisionFlag
+	flag.Var(&provisions, "provision-user", "provision a user account: name:password (repeatable)")
+	flag.Parse()
+
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -42,12 +60,36 @@ func main() {
 
 	queries := db.New(pool)
 
-	mux := http.NewServeMux()
-	path, h := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
-	mux.Handle(path, h)
+	if len(provisions) > 0 {
+		for _, spec := range provisions {
+			idx := strings.Index(spec, ":")
+			if idx < 1 {
+				log.Fatalf("--provision-user: expected name:password, got %q", spec)
+			}
+			name := spec[:idx]
+			password := spec[idx+1:]
+			rawKey, err := auth.ProvisionUser(context.Background(), queries, name, password)
+			if err != nil {
+				log.Fatalf("provision user %q: %v", name, err)
+			}
+			fmt.Printf("provisioned user %q — API key: %s\n", name, rawKey)
+		}
+		return
+	}
 
+	const sessionLifetime = 30 * 24 * time.Hour
+
+	mux := http.NewServeMux()
+	mux.Handle("/auth/login", auth.LoginHandler(queries, sessionLifetime))
+	mux.Handle("/auth/logout", auth.LogoutHandler(queries))
+
+	taskMux := http.NewServeMux()
+	healthPath, healthH := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
+	taskMux.Handle(healthPath, healthH)
 	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})
-	mux.Handle(taskPath, taskH)
+	taskMux.Handle(taskPath, taskH)
+
+	mux.Handle("/", auth.Middleware(queries)(taskMux))
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", h2c.NewHandler(mux, &http2.Server{})); err != nil {

@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.19.2
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.9.2
+	golang.org/x/crypto v0.51.0
 	golang.org/x/net v0.54.0
 	google.golang.org/protobuf v1.36.9
 )

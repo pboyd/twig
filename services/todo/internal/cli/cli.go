@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -41,6 +42,12 @@ func runTask(args []string) int {
 		return 1
 	}
 
+	apiKey := os.Getenv("TODO_API_KEY")
+	if apiKey == "" {
+		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
+		return 1
+	}
+
 	addr := os.Getenv("TODO_ADDR")
 	if addr == "" {
 		addr = defaultAddr
@@ -50,6 +57,7 @@ func runTask(args []string) int {
 		&http.Client{},
 		addr,
 		connect.WithSendGzip(),
+		connect.WithInterceptors(bearerInterceptor(apiKey)),
 	)
 
 	switch args[0] {
@@ -78,4 +86,15 @@ func printTaskUsage() {
 	fmt.Fprintln(os.Stderr, "  rm <id>          Remove a task")
 	fmt.Fprintln(os.Stderr, "  mod [--parent <id>] [--due <timestamp>] <id> <name>")
 	fmt.Fprintln(os.Stderr, "                   Modify a task")
+}
+
+// bearerInterceptor returns a Connect interceptor that adds an
+// Authorization: Bearer header to every outgoing unary request.
+func bearerInterceptor(apiKey string) connect.UnaryInterceptorFunc {
+	return connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
+		return connect.UnaryFunc(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			req.Header().Set("Authorization", "Bearer "+apiKey)
+			return next(ctx, req)
+		})
+	})
 }

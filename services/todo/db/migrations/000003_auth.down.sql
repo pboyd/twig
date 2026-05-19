@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS tasks_user_id_idx;
+ALTER TABLE tasks DROP COLUMN IF EXISTS user_id;
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;

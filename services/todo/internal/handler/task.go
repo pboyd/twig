@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	"github.com/pboyd/todo/services/todo/internal/auth"
 	"github.com/pboyd/todo/services/todo/internal/db"
 )
 
@@ -19,7 +20,6 @@ type Task struct {
 	Queries *db.Queries
 }
 
-// dbTaskToProto converts a db.Task to its proto representation.
 func dbTaskToProto(t db.Task) *taskv1.Task {
 	pt := &taskv1.Task{
 		Id:          t.ID,
@@ -36,7 +36,6 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 	return pt
 }
 
-// validateName trims and validates a task name, returning the trimmed name.
 func validateName(name string) (string, error) {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {
@@ -48,16 +47,13 @@ func validateName(name string) (string, error) {
 	return trimmed, nil
 }
 
-// parentChainContains walks the ancestor chain starting at startID and
-// reports whether targetID appears in it (including startID itself).
-// Used to detect cycles before re-parenting.
-func (t *Task) parentChainContains(ctx context.Context, startID, targetID int64) (bool, error) {
+func (t *Task) parentChainContains(ctx context.Context, userID, startID, targetID int64) (bool, error) {
 	current := startID
 	for {
 		if current == targetID {
 			return true, nil
 		}
-		task, err := t.Queries.GetTask(ctx, current)
+		task, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: current, UserID: userID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
@@ -75,6 +71,8 @@ func (t *Task) CreateTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.CreateTaskRequest],
 ) (*connect.Response[taskv1.CreateTaskResponse], error) {
+	userID := auth.UserID(ctx)
+
 	name, err := validateName(req.Msg.Name)
 	if err != nil {
 		return nil, err
@@ -83,12 +81,13 @@ func (t *Task) CreateTask(
 	params := db.CreateTaskParams{
 		Name:        name,
 		Description: req.Msg.Description,
+		UserID:      userID,
 	}
 	if req.Msg.Due != nil {
 		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
 	}
 	if req.Msg.ParentId != nil {
-		exists, err := t.Queries.TaskExists(ctx, *req.Msg.ParentId)
+		exists, err := t.Queries.TaskExists(ctx, db.TaskExistsParams{ID: *req.Msg.ParentId, UserID: userID})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -109,7 +108,8 @@ func (t *Task) GetTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.GetTaskRequest],
 ) (*connect.Response[taskv1.GetTaskResponse], error) {
-	row, err := t.Queries.GetTask(ctx, req.Msg.Id)
+	userID := auth.UserID(ctx)
+	row, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
 	}
@@ -123,7 +123,8 @@ func (t *Task) ListTasks(
 	ctx context.Context,
 	req *connect.Request[taskv1.ListTasksRequest],
 ) (*connect.Response[taskv1.ListTasksResponse], error) {
-	rows, err := t.Queries.ListTasks(ctx)
+	userID := auth.UserID(ctx)
+	rows, err := t.Queries.ListTasks(ctx, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -138,6 +139,8 @@ func (t *Task) UpdateTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.UpdateTaskRequest],
 ) (*connect.Response[taskv1.UpdateTaskResponse], error) {
+	userID := auth.UserID(ctx)
+
 	name, err := validateName(req.Msg.Name)
 	if err != nil {
 		return nil, err
@@ -147,20 +150,21 @@ func (t *Task) UpdateTask(
 		ID:          req.Msg.Id,
 		Name:        name,
 		Description: req.Msg.Description,
+		UserID:      userID,
 	}
 	if req.Msg.Due != nil {
 		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
 	}
 	if req.Msg.ParentId != nil {
 		newParentID := *req.Msg.ParentId
-		exists, err := t.Queries.TaskExists(ctx, newParentID)
+		exists, err := t.Queries.TaskExists(ctx, db.TaskExistsParams{ID: newParentID, UserID: userID})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		if !exists {
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent task not found"))
 		}
-		cycle, err := t.parentChainContains(ctx, newParentID, req.Msg.Id)
+		cycle, err := t.parentChainContains(ctx, userID, newParentID, req.Msg.Id)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
@@ -184,7 +188,8 @@ func (t *Task) DeleteTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.DeleteTaskRequest],
 ) (*connect.Response[taskv1.DeleteTaskResponse], error) {
-	_, err := t.Queries.DeleteTask(ctx, req.Msg.Id)
+	userID := auth.UserID(ctx)
+	_, err := t.Queries.DeleteTask(ctx, db.DeleteTaskParams{ID: req.Msg.Id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
 	}

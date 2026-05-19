@@ -8,10 +8,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	ID        int64
+	UserID    int64
+	KeyHash   string
+	Label     pgtype.Text
+	CreatedAt pgtype.Timestamptz
+}
+
+type Session struct {
+	ID        string
+	UserID    int64
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+}
+
 type Task struct {
 	ID          int64
 	Name        string
 	Description string
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
+	UserID      int64
+}
+
+type User struct {
+	ID           int64
+	Username     string
+	PasswordHash string
 }

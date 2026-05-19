@@ -12,9 +12,9 @@ import (
 )
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, description, due, parent_id)
-VALUES ($1, $2, $3, $4)
-RETURNING id, name, description, due, parent_id
+INSERT INTO tasks (name, description, due, parent_id, user_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, description, due, parent_id, user_id
 `
 
 type CreateTaskParams struct {
@@ -22,6 +22,7 @@ type CreateTaskParams struct {
 	Description string
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
+	UserID      int64
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -30,6 +31,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.Description,
 		arg.Due,
 		arg.ParentID,
+		arg.UserID,
 	)
 	var i Task
 	err := row.Scan(
@@ -38,28 +40,39 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Description,
 		&i.Due,
 		&i.ParentID,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const deleteTask = `-- name: DeleteTask :one
-DELETE FROM tasks WHERE id = $1
+DELETE FROM tasks WHERE id = $1 AND user_id = $2
 RETURNING id
 `
 
-func (q *Queries) DeleteTask(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRow(ctx, deleteTask, id)
-	var id_2 int64
-	err := row.Scan(&id_2)
-	return id_2, err
+type DeleteTaskParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteTask, arg.ID, arg.UserID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, description, due, parent_id FROM tasks WHERE id = $1
+SELECT id, name, description, due, parent_id, user_id FROM tasks WHERE id = $1 AND user_id = $2
 `
 
-func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
-	row := q.db.QueryRow(ctx, getTask, id)
+type GetTaskParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) {
+	row := q.db.QueryRow(ctx, getTask, arg.ID, arg.UserID)
 	var i Task
 	err := row.Scan(
 		&i.ID,
@@ -67,16 +80,17 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
 		&i.Description,
 		&i.Due,
 		&i.ParentID,
+		&i.UserID,
 	)
 	return i, err
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, description, due, parent_id FROM tasks ORDER BY id
+SELECT id, name, description, due, parent_id, user_id FROM tasks WHERE user_id = $1 ORDER BY id
 `
 
-func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
-	rows, err := q.db.Query(ctx, listTasks)
+func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
+	rows, err := q.db.Query(ctx, listTasks, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +104,7 @@ func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
 			&i.Description,
 			&i.Due,
 			&i.ParentID,
+			&i.UserID,
 		); err != nil {
 			return nil, err
 		}
@@ -102,11 +117,16 @@ func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
 }
 
 const taskExists = `-- name: TaskExists :one
-SELECT EXISTS (SELECT 1 FROM tasks WHERE id = $1) AS exists
+SELECT EXISTS (SELECT 1 FROM tasks WHERE id = $1 AND user_id = $2) AS exists
 `
 
-func (q *Queries) TaskExists(ctx context.Context, id int64) (bool, error) {
-	row := q.db.QueryRow(ctx, taskExists, id)
+type TaskExistsParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) TaskExists(ctx context.Context, arg TaskExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, taskExists, arg.ID, arg.UserID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -115,8 +135,8 @@ func (q *Queries) TaskExists(ctx context.Context, id int64) (bool, error) {
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
 SET name = $2, description = $3, due = $4, parent_id = $5
-WHERE id = $1
-RETURNING id, name, description, due, parent_id
+WHERE id = $1 AND user_id = $6
+RETURNING id, name, description, due, parent_id, user_id
 `
 
 type UpdateTaskParams struct {
@@ -125,6 +145,7 @@ type UpdateTaskParams struct {
 	Description string
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
+	UserID      int64
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
@@ -134,6 +155,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.Description,
 		arg.Due,
 		arg.ParentID,
+		arg.UserID,
 	)
 	var i Task
 	err := row.Scan(
@@ -142,6 +164,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Description,
 		&i.Due,
 		&i.ParentID,
+		&i.UserID,
 	)
 	return i, err
 }

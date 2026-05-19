@@ -13,13 +13,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	"github.com/pboyd/todo/services/todo/internal/auth"
 	"github.com/pboyd/todo/services/todo/internal/db"
 	"github.com/pboyd/todo/services/todo/internal/handler"
 )
 
 // newTestHandler creates a Task handler backed by a real PostgreSQL database.
 // Tests that call this are integration tests and require DATABASE_URL.
-func newTestHandler(t *testing.T) *handler.Task {
+func newTestHandler(t *testing.T) (*handler.Task, int64) {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -41,11 +42,30 @@ func newTestHandler(t *testing.T) *handler.Task {
 	t.Cleanup(pool.Close)
 
 	queries := db.New(pool)
-	// Clean up tasks created during the test.
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "DELETE FROM tasks")
+
+	// Create a test user for this handler.
+	hash, err := auth.HashPassword("testpass")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	user, err := queries.CreateUser(context.Background(), db.CreateUserParams{
+		Username:     "testuser_" + t.Name(),
+		PasswordHash: hash,
 	})
-	return &handler.Task{Queries: queries}
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	userID := user.ID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
+	})
+	return &handler.Task{Queries: queries}, userID
+}
+
+// ctxWithUser returns a context carrying the given user_id.
+func ctxWithUser(userID int64) context.Context {
+	return auth.WithUserID(context.Background(), userID)
 }
 
 // ---- Unit tests: name validation ----
@@ -68,8 +88,6 @@ func TestCreateTask_NameValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.wantErr == 0 {
-				// Valid name — validation passes; nil Queries panics after that.
-				// We verify that no InvalidArgument is returned before the panic.
 				defer func() {
 					if r := recover(); r != nil {
 						// Panic from nil Queries is expected for valid-name cases.
@@ -134,8 +152,8 @@ func TestUpdateTask_NameValidation(t *testing.T) {
 // ---- Integration tests: US1 ----
 
 func TestCreateTask_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
 	t.Run("name only", func(t *testing.T) {
 		resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
@@ -189,8 +207,8 @@ func TestCreateTask_Integration(t *testing.T) {
 }
 
 func TestGetTask_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
 	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Get me"}))
 	if err != nil {
@@ -224,8 +242,8 @@ func TestGetTask_Integration(t *testing.T) {
 }
 
 func TestListTasks_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
 	t.Run("empty list", func(t *testing.T) {
 		resp, err := h.ListTasks(ctx, connect.NewRequest(&taskv1.ListTasksRequest{}))
@@ -264,8 +282,8 @@ func TestListTasks_Integration(t *testing.T) {
 // ---- Integration tests: US2 ----
 
 func TestUpdateTask_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
 	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
 		Name:        "Original",
@@ -287,7 +305,6 @@ func TestUpdateTask_Integration(t *testing.T) {
 		if ur.Msg.Task.Name != "Updated" {
 			t.Errorf("name = %q, want %q", ur.Msg.Task.Name, "Updated")
 		}
-		// description should be cleared (full replace)
 		if ur.Msg.Task.Description != "" {
 			t.Errorf("description = %q, want empty after clear", ur.Msg.Task.Description)
 		}
@@ -314,17 +331,15 @@ func TestUpdateTask_Integration(t *testing.T) {
 // ---- Integration tests: US3 ----
 
 func TestHierarchy_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
-	// Build a 3-level hierarchy: root -> child -> grandchild
 	rootResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "root"}))
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	rootID := rootResp.Msg.Task.Id
 
-	childID := rootID + 1 // will be assigned next
 	childResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
 		Name:     "child",
 		ParentId: &rootID,
@@ -332,7 +347,7 @@ func TestHierarchy_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	childID = childResp.Msg.Task.Id
+	childID := childResp.Msg.Task.Id
 	if childResp.Msg.Task.ParentId == nil || *childResp.Msg.Task.ParentId != rootID {
 		t.Errorf("child parent_id = %v, want %d", childResp.Msg.Task.ParentId, rootID)
 	}
@@ -377,7 +392,6 @@ func TestHierarchy_Integration(t *testing.T) {
 	})
 
 	t.Run("descendant-parent cycle", func(t *testing.T) {
-		// Trying to set root's parent to grandchild would create a cycle
 		_, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
 			Id:       rootID,
 			Name:     "root",
@@ -409,7 +423,6 @@ func TestHierarchy_Integration(t *testing.T) {
 	})
 
 	t.Run("re-parent task", func(t *testing.T) {
-		// Move grandchild to be directly under root
 		_, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
 			Id:       grandchildID,
 			Name:     "grandchild",
@@ -424,8 +437,8 @@ func TestHierarchy_Integration(t *testing.T) {
 // ---- Integration tests: US4 ----
 
 func TestDeleteTask_Integration(t *testing.T) {
-	h := newTestHandler(t)
-	ctx := context.Background()
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
 
 	t.Run("delete leaf", func(t *testing.T) {
 		resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "leaf"}))
@@ -470,7 +483,6 @@ func TestDeleteTask_Integration(t *testing.T) {
 			t.Fatalf("DeleteTask parent: %v", err)
 		}
 
-		// Child should also be gone
 		_, err = h.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: childID}))
 		if err == nil {
 			t.Fatal("expected child to be deleted via cascade")
@@ -485,6 +497,71 @@ func TestDeleteTask_Integration(t *testing.T) {
 		ce, ok := err.(*connect.Error)
 		if !ok || ce.Code() != connect.CodeNotFound {
 			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+}
+
+// ---- Cross-user isolation tests ----
+
+func TestCrossUserIsolation(t *testing.T) {
+	h, userA := newTestHandler(t)
+	_, userB := newTestHandler(t)
+
+	ctxA := ctxWithUser(userA)
+	ctxB := ctxWithUser(userB)
+
+	// User A creates a task.
+	resp, err := h.CreateTask(ctxA, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "alice task"}))
+	if err != nil {
+		t.Fatalf("CreateTask as user A: %v", err)
+	}
+	taskID := resp.Msg.Task.Id
+
+	t.Run("user B cannot get user A's task", func(t *testing.T) {
+		_, err := h.GetTask(ctxB, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+		if err == nil {
+			t.Fatal("expected not found, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B cannot update user A's task", func(t *testing.T) {
+		_, err := h.UpdateTask(ctxB, connect.NewRequest(&taskv1.UpdateTaskRequest{
+			Id:   taskID,
+			Name: "hacked",
+		}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B cannot delete user A's task", func(t *testing.T) {
+		_, err := h.DeleteTask(ctxB, connect.NewRequest(&taskv1.DeleteTaskRequest{Id: taskID}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B list does not include user A's tasks", func(t *testing.T) {
+		listResp, err := h.ListTasks(ctxB, connect.NewRequest(&taskv1.ListTasksRequest{}))
+		if err != nil {
+			t.Fatalf("ListTasks as user B: %v", err)
+		}
+		for _, task := range listResp.Msg.Tasks {
+			if task.Id == taskID {
+				t.Error("user B's list should not include user A's task")
+			}
 		}
 	})
 }
