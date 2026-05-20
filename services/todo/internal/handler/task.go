@@ -26,6 +26,7 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 		Id:          t.ID,
 		Name:        t.Name,
 		Description: t.Description,
+		Estimate:    int32(t.Estimate),
 	}
 	if t.Due.Valid {
 		pt.Due = timestamppb.New(t.Due.Time)
@@ -128,7 +129,58 @@ func (t *Task) GetTask(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&taskv1.GetTaskResponse{Task: dbTaskToProto(row)}), nil
+
+	count, err := t.Queries.CountCompletedPomodorosForTask(ctx, db.CountCompletedPomodorosForTaskParams{
+		TaskID: req.Msg.Id,
+		UserID: userID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	poms, err := t.Queries.ListPomodorosForTask(ctx, db.ListPomodorosForTaskParams{
+		TaskID: req.Msg.Id,
+		UserID: userID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	protoPoms := make([]*taskv1.Pomodoro, len(poms))
+	for i, p := range poms {
+		protoPoms[i] = dbPomodoroToProto(p)
+	}
+
+	return connect.NewResponse(&taskv1.GetTaskResponse{
+		Task:                   dbTaskToProto(row),
+		CompletedPomodoroCount: count,
+		Pomodoros:              protoPoms,
+	}), nil
+}
+
+func (t *Task) SetEstimate(
+	ctx context.Context,
+	req *connect.Request[taskv1.SetEstimateRequest],
+) (*connect.Response[taskv1.SetEstimateResponse], error) {
+	userID := auth.UserID(ctx)
+
+	if req.Msg.Estimate < 0 || req.Msg.Estimate > 10 {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("estimate must be between 0 and 10; tasks larger than 10 pomodoros must be broken down further"))
+	}
+
+	row, err := t.Queries.SetTaskEstimate(ctx, db.SetTaskEstimateParams{
+		ID:       req.Msg.TaskId,
+		Estimate: int16(req.Msg.Estimate),
+		UserID:   userID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&taskv1.SetEstimateResponse{Task: dbTaskToProto(row)}), nil
 }
 
 func (t *Task) ListTasks(

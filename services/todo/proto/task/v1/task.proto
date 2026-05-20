@@ -38,6 +38,22 @@ service TaskService {
   //   NotFound          — no task exists with the given id (for this user)
   //   FailedPrecondition — the task has at least one incomplete descendant
   rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
+
+  // SetEstimate overwrites a task's estimate.
+  rpc SetEstimate(SetEstimateRequest) returns (SetEstimateResponse);
+
+  // StartPomodoro creates a new active pomodoro for the calling user
+  // against the named task.
+  rpc StartPomodoro(StartPomodoroRequest) returns (StartPomodoroResponse);
+
+  // CancelPomodoro cancels the calling user's active pomodoro.
+  rpc CancelPomodoro(CancelPomodoroRequest) returns (CancelPomodoroResponse);
+
+  // CompletePomodoro marks the calling user's active pomodoro complete.
+  rpc CompletePomodoro(CompletePomodoroRequest) returns (CompletePomodoroResponse);
+
+  // GetActivePomodoro returns the calling user's active pomodoro, if any.
+  rpc GetActivePomodoro(GetActivePomodoroRequest) returns (GetActivePomodoroResponse);
 }
 
 // Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -56,6 +72,17 @@ message Task {
   // Unset when the task is incomplete; set to the moment of completion
   // (UTC) when complete. Once set, it never changes.
   google.protobuf.Timestamp completed_at = 6;
+  // User's estimated number of pomodoros to complete this task.
+  // 0 means "no estimate" (default). Server enforces 0 <= estimate <= 10.
+  int32 estimate = 7;
+}
+
+message Pomodoro {
+  int64 id = 1;
+  int64 task_id = 2;
+  google.protobuf.Timestamp start_at = 3;
+  google.protobuf.Timestamp end_at = 4;
+  bool complete = 5;
 }
 
 message CompleteTaskRequest {
@@ -86,6 +113,8 @@ message GetTaskRequest {
 
 message GetTaskResponse {
   Task task = 1;
+  int64 completed_pomodoro_count = 2;
+  repeated Pomodoro pomodoros = 3;
 }
 
 message ListTasksRequest {}
@@ -114,3 +143,33 @@ message DeleteTaskRequest {
 }
 
 message DeleteTaskResponse {}
+
+message SetEstimateRequest {
+  int64 task_id = 1;
+  int32 estimate = 2;
+}
+message SetEstimateResponse {
+  Task task = 1;
+}
+
+message StartPomodoroRequest {
+  int64 task_id = 1;
+}
+message StartPomodoroResponse {
+  Pomodoro pomodoro = 1;
+}
+
+message CancelPomodoroRequest {}
+message CancelPomodoroResponse {
+  Pomodoro pomodoro = 1;
+}
+
+message CompletePomodoroRequest {}
+message CompletePomodoroResponse {
+  Pomodoro pomodoro = 1;
+}
+
+message GetActivePomodoroRequest {}
+message GetActivePomodoroResponse {
+  Pomodoro pomodoro = 1;
+}

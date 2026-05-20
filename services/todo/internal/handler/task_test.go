@@ -777,6 +777,156 @@ func TestUpdateTask_CompleteParentRejected(t *testing.T) {
 	})
 }
 
+// ---- Integration tests: GetTask pomodoro fields (T014) ----
+
+func TestGetTask_PomoFields(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "pomo task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	queries := h.Queries
+
+	// Insert one completed and one canceled pomodoro directly.
+	completed, err := queries.StartPomodoro(ctx, db.StartPomodoroParams{UserID: userID, TaskID: taskID})
+	if err != nil {
+		t.Fatalf("StartPomodoro (completed): %v", err)
+	}
+	_, err = queries.CompleteActivePomodoro(ctx, userID)
+	if err != nil {
+		t.Fatalf("CompleteActivePomodoro: %v", err)
+	}
+
+	_, err = queries.StartPomodoro(ctx, db.StartPomodoroParams{UserID: userID, TaskID: taskID})
+	if err != nil {
+		t.Fatalf("StartPomodoro (canceled): %v", err)
+	}
+	_, err = queries.CancelActivePomodoro(ctx, userID)
+	if err != nil {
+		t.Fatalf("CancelActivePomodoro: %v", err)
+	}
+	_ = completed
+
+	gr, err := h.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+
+	if gr.Msg.CompletedPomodoroCount != 1 {
+		t.Errorf("completed_pomodoro_count = %d, want 1", gr.Msg.CompletedPomodoroCount)
+	}
+	if len(gr.Msg.Pomodoros) != 2 {
+		t.Fatalf("len(pomodoros) = %d, want 2", len(gr.Msg.Pomodoros))
+	}
+	// Ordered by start_at ascending.
+	if !gr.Msg.Pomodoros[0].StartAt.AsTime().Before(gr.Msg.Pomodoros[1].StartAt.AsTime()) &&
+		!gr.Msg.Pomodoros[0].StartAt.AsTime().Equal(gr.Msg.Pomodoros[1].StartAt.AsTime()) {
+		t.Errorf("pomodoros not in start_at order")
+	}
+}
+
+// ---- Integration tests: SetEstimate (T040) ----
+
+func TestSetEstimate_Integration(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "estimate task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	cases := []struct {
+		name     string
+		estimate int32
+		wantCode connect.Code
+	}{
+		{"happy path 0", 0, 0},
+		{"happy path 10", 10, 0},
+		{"reject -1", -1, connect.CodeInvalidArgument},
+		{"reject 11", 11, connect.CodeInvalidArgument},
+		{"reject 100", 100, connect.CodeInvalidArgument},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := h.SetEstimate(ctx, connect.NewRequest(&taskv1.SetEstimateRequest{
+				TaskId:   taskID,
+				Estimate: tc.estimate,
+			}))
+			if tc.wantCode != 0 {
+				if err == nil {
+					t.Fatalf("expected error code %v, got nil", tc.wantCode)
+				}
+				ce, ok := err.(*connect.Error)
+				if !ok || ce.Code() != tc.wantCode {
+					t.Errorf("code = %v, want %v; msg = %v", err, tc.wantCode, err)
+				}
+				// Verify error message for InvalidArgument.
+				if tc.wantCode == connect.CodeInvalidArgument {
+					if !strings.Contains(ce.Message(), "broken down further") {
+						t.Errorf("error message %q does not contain 'broken down further'", ce.Message())
+					}
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if resp.Msg.Task.Estimate != tc.estimate {
+					t.Errorf("estimate = %d, want %d", resp.Msg.Task.Estimate, tc.estimate)
+				}
+			}
+		})
+	}
+
+	t.Run("not found for unknown task", func(t *testing.T) {
+		_, err := h.SetEstimate(ctx, connect.NewRequest(&taskv1.SetEstimateRequest{
+			TaskId: 999999, Estimate: 3,
+		}))
+		if err == nil {
+			t.Fatal("expected NotFound")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("not found for another user's task", func(t *testing.T) {
+		_, userB := newTestHandler(t)
+		ctxB := ctxWithUser(userB)
+		_, err := h.SetEstimate(ctxB, connect.NewRequest(&taskv1.SetEstimateRequest{
+			TaskId: taskID, Estimate: 3,
+		}))
+		if err == nil {
+			t.Fatal("expected NotFound")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("overwrite value", func(t *testing.T) {
+		_, err := h.SetEstimate(ctx, connect.NewRequest(&taskv1.SetEstimateRequest{TaskId: taskID, Estimate: 3}))
+		if err != nil {
+			t.Fatalf("set to 3: %v", err)
+		}
+		resp, err := h.SetEstimate(ctx, connect.NewRequest(&taskv1.SetEstimateRequest{TaskId: taskID, Estimate: 7}))
+		if err != nil {
+			t.Fatalf("set to 7: %v", err)
+		}
+		if resp.Msg.Task.Estimate != 7 {
+			t.Errorf("estimate = %d, want 7", resp.Msg.Task.Estimate)
+		}
+	})
+}
+
 // ---- Cross-user isolation tests ----
 
 func TestCrossUserIsolation(t *testing.T) {

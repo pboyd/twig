@@ -15,7 +15,7 @@ const completeTask = `-- name: CompleteTask :one
 UPDATE tasks
 SET completed_at = COALESCE(completed_at, NOW())
 WHERE id = $1 AND user_id = $2
-RETURNING id, name, description, due, parent_id, user_id, completed_at
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate
 `
 
 type CompleteTaskParams struct {
@@ -34,6 +34,7 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 		&i.ParentID,
 		&i.UserID,
 		&i.CompletedAt,
+		&i.Estimate,
 	)
 	return i, err
 }
@@ -41,7 +42,7 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (name, description, due, parent_id, user_id)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, description, due, parent_id, user_id, completed_at
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate
 `
 
 type CreateTaskParams struct {
@@ -69,6 +70,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.ParentID,
 		&i.UserID,
 		&i.CompletedAt,
+		&i.Estimate,
 	)
 	return i, err
 }
@@ -107,7 +109,7 @@ func (q *Queries) GetParentCompletion(ctx context.Context, arg GetParentCompleti
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, description, due, parent_id, user_id, completed_at FROM tasks WHERE id = $1 AND user_id = $2
+SELECT id, name, description, due, parent_id, user_id, completed_at, estimate FROM tasks WHERE id = $1 AND user_id = $2
 `
 
 type GetTaskParams struct {
@@ -126,6 +128,7 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.ParentID,
 		&i.UserID,
 		&i.CompletedAt,
+		&i.Estimate,
 	)
 	return i, err
 }
@@ -198,7 +201,7 @@ func (q *Queries) ListIncompleteDescendantIds(ctx context.Context, arg ListIncom
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, description, due, parent_id, user_id, completed_at FROM tasks WHERE user_id = $1 ORDER BY id
+SELECT id, name, description, due, parent_id, user_id, completed_at, estimate FROM tasks WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
@@ -218,6 +221,7 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 			&i.ParentID,
 			&i.UserID,
 			&i.CompletedAt,
+			&i.Estimate,
 		); err != nil {
 			return nil, err
 		}
@@ -227,6 +231,32 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setTaskEstimate = `-- name: SetTaskEstimate :one
+UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate
+`
+
+type SetTaskEstimateParams struct {
+	ID       int64
+	Estimate int16
+	UserID   int64
+}
+
+func (q *Queries) SetTaskEstimate(ctx context.Context, arg SetTaskEstimateParams) (Task, error) {
+	row := q.db.QueryRow(ctx, setTaskEstimate, arg.ID, arg.Estimate, arg.UserID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Due,
+		&i.ParentID,
+		&i.UserID,
+		&i.CompletedAt,
+		&i.Estimate,
+	)
+	return i, err
 }
 
 const taskExists = `-- name: TaskExists :one
@@ -249,7 +279,7 @@ const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
 SET name = $2, description = $3, due = $4, parent_id = $5
 WHERE id = $1 AND user_id = $6
-RETURNING id, name, description, due, parent_id, user_id, completed_at
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate
 `
 
 type UpdateTaskParams struct {
@@ -279,6 +309,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.ParentID,
 		&i.UserID,
 		&i.CompletedAt,
+		&i.Estimate,
 	)
 	return i, err
 }

@@ -16,6 +16,15 @@ type ApiKey struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Pomodoro struct {
+	ID       int64
+	UserID   int64
+	TaskID   int64
+	StartAt  pgtype.Timestamptz
+	EndAt    pgtype.Timestamptz
+	Complete bool
+}
+
 type Session struct {
 	ID        string
 	UserID    int64
@@ -31,6 +40,7 @@ type Task struct {
 	ParentID    pgtype.Int8
 	UserID      int64
 	CompletedAt pgtype.Timestamptz
+	Estimate    int16
 }
 
 type User struct {

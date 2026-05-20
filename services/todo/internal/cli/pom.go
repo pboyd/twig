@@ -1,0 +1,426 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strconv"
+	"time"
+
+	"connectrpc.com/connect"
+
+	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"github.com/pboyd/todo/services/todo/internal/pomodoro"
+)
+
+func runPom(client taskv1connect.TaskServiceClient, args []string) int {
+	if len(args) == 0 {
+		printPomUsage()
+		return 1
+	}
+	switch args[0] {
+	case "estimate":
+		return runEstimate(client, args[1:])
+	case "start":
+		return runStart(client, args[1:])
+	case "resume":
+		return runResume(client, args[1:])
+	case "cancel":
+		return runCancel(client, args[1:])
+	case "status":
+		return runStatus(client, args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown pom subcommand: %s\n", args[0])
+		printPomUsage()
+		return 1
+	}
+}
+
+func printPomUsage() {
+	fmt.Fprintln(os.Stderr, "Usage: todo task pom <subcommand> [arguments]")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Subcommands:")
+	fmt.Fprintln(os.Stderr, "  estimate <task_id> <n>   Set estimated pomodoros (0–10)")
+	fmt.Fprintln(os.Stderr, "  start <task_id> [--exec cmd]  Start a 25-minute pomodoro")
+	fmt.Fprintln(os.Stderr, "  resume [--exec cmd]      Re-attach to the active pomodoro")
+	fmt.Fprintln(os.Stderr, "  cancel                   Cancel the active pomodoro")
+	fmt.Fprintln(os.Stderr, "  status                   Show active pomodoro status")
+}
+
+func runEstimate(client taskv1connect.TaskServiceClient, args []string) int {
+	if len(args) < 2 {
+		printPomUsage()
+		return 1
+	}
+	taskID, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid task_id: %v\n", args[0])
+		printPomUsage()
+		return 1
+	}
+	n, err := strconv.ParseInt(args[1], 10, 32)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid estimate: %v\n", args[1])
+		printPomUsage()
+		return 1
+	}
+
+	resp, err := client.SetEstimate(context.Background(), connect.NewRequest(&taskv1.SetEstimateRequest{
+		TaskId:   taskID,
+		Estimate: int32(n),
+	}))
+	if err != nil {
+		ce, ok := err.(*connect.Error)
+		if ok && ce.Code() == connect.CodeNotFound {
+			fmt.Fprintln(os.Stderr, "task not found")
+		} else if ok && ce.Code() == connect.CodeInvalidArgument {
+			fmt.Fprintln(os.Stderr, ce.Message())
+		} else {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		return 1
+	}
+	fmt.Printf("set estimate for task %d to %d\n", resp.Msg.Task.Id, resp.Msg.Task.Estimate)
+	return 0
+}
+
+func runStart(client taskv1connect.TaskServiceClient, args []string) int {
+	taskID, execCmd, ok := parseStartArgs(args)
+	if !ok {
+		printPomUsage()
+		return 1
+	}
+
+	ctx := context.Background()
+
+	taskResp, err := client.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	task := taskResp.Msg.Task
+	completedCount := taskResp.Msg.CompletedPomodoroCount
+
+	startResp, err := client.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+	if err != nil {
+		ce, ok := err.(*connect.Error)
+		if ok && ce.Code() == connect.CodeAlreadyExists {
+			activeTaskID := extractActiveTaskID(ce)
+			if activeTaskID == taskID {
+				// Same task: prompt restart or resume.
+				choice := promptRestartResume(taskID)
+				switch choice {
+				case "restart":
+					_, cerr := client.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{}))
+					if cerr != nil {
+						fmt.Fprintf(os.Stderr, "error canceling: %v\n", cerr)
+						return 1
+					}
+					startResp2, serr := client.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+					if serr != nil {
+						fmt.Fprintf(os.Stderr, "error: %v\n", serr)
+						return 1
+					}
+					return runCountdownAndComplete(client, ctx, startResp2.Msg.Pomodoro, task, completedCount, execCmd)
+				case "resume":
+					return runResume(client, buildResumeArgs(execCmd))
+				default:
+					return 1
+				}
+			} else {
+				// Different task: prompt cancel-and-start or abort.
+				choice := promptCancelAndStart(activeTaskID)
+				switch choice {
+				case "cancel":
+					_, cerr := client.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{}))
+					if cerr != nil {
+						fmt.Fprintf(os.Stderr, "error canceling: %v\n", cerr)
+						return 1
+					}
+					startResp2, serr := client.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+					if serr != nil {
+						fmt.Fprintf(os.Stderr, "error: %v\n", serr)
+						return 1
+					}
+					return runCountdownAndComplete(client, ctx, startResp2.Msg.Pomodoro, task, completedCount, execCmd)
+				default:
+					fmt.Fprintf(os.Stderr, "you have an active pomodoro on task %d\n", activeTaskID)
+					return 1
+				}
+			}
+		}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	return runCountdownAndComplete(client, ctx, startResp.Msg.Pomodoro, task, completedCount, execCmd)
+}
+
+func runCountdownAndComplete(
+	client taskv1connect.TaskServiceClient,
+	ctx context.Context,
+	activePom *taskv1.Pomodoro,
+	task *taskv1.Task,
+	completedCount int64,
+	execCmd string,
+) int {
+	deps := realCountdownDeps(client, ctx)
+	outcome := runCountdown(ctx, deps, activePom, task, completedCount)
+
+	switch outcome {
+	case outcomeCompleted:
+		_, err := client.CompletePomodoro(ctx, connect.NewRequest(&taskv1.CompletePomodoroRequest{}))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error completing pomodoro: %v\n", err)
+			return 1
+		}
+		if execCmd != "" {
+			if err := execHook(execCmd); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: --exec command exited with status %v: %s\n", err, execCmd)
+			}
+		}
+	case outcomeCanceled:
+		_, err := client.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{}))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error canceling pomodoro: %v\n", err)
+			return 1
+		}
+	case outcomeQuit:
+		// No API call — timer keeps running on the server.
+	case outcomeExternal:
+		// Already handled by countdown renderer.
+	}
+	return 0
+}
+
+func runResume(client taskv1connect.TaskServiceClient, args []string) int {
+	execCmd := parseExecFlag(args)
+	ctx := context.Background()
+	return runResumeWith(
+		func(_ context.Context) (*taskv1.Pomodoro, error) {
+			resp, err := client.GetActivePomodoro(ctx, connect.NewRequest(&taskv1.GetActivePomodoroRequest{}))
+			if err != nil {
+				return nil, err
+			}
+			return resp.Msg.Pomodoro, nil
+		},
+		func(_ context.Context) error {
+			_, err := client.CompletePomodoro(ctx, connect.NewRequest(&taskv1.CompletePomodoroRequest{}))
+			return err
+		},
+		func(_ context.Context, id int64) (*taskv1.GetTaskResponse, error) {
+			resp, err := client.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: id}))
+			if err != nil {
+				return nil, err
+			}
+			return resp.Msg, nil
+		},
+		func(pom *taskv1.Pomodoro, task *taskv1.Task, completedCount int64) int {
+			return runCountdownAndComplete(client, ctx, pom, task, completedCount, execCmd)
+		},
+		time.Now(),
+		execCmd,
+	)
+}
+
+func runResumeWith(
+	getActiveFn func(ctx context.Context) (*taskv1.Pomodoro, error),
+	completeFn func(ctx context.Context) error,
+	getTaskFn func(ctx context.Context, id int64) (*taskv1.GetTaskResponse, error),
+	countdownFn func(pom *taskv1.Pomodoro, task *taskv1.Task, completedCount int64) int,
+	now time.Time,
+	execCmd string,
+) int {
+	ctx := context.Background()
+	activePom, err := getActiveFn(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	if activePom == nil {
+		fmt.Fprintln(os.Stderr, "no active pomodoro to resume")
+		return 1
+	}
+	startAt := activePom.StartAt.AsTime()
+
+	if pomodoro.Remaining(startAt, now) == 0 {
+		if err := completeFn(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "error completing pomodoro: %v\n", err)
+			return 1
+		}
+		if execCmd != "" {
+			if err := execHook(execCmd); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: --exec command exited with status %v: %s\n", err, execCmd)
+			}
+		}
+		return 0
+	}
+
+	if getTaskFn == nil || countdownFn == nil {
+		return 0
+	}
+	taskResp, err := getTaskFn(ctx, activePom.TaskId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	return countdownFn(activePom, taskResp.Task, taskResp.CompletedPomodoroCount)
+}
+
+func runCancel(client taskv1connect.TaskServiceClient, args []string) int {
+	return runCancelWith(func(ctx context.Context) error {
+		_, err := client.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{}))
+		return err
+	})
+}
+
+func runCancelWith(cancelFn func(ctx context.Context) error) int {
+	err := cancelFn(context.Background())
+	if err != nil {
+		ce, ok := err.(*connect.Error)
+		if ok && ce.Code() == connect.CodeFailedPrecondition {
+			fmt.Fprintln(os.Stderr, "no active pomodoro")
+		} else {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		return 1
+	}
+	fmt.Println("canceled active pomodoro")
+	return 0
+}
+
+func runStatus(client taskv1connect.TaskServiceClient, args []string) int {
+	return runStatusWith(
+		func(ctx context.Context) (*taskv1.Pomodoro, error) {
+			resp, err := client.GetActivePomodoro(ctx, connect.NewRequest(&taskv1.GetActivePomodoroRequest{}))
+			if err != nil {
+				return nil, err
+			}
+			return resp.Msg.Pomodoro, nil
+		},
+		func(ctx context.Context, id int64) (*taskv1.Task, error) {
+			resp, err := client.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: id}))
+			if err != nil {
+				return nil, err
+			}
+			return resp.Msg.Task, nil
+		},
+		time.Now(),
+		os.Stdout,
+	)
+}
+
+func runStatusWith(
+	getActiveFn func(ctx context.Context) (*taskv1.Pomodoro, error),
+	getTaskFn func(ctx context.Context, id int64) (*taskv1.Task, error),
+	now time.Time,
+	w io.Writer,
+) int {
+	ctx := context.Background()
+	p, err := getActiveFn(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+	if p == nil {
+		fmt.Fprintln(w, "No active pomodoro.")
+		return 0
+	}
+	startAt := p.StartAt.AsTime()
+	remaining := pomodoro.Remaining(startAt, now)
+	mins := int(remaining.Minutes())
+	secs := int(remaining.Seconds()) % 60
+
+	task, err := getTaskFn(ctx, p.TaskId)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(w, "Active pomodoro: task %d %q\n", task.Id, task.Name)
+	fmt.Fprintf(w, "started: %s\n", startAt.Format(time.RFC3339))
+	fmt.Fprintf(w, "remaining: %d:%02d\n", mins, secs)
+	return 0
+}
+
+func execHook(cmd string) error {
+	c := exec.Command("sh", "-c", cmd)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
+func parseStartArgs(args []string) (taskID int64, execCmd string, ok bool) {
+	if len(args) == 0 {
+		return 0, "", false
+	}
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid task_id: %v\n", args[0])
+		return 0, "", false
+	}
+	rest := args[1:]
+	for i := 0; i < len(rest); i++ {
+		if rest[i] == "--exec" && i+1 < len(rest) {
+			execCmd = rest[i+1]
+			i++
+		}
+	}
+	return id, execCmd, true
+}
+
+func parseExecFlag(args []string) string {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--exec" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func buildResumeArgs(execCmd string) []string {
+	if execCmd == "" {
+		return nil
+	}
+	return []string{"--exec", execCmd}
+}
+
+func extractActiveTaskID(ce *connect.Error) int64 {
+	for _, d := range ce.Details() {
+		v, err := d.Value()
+		if err != nil {
+			continue
+		}
+		if req, ok := v.(*taskv1.StartPomodoroRequest); ok {
+			return req.TaskId
+		}
+	}
+	return 0
+}
+
+func promptRestartResume(taskID int64) string {
+	fmt.Fprintf(os.Stderr, "you have an active pomodoro on task %d. [r]estart or [s]resume? ", taskID)
+	var input string
+	fmt.Fscan(os.Stdin, &input)
+	switch input {
+	case "r", "restart":
+		return "restart"
+	case "s", "resume":
+		return "resume"
+	}
+	return ""
+}
+
+func promptCancelAndStart(activeTaskID int64) string {
+	fmt.Fprintf(os.Stderr, "you have an active pomodoro on task %d. [c]ancel it and start, or [a]bort? ", activeTaskID)
+	var input string
+	fmt.Fscan(os.Stdin, &input)
+	switch input {
+	case "c", "cancel":
+		return "cancel"
+	}
+	return ""
+}

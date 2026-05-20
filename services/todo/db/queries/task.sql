@@ -43,6 +43,9 @@ SELECT EXISTS (
     SELECT 1 FROM descendants WHERE completed_at IS NULL
 ) AS has_incomplete;
 
+-- name: SetTaskEstimate :one
+UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING *;
+
 -- name: GetParentCompletion :one
 SELECT completed_at FROM tasks WHERE id = $1 AND user_id = $2;
 
