@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	"connectrpc.com/connect"
@@ -62,9 +63,7 @@ func realCountdownDeps(client taskv1connect.TaskServiceClient, ctx context.Conte
 				return 0, nil
 			}
 			buf := make([]byte, 1)
-			_ = os.Stdin.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
 			n, _ := os.Stdin.Read(buf)
-			_ = os.Stdin.SetReadDeadline(time.Time{})
 			if n > 0 {
 				return buf[0], nil
 			}
@@ -93,7 +92,9 @@ func runCountdown(
 	fd := int(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
 		if oldState, err := term.MakeRaw(fd); err == nil {
+			_ = syscall.SetNonblock(fd, true)
 			defer func() {
+				_ = syscall.SetNonblock(fd, false)
 				_ = term.Restore(fd, oldState)
 				fmt.Println()
 			}()
