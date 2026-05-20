@@ -69,6 +69,8 @@ func runTask(args []string) int {
 		return runRm(client, args[1:])
 	case "mod":
 		return runMod(client, args[1:])
+	case "complete":
+		return runComplete(client, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
 		printTaskUsage()
@@ -80,12 +82,14 @@ func printTaskUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: todo task <subcommand> [arguments]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  list             List all tasks as a tree")
+	fmt.Fprintln(os.Stderr, "  list [--completed | --all]")
+	fmt.Fprintln(os.Stderr, "                   List tasks as a tree (default: incomplete only)")
 	fmt.Fprintln(os.Stderr, "  add [--parent <id>] [--due <timestamp>] <name>")
 	fmt.Fprintln(os.Stderr, "                   Add a new task")
 	fmt.Fprintln(os.Stderr, "  rm <id>          Remove a task")
 	fmt.Fprintln(os.Stderr, "  mod [--parent <id>] [--due <timestamp>] <id> <name>")
 	fmt.Fprintln(os.Stderr, "                   Modify a task")
+	fmt.Fprintln(os.Stderr, "  complete <id>    Mark a task complete")
 }
 
 // bearerInterceptor returns a Connect interceptor that adds an

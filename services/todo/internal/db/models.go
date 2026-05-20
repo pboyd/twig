@@ -30,6 +30,7 @@ type Task struct {
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
 	UserID      int64
+	CompletedAt pgtype.Timestamptz
 }
 
 type User struct {

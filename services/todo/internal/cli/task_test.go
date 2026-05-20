@@ -10,10 +10,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // fakeTaskService is an in-memory implementation of TaskServiceHandler for testing.
@@ -40,8 +42,13 @@ func (s *fakeTaskService) CreateTask(_ context.Context, req *connect.Request[tas
 	}
 
 	if req.Msg.ParentId != nil {
-		if _, ok := s.tasks[*req.Msg.ParentId]; !ok {
+		parent, ok := s.tasks[*req.Msg.ParentId]
+		if !ok {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("parent task not found"))
+		}
+		if parent.CompletedAt != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("cannot add a subtask under task %d: parent is complete", *req.Msg.ParentId))
 		}
 	}
 
@@ -105,6 +112,10 @@ func (s *fakeTaskService) UpdateTask(_ context.Context, req *connect.Request[tas
 			}
 			pid = *p.ParentId
 		}
+		if parent := s.tasks[*req.Msg.ParentId]; parent != nil && parent.CompletedAt != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("cannot move task under task %d: parent is complete", *req.Msg.ParentId))
+		}
 	}
 
 	task.Name = req.Msg.Name
@@ -125,6 +136,45 @@ func (s *fakeTaskService) DeleteTask(_ context.Context, req *connect.Request[tas
 	// Cascade delete children
 	s.deleteSubtree(req.Msg.Id)
 	return connect.NewResponse(&taskv1.DeleteTaskResponse{}), nil
+}
+
+func (s *fakeTaskService) CompleteTask(_ context.Context, req *connect.Request[taskv1.CompleteTaskRequest]) (*connect.Response[taskv1.CompleteTaskResponse], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[req.Msg.Id]
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task not found"))
+	}
+
+	// Check for incomplete descendants.
+	for _, t := range s.tasks {
+		if t.CompletedAt == nil && s.isDescendant(req.Msg.Id, t.Id) {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("incomplete descendants: [%d]", t.Id))
+		}
+	}
+
+	if task.CompletedAt == nil {
+		now := timestamppb.New(time.Now())
+		task.CompletedAt = now
+	}
+	return connect.NewResponse(&taskv1.CompleteTaskResponse{Task: task}), nil
+}
+
+// isDescendant returns true if candidateID is a descendant of ancestorID. Caller must hold mu.
+func (s *fakeTaskService) isDescendant(ancestorID, candidateID int64) bool {
+	current := candidateID
+	for {
+		t, ok := s.tasks[current]
+		if !ok || t.ParentId == nil {
+			return false
+		}
+		if *t.ParentId == ancestorID {
+			return true
+		}
+		current = *t.ParentId
+	}
 }
 
 // deleteSubtree removes a task and all its descendants. Caller must hold mu.
@@ -456,5 +506,175 @@ func TestRmMalformedID(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "integer") {
 		t.Errorf("expected integer error, got: %s", stderr)
+	}
+}
+
+// --- Tests for complete (US1) ---
+
+func TestCompleteLeaf(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"leaf task"}) // id=1
+	stdout, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "completed task 1") {
+		t.Errorf("expected 'completed task 1', got: %s", stdout)
+	}
+}
+
+func TestCompleteIdempotent(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"leaf"}) // id=1
+	runCmd(runComplete, h.client, []string{"1"})
+	// Small sleep so the second call timestamp is definitely after the first.
+	time.Sleep(5 * time.Millisecond)
+	stdout, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 on re-complete, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "already complete") {
+		t.Errorf("expected 'already complete' message, got: %s", stdout)
+	}
+}
+
+func TestCompleteMalformedID(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runComplete, h.client, []string{"abc"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "integer") {
+		t.Errorf("expected integer error, got: %s", stderr)
+	}
+}
+
+func TestCompleteNotFound(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runComplete, h.client, []string{"999"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if stderr == "" {
+		t.Error("expected error message on stderr")
+	}
+}
+
+func TestCompleteBlockedByIncompleteDescendant(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"parent"})                 // id=1
+	runCmd(runAdd, h.client, []string{"--parent", "1", "child"}) // id=2
+	_, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "incomplete descendants") {
+		t.Errorf("expected 'incomplete descendants' message, got: %s", stderr)
+	}
+}
+
+// --- Tests for list filter flags (US3) ---
+
+func TestListFlagsMutuallyExclusive(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runList, h.client, []string{"--completed", "--all"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "mutually exclusive") {
+		t.Errorf("expected mutually exclusive message, got: %s", stderr)
+	}
+}
+
+func TestListDefaultHidesCompleted(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"done"})    // id=1
+	runCmd(runAdd, h.client, []string{"pending"}) // id=2
+	runCmd(runComplete, h.client, []string{"1"})
+
+	stdout, stderr, code := runCmd(runList, h.client, []string{})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if strings.Contains(stdout, "done") {
+		t.Errorf("completed task should not appear in default list: %s", stdout)
+	}
+	if !strings.Contains(stdout, "pending") {
+		t.Errorf("incomplete task should appear in default list: %s", stdout)
+	}
+}
+
+func TestListCompletedFlag(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"done"})    // id=1
+	runCmd(runAdd, h.client, []string{"pending"}) // id=2
+	runCmd(runComplete, h.client, []string{"1"})
+
+	stdout, stderr, code := runCmd(runList, h.client, []string{"--completed"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "done") {
+		t.Errorf("expected completed task in --completed list: %s", stdout)
+	}
+	if strings.Contains(stdout, "pending") {
+		t.Errorf("incomplete task should not appear in --completed list: %s", stdout)
+	}
+}
+
+func TestListAllFlag(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"done"})    // id=1
+	runCmd(runAdd, h.client, []string{"pending"}) // id=2
+	runCmd(runComplete, h.client, []string{"1"})
+
+	stdout, stderr, code := runCmd(runList, h.client, []string{"--all"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "done") || !strings.Contains(stdout, "pending") {
+		t.Errorf("expected both tasks in --all list: %s", stdout)
+	}
+}
+
+func TestListCheckboxPrefix(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"incomplete"}) // id=1
+	runCmd(runAdd, h.client, []string{"complete"})   // id=2
+	runCmd(runComplete, h.client, []string{"2"})
+
+	stdout, _, _ := runCmd(runList, h.client, []string{"--all"})
+	if !strings.Contains(stdout, "[ ]") {
+		t.Errorf("expected [ ] prefix for incomplete task: %s", stdout)
+	}
+	if !strings.Contains(stdout, "[x]") {
+		t.Errorf("expected [x] prefix for complete task: %s", stdout)
+	}
+}
+
+func TestCompleteParentBlockedCLI(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"parent"})               // id=1
+	runCmd(runComplete, h.client, []string{"1"})
+	_, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "1", "late child"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "parent is complete") {
+		t.Errorf("expected 'parent is complete' message, got: %s", stderr)
+	}
+}
+
+func TestModCompleteParentBlockedCLI(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h.client, []string{"parent"})   // id=1
+	runCmd(runAdd, h.client, []string{"orphan"})   // id=2
+	runCmd(runComplete, h.client, []string{"1"})
+	_, stderr, code := runCmd(runMod, h.client, []string{"--parent", "1", "2", "orphan"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "parent is complete") {
+		t.Errorf("expected 'parent is complete' message, got: %s", stderr)
 	}
 }

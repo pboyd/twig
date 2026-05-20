@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"connectrpc.com/connect"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
@@ -14,20 +15,72 @@ import (
 
 func runList(client taskv1connect.TaskServiceClient, args []string) int {
 	addr := backendAddr()
+
+	fs := flag.NewFlagSet("list", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var showCompleted bool
+	var showAll bool
+	fs.BoolVar(&showCompleted, "completed", false, "show only completed tasks")
+	fs.BoolVar(&showAll, "all", false, "show all tasks")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	if showCompleted && showAll {
+		fmt.Fprintln(os.Stderr, "--completed and --all are mutually exclusive")
+		return 1
+	}
+
 	resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, mapError(err, addr))
 		return 1
 	}
 
-	tasks := resp.Msg.Tasks
-	if len(tasks) == 0 {
+	roots := buildTree(resp.Msg.Tasks)
+	switch {
+	case showCompleted:
+		roots = filterCompleted(roots)
+	case showAll:
+		// no filtering
+	default:
+		roots = pruneIncomplete(roots)
+	}
+
+	if len(roots) == 0 {
 		fmt.Println("no tasks")
 		return 0
 	}
 
-	roots := buildTree(tasks)
 	renderRoots(os.Stdout, roots)
+	return 0
+}
+
+func runComplete(client taskv1connect.TaskServiceClient, args []string) int {
+	addr := backendAddr()
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: todo task complete <id>")
+		return 1
+	}
+
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "<id> must be an integer, got %q\n", args[0])
+		return 1
+	}
+
+	before := time.Now()
+	resp, err := client.CompleteTask(context.Background(), connect.NewRequest(&taskv1.CompleteTaskRequest{Id: id}))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, mapError(err, addr))
+		return 1
+	}
+
+	task := resp.Msg.Task
+	if task.CompletedAt != nil && task.CompletedAt.AsTime().Before(before) {
+		fmt.Printf("task %d already complete (at %s)\n", id, task.CompletedAt.AsTime().UTC().Format(time.RFC3339))
+	} else {
+		fmt.Printf("completed task %d\n", id)
+	}
 	return 0
 }
 

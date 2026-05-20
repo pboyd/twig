@@ -59,12 +59,12 @@ todo task add --parent 2 "write changelog"            # → created task 3
 todo task add --parent 2 "tag the commit"             # → created task 4
 
 todo task complete 2
-# error: cannot complete task 2: incomplete descendants: [3, 4]
+# incomplete descendants: [3 4]
 # (exit 1)
 
 todo task complete 3                                  # → completed task 3
 todo task complete 2
-# error: cannot complete task 2: incomplete descendants: [4]
+# incomplete descendants: [4]
 # (exit 1)
 
 todo task complete 4
@@ -128,9 +128,9 @@ repeatedly can do so safely.
 
 | Command | Exit | Stderr (excerpt) |
 |---------|------|------------------|
-| `todo task complete 999` (no such task) | 1 | `error: task 999 not found` |
+| `todo task complete 999` (no such task) | 1 | `task not found` |
 | `todo task complete abc` (malformed id) | 1 | `<id> must be an integer, got "abc"` |
-| `todo task complete 2` with incomplete descendants | 1 | `cannot complete task 2: incomplete descendants: [...]` |
+| `todo task complete 2` with incomplete descendants | 1 | `incomplete descendants: [<id> ...]` |
 | `todo task list --completed --all` | 1 | `--completed and --all are mutually exclusive` |
 | `todo task add --parent <complete-id> ...` | 1 | `cannot add a subtask under task <id>: parent is complete` |
 | `todo task mod --parent <complete-id> <id> <name>` | 1 | `cannot move task under task <id>: parent is complete` |

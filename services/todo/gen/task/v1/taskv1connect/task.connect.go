@@ -49,6 +49,9 @@ const (
 	TaskServiceUpdateTaskProcedure = "/task.v1.TaskService/UpdateTask"
 	// TaskServiceDeleteTaskProcedure is the fully-qualified name of the TaskService's DeleteTask RPC.
 	TaskServiceDeleteTaskProcedure = "/task.v1.TaskService/DeleteTask"
+	// TaskServiceCompleteTaskProcedure is the fully-qualified name of the TaskService's CompleteTask
+	// RPC.
+	TaskServiceCompleteTaskProcedure = "/task.v1.TaskService/CompleteTask"
 )
 
 // TaskServiceClient is a client for the task.v1.TaskService service.
@@ -64,6 +67,15 @@ type TaskServiceClient interface {
 	UpdateTask(context.Context, *connect.Request[v1.UpdateTaskRequest]) (*connect.Response[v1.UpdateTaskResponse], error)
 	// DeleteTask removes a task and, by cascade, all of its descendants.
 	DeleteTask(context.Context, *connect.Request[v1.DeleteTaskRequest]) (*connect.Response[v1.DeleteTaskResponse], error)
+	// CompleteTask marks the identified task complete and records the completion
+	// moment. It is idempotent: re-completing a task is a successful no-op that
+	// returns the row unchanged with its original completed_at.
+	//
+	// Errors:
+	//
+	//	NotFound          — no task exists with the given id (for this user)
+	//	FailedPrecondition — the task has at least one incomplete descendant
+	CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error)
 }
 
 // NewTaskServiceClient constructs a client for the task.v1.TaskService service. By default, it uses
@@ -107,16 +119,23 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(taskServiceMethods.ByName("DeleteTask")),
 			connect.WithClientOptions(opts...),
 		),
+		completeTask: connect.NewClient[v1.CompleteTaskRequest, v1.CompleteTaskResponse](
+			httpClient,
+			baseURL+TaskServiceCompleteTaskProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("CompleteTask")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // taskServiceClient implements TaskServiceClient.
 type taskServiceClient struct {
-	createTask *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	getTask    *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	listTasks  *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	updateTask *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	createTask   *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	getTask      *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	listTasks    *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	updateTask   *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	deleteTask   *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	completeTask *connect.Client[v1.CompleteTaskRequest, v1.CompleteTaskResponse]
 }
 
 // CreateTask calls task.v1.TaskService.CreateTask.
@@ -144,6 +163,11 @@ func (c *taskServiceClient) DeleteTask(ctx context.Context, req *connect.Request
 	return c.deleteTask.CallUnary(ctx, req)
 }
 
+// CompleteTask calls task.v1.TaskService.CompleteTask.
+func (c *taskServiceClient) CompleteTask(ctx context.Context, req *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error) {
+	return c.completeTask.CallUnary(ctx, req)
+}
+
 // TaskServiceHandler is an implementation of the task.v1.TaskService service.
 type TaskServiceHandler interface {
 	// CreateTask stores a new task and returns it with its assigned id.
@@ -157,6 +181,15 @@ type TaskServiceHandler interface {
 	UpdateTask(context.Context, *connect.Request[v1.UpdateTaskRequest]) (*connect.Response[v1.UpdateTaskResponse], error)
 	// DeleteTask removes a task and, by cascade, all of its descendants.
 	DeleteTask(context.Context, *connect.Request[v1.DeleteTaskRequest]) (*connect.Response[v1.DeleteTaskResponse], error)
+	// CompleteTask marks the identified task complete and records the completion
+	// moment. It is idempotent: re-completing a task is a successful no-op that
+	// returns the row unchanged with its original completed_at.
+	//
+	// Errors:
+	//
+	//	NotFound          — no task exists with the given id (for this user)
+	//	FailedPrecondition — the task has at least one incomplete descendant
+	CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error)
 }
 
 // NewTaskServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -196,6 +229,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(taskServiceMethods.ByName("DeleteTask")),
 		connect.WithHandlerOptions(opts...),
 	)
+	taskServiceCompleteTaskHandler := connect.NewUnaryHandler(
+		TaskServiceCompleteTaskProcedure,
+		svc.CompleteTask,
+		connect.WithSchema(taskServiceMethods.ByName("CompleteTask")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/task.v1.TaskService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TaskServiceCreateTaskProcedure:
@@ -208,6 +247,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 			taskServiceUpdateTaskHandler.ServeHTTP(w, r)
 		case TaskServiceDeleteTaskProcedure:
 			taskServiceDeleteTaskHandler.ServeHTTP(w, r)
+		case TaskServiceCompleteTaskProcedure:
+			taskServiceCompleteTaskHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -235,4 +276,8 @@ func (UnimplementedTaskServiceHandler) UpdateTask(context.Context, *connect.Requ
 
 func (UnimplementedTaskServiceHandler) DeleteTask(context.Context, *connect.Request[v1.DeleteTaskRequest]) (*connect.Response[v1.DeleteTaskResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.DeleteTask is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.CompleteTask is not implemented"))
 }

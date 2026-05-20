@@ -11,10 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeTask = `-- name: CompleteTask :one
+UPDATE tasks
+SET completed_at = COALESCE(completed_at, NOW())
+WHERE id = $1 AND user_id = $2
+RETURNING id, name, description, due, parent_id, user_id, completed_at
+`
+
+type CompleteTaskParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Task, error) {
+	row := q.db.QueryRow(ctx, completeTask, arg.ID, arg.UserID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Due,
+		&i.ParentID,
+		&i.UserID,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (name, description, due, parent_id, user_id)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, description, due, parent_id, user_id
+RETURNING id, name, description, due, parent_id, user_id, completed_at
 `
 
 type CreateTaskParams struct {
@@ -41,6 +68,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Due,
 		&i.ParentID,
 		&i.UserID,
+		&i.CompletedAt,
 	)
 	return i, err
 }
@@ -62,8 +90,24 @@ func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, 
 	return id, err
 }
 
+const getParentCompletion = `-- name: GetParentCompletion :one
+SELECT completed_at FROM tasks WHERE id = $1 AND user_id = $2
+`
+
+type GetParentCompletionParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) GetParentCompletion(ctx context.Context, arg GetParentCompletionParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getParentCompletion, arg.ID, arg.UserID)
+	var completed_at pgtype.Timestamptz
+	err := row.Scan(&completed_at)
+	return completed_at, err
+}
+
 const getTask = `-- name: GetTask :one
-SELECT id, name, description, due, parent_id, user_id FROM tasks WHERE id = $1 AND user_id = $2
+SELECT id, name, description, due, parent_id, user_id, completed_at FROM tasks WHERE id = $1 AND user_id = $2
 `
 
 type GetTaskParams struct {
@@ -81,12 +125,80 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.Due,
 		&i.ParentID,
 		&i.UserID,
+		&i.CompletedAt,
 	)
 	return i, err
 }
 
+const hasIncompleteDescendants = `-- name: HasIncompleteDescendants :one
+WITH RECURSIVE descendants AS (
+    SELECT tasks.id, tasks.completed_at
+      FROM tasks
+     WHERE tasks.parent_id = $1 AND tasks.user_id = $2
+    UNION ALL
+    SELECT t.id, t.completed_at
+      FROM tasks t
+      JOIN descendants d ON t.parent_id = d.id
+     WHERE t.user_id = $2
+)
+SELECT EXISTS (
+    SELECT 1 FROM descendants WHERE completed_at IS NULL
+) AS has_incomplete
+`
+
+type HasIncompleteDescendantsParams struct {
+	ParentID pgtype.Int8
+	UserID   int64
+}
+
+func (q *Queries) HasIncompleteDescendants(ctx context.Context, arg HasIncompleteDescendantsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasIncompleteDescendants, arg.ParentID, arg.UserID)
+	var has_incomplete bool
+	err := row.Scan(&has_incomplete)
+	return has_incomplete, err
+}
+
+const listIncompleteDescendantIds = `-- name: ListIncompleteDescendantIds :many
+WITH RECURSIVE descendants AS (
+    SELECT tasks.id, tasks.completed_at
+      FROM tasks
+     WHERE tasks.parent_id = $1 AND tasks.user_id = $2
+    UNION ALL
+    SELECT t.id, t.completed_at
+      FROM tasks t
+      JOIN descendants d ON t.parent_id = d.id
+     WHERE t.user_id = $2
+)
+SELECT id FROM descendants WHERE completed_at IS NULL ORDER BY id
+`
+
+type ListIncompleteDescendantIdsParams struct {
+	ParentID pgtype.Int8
+	UserID   int64
+}
+
+func (q *Queries) ListIncompleteDescendantIds(ctx context.Context, arg ListIncompleteDescendantIdsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listIncompleteDescendantIds, arg.ParentID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, description, due, parent_id, user_id FROM tasks WHERE user_id = $1 ORDER BY id
+SELECT id, name, description, due, parent_id, user_id, completed_at FROM tasks WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
@@ -105,6 +217,7 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 			&i.Due,
 			&i.ParentID,
 			&i.UserID,
+			&i.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -136,7 +249,7 @@ const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
 SET name = $2, description = $3, due = $4, parent_id = $5
 WHERE id = $1 AND user_id = $6
-RETURNING id, name, description, due, parent_id, user_id
+RETURNING id, name, description, due, parent_id, user_id, completed_at
 `
 
 type UpdateTaskParams struct {
@@ -165,6 +278,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Due,
 		&i.ParentID,
 		&i.UserID,
+		&i.CompletedAt,
 	)
 	return i, err
 }

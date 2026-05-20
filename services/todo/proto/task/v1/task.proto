@@ -29,6 +29,15 @@ service TaskService {
 
   // DeleteTask removes a task and, by cascade, all of its descendants.
   rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+
+  // CompleteTask marks the identified task complete and records the completion
+  // moment. It is idempotent: re-completing a task is a successful no-op that
+  // returns the row unchanged with its original completed_at.
+  //
+  // Errors:
+  //   NotFound          — no task exists with the given id (for this user)
+  //   FailedPrecondition — the task has at least one incomplete descendant
+  rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
 }
 
 // Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -44,6 +53,20 @@ message Task {
   google.protobuf.Timestamp due = 4;
   // Optional parent task id; unset for a top-level task.
   optional int64 parent_id = 5;
+  // Unset when the task is incomplete; set to the moment of completion
+  // (UTC) when complete. Once set, it never changes.
+  google.protobuf.Timestamp completed_at = 6;
+}
+
+message CompleteTaskRequest {
+  // Identifier of the task to mark complete.
+  int64 id = 1;
+}
+
+message CompleteTaskResponse {
+  // The task in its post-completion state. For a task that was already
+  // complete, this is the unchanged row.
+  Task task = 1;
 }
 
 message CreateTaskRequest {

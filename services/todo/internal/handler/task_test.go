@@ -2,14 +2,18 @@ package handler_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
@@ -17,6 +21,8 @@ import (
 	"github.com/pboyd/todo/services/todo/internal/db"
 	"github.com/pboyd/todo/services/todo/internal/handler"
 )
+
+var testUserCounter int64
 
 // newTestHandler creates a Task handler backed by a real PostgreSQL database.
 // Tests that call this are integration tests and require DATABASE_URL.
@@ -48,8 +54,9 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
+	n := atomic.AddInt64(&testUserCounter, 1)
 	user, err := queries.CreateUser(context.Background(), db.CreateUserParams{
-		Username:     "testuser_" + t.Name(),
+		Username:     fmt.Sprintf("testuser_%d_%s", n, t.Name()),
 		PasswordHash: hash,
 	})
 	if err != nil {
@@ -58,6 +65,7 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 	userID := user.ID
 
 	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "DELETE FROM tasks WHERE user_id = $1", userID)
 		_, _ = pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
 	})
 	return &handler.Task{Queries: queries}, userID
@@ -66,6 +74,34 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 // ctxWithUser returns a context carrying the given user_id.
 func ctxWithUser(userID int64) context.Context {
 	return auth.WithUserID(context.Background(), userID)
+}
+
+// ---- Unit tests: dbTaskToProto ----
+
+func TestDbTaskToProto_CompletedAt(t *testing.T) {
+	t.Run("completed_at unset when Valid false", func(t *testing.T) {
+		row := db.Task{ID: 1, Name: "task"}
+		pt := handler.ExportDbTaskToProto(row)
+		if pt.CompletedAt != nil {
+			t.Errorf("expected nil completed_at, got %v", pt.CompletedAt)
+		}
+	})
+
+	t.Run("completed_at set when Valid true", func(t *testing.T) {
+		ts := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+		row := db.Task{
+			ID:          1,
+			Name:        "task",
+			CompletedAt: pgtype.Timestamptz{Time: ts, Valid: true},
+		}
+		pt := handler.ExportDbTaskToProto(row)
+		if pt.CompletedAt == nil {
+			t.Fatal("expected non-nil completed_at")
+		}
+		if !pt.CompletedAt.AsTime().Equal(ts) {
+			t.Errorf("completed_at = %v, want %v", pt.CompletedAt.AsTime(), ts)
+		}
+	})
 }
 
 // ---- Unit tests: name validation ----
@@ -497,6 +533,246 @@ func TestDeleteTask_Integration(t *testing.T) {
 		ce, ok := err.(*connect.Error)
 		if !ok || ce.Code() != connect.CodeNotFound {
 			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+}
+
+// ---- Integration tests: CompleteTask (US1 + US4) ----
+
+func TestCompleteTask_Integration(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Create a leaf task.
+	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "leaf"}))
+	if err != nil {
+		t.Fatalf("setup CreateTask: %v", err)
+	}
+	leafID := resp.Msg.Task.Id
+
+	t.Run("marks leaf complete and sets completed_at", func(t *testing.T) {
+		before := time.Now()
+		cr, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: leafID}))
+		if err != nil {
+			t.Fatalf("CompleteTask: %v", err)
+		}
+		task := cr.Msg.Task
+		if task.CompletedAt == nil {
+			t.Fatal("expected completed_at to be set")
+		}
+		completedTime := task.CompletedAt.AsTime()
+		if completedTime.Before(before) || completedTime.After(time.Now()) {
+			t.Errorf("completed_at %v not near now", completedTime)
+		}
+	})
+
+	t.Run("idempotent: second call returns same completed_at", func(t *testing.T) {
+		first, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: leafID}))
+		if err != nil {
+			t.Fatalf("first CompleteTask: %v", err)
+		}
+		second, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: leafID}))
+		if err != nil {
+			t.Fatalf("second CompleteTask: %v", err)
+		}
+		if !first.Msg.Task.CompletedAt.AsTime().Equal(second.Msg.Task.CompletedAt.AsTime()) {
+			t.Errorf("completed_at changed: first=%v second=%v",
+				first.Msg.Task.CompletedAt.AsTime(), second.Msg.Task.CompletedAt.AsTime())
+		}
+	})
+
+	t.Run("not found for unknown id", func(t *testing.T) {
+		_, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: 999999}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("cross-user: not found for another user's task", func(t *testing.T) {
+		_, userB := newTestHandler(t)
+		ctxB := ctxWithUser(userB)
+		_, err := h.CompleteTask(ctxB, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: leafID}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("blocked by incomplete direct child", func(t *testing.T) {
+		parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent"}))
+		if err != nil {
+			t.Fatalf("create parent: %v", err)
+		}
+		parentID := parentResp.Msg.Task.Id
+		_, err = h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "child",
+			ParentId: &parentID,
+		}))
+		if err != nil {
+			t.Fatalf("create child: %v", err)
+		}
+
+		_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: parentID}))
+		if err == nil {
+			t.Fatal("expected FailedPrecondition, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeFailedPrecondition {
+			t.Errorf("expected CodeFailedPrecondition, got %v", err)
+		}
+	})
+
+	t.Run("blocked by incomplete grandchild", func(t *testing.T) {
+		topResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "top"}))
+		if err != nil {
+			t.Fatalf("create top: %v", err)
+		}
+		topID := topResp.Msg.Task.Id
+		midResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "mid",
+			ParentId: &topID,
+		}))
+		if err != nil {
+			t.Fatalf("create mid: %v", err)
+		}
+		midID := midResp.Msg.Task.Id
+		_, err = h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "leaf2",
+			ParentId: &midID,
+		}))
+		if err != nil {
+			t.Fatalf("create leaf2: %v", err)
+		}
+
+		_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: topID}))
+		if err == nil {
+			t.Fatal("expected FailedPrecondition for grandchild, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeFailedPrecondition {
+			t.Errorf("expected CodeFailedPrecondition, got %v", err)
+		}
+	})
+
+	t.Run("succeeds once all descendants are complete", func(t *testing.T) {
+		parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent2"}))
+		if err != nil {
+			t.Fatalf("create parent2: %v", err)
+		}
+		parentID := parentResp.Msg.Task.Id
+		childResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "child2",
+			ParentId: &parentID,
+		}))
+		if err != nil {
+			t.Fatalf("create child2: %v", err)
+		}
+		childID := childResp.Msg.Task.Id
+
+		_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: childID}))
+		if err != nil {
+			t.Fatalf("complete child2: %v", err)
+		}
+		_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: parentID}))
+		if err != nil {
+			t.Fatalf("complete parent2 after child done: %v", err)
+		}
+	})
+}
+
+func TestCreateTask_CompleteParentRejected(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "complete-parent"}))
+	if err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	parentID := parentResp.Msg.Task.Id
+	_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: parentID}))
+	if err != nil {
+		t.Fatalf("complete parent: %v", err)
+	}
+
+	t.Run("rejected when parent is complete", func(t *testing.T) {
+		_, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "late child",
+			ParentId: &parentID,
+		}))
+		if err == nil {
+			t.Fatal("expected FailedPrecondition, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeFailedPrecondition {
+			t.Errorf("expected CodeFailedPrecondition, got %v", err)
+		}
+	})
+
+	t.Run("incomplete parent still succeeds", func(t *testing.T) {
+		incompleteParentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "incomplete-parent"}))
+		if err != nil {
+			t.Fatalf("create incomplete parent: %v", err)
+		}
+		incompleteID := incompleteParentResp.Msg.Task.Id
+		_, err = h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "child under incomplete",
+			ParentId: &incompleteID,
+		}))
+		if err != nil {
+			t.Fatalf("CreateTask under incomplete parent: %v", err)
+		}
+	})
+}
+
+func TestUpdateTask_CompleteParentRejected(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "complete-parent"}))
+	if err != nil {
+		t.Fatalf("create parent: %v", err)
+	}
+	parentID := parentResp.Msg.Task.Id
+	_, err = h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: parentID}))
+	if err != nil {
+		t.Fatalf("complete parent: %v", err)
+	}
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "standalone"}))
+	if err != nil {
+		t.Fatalf("create standalone: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	t.Run("rejected when re-parenting under complete parent", func(t *testing.T) {
+		_, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+			Id:       taskID,
+			Name:     "standalone",
+			ParentId: &parentID,
+		}))
+		if err == nil {
+			t.Fatal("expected FailedPrecondition, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeFailedPrecondition {
+			t.Errorf("expected CodeFailedPrecondition, got %v", err)
+		}
+	})
+
+	t.Run("update not changing parent does not regress", func(t *testing.T) {
+		_, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+			Id:   taskID,
+			Name: "standalone-renamed",
+		}))
+		if err != nil {
+			t.Fatalf("UpdateTask without parent change: %v", err)
 		}
 	})
 }

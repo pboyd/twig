@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -32,6 +33,9 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 	if t.ParentID.Valid {
 		v := t.ParentID.Int64
 		pt.ParentId = &v
+	}
+	if t.CompletedAt.Valid {
+		pt.CompletedAt = timestamppb.New(t.CompletedAt.Time)
 	}
 	return pt
 }
@@ -93,6 +97,14 @@ func (t *Task) CreateTask(
 		}
 		if !exists {
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent task not found"))
+		}
+		parentCompletion, err := t.Queries.GetParentCompletion(ctx, db.GetParentCompletionParams{ID: *req.Msg.ParentId, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if parentCompletion.Valid {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("cannot add a subtask under task %d: parent is complete", *req.Msg.ParentId))
 		}
 		params.ParentID = pgtype.Int8{Int64: *req.Msg.ParentId, Valid: true}
 	}
@@ -171,6 +183,14 @@ func (t *Task) UpdateTask(
 		if cycle {
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent_id would create a cycle"))
 		}
+		parentCompletion, err := t.Queries.GetParentCompletion(ctx, db.GetParentCompletionParams{ID: newParentID, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if parentCompletion.Valid {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("cannot move task under task %d: parent is complete", newParentID))
+		}
 		params.ParentID = pgtype.Int8{Int64: newParentID, Valid: true}
 	}
 
@@ -182,6 +202,51 @@ func (t *Task) UpdateTask(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&taskv1.UpdateTaskResponse{Task: dbTaskToProto(row)}), nil
+}
+
+func (t *Task) CompleteTask(
+	ctx context.Context,
+	req *connect.Request[taskv1.CompleteTaskRequest],
+) (*connect.Response[taskv1.CompleteTaskResponse], error) {
+	userID := auth.UserID(ctx)
+
+	// Verify task exists before checking descendants.
+	_, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Block completion when any descendant is incomplete.
+	hasIncomplete, err := t.Queries.HasIncompleteDescendants(ctx, db.HasIncompleteDescendantsParams{
+		ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
+		UserID:   userID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if hasIncomplete {
+		ids, err := t.Queries.ListIncompleteDescendantIds(ctx, db.ListIncompleteDescendantIdsParams{
+			ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
+			UserID:   userID,
+		})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			fmt.Errorf("incomplete descendants: %v", ids))
+	}
+
+	row, err := t.Queries.CompleteTask(ctx, db.CompleteTaskParams{ID: req.Msg.Id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&taskv1.CompleteTaskResponse{Task: dbTaskToProto(row)}), nil
 }
 
 func (t *Task) DeleteTask(

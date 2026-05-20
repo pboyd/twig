@@ -91,6 +91,22 @@ func sortNodes(nodes []*treeNode) {
 	}
 }
 
+// formatCompletedAt formats a proto timestamp as RFC 3339 UTC, or empty string if nil.
+func formatCompletedAt(ts *timestamppb.Timestamp) string {
+	if ts == nil {
+		return ""
+	}
+	return ts.AsTime().UTC().Format(time.RFC3339)
+}
+
+// checkboxPrefix returns "[ ] " for incomplete tasks and "[x] " for complete.
+func checkboxPrefix(task *taskv1.Task) string {
+	if task.GetCompletedAt() != nil {
+		return "[x] "
+	}
+	return "[ ] "
+}
+
 // renderTree writes the tree to w using tree-style ASCII connectors.
 func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool) {
 	for i, node := range nodes {
@@ -104,9 +120,12 @@ func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool) {
 		}
 
 		due := formatDue(node.task.Due)
-		line := fmt.Sprintf("%s%s[%d] %s", prefix, connector, node.task.Id, node.task.Name)
+		line := fmt.Sprintf("%s%s%s[%d] %s", prefix, connector, checkboxPrefix(node.task), node.task.Id, node.task.Name)
 		if due != "" {
 			line += fmt.Sprintf(" (due %s)", due)
+		}
+		if cat := formatCompletedAt(node.task.CompletedAt); cat != "" {
+			line += fmt.Sprintf(" (completed %s)", cat)
 		}
 		fmt.Fprintln(w, line)
 		renderTree(w, node.children, childPrefix, last)
@@ -117,11 +136,46 @@ func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool) {
 func renderRoots(w io.Writer, roots []*treeNode) {
 	for _, root := range roots {
 		due := formatDue(root.task.Due)
-		line := fmt.Sprintf("[%d] %s", root.task.Id, root.task.Name)
+		line := fmt.Sprintf("%s[%d] %s", checkboxPrefix(root.task), root.task.Id, root.task.Name)
 		if due != "" {
 			line += fmt.Sprintf(" (due %s)", due)
+		}
+		if cat := formatCompletedAt(root.task.CompletedAt); cat != "" {
+			line += fmt.Sprintf(" (completed %s)", cat)
 		}
 		fmt.Fprintln(w, line)
 		renderTree(w, root.children, "", false)
 	}
+}
+
+// pruneIncomplete returns nodes where the node itself or any descendant is incomplete.
+// Completed leaf nodes whose entire subtree is complete are dropped.
+func pruneIncomplete(roots []*treeNode) []*treeNode {
+	var result []*treeNode
+	for _, node := range roots {
+		prunedChildren := pruneIncomplete(node.children)
+		incomplete := node.task.GetCompletedAt() == nil
+		if incomplete || len(prunedChildren) > 0 {
+			kept := &treeNode{task: node.task, children: prunedChildren}
+			result = append(result, kept)
+		}
+	}
+	return result
+}
+
+// filterCompleted returns nodes that are complete, promoting completed descendants
+// of incomplete parents to the nearest kept ancestor's level (or root).
+func filterCompleted(roots []*treeNode) []*treeNode {
+	var result []*treeNode
+	for _, node := range roots {
+		childResults := filterCompleted(node.children)
+		if node.task.GetCompletedAt() != nil {
+			kept := &treeNode{task: node.task, children: childResults}
+			result = append(result, kept)
+		} else {
+			// Incomplete node: promote any kept children to this level.
+			result = append(result, childResults...)
+		}
+	}
+	return result
 }
