@@ -40,7 +40,7 @@ auto_commit:
     enabled: true
     message: "[Spec Kit] Add specification"
   after_clarify:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Clarify specification"
   after_plan:
     enabled: true
