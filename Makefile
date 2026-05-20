@@ -10,7 +10,7 @@ cli:
 	cd services/todo && go build -o todo ./cmd/todo
 
 dev:
-	podman-compose up --build
+	podman-compose up -d --build --force-recreate
 
 migrate-up:
 	migrate -path services/todo/db/migrations -database "$(DATABASE_URL)" up
