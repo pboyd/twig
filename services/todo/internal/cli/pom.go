@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
@@ -15,6 +16,29 @@ import (
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/pomodoro"
 )
+
+func runPomTop(args []string) int {
+	apiKey := os.Getenv("TODO_API_KEY")
+	if apiKey == "" {
+		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
+		return 1
+	}
+	addr := os.Getenv("TODO_ADDR")
+	if addr == "" {
+		addr = defaultAddr
+	}
+	client := newTaskClient(addr, apiKey)
+	return runPom(client, args)
+}
+
+func newTaskClient(addr, apiKey string) taskv1connect.TaskServiceClient {
+	return taskv1connect.NewTaskServiceClient(
+		&http.Client{},
+		addr,
+		connect.WithSendGzip(),
+		connect.WithInterceptors(bearerInterceptor(apiKey)),
+	)
+}
 
 func runPom(client taskv1connect.TaskServiceClient, args []string) int {
 	if len(args) == 0 {
@@ -40,7 +64,7 @@ func runPom(client taskv1connect.TaskServiceClient, args []string) int {
 }
 
 func printPomUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo task pom <subcommand> [arguments]")
+	fmt.Fprintln(os.Stderr, "Usage: todo pom <subcommand> [arguments]")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Subcommands:")
 	fmt.Fprintln(os.Stderr, "  estimate <task_id> <n>   Set estimated pomodoros (0–10)")

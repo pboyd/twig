@@ -22,6 +22,8 @@ func Run(args []string) int {
 	switch args[0] {
 	case "task":
 		return runTask(args[1:])
+	case "pom":
+		return runPomTop(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
 		printRootUsage()
@@ -34,6 +36,7 @@ func printRootUsage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  task  Manage tasks")
+	fmt.Fprintln(os.Stderr, "  pom   Pomodoro timer")
 }
 
 func runTask(args []string) int {
@@ -71,8 +74,6 @@ func runTask(args []string) int {
 		return runMod(client, args[1:])
 	case "complete":
 		return runComplete(client, args[1:])
-	case "pom":
-		return runPom(client, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
 		printTaskUsage()
@@ -92,14 +93,6 @@ func printTaskUsage() {
 	fmt.Fprintln(os.Stderr, "  mod [--parent <id>] [--due <timestamp>] <id> <name>")
 	fmt.Fprintln(os.Stderr, "                   Modify a task")
 	fmt.Fprintln(os.Stderr, "  complete <id>    Mark a task complete")
-	fmt.Fprintln(os.Stderr, "  pom estimate <task_id> <n>")
-	fmt.Fprintln(os.Stderr, "                   Set estimated pomodoros for a task (0–10)")
-	fmt.Fprintln(os.Stderr, "  pom start <task_id> [--exec cmd]")
-	fmt.Fprintln(os.Stderr, "                   Start a 25-minute pomodoro for a task")
-	fmt.Fprintln(os.Stderr, "  pom resume [--exec cmd]")
-	fmt.Fprintln(os.Stderr, "                   Re-attach to the active pomodoro")
-	fmt.Fprintln(os.Stderr, "  pom cancel       Cancel the active pomodoro")
-	fmt.Fprintln(os.Stderr, "  pom status       Show active pomodoro status")
 }
 
 // bearerInterceptor returns a Connect interceptor that adds an
