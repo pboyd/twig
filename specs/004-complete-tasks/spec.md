@@ -8,6 +8,15 @@
 
 **Input**: User description: "users need to be able to mark a task complete. This will need to be done through the CLI: `todo task complete 1`. Record a timestamp for when the task was completed. We'll also need to filter the task list for completed or incomplete tasks. By default the CLI should only show incomplete tasks, but it should have a flag to show everything or completed tasks. The system should not allow a user to complete a task with an incomplete subtask."
 
+## Clarifications
+
+### Session 2026-05-20
+
+- Q: When the default list filter hides completed tasks, how should it interact with the tree rendering? → A: Hide only completed task rows; an incomplete parent stays visible even if some children are complete. A branch where every task (parent and all descendants) is complete disappears entirely.
+- Q: How should completed tasks be visually distinguished in list output? → A: Checkbox marker `[ ]` for incomplete and `[x]` for complete, prefixed to each task name. Completed tasks also show their completion timestamp at the end of the line.
+- Q: What should happen if a user tries to add a subtask under a parent that is already complete? → A: Reject with a clear error. A completed task may not gain new (incomplete) descendants; the invariant "no incomplete descendant under a complete task" always holds.
+- Q: In which order should tasks appear in `--completed` and `--all` listings? → A: Keep id order (creation order, oldest first) within each parent for every list mode; only the filter differs across modes, never the ordering rules.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Mark a task complete (Priority: P1)
@@ -87,14 +96,17 @@ A user attempts to mark a parent task complete while it still has unfinished sub
 - **FR-002**: When a task is marked complete, the system MUST record the date and time of completion and persist it with the task.
 - **FR-003**: The system MUST reject completion of a task that has any incomplete subtask (at any depth in the subtask hierarchy) and MUST NOT record a completion timestamp on the parent in that case.
 - **FR-004**: When completion is rejected due to incomplete subtasks, the system MUST identify which subtasks are blocking completion.
-- **FR-005**: The CLI list command MUST, by default (with no filter flag), show only tasks that are not complete.
+- **FR-005**: The CLI list command MUST, by default (with no filter flag), show only tasks that are not complete. The tree structure is preserved by omitting only the rows for completed tasks: an incomplete parent task remains visible even when some of its children are complete, and a branch is omitted entirely only when the parent task and all of its descendants are complete.
 - **FR-006**: The CLI list command MUST support a flag to show only completed tasks.
 - **FR-007**: The CLI list command MUST support a flag to show all tasks regardless of completion status.
-- **FR-008**: When showing completed tasks, the system MUST include each task's completion timestamp in the output.
-- **FR-009**: When showing all tasks, the system MUST visually distinguish complete from incomplete tasks.
+- **FR-008**: When a completed task appears in the list output, the system MUST include that task's completion timestamp at the end of its line.
+- **FR-009**: Every task line in list output MUST be prefixed with a checkbox marker: `[ ]` for incomplete tasks and `[x]` for completed tasks. This marker is shown in every list mode (default, completed-only, all).
 - **FR-010**: Attempting to complete a task that is already complete MUST be a no-op that preserves the original completion timestamp and reports the current status to the user.
 - **FR-011**: Attempting to complete a non-existent task MUST produce a clear error message and a non-zero exit status, with no changes to stored data.
 - **FR-012**: Conflicting list filter flags (e.g., "completed only" together with "show all") MUST be rejected with a clear error.
+- **FR-013**: The system MUST reject any attempt to add a new subtask under a task that is already complete, with a clear error explaining that the parent task is complete. No new task is created in that case. (Combined with FR-003, this preserves the invariant that a completed task has no incomplete descendants.)
+- **FR-014**: The system MUST also reject moving an existing task so that it becomes a descendant of a completed task, by the same rule as FR-013.
+- **FR-015**: Across every list mode (default, completed-only, all), tasks MUST appear in id order (creation order, oldest first) within each parent. The filter changes which tasks are included; it does not change ordering rules.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -119,3 +131,5 @@ A user attempts to mark a parent task complete while it still has unfinished sub
 - Bulk completion (completing multiple tasks in one command) is out of scope for this feature.
 - Completion timestamps are recorded in the system's standard time representation; users are not asked to provide a custom completion time.
 - Authentication and ownership rules established by the user-auth feature continue to apply: a user can only complete their own tasks.
+- Following the existing CLI exit-status convention (single non-zero code `1` for every failure, `0` for success), completing an already-complete task is treated as a successful no-op and exits with status `0`. Genuine errors (non-existent task id, blocked by incomplete subtasks, conflicting flags, malformed id) exit with status `1`.
+- Completion timestamps are recorded in UTC using RFC 3339 format, matching the convention established for due-date timestamps in the prior CLI feature.
