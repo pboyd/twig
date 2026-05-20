@@ -33,3 +33,5 @@
 
 - All items pass on initial validation; no [NEEDS CLARIFICATION] markers were introduced.
 - Spec preserves the user-described data model (task `estimate`, pomodoro `task_id`/`start`/`end`/`complete`) and CLI surface (`task pom estimate|start|resume|cancel|status`) without prescribing implementation choices.
+- 2026-05-20 clarification session: 5 questions answered, covering task-deletion cascade (FR-025), `--exec` semantics (FR-034), `task pom cancel` signature (FR-040), API exposure of pomodoro history (FR-023), and abort behavior when declining to cancel another active pomodoro (FR-036).
+- 2026-05-20 follow-up: `task pom resume` was also dropped to a no-argument command for consistency with `cancel` (FR-037, FR-038, Story 2 acceptance scenarios 3/4/8).

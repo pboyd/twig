@@ -8,6 +8,17 @@
 
 **Input**: User description: "Add pomodoro tracking to tasks. A pomodoro is a 25-minute session of focused work."
 
+## Clarifications
+
+### Session 2026-05-20
+
+- Q: What happens to a task's pomodoro records when the task is deleted? → A: Cascade-delete all pomodoro records (completed and canceled) along with the task.
+- Q: How should `--exec <cmd>` be run when a pomodoro completes? → A: Synchronously; stream stdout/stderr to the terminal; if the command exits non-zero, print a warning but the CLI itself still exits 0.
+- Q: Should `task pom cancel` take a task_id argument? → A: No — drop the task_id argument; `task pom cancel` always cancels the user's single active pomodoro (if any).
+- Q: Does the API expose the list of historical pomodoro records for a task, or only counts? → A: Both — expose the completed-pomodoro count *and* a list of all pomodoro records (completed + canceled, with timestamps) for a given task.
+- Q: When `task pom start` finds another task's pomodoro already active and the user declines to cancel it, what happens? → A: Abort the start command — no record changes, CLI exits non-zero with a message naming the currently active task.
+- Q: Should `task pom resume` take a task_id argument? → A: No — drop the task_id argument; `task pom resume` always resumes the user's single active pomodoro (and errors if none is active).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run a focused work session on a task (Priority: P1)
@@ -32,18 +43,18 @@ A user is in the middle of a pomodoro and needs to step away or stop. They can e
 
 **Why this priority**: Real workflows are interrupted. Supporting cancel, quit, and resume keeps the data model honest (canceled sessions don't count as completions) and lets users move between terminals or tasks without losing state.
 
-**Independent Test**: Start a pomodoro, quit the countdown UI, run resume on the same task, and confirm the countdown picks up from the correct remaining time; separately, start a pomodoro, press `c` to cancel, and confirm an incomplete pomodoro record is saved with end time = now.
+**Independent Test**: Start a pomodoro, quit the countdown UI, run resume, and confirm the countdown picks up from the correct remaining time on the same task; separately, start a pomodoro, press `c` to cancel, and confirm an incomplete pomodoro record is saved with end time = now.
 
 **Acceptance Scenarios**:
 
 1. **Given** an active pomodoro displayed in the countdown UI, **When** the user presses `c`, **Then** the active pomodoro's end time is set to the current time, the `complete` flag remains false, and the UI exits.
 2. **Given** an active pomodoro displayed in the countdown UI, **When** the user presses `q`, **Then** the UI exits but the pomodoro record remains active (end time still `null`).
-3. **Given** a pomodoro is already active for task T, **When** the user runs resume for task T, **Then** the countdown displays the time remaining until start + 25 minutes.
-4. **Given** a pomodoro was started more than 25 minutes ago and not yet ended, **When** the user runs resume for that task, **Then** the pomodoro is immediately marked complete and the UI exits.
+3. **Given** the user has an active pomodoro (on any task), **When** the user runs resume, **Then** the countdown displays the time remaining until that pomodoro's start + 25 minutes.
+4. **Given** the user's active pomodoro was started more than 25 minutes ago and not yet ended, **When** the user runs resume, **Then** the pomodoro is immediately marked complete and the UI exits.
 5. **Given** a pomodoro is already active for task T, **When** the user runs start for task T, **Then** the user is asked whether to restart (cancel the current one and start a new one) or resume.
 6. **Given** a pomodoro is active for task A, **When** the user runs start for task B, **Then** the user is asked whether to cancel task A's pomodoro; canceling it then starts a new pomodoro for task B.
 7. **Given** an active pomodoro is being displayed in a countdown UI, **When** that pomodoro is canceled externally (e.g., from another terminal), **Then** the countdown UI detects the cancellation within a short polling interval and exits.
-8. **Given** a task has no active or prior pomodoro, **When** the user runs resume for that task, **Then** an error is returned indicating the task was never started.
+8. **Given** the user has no active pomodoro, **When** the user runs resume, **Then** an error is returned indicating there is no active pomodoro to resume.
 
 ---
 
@@ -86,8 +97,9 @@ A user wants to quickly see whether they have a pomodoro running and, if so, wha
 - The system clock moves backwards between start and end (e.g., NTP correction) → end time is still recorded as the current time at cancel/complete; the duration may be shorter than expected but the record is preserved.
 - A pomodoro record's start time is more than 25 minutes in the past and it is still active → on resume it is immediately completed; on status it is reported as still active until the next state-changing operation, since the API does not run timers itself.
 - Two clients race to start a pomodoro for the same user → only one succeeds; the other receives an error indicating an active pomodoro already exists.
-- The user provides `--exec` with a command that fails → the pomodoro is still recorded as complete; the command's failure is surfaced to the user but does not change the pomodoro record.
+- The user provides `--exec` with a command that fails → the CLI runs the command synchronously and streams its output; the failure is surfaced as a warning, the pomodoro remains recorded as complete, and the CLI exits with status 0.
 - The user presses `c` after the timer has already reached zero → the pomodoro is treated as complete (not canceled).
+- A task is deleted while it has pomodoro records (active, completed, or canceled) → all of the task's pomodoro records are deleted along with the task.
 
 ## Requirements *(mandatory)*
 
@@ -115,8 +127,9 @@ A user wants to quickly see whether they have a pomodoro running and, if so, wha
 - **FR-020**: The system MUST provide a Start operation that creates a new pomodoro for a given `task_id`, with `start` set to the current time, `end` set to `null`, and `complete` set to false; this operation MUST fail if the user already has an active pomodoro or if the task does not exist.
 - **FR-021**: The system MUST provide a Cancel operation that sets `end` on the user's active pomodoro to the current time and leaves `complete` false; this operation MUST fail if there is no active pomodoro.
 - **FR-022**: The system MUST provide a Complete operation that sets `end` on the user's active pomodoro to the current time and sets `complete` to true; this operation MUST fail if there is no active pomodoro.
-- **FR-023**: The system MUST expose, for a given task, the number of pomodoros previously completed against it.
+- **FR-023**: The system MUST expose, for a given task, both (a) the count of pomodoros previously completed against it and (b) the full list of all pomodoro records (completed and canceled) for that task, each including `start`, `end`, and `complete`.
 - **FR-024**: The system MUST expose the current user's active pomodoro (if any), including `task_id`, `start`, and enough information to compute the remaining time until `start` + 25 minutes.
+- **FR-025**: When a task is deleted, the system MUST also delete all pomodoro records (active, completed, and canceled) that reference that task, so that no orphan pomodoro records remain.
 
 **CLI behavior**
 
@@ -124,13 +137,13 @@ A user wants to quickly see whether they have a pomodoro running and, if so, wha
 - **FR-031**: The CLI MUST provide a start command that begins a new pomodoro for a given task, displaying a live countdown UI showing the task name, the task's `estimate`, and the count of previously completed pomodoros for that task.
 - **FR-032**: While the countdown is displayed, pressing `c` MUST cancel the pomodoro (via the Cancel operation) and exit the UI.
 - **FR-033**: While the countdown is displayed, pressing `q` MUST exit the UI without changing the underlying pomodoro record.
-- **FR-034**: When the countdown reaches zero, the CLI MUST invoke the Complete operation; if `--exec <cmd>` was provided, the CLI MUST then execute that command.
+- **FR-034**: When the countdown reaches zero, the CLI MUST invoke the Complete operation; if `--exec <cmd>` was provided, the CLI MUST then execute that command synchronously, streaming its stdout and stderr to the user's terminal. If the command exits non-zero, the CLI MUST print a warning identifying the failure but MUST itself exit with status 0 (the pomodoro is still considered successfully completed).
 - **FR-035**: When start is invoked for a task that already has an active pomodoro, the CLI MUST prompt the user to either restart (cancel the existing one and start anew) or resume (behave equivalently to the resume command).
-- **FR-036**: When start is invoked while the user has an active pomodoro on a different task, the CLI MUST prompt the user to cancel the other pomodoro (behaving equivalently to the cancel command) before starting the new one.
-- **FR-037**: The CLI MUST provide a resume command that attaches a countdown UI to the user's existing active pomodoro for the given task; it MUST fail with an error if no pomodoro has ever been started for that task.
-- **FR-038**: If, at resume time, the active pomodoro's `start` is more than 25 minutes in the past, the CLI MUST immediately mark it complete (via Complete) and exit.
+- **FR-036**: When start is invoked while the user has an active pomodoro on a different task, the CLI MUST prompt the user to cancel the other pomodoro (behaving equivalently to the cancel command) before starting the new one. If the user declines, the CLI MUST abort without modifying any records and exit with a non-zero status, printing a message that identifies the currently active task.
+- **FR-037**: The CLI MUST provide a `task pom resume` command (taking no task_id argument) that attaches a countdown UI to the user's currently active pomodoro, whichever task it is on; it MUST fail with an error if the user has no active pomodoro.
+- **FR-038**: If, at resume time, the active pomodoro's `start` is more than 25 minutes in the past, the CLI MUST immediately mark it complete (via Complete) and exit without displaying a countdown.
 - **FR-039**: While a countdown UI is displayed, the CLI MUST detect external cancellation/completion of the underlying pomodoro (e.g., from another terminal) within a short polling interval and exit gracefully.
-- **FR-040**: The CLI MUST provide a cancel command that cancels the user's active pomodoro on the given task.
+- **FR-040**: The CLI MUST provide a `task pom cancel` command (taking no arguments) that cancels the user's currently active pomodoro, whichever task it is on. If the user has no active pomodoro, the command MUST exit with an error.
 - **FR-041**: The CLI MUST provide a status command that prints information about the active pomodoro (task name/ID, start time, time remaining) or reports that none is active.
 
 ### Key Entities *(include if feature involves data)*
