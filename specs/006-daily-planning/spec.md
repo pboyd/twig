@@ -6,6 +6,14 @@
 
 **Status**: Draft
 
+## Clarifications
+
+### Session 2026-05-21
+
+- Q: When entries touch at the boundary (A ends at 11:00, B starts at 11:00), do they overlap? → A: Touching is allowed; treat ranges as half-open `[start, end)`.
+- Q: For `todo plan task` with no explicit duration, what duration applies when remaining pomodoros (estimate − completed) is 0 or negative? → A: Fall back to the 30-minute default, same as a task with no estimate.
+- Q: Can a single task be scheduled in multiple plan entries on the same day (e.g. split around a meeting)? → A: Yes, no per-day limit on entries linked to the same task.
+
 **Input**: User description: "Users need to make plans and store them in the database through the API. A plan is always for a single day, and contains entries which cover part of the day. CLI command `todo plan` with subcommands task/event/rm/rename/mv/clear."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -102,10 +110,10 @@ When a user's day goes off-script, they want to wipe the remaining schedule and 
 - **FR-005**: An entry's `name` MAY be omitted when a `task_id` is provided; in that case the displayed name falls back to the linked task's name.
 - **FR-006**: An entry's `name` MUST be provided for entries without a linked task.
 - **FR-007**: Entry start times MUST be stored and interpreted in the user's local timezone.
-- **FR-008**: System MUST reject any add or move operation that would cause two entries on the same day to overlap, and MUST return a clear error identifying the conflict.
+- **FR-008**: System MUST reject any add or move operation that would cause two entries on the same day to overlap, and MUST return a clear error identifying the conflict. Two entries overlap when their `[start, start+duration)` intervals share any time; entries that touch at the boundary (one ends exactly when the other begins) are NOT considered to overlap.
 - **FR-009**: CLI command `todo plan` MUST accept an optional `--date YYYY-MM-DD` flag; when omitted, operations target the current local day.
 - **FR-010**: With no subcommand, `todo plan` MUST render the day's entries as an ASCII day-planner grid that begins at the hour of the first entry, ends at the end of the last entry, includes intermediate hours (showing gaps as empty), and labels each entry with its id and display name.
-- **FR-011**: `todo plan task <task_id> <start> [duration]` MUST add an entry linked to the given task and print the new entry id. If `duration` is omitted: when the task has a pomodoro estimate, duration is `(estimate - completed_pomodoros) * 30 minutes`; otherwise duration defaults to 30 minutes.
+- **FR-011**: `todo plan task <task_id> <start> [duration]` MUST add an entry linked to the given task and print the new entry id. If `duration` is omitted: when the task has a pomodoro estimate AND `(estimate - completed_pomodoros) > 0`, duration is `(estimate - completed_pomodoros) * 30 minutes`; otherwise (no estimate set, or estimate already met/exceeded) duration defaults to 30 minutes.
 - **FR-012**: `todo plan event <name> <start> [duration]` MUST add an entry with no linked task; if `duration` is omitted it defaults to 30 minutes.
 - **FR-013**: `todo plan rm <n>` MUST remove the entry with id `n` from the target day.
 - **FR-014**: `todo plan rename <n> <name>` MUST change the `name` field of entry `n` on the target day.
@@ -115,6 +123,7 @@ When a user's day goes off-script, they want to wipe the remaining schedule and 
 - **FR-018**: Duration parsing MUST accept minute-only (`90m`), hour+minute (`1h30m`), and hour-only (`2h`) forms.
 - **FR-019**: All subcommands that target an entry by id MUST return a clear "not found" error when the id does not exist on the target day.
 - **FR-020**: Deleting a task referenced by a plan entry is out of scope for this feature; entries reference tasks as a foreign key but task-deletion semantics are not changed here.
+- **FR-021**: A single task MAY be referenced by multiple plan entries on the same day; the system MUST NOT reject a `task` add solely because the task already appears elsewhere in the day's plan. Overlap rules (FR-008) still apply.
 
 ### Key Entities
 
