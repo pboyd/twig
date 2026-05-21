@@ -24,6 +24,8 @@ func Run(args []string) int {
 		return runTask(args[1:])
 	case "pom":
 		return runPomTop(args[1:])
+	case "plan":
+		return runPlan(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
 		printRootUsage()
@@ -37,6 +39,7 @@ func printRootUsage() {
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  task  Manage tasks")
 	fmt.Fprintln(os.Stderr, "  pom   Pomodoro timer")
+	fmt.Fprintln(os.Stderr, "  plan  Daily planning")
 }
 
 func runTask(args []string) int {

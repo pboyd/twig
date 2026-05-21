@@ -1,0 +1,94 @@
+package cli_test
+
+import (
+	"strings"
+	"testing"
+
+	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
+	"github.com/pboyd/todo/services/todo/internal/cli"
+)
+
+func TestRenderGrid_Empty(t *testing.T) {
+	out := cli.RenderGrid(nil)
+	if out != "Plan is empty.\n" {
+		t.Errorf("empty = %q, want %q", out, "Plan is empty.\n")
+	}
+	out = cli.RenderGrid([]*planv1.PlanEntry{})
+	if out != "Plan is empty.\n" {
+		t.Errorf("empty slice = %q, want %q", out, "Plan is empty.\n")
+	}
+}
+
+func TestRenderGrid_SingleEntry_OnQuarterHour(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-21", Id: 1, Name: "Meeting", StartMinute: 540, DurationMinute: 60},
+	}
+	out := cli.RenderGrid(entries)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	// 9:00–10:00 → floor=540, ceil=600 → 4 rows (540,555,570,585)
+	if len(lines) != 4 {
+		t.Errorf("expected 4 rows, got %d:\n%s", len(lines), out)
+	}
+	if !strings.HasPrefix(lines[0], "09:00") {
+		t.Errorf("first line should start with 09:00, got: %q", lines[0])
+	}
+	if !strings.Contains(lines[0], "1 Meeting") {
+		t.Errorf("first line should contain entry, got: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "░") {
+		t.Errorf("continuation row should have ░, got: %q", lines[1])
+	}
+}
+
+func TestRenderGrid_TwoEntries_WithGap(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-21", Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 60}, // 8:00–9:00
+		{Day: "2026-05-21", Id: 2, Name: "Lunch", StartMinute: 720, DurationMinute: 60}, // 12:00–13:00
+	}
+	out := cli.RenderGrid(entries)
+	// Floor: 480 → 480; Ceil: 780 → 780. Rows: 480..780 in steps of 15 = 20 rows.
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 20 {
+		t.Errorf("expected 20 rows, got %d", len(lines))
+	}
+	// Row 0 (08:00) should contain entry 1.
+	if !strings.Contains(lines[0], "1 Focus") {
+		t.Errorf("row 0: %q", lines[0])
+	}
+	// Row 4 (09:00) should be a gap.
+	if strings.Contains(lines[4], "Focus") || strings.Contains(lines[4], "Lunch") {
+		t.Errorf("row 4 (gap) should be empty: %q", lines[4])
+	}
+	// Row 16 (12:00) should contain entry 2.
+	if !strings.Contains(lines[16], "2 Lunch") {
+		t.Errorf("row 16: %q", lines[16])
+	}
+}
+
+func TestRenderGrid_OffQuarterHour(t *testing.T) {
+	// Entry starts at 10:05 (605 minutes).
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-21", Id: 1, Name: "Late start", StartMinute: 605, DurationMinute: 30},
+	}
+	out := cli.RenderGrid(entries)
+	// Floor: 600 (10:00), Ceil: 645 (10:45). Rows: 600, 615, 630.
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Errorf("expected 3 rows, got %d:\n%s", len(lines), out)
+	}
+	// First row should have ~ prefix with actual start time.
+	if !strings.HasPrefix(lines[0], "~10:05") {
+		t.Errorf("expected ~10:05 prefix, got: %q", lines[0])
+	}
+}
+
+func TestRenderGrid_TaskLinkedEntry(t *testing.T) {
+	// Server already substituted the task name into Name field.
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-21", Id: 3, Name: "Deep Work", TaskId: 42, StartMinute: 480, DurationMinute: 60},
+	}
+	out := cli.RenderGrid(entries)
+	if !strings.Contains(out, "3 Deep Work") {
+		t.Errorf("expected task name in grid, got:\n%s", out)
+	}
+}

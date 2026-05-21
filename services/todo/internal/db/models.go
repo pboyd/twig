@@ -16,6 +16,16 @@ type ApiKey struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PlanEntry struct {
+	UserID         int64
+	Day            pgtype.Date
+	ID             int32
+	TaskID         pgtype.Int8
+	Name           pgtype.Text
+	StartMinute    int16
+	DurationMinute int16
+}
+
 type Pomodoro struct {
 	ID       int64
 	UserID   int64

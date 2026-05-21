@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/http2/h2c"
 
 	"github.com/pboyd/todo/services/todo/gen/health/v1/healthv1connect"
+	"github.com/pboyd/todo/services/todo/gen/plan/v1/planv1connect"
 	"github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/auth"
 	"github.com/pboyd/todo/services/todo/internal/db"
@@ -88,6 +89,8 @@ func main() {
 	taskMux.Handle(healthPath, healthH)
 	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})
 	taskMux.Handle(taskPath, taskH)
+	planPath, planH := planv1connect.NewPlanServiceHandler(&handler.Plan{Queries: queries, Pool: pool})
+	taskMux.Handle(planPath, planH)
 
 	mux.Handle("/", auth.Middleware(queries)(taskMux))
 
