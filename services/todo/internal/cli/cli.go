@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -16,8 +17,12 @@ const defaultAddr = "http://localhost:8080"
 // Run is the entrypoint for the CLI. It returns the process exit code.
 func Run(args []string) int {
 	if len(args) == 0 {
-		printRootUsage()
+		printRootUsage(os.Stderr)
 		return 1
+	}
+
+	if args[0] == "--help" {
+		return runHelp(nil)
 	}
 
 	switch args[0] {
@@ -27,23 +32,54 @@ func Run(args []string) int {
 		return runPomTop(args[1:])
 	case "plan":
 		return runPlan(args[1:])
+	case "help":
+		return runHelp(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
-		printRootUsage()
+		fmt.Fprintln(os.Stderr, "Run 'todo help' for usage.")
 		return 1
 	}
 }
 
-func printRootUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo <command> [arguments]")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Commands:")
-	fmt.Fprintln(os.Stderr, "  task  Manage tasks")
-	fmt.Fprintln(os.Stderr, "  pom   Pomodoro timer")
-	fmt.Fprintln(os.Stderr, "  plan  Daily planning")
+func runHelp(args []string) int {
+	if len(args) == 0 {
+		printRootUsage(os.Stdout)
+		return 0
+	}
+	switch args[0] {
+	case "task":
+		printTaskUsage(os.Stdout)
+		return 0
+	case "pom":
+		printPomUsage(os.Stdout)
+		return 0
+	case "plan":
+		printPlanUsage(os.Stdout)
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\nRun 'todo help' for usage.\n", args[0])
+		return 1
+	}
+}
+
+func printRootUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: todo <command> [arguments]")
+	fmt.Fprintln(w, "       todo help [command]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  task   Manage tasks (add, remove, modify, list)")
+	fmt.Fprintln(w, "  pom    Pomodoro timer (estimate, start, resume, cancel, status)")
+	fmt.Fprintln(w, "  plan   Daily planning (schedule tasks and events)")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Run 'todo help <command>' for command-specific help.")
 }
 
 func runTask(args []string) int {
+	if len(args) > 0 && args[0] == "--help" {
+		printTaskUsage(os.Stdout)
+		return 0
+	}
+
 	apiKey := os.Getenv("TODO_API_KEY")
 	if apiKey == "" {
 		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
@@ -77,24 +113,26 @@ func runTask(args []string) int {
 		return runComplete(client, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
-		printTaskUsage()
+		fmt.Fprintln(os.Stderr, "Run 'todo help task' for usage.")
 		return 1
 	}
 }
 
-func printTaskUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo task [<subcommand>] [arguments]")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Subcommands (if omitted, lists tasks):")
-	fmt.Fprintln(os.Stderr, "  add [--parent <id>] [--due <timestamp>] <name>")
-	fmt.Fprintln(os.Stderr, "                   Add a new task")
-	fmt.Fprintln(os.Stderr, "  rm <id>          Remove a task")
-	fmt.Fprintln(os.Stderr, "  mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
-	fmt.Fprintln(os.Stderr, "                   Modify a task (name optional)")
-	fmt.Fprintln(os.Stderr, "  complete <id>    Mark a task complete")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "When invoked with no subcommand, lists tasks as a tree:")
-	fmt.Fprintln(os.Stderr, "  todo task [--completed | --all]")
+func printTaskUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: todo task [<subcommand>] [arguments]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Subcommands (if omitted, lists tasks):")
+	fmt.Fprintln(w, "  add [--parent <id>] [--due <date>] <name>")
+	fmt.Fprintln(w, "                   Add a new task")
+	fmt.Fprintln(w, "  rm <id>          Remove a task")
+	fmt.Fprintln(w, "  mod <id> [<name>] [--parent <id>] [--due <date>]")
+	fmt.Fprintln(w, "                   Modify a task")
+	fmt.Fprintln(w, "  complete <id>    Mark a task complete")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Listing tasks:")
+	fmt.Fprintln(w, "  todo task [--completed | --all]")
+	fmt.Fprintln(w, "  --completed      Show only completed tasks")
+	fmt.Fprintln(w, "  --all            Show all tasks (including completed)")
 }
 
 // bearerInterceptor returns a Connect interceptor that adds an

@@ -147,3 +147,72 @@ func TestRunTaskListSubcommandUnknown(t *testing.T) {
 		t.Errorf("expected 'unknown subcommand' in stderr, got: %q", errOut)
 	}
 }
+
+// --- T011: help routing tests ---
+
+func captureStdout(fn func()) string {
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = old
+	buf := make([]byte, 8192)
+	n, _ := r.Read(buf)
+	return string(buf[:n])
+}
+
+func TestRunHelpNoArgs(t *testing.T) {
+	out := captureStdout(func() {
+		code := Run([]string{"help"})
+		if code != 0 {
+			t.Errorf("Run(help): expected exit 0, got %d", code)
+		}
+	})
+	if !strings.Contains(out, "task") || !strings.Contains(out, "pom") || !strings.Contains(out, "plan") {
+		t.Errorf("Run(help): expected command listing in output, got: %q", out)
+	}
+}
+
+func TestRunHelpFlag(t *testing.T) {
+	out := captureStdout(func() {
+		code := Run([]string{"--help"})
+		if code != 0 {
+			t.Errorf("Run(--help): expected exit 0, got %d", code)
+		}
+	})
+	if !strings.Contains(out, "task") || !strings.Contains(out, "pom") || !strings.Contains(out, "plan") {
+		t.Errorf("Run(--help): expected command listing in output, got: %q", out)
+	}
+}
+
+func TestRunHelpTask(t *testing.T) {
+	out := captureStdout(func() {
+		code := Run([]string{"help", "task"})
+		if code != 0 {
+			t.Errorf("Run(help task): expected exit 0, got %d", code)
+		}
+	})
+	if !strings.Contains(out, "add") || !strings.Contains(out, "complete") {
+		t.Errorf("Run(help task): expected task subcommands in output, got: %q", out)
+	}
+}
+
+func TestRunHelpUnknown(t *testing.T) {
+	r, w, _ := os.Pipe()
+	oldErr := os.Stderr
+	os.Stderr = w
+	code := Run([]string{"help", "unknown"})
+	w.Close()
+	os.Stderr = oldErr
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	errOut := string(buf[:n])
+
+	if code == 0 {
+		t.Error("Run(help unknown): expected non-zero exit code")
+	}
+	if !strings.Contains(errOut, "unknown command") {
+		t.Errorf("Run(help unknown): expected 'unknown command' in stderr, got: %q", errOut)
+	}
+}

@@ -1,101 +1,113 @@
-# Implementation Plan: CLI UX Improvements
+# Implementation Plan: [FEATURE]
 
-**Branch**: `007-cli-ux-improvements` | **Date**: 2026-05-21 | **Spec**: [spec.md](./spec.md)
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Feature specification from `/specs/007-cli-ux-improvements/spec.md`
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Four small UX improvements to the `todo` Go CLI: (1) `todo task` with no subcommand defaults to listing (matching `plan`), and the `list` subcommand is removed; (2) completed tasks render in dim/gray with strikethrough instead of `[x]`/`[ ]` checkbox markers, with graceful degradation when not a TTY; (3) `todo task mod` parses flags correctly when placed after the id and makes the name positional argument optional; (4) when a task has an `estimate > 0`, the value is appended as `(N)` after the task name in list output.
-
-All changes are localized to `services/todo/internal/cli/` (`cli.go`, `task.go`, `render.go` and their tests). No protobuf, server, or storage changes.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: Go 1.25 (per `services/todo/go.mod`)
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
-**Primary Dependencies**: `connectrpc.com/connect`, `golang.org/x/term` (already a transitive dep; used directly for TTY detection)
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
 
-**Storage**: N/A (CLI only; reads `Task.estimate` from existing protobuf, which is already populated by the server)
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
-**Testing**: `go test ./...` under `services/todo`; existing tests in `cli_test.go`, `task_test.go`, `render_test.go` are extended.
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
-**Target Platform**: Linux/macOS terminal (ANSI-capable). Non-TTY output (pipes, redirects, `go test`) must emit plain text with no escape sequences.
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
 
-**Project Type**: CLI subcommand of an existing Go service.
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
 
-**Performance Goals**: N/A — formatting is O(tasks); rendering happens once per invocation.
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
 
-**Constraints**: No new third-party dependencies. Reuse `golang.org/x/term.IsTerminal` for TTY detection. Output to non-TTY streams must contain no ANSI escape codes.
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
 
-**Scale/Scope**: ~5 functions touched, ~3 test files updated. Single-user CLI.
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **I. Simplicity / YAGNI**: PASS. No new abstractions or packages. Styling is a thin helper (a function returning ANSI codes when stdout is a TTY, empty strings otherwise). The flag-parsing fix re-uses the existing `flag.FlagSet` pattern, taking the id positionally and reslicing args before `fs.Parse`.
-- **II. API-First Design**: PASS (N/A in spirit). No network contracts change. The CLI command schema *is* the user-facing contract; it is documented in `contracts/cli-commands.md` below before implementation. The `Task.estimate` field already exists in `proto/task/v1/task.proto`; no proto edits.
-
-No violations to justify.
+[Gates determined based on constitution file]
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/007-cli-ux-improvements/
-├── plan.md              # This file
-├── spec.md              # Feature spec
-├── research.md          # Phase 0: TTY detection + ANSI styling decisions
-├── data-model.md        # Phase 1: no new entities (notes only)
-├── quickstart.md        # Phase 1: manual verification recipe
-├── contracts/
-│   └── cli-commands.md  # CLI command schema (the contract)
-├── checklists/
-│   └── requirements.md  # Spec quality checklist
-└── tasks.md             # Phase 2 output (created by /speckit-tasks)
+specs/[###-feature]/
+├── plan.md              # This file (/speckit-plan command output)
+├── research.md          # Phase 0 output (/speckit-plan command)
+├── data-model.md        # Phase 1 output (/speckit-plan command)
+├── quickstart.md        # Phase 1 output (/speckit-plan command)
+├── contracts/           # Phase 1 output (/speckit-plan command)
+└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
 ```
 
 ### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
-services/todo/
-├── cmd/todo/main.go                          # entrypoint (unchanged)
-└── internal/cli/
-    ├── cli.go                                # EDIT: dispatch `task` with no args to list; remove `list` case; update usage
-    ├── task.go                               # EDIT: rewrite runMod arg parsing; runList stays but is called from runTask directly
-    ├── render.go                             # EDIT: replace checkboxPrefix with style-based rendering; append estimate
-    ├── cli_test.go                           # EDIT: cover new dispatch behavior
-    ├── task_test.go                          # EDIT: cover `task mod` flag-after-id and optional-name cases
-    └── render_test.go                        # EDIT: cover styled vs plain rendering and estimate suffix
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
-**Structure Decision**: Single Go module (`services/todo`). All work happens in the existing `internal/cli` package — no new packages or files. This matches existing conventions and Principle I (simplicity).
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Complexity Tracking
 
-> Constitution Check passes with no violations. Table intentionally empty.
+> **Fill ONLY if Constitution Check has violations that must be justified**
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-
-## Phase 0 — Research
-
-See [research.md](./research.md). Key decisions:
-
-- **ANSI styling without a new dependency**: emit raw escape sequences (`\x1b[2;9m` for dim+strikethrough, `\x1b[0m` to reset). Gate behind `term.IsTerminal(int(os.Stdout.Fd()))`. Tests exercise both branches via an injectable `styler` value passed into `renderRoots`/`renderTree`.
-- **Flag-after-positional parsing**: Go's stdlib `flag` package stops at the first non-flag argument. Solution: take the id from `args[0]`, parse the rest with `fs.Parse(args[1:])`, then treat `fs.Args()` as the optional name(s). This permits all of `mod <id>`, `mod <id> "name"`, `mod <id> --parent 5`, `mod <id> --parent 5 "name"`, `mod <id> "name" --parent 5`.
-- **Estimate rendering**: `Task.estimate` is `int32`; `0` means "no estimate" (per `proto/task/v1/task.proto:77`). Append ` (N)` only when `> 0`.
-
-## Phase 1 — Design & Contracts
-
-- [data-model.md](./data-model.md) — no entity changes; describes which existing `Task` fields drive rendering.
-- [contracts/cli-commands.md](./contracts/cli-commands.md) — updated CLI command schema (the user-facing contract).
-- [quickstart.md](./quickstart.md) — manual verification steps.
-- Agent context: `CLAUDE.md` updated to point at this plan.
-
-### Post-design Constitution Re-Check
-
-- **I. Simplicity**: still PASS — no extra packages introduced; styling is one helper function and one TTY check.
-- **II. API-First**: still PASS — `contracts/cli-commands.md` documents the new shape before implementation begins.
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

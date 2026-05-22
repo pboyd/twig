@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -44,6 +45,11 @@ func runPlan(args []string) int {
 		return runPlanShow(client, day)
 	}
 
+	if args[0] == "--help" {
+		printPlanUsage(os.Stdout)
+		return 0
+	}
+
 	switch args[0] {
 	case "task":
 		return runPlanTask(client, day, args[1:])
@@ -59,25 +65,28 @@ func runPlan(args []string) int {
 		return runPlanClear(client, day, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown plan subcommand: %s\n", args[0])
-		printPlanUsage()
+		fmt.Fprintln(os.Stderr, "Run 'todo help plan' for usage.")
 		return 1
 	}
 }
 
-func printPlanUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo plan [--date YYYY-MM-DD] [subcommand]")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  (none)              Show today's plan as a grid")
-	fmt.Fprintln(os.Stderr, "  task <id> <start> [dur]  Schedule a task")
-	fmt.Fprintln(os.Stderr, "  event <name> <start> [dur]  Block off time")
-	fmt.Fprintln(os.Stderr, "  rm <n>              Remove entry n")
-	fmt.Fprintln(os.Stderr, "  rename <n> <name>   Rename entry n")
-	fmt.Fprintln(os.Stderr, "  mv <n> <start> [dur]  Move entry n")
-	fmt.Fprintln(os.Stderr, "  clear [start]       Clear entries from start (default: now)")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Time formats: 13:15  1:15pm  01:15 PM")
-	fmt.Fprintln(os.Stderr, "Duration formats: 90m  1h  2h  1h30m")
+func printPlanUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: todo plan [--date YYYY-MM-DD] [subcommand]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintln(w, "  (none)                      Show today's plan as a grid")
+	fmt.Fprintln(w, "  task <id> <start> [dur]     Schedule a task")
+	fmt.Fprintln(w, "  event <name> <start> [dur]  Block off time")
+	fmt.Fprintln(w, "  rm <n>                      Remove entry n")
+	fmt.Fprintln(w, "  rename <n> <name>           Rename entry n")
+	fmt.Fprintln(w, "  mv <n> <start> [dur]        Move entry n")
+	fmt.Fprintln(w, "  clear [start]               Clear entries from start (default: now)")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Time formats:     13:15  1:15pm  01:15 PM")
+	fmt.Fprintln(w, "Duration formats: 90m  1h  2h  1h30m")
 }
 
 func runPlanShow(client planv1connect.PlanServiceClient, day string) int {

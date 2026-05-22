@@ -41,8 +41,12 @@ func newTaskClient(addr, apiKey string) taskv1connect.TaskServiceClient {
 }
 
 func runPom(client taskv1connect.TaskServiceClient, args []string) int {
+	if len(args) > 0 && args[0] == "--help" {
+		printPomUsage(os.Stdout)
+		return 0
+	}
 	if len(args) == 0 {
-		printPomUsage()
+		printPomUsage(os.Stderr)
 		return 1
 	}
 	switch args[0] {
@@ -58,37 +62,40 @@ func runPom(client taskv1connect.TaskServiceClient, args []string) int {
 		return runStatus(client, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown pom subcommand: %s\n", args[0])
-		printPomUsage()
+		fmt.Fprintln(os.Stderr, "Run 'todo help pom' for usage.")
 		return 1
 	}
 }
 
-func printPomUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo pom <subcommand> [arguments]")
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  estimate <task_id> <n>   Set estimated pomodoros (0–10)")
-	fmt.Fprintln(os.Stderr, "  start <task_id> [--exec cmd]  Start a 25-minute pomodoro")
-	fmt.Fprintln(os.Stderr, "  resume [--exec cmd]      Re-attach to the active pomodoro")
-	fmt.Fprintln(os.Stderr, "  cancel                   Cancel the active pomodoro")
-	fmt.Fprintln(os.Stderr, "  status                   Show active pomodoro status")
+func printPomUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: todo pom <subcommand> [arguments]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintln(w, "  estimate <task_id> <n>        Set estimated pomodoros (0–10)")
+	fmt.Fprintln(w, "  start <task_id> [--exec cmd]  Start a 25-minute pomodoro")
+	fmt.Fprintln(w, "  resume [--exec cmd]           Re-attach to the active pomodoro")
+	fmt.Fprintln(w, "  cancel                        Cancel the active pomodoro")
+	fmt.Fprintln(w, "  status                        Show active pomodoro status")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --exec <cmd>    Shell command to run when pomodoro completes")
 }
 
 func runEstimate(client taskv1connect.TaskServiceClient, args []string) int {
 	if len(args) < 2 {
-		printPomUsage()
+		printPomUsage(os.Stderr)
 		return 1
 	}
 	taskID, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid task_id: %v\n", args[0])
-		printPomUsage()
+		printPomUsage(os.Stderr)
 		return 1
 	}
 	n, err := strconv.ParseInt(args[1], 10, 32)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid estimate: %v\n", args[1])
-		printPomUsage()
+		printPomUsage(os.Stderr)
 		return 1
 	}
 
@@ -114,7 +121,7 @@ func runEstimate(client taskv1connect.TaskServiceClient, args []string) int {
 func runStart(client taskv1connect.TaskServiceClient, args []string) int {
 	taskID, execCmd, ok := parseStartArgs(args)
 	if !ok {
-		printPomUsage()
+		printPomUsage(os.Stderr)
 		return 1
 	}
 
