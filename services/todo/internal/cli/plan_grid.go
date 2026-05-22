@@ -39,19 +39,28 @@ func RenderGrid(entries []*planv1.PlanEntry) string {
 			start := e.StartMinute
 			end := start + e.DurationMinute
 
-			if t <= start && start < t+15 {
-				// This slot contains the entry's first row.
-				if start != t {
-					// Entry begins mid-slot: show actual start with ~ prefix.
-					timeLabel = fmt.Sprintf("~%02d:%02d", start/60, start%60)
-				}
-				cell = fmt.Sprintf("%d %s", e.Id, e.Name)
-				break
-			} else if start < t && t < end {
-				// Continuation row.
-				cell = fmt.Sprintf("  ░ %s", e.Name)
-				break
+			if start >= t+15 || end <= t {
+				continue
 			}
+
+			startsHere := t <= start && start < t+15
+			endsHere := t < end && end <= t+15
+
+			if startsHere && start != t {
+				timeLabel = fmt.Sprintf("~%02d:%02d", start/60, start%60)
+			}
+
+			switch {
+			case startsHere && endsHere:
+				cell = fmt.Sprintf("─ %d %s", e.Id, e.Name)
+			case startsHere:
+				cell = fmt.Sprintf("┌ %d %s", e.Id, e.Name)
+			case endsHere:
+				cell = "└"
+			default:
+				cell = "│"
+			}
+			break
 		}
 
 		sb.WriteString(fmt.Sprintf("%s │ %s\n", timeLabel, cell))

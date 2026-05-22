@@ -32,11 +32,20 @@ func TestRenderGrid_SingleEntry_OnQuarterHour(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "09:00") {
 		t.Errorf("first line should start with 09:00, got: %q", lines[0])
 	}
-	if !strings.Contains(lines[0], "1 Meeting") {
-		t.Errorf("first line should contain entry, got: %q", lines[0])
+	if !strings.Contains(lines[0], "┌ 1 Meeting") {
+		t.Errorf("start row should contain ┌ marker and name, got: %q", lines[0])
 	}
-	if !strings.Contains(lines[1], "░") {
-		t.Errorf("continuation row should have ░, got: %q", lines[1])
+	if strings.Contains(lines[1], "Meeting") {
+		t.Errorf("middle row should not repeat name, got: %q", lines[1])
+	}
+	if !strings.HasSuffix(lines[1], "│") {
+		t.Errorf("middle row should have │ span marker, got: %q", lines[1])
+	}
+	if strings.Contains(lines[3], "Meeting") {
+		t.Errorf("end row should not repeat name, got: %q", lines[3])
+	}
+	if !strings.HasSuffix(lines[3], "└") {
+		t.Errorf("end row should have └ span marker, got: %q", lines[3])
 	}
 }
 
@@ -79,6 +88,64 @@ func TestRenderGrid_OffQuarterHour(t *testing.T) {
 	// First row should have ~ prefix with actual start time.
 	if !strings.HasPrefix(lines[0], "~10:05") {
 		t.Errorf("expected ~10:05 prefix, got: %q", lines[0])
+	}
+}
+
+func TestRenderGrid_SpanMarkers(t *testing.T) {
+	cases := []struct {
+		name    string
+		entries []*planv1.PlanEntry
+		want    []string
+	}{
+		{
+			// T002: single-slot entry must use the dash marker, not ┌/└.
+			name: "single-slot entry uses dash marker",
+			entries: []*planv1.PlanEntry{
+				{Id: 1, Name: "Sprint", StartMinute: 540, DurationMinute: 15},
+			},
+			want: []string{
+				"09:00 │ ─ 1 Sprint",
+			},
+		},
+		{
+			// T003: two-slot entry must show ┌ on row 1 and └ on row 2 with no │ between.
+			name: "two-slot entry uses start and end markers without middle row",
+			entries: []*planv1.PlanEntry{
+				{Id: 1, Name: "Focus", StartMinute: 540, DurationMinute: 30},
+			},
+			want: []string{
+				"09:00 │ ┌ 1 Focus",
+				"09:15 │ └",
+			},
+		},
+		{
+			// T004: adjacent entries — A's └ and B's ┌ must be on consecutive lines.
+			name: "adjacent entries have no blank row between them",
+			entries: []*planv1.PlanEntry{
+				{Id: 1, Name: "A", StartMinute: 480, DurationMinute: 30},
+				{Id: 2, Name: "B", StartMinute: 510, DurationMinute: 30},
+			},
+			want: []string{
+				"08:00 │ ┌ 1 A",
+				"08:15 │ └",
+				"08:30 │ ┌ 2 B",
+				"08:45 │ └",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := cli.RenderGrid(tc.entries)
+			lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+			if len(lines) != len(tc.want) {
+				t.Fatalf("expected %d lines, got %d:\n%s", len(tc.want), len(lines), out)
+			}
+			for i, want := range tc.want {
+				if lines[i] != want {
+					t.Errorf("line %d: got %q, want %q", i, lines[i], want)
+				}
+			}
+		})
 	}
 }
 

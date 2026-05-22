@@ -23,12 +23,12 @@ description: "Task list for plan-span-markers feature"
 
 **Independent Test**: Run `go test ./internal/cli/... -run RenderGrid` and verify all updated and new table-driven cases pass. Then follow `specs/009-plan-span-markers/quickstart.md` to render against a live plan and confirm the four marker glyphs render in the four expected positions.
 
-- [ ] T001 [US1] Update existing snapshot expectations in `services/todo/internal/cli/plan_grid_test.go` so all current multi-slot test cases reflect the new visual contract (`┌` on the start row carrying number + name; `│` on intermediate rows with no name; `└` on the final row with no name).
-- [ ] T002 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for a single-slot entry — assert the rendered row is `─ <id> <name>` (no `┌`/`└`).
-- [ ] T003 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for a two-slot entry — assert exactly two rows: a `┌`-row with name and a `└`-row without name, no `│` row between them.
-- [ ] T004 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for two adjacent entries (entry A ends in slot N, entry B starts in slot N+1) — assert entry A's last row is `└` and entry B's next row is `┌ <id> <name>`, with no blank row between them.
-- [ ] T005 [US1] Rewrite the per-slot cell logic inside `RenderGrid` in `services/todo/internal/cli/plan_grid.go`: for each 15-minute slot, determine `startsHere = (t <= e.StartMinute < t+15)` and `endsHere = (t < e.StartMinute + e.DurationMinute <= t+15)` for the owning entry, then select the cell content as: `startsHere && endsHere → "─ <id> <name>"`; `startsHere && !endsHere → "┌ <id> <name>"`; `!startsHere && endsHere → "└"`; `!startsHere && !endsHere → "│"`. Preserve the existing `~HH:MM` mid-slot start-label behavior and the leading `HH:MM │ ` row framing.
-- [ ] T006 [US1] Run `cd services/todo && go test ./internal/cli/...` and confirm all tests (including T001–T004) pass.
+- [X] T001 [US1] Update existing snapshot expectations in `services/todo/internal/cli/plan_grid_test.go` so all current multi-slot test cases reflect the new visual contract (`┌` on the start row carrying number + name; `│` on intermediate rows with no name; `└` on the final row with no name).
+- [X] T002 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for a single-slot entry — assert the rendered row is `─ <id> <name>` (no `┌`/`└`).
+- [X] T003 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for a two-slot entry — assert exactly two rows: a `┌`-row with name and a `└`-row without name, no `│` row between them.
+- [X] T004 [P] [US1] Add a table-driven test case in `services/todo/internal/cli/plan_grid_test.go` for two adjacent entries (entry A ends in slot N, entry B starts in slot N+1) — assert entry A's last row is `└` and entry B's next row is `┌ <id> <name>`, with no blank row between them.
+- [X] T005 [US1] Rewrite the per-slot cell logic inside `RenderGrid` in `services/todo/internal/cli/plan_grid.go`: for each 15-minute slot, determine `startsHere = (t <= e.StartMinute < t+15)` and `endsHere = (t < e.StartMinute + e.DurationMinute <= t+15)` for the owning entry, then select the cell content as: `startsHere && endsHere → "─ <id> <name>"`; `startsHere && !endsHere → "┌ <id> <name>"`; `!startsHere && endsHere → "└"`; `!startsHere && !endsHere → "│"`. Preserve the existing `~HH:MM` mid-slot start-label behavior and the leading `HH:MM │ ` row framing.
+- [X] T006 [US1] Run `cd services/todo && go test ./internal/cli/...` and confirm all tests (including T001–T004) pass.
 - [ ] T007 [US1] Execute the live-render section of `specs/009-plan-span-markers/quickstart.md` against `make dev` and tick all four scenario checkboxes in that document.
 
 **Checkpoint**: User Story 1 delivers the entire feature. Plan view shows span markers with the name printed once per block.
@@ -37,7 +37,7 @@ description: "Task list for plan-span-markers feature"
 
 ## Phase 2: Polish & Cross-Cutting Concerns
 
-- [ ] T008 [P] Run `cd services/todo && go vet ./...` and `gofmt -l services/todo/internal/cli/` and resolve any findings.
+- [X] T008 [P] Run `cd services/todo && go vet ./...` and `gofmt -l services/todo/internal/cli/` and resolve any findings.
 
 ---
 
