@@ -25,7 +25,7 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 **Purpose**: Make sure the local environment can build/test the existing CLI before any edits.
 
-- [ ] T001 Verify baseline build: run `go build ./...` and `go test ./internal/cli/...` from `services/todo/`; capture current pass/fail state in a scratch note (not committed).
+- [X] T001 Verify baseline build: run `go build ./...` and `go test ./internal/cli/...` from `services/todo/`; capture current pass/fail state in a scratch note (not committed).
 
 ---
 
@@ -33,8 +33,8 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 **Purpose**: One shared helper for TTY-gated ANSI styling. All later stories that touch rendering depend on this.
 
-- [ ] T002 Add styling helper to `services/todo/internal/cli/render.go`: introduce a `styler` type (or two small functions `dimStrike(s string) string` and `wantStyled(w io.Writer) bool`) that emit `\x1b[2;9m…\x1b[0m` only when styling is enabled, and the raw string otherwise. TTY detection uses `golang.org/x/term.IsTerminal(int(os.Stdout.Fd()))`. Add `golang.org/x/term` to `services/todo/go.mod` direct requires (currently indirect). Keep the helper unexported.
-- [ ] T003 Plumb a `styled bool` (or equivalent) parameter through `renderRoots` and `renderTree` in `services/todo/internal/cli/render.go` so tests can force styled/plain output without depending on the process's stdout TTY state.
+- [X] T002 Add styling helper to `services/todo/internal/cli/render.go`: introduce a `styler` type (or two small functions `dimStrike(s string) string` and `wantStyled(w io.Writer) bool`) that emit `\x1b[2;9m…\x1b[0m` only when styling is enabled, and the raw string otherwise. TTY detection uses `golang.org/x/term.IsTerminal(int(os.Stdout.Fd()))`. Add `golang.org/x/term` to `services/todo/go.mod` direct requires (currently indirect). Keep the helper unexported.
+- [X] T003 Plumb a `styled bool` (or equivalent) parameter through `renderRoots` and `renderTree` in `services/todo/internal/cli/render.go` so tests can force styled/plain output without depending on the process's stdout TTY state.
 
 **Checkpoint**: Foundation ready — styling can be toggled deterministically in tests; subsequent stories can change rendering output independently.
 
@@ -48,11 +48,11 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] In `services/todo/internal/cli/task_test.go`, add a table-driven test for the `runMod` arg-parsing layer covering: (a) `mod 3` → "nothing to update" error; (b) `mod 3 "new name"` → name change only; (c) `mod 3 --parent 5` → parent change only, name preserved; (d) `mod 3 --parent 5 "new name"` → both; (e) `mod 3 "new name" --parent 5` → both; (f) `mod 3 ""` → empty-name error; (g) `mod 3 a b c` → unexpected-args error. Mock or stub the `TaskServiceClient` so the test asserts on the `UpdateTaskRequest` constructed, not on a real RPC.
+- [X] T004 [P] [US1] In `services/todo/internal/cli/task_test.go`, add a table-driven test for the `runMod` arg-parsing layer covering: (a) `mod 3` → "nothing to update" error; (b) `mod 3 "new name"` → name change only; (c) `mod 3 --parent 5` → parent change only, name preserved; (d) `mod 3 --parent 5 "new name"` → both; (e) `mod 3 "new name" --parent 5` → both; (f) `mod 3 ""` → empty-name error; (g) `mod 3 a b c` → unexpected-args error. Mock or stub the `TaskServiceClient` so the test asserts on the `UpdateTaskRequest` constructed, not on a real RPC.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Rewrite `runMod` in `services/todo/internal/cli/task.go`:
+- [X] T005 [US1] Rewrite `runMod` in `services/todo/internal/cli/task.go`:
   - Require `args[0]` as `<id>`; parse it as int64 first.
   - Call `fs.Parse(args[1:])`.
   - After parsing, `rest := fs.Args()`. If `len(rest) > 1` → usage error. If `len(rest) == 1` and `rest[0] == ""` → reject empty name. If `len(rest) == 0` AND no flags were set (`parentStr == "" && dueStr == ""`) → "nothing to update" error.
@@ -71,14 +71,14 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 ### Tests for User Story 2
 
-- [ ] T006 [P] [US2] In `services/todo/internal/cli/cli_test.go`, add tests for the `runTask` dispatch: (a) empty `args` invokes the list path; (b) `["list"]` produces an unknown-subcommand error. Stub `runList` via the existing `export_test.go` hooks or by routing through a small indirection if needed; do not require a live backend.
+- [X] T006 [P] [US2] In `services/todo/internal/cli/cli_test.go`, add tests for the `runTask` dispatch: (a) empty `args` invokes the list path; (b) `["list"]` produces an unknown-subcommand error. Stub `runList` via the existing `export_test.go` hooks or by routing through a small indirection if needed; do not require a live backend.
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] Edit `runTask` in `services/todo/internal/cli/cli.go`:
+- [X] T007 [US2] Edit `runTask` in `services/todo/internal/cli/cli.go`:
   - When `len(args) == 0`, build the `TaskServiceClient` and call `runList(client, nil)`. Mirror the empty-arg branch of `runPlan` in `plan.go:43-45`.
   - Remove the `case "list":` arm from the dispatch switch.
-- [ ] T008 [US2] Update `printTaskUsage` in `services/todo/internal/cli/cli.go` to drop the `list` entry and document the new default-list behavior per `contracts/cli-commands.md` § "Help text".
+- [X] T008 [US2] Update `printTaskUsage` in `services/todo/internal/cli/cli.go` to drop the `list` entry and document the new default-list behavior per `contracts/cli-commands.md` § "Help text".
 
 **Checkpoint**: Both US1 and US2 are independently functional. The CLI now matches the `plan` command's shape and the flag bug is fixed.
 
@@ -92,11 +92,11 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 ### Tests for User Story 3
 
-- [ ] T009 [P] [US3] In `services/todo/internal/cli/render_test.go`, add tests for `renderRoots` covering: (a) styled=true on a completed task wraps the post-id content with `\x1b[2;9m` and `\x1b[0m`; (b) styled=false on the same task produces a plain string with no escapes; (c) no `[x]` or `[ ]` marker appears in either case; (d) incomplete tasks are unstyled in both modes.
+- [X] T009 [P] [US3] In `services/todo/internal/cli/render_test.go`, add tests for `renderRoots` covering: (a) styled=true on a completed task wraps the post-id content with `\x1b[2;9m` and `\x1b[0m`; (b) styled=false on the same task produces a plain string with no escapes; (c) no `[x]` or `[ ]` marker appears in either case; (d) incomplete tasks are unstyled in both modes.
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] In `services/todo/internal/cli/render.go`, remove `checkboxPrefix` and its call sites. Change `renderTree` and `renderRoots` so the per-line content is built as a plain string (id + name + estimate + suffixes), then the post-id portion is run through the styling helper from T002 when the task is completed and styling is enabled. The leading `[<id>] ` (or `connector + [<id>] `) MUST NOT be styled.
+- [X] T010 [US3] In `services/todo/internal/cli/render.go`, remove `checkboxPrefix` and its call sites. Change `renderTree` and `renderRoots` so the per-line content is built as a plain string (id + name + estimate + suffixes), then the post-id portion is run through the styling helper from T002 when the task is completed and styling is enabled. The leading `[<id>] ` (or `connector + [<id>] `) MUST NOT be styled.
 
 **Checkpoint**: US3 complete; piping output to a file produces no escape codes, and an interactive run shows completed tasks in dim+strikethrough.
 
@@ -110,11 +110,11 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 ### Tests for User Story 4
 
-- [ ] T011 [P] [US4] In `services/todo/internal/cli/render_test.go`, add cases: (a) `estimate = 3` renders ` (3)` immediately after the name and before any `(due …)` / `(completed …)` suffix; (b) `estimate = 0` renders no parenthesized estimate; (c) for a completed task with `estimate = 2`, the `(2)` is inside the dim+strikethrough region when styled=true.
+- [X] T011 [P] [US4] In `services/todo/internal/cli/render_test.go`, add cases: (a) `estimate = 3` renders ` (3)` immediately after the name and before any `(due …)` / `(completed …)` suffix; (b) `estimate = 0` renders no parenthesized estimate; (c) for a completed task with `estimate = 2`, the `(2)` is inside the dim+strikethrough region when styled=true.
 
 ### Implementation for User Story 4
 
-- [ ] T012 [US4] In `services/todo/internal/cli/render.go`, within the line-building code shared by `renderRoots`/`renderTree`, append ` (%d)` after `task.Name` when `task.GetEstimate() > 0`. Ordering: name, then optional ` (N)`, then ` (due …)`, then ` (completed …)`.
+- [X] T012 [US4] In `services/todo/internal/cli/render.go`, within the line-building code shared by `renderRoots`/`renderTree`, append ` (%d)` after `task.Name` when `task.GetEstimate() > 0`. Ordering: name, then optional ` (N)`, then ` (due …)`, then ` (completed …)`.
 
 **Checkpoint**: All four user stories functional.
 
@@ -122,9 +122,9 @@ description: "Task list for feature 007-cli-ux-improvements"
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T013 Run `go test ./...` from `services/todo/` and ensure the full suite passes. Fix any failures introduced by the rendering format change (some existing render assertions that look for `[x] ` / `[ ] ` will need updating to the new format).
-- [ ] T014 [P] Run the quickstart steps from `specs/007-cli-ux-improvements/quickstart.md` against a live backend and confirm each expected behavior.
-- [ ] T015 [P] `go vet ./...` and `gofmt -l services/todo/internal/cli` clean.
+- [X] T013 Run `go test ./...` from `services/todo/` and ensure the full suite passes. Fix any failures introduced by the rendering format change (some existing render assertions that look for `[x] ` / `[ ] ` will need updating to the new format).
+- [X] T014 [P] Run the quickstart steps from `specs/007-cli-ux-improvements/quickstart.md` against a live backend and confirm each expected behavior.
+- [X] T015 [P] `go vet ./...` and `gofmt -l services/todo/internal/cli` clean.
 
 ---
 

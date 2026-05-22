@@ -102,7 +102,7 @@ func TestRenderTreeGlyphs(t *testing.T) {
 	}
 	roots := buildTree(tasks)
 	var buf bytes.Buffer
-	renderRoots(&buf, roots)
+	renderRoots(&buf, roots, false)
 	out := buf.String()
 
 	if !strings.Contains(out, "├──") {
@@ -117,7 +117,7 @@ func TestRenderTreeNoDue(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task"}}
 	roots := buildTree(tasks)
 	var buf bytes.Buffer
-	renderRoots(&buf, roots)
+	renderRoots(&buf, roots, false)
 	out := buf.String()
 	if strings.Contains(out, "(due ") {
 		t.Errorf("unexpected due date in output: %s", out)
@@ -129,7 +129,7 @@ func TestRenderTreeWithDue(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", Due: ts}}
 	roots := buildTree(tasks)
 	var buf bytes.Buffer
-	renderRoots(&buf, roots)
+	renderRoots(&buf, roots, false)
 	out := buf.String()
 	if !strings.Contains(out, "2026-05-25T00:00:00Z") {
 		t.Errorf("expected RFC3339 date in output: %s", out)
@@ -148,7 +148,7 @@ func TestSiblingOrder(t *testing.T) {
 	}
 }
 
-func TestCheckboxAndCompletedAt(t *testing.T) {
+func TestCompletedAt(t *testing.T) {
 	now := time.Date(2026, 5, 20, 18, 42, 11, 0, time.UTC)
 	ts := timestamppb.New(now)
 	tasks := []*taskv1.Task{
@@ -157,17 +157,20 @@ func TestCheckboxAndCompletedAt(t *testing.T) {
 	}
 	roots := buildTree(tasks)
 	var buf bytes.Buffer
-	renderRoots(&buf, roots)
+	renderRoots(&buf, roots, false)
 	out := buf.String()
 
-	if !strings.Contains(out, "[ ] ") {
-		t.Errorf("expected [ ] prefix for incomplete task: %s", out)
-	}
-	if !strings.Contains(out, "[x] ") {
-		t.Errorf("expected [x] prefix for complete task: %s", out)
+	if strings.Contains(out, "[ ] ") || strings.Contains(out, "[x] ") {
+		t.Errorf("checkbox prefixes must not appear in output: %s", out)
 	}
 	if !strings.Contains(out, "(completed 2026-05-20T18:42:11Z)") {
 		t.Errorf("expected completed timestamp in output: %s", out)
+	}
+	if !strings.Contains(out, "[1] incomplete") {
+		t.Errorf("expected [1] incomplete in output: %s", out)
+	}
+	if !strings.Contains(out, "[2] complete") {
+		t.Errorf("expected [2] complete in output: %s", out)
 	}
 }
 
@@ -310,7 +313,7 @@ func TestNestedDepth(t *testing.T) {
 	}
 	roots := buildTree(tasks)
 	var buf bytes.Buffer
-	renderRoots(&buf, roots)
+	renderRoots(&buf, roots, false)
 	out := buf.String()
 	// All tasks should appear
 	for _, name := range []string{"root", "childA", "grandchild", "childB"} {
@@ -321,5 +324,122 @@ func TestNestedDepth(t *testing.T) {
 	// │ should appear for the grandchild line (root still has childB pending)
 	if !strings.Contains(out, "│") {
 		t.Errorf("expected │ glyph for depth: %s", out)
+	}
+}
+
+// --- T009: styled rendering tests (US3) ---
+
+func TestRenderStyledCompletedTask(t *testing.T) {
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	ts := timestamppb.New(now)
+	tasks := []*taskv1.Task{{Id: 7, Name: "done task", CompletedAt: ts}}
+	roots := buildTree(tasks)
+
+	t.Run("styled=true wraps post-id content", func(t *testing.T) {
+		var buf bytes.Buffer
+		renderRoots(&buf, roots, true)
+		out := buf.String()
+		if !strings.Contains(out, "\x1b[2;9m") {
+			t.Errorf("expected dim+strikethrough open code in styled output: %q", out)
+		}
+		if !strings.Contains(out, "\x1b[0m") {
+			t.Errorf("expected reset code in styled output: %q", out)
+		}
+		if strings.Contains(out, "[ ] ") || strings.Contains(out, "[x] ") {
+			t.Errorf("checkbox markers must not appear: %q", out)
+		}
+		// Leading [id] prefix must NOT be inside the escape sequence
+		idx := strings.Index(out, "[7]")
+		escIdx := strings.Index(out, "\x1b[2;9m")
+		if escIdx < idx {
+			t.Errorf("[id] prefix appears after ANSI open code — it must not be styled: %q", out)
+		}
+	})
+
+	t.Run("styled=false produces no ANSI codes", func(t *testing.T) {
+		var buf bytes.Buffer
+		renderRoots(&buf, roots, false)
+		out := buf.String()
+		if strings.ContainsAny(out, "\x1b") {
+			t.Errorf("no escape codes expected in unstyled output: %q", out)
+		}
+		if strings.Contains(out, "[ ] ") || strings.Contains(out, "[x] ") {
+			t.Errorf("checkbox markers must not appear: %q", out)
+		}
+	})
+}
+
+func TestRenderStyledIncompleteTask(t *testing.T) {
+	tasks := []*taskv1.Task{{Id: 3, Name: "pending"}}
+	roots := buildTree(tasks)
+
+	for _, styled := range []bool{true, false} {
+		var buf bytes.Buffer
+		renderRoots(&buf, roots, styled)
+		out := buf.String()
+		if strings.ContainsAny(out, "\x1b") {
+			t.Errorf("styled=%v: incomplete task must not have ANSI codes: %q", styled, out)
+		}
+	}
+}
+
+// --- T011: estimate rendering tests (US4) ---
+
+func TestRenderEstimateNonZero(t *testing.T) {
+	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 3}}
+	roots := buildTree(tasks)
+	var buf bytes.Buffer
+	renderRoots(&buf, roots, false)
+	out := buf.String()
+	if !strings.Contains(out, " (3)") {
+		t.Errorf("expected \" (3)\" in output: %s", out)
+	}
+}
+
+func TestRenderEstimateZero(t *testing.T) {
+	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 0}}
+	roots := buildTree(tasks)
+	var buf bytes.Buffer
+	renderRoots(&buf, roots, false)
+	out := buf.String()
+	// Should not contain any parenthesized number
+	if strings.Contains(out, " (0)") {
+		t.Errorf("zero estimate must not appear in output: %s", out)
+	}
+}
+
+func TestRenderEstimateOrderBeforeDue(t *testing.T) {
+	due := timestamppb.New(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 2, Due: due}}
+	roots := buildTree(tasks)
+	var buf bytes.Buffer
+	renderRoots(&buf, roots, false)
+	out := buf.String()
+	estIdx := strings.Index(out, " (2)")
+	dueIdx := strings.Index(out, " (due ")
+	if estIdx < 0 || dueIdx < 0 {
+		t.Fatalf("missing estimate or due in output: %s", out)
+	}
+	if estIdx > dueIdx {
+		t.Errorf("estimate must appear before due date; got: %s", out)
+	}
+}
+
+func TestRenderEstimateStyledCompleted(t *testing.T) {
+	now := timestamppb.New(time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
+	tasks := []*taskv1.Task{{Id: 5, Name: "done", Estimate: 2, CompletedAt: now}}
+	roots := buildTree(tasks)
+	var buf bytes.Buffer
+	renderRoots(&buf, roots, true)
+	out := buf.String()
+	// (2) must be inside the styled region (between \x1b[2;9m and \x1b[0m)
+	open := strings.Index(out, "\x1b[2;9m")
+	reset := strings.Index(out, "\x1b[0m")
+	est := strings.Index(out, "(2)")
+	if open < 0 || reset < 0 || est < 0 {
+		t.Fatalf("missing styled codes or estimate in output: %q", out)
+	}
+	if !(open < est && est < reset) {
+		t.Errorf("estimate (2) must be inside styled region; got: %q", out)
 	}
 }

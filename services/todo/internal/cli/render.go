@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"time"
 
 	"connectrpc.com/connect"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -99,16 +101,37 @@ func formatCompletedAt(ts *timestamppb.Timestamp) string {
 	return ts.AsTime().UTC().Format(time.RFC3339)
 }
 
-// checkboxPrefix returns "[ ] " for incomplete tasks and "[x] " for complete.
-func checkboxPrefix(task *taskv1.Task) string {
-	if task.GetCompletedAt() != nil {
-		return "[x] "
+// dimStrike wraps s with ANSI dim+strikethrough codes.
+func dimStrike(s string) string {
+	return "\x1b[2;9m" + s + "\x1b[0m"
+}
+
+// wantStyled reports whether w supports ANSI styling (i.e. is a TTY).
+func wantStyled(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
 	}
-	return "[ ] "
+	return term.IsTerminal(int(f.Fd()))
+}
+
+// buildPostID constructs the post-id portion of a task line (name, estimate, due, completed).
+func buildPostID(task *taskv1.Task) string {
+	s := task.Name
+	if task.GetEstimate() > 0 {
+		s += fmt.Sprintf(" (%d)", task.GetEstimate())
+	}
+	if due := formatDue(task.Due); due != "" {
+		s += fmt.Sprintf(" (due %s)", due)
+	}
+	if cat := formatCompletedAt(task.CompletedAt); cat != "" {
+		s += fmt.Sprintf(" (completed %s)", cat)
+	}
+	return s
 }
 
 // renderTree writes the tree to w using tree-style ASCII connectors.
-func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool) {
+func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool, styled bool) {
 	for i, node := range nodes {
 		last := i == len(nodes)-1
 
@@ -119,32 +142,24 @@ func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool) {
 			childPrefix = prefix + "    "
 		}
 
-		due := formatDue(node.task.Due)
-		line := fmt.Sprintf("%s%s%s[%d] %s", prefix, connector, checkboxPrefix(node.task), node.task.Id, node.task.Name)
-		if due != "" {
-			line += fmt.Sprintf(" (due %s)", due)
+		postID := buildPostID(node.task)
+		if styled && node.task.GetCompletedAt() != nil {
+			postID = dimStrike(postID)
 		}
-		if cat := formatCompletedAt(node.task.CompletedAt); cat != "" {
-			line += fmt.Sprintf(" (completed %s)", cat)
-		}
-		fmt.Fprintln(w, line)
-		renderTree(w, node.children, childPrefix, last)
+		fmt.Fprintln(w, fmt.Sprintf("%s%s[%d] %s", prefix, connector, node.task.Id, postID))
+		renderTree(w, node.children, childPrefix, last, styled)
 	}
 }
 
 // renderRoots writes root nodes (no leading connector).
-func renderRoots(w io.Writer, roots []*treeNode) {
+func renderRoots(w io.Writer, roots []*treeNode, styled bool) {
 	for _, root := range roots {
-		due := formatDue(root.task.Due)
-		line := fmt.Sprintf("%s[%d] %s", checkboxPrefix(root.task), root.task.Id, root.task.Name)
-		if due != "" {
-			line += fmt.Sprintf(" (due %s)", due)
+		postID := buildPostID(root.task)
+		if styled && root.task.GetCompletedAt() != nil {
+			postID = dimStrike(postID)
 		}
-		if cat := formatCompletedAt(root.task.CompletedAt); cat != "" {
-			line += fmt.Sprintf(" (completed %s)", cat)
-		}
-		fmt.Fprintln(w, line)
-		renderTree(w, root.children, "", false)
+		fmt.Fprintln(w, fmt.Sprintf("[%d] %s", root.task.Id, postID))
+		renderTree(w, root.children, "", false, styled)
 	}
 }
 

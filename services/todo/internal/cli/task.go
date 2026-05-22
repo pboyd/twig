@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -51,7 +52,7 @@ func runList(client taskv1connect.TaskServiceClient, args []string) int {
 		return 0
 	}
 
-	renderRoots(os.Stdout, roots)
+	renderRoots(os.Stdout, roots, wantStyled(os.Stdout))
 	return 0
 }
 
@@ -155,27 +156,66 @@ func runRm(client taskv1connect.TaskServiceClient, args []string) int {
 
 func runMod(client taskv1connect.TaskServiceClient, args []string) int {
 	addr := backendAddr()
+
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: todo task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+		return 1
+	}
+
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "<id> must be an integer, got %q\n", args[0])
+		return 1
+	}
+
 	fs := flag.NewFlagSet("mod", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var parentStr string
 	var dueStr string
 	fs.StringVar(&parentStr, "parent", "", "parent task id")
 	fs.StringVar(&dueStr, "due", "", "due date (RFC 3339 or YYYY-MM-DD)")
-	if err := fs.Parse(args); err != nil {
+
+	// Pre-separate flag tokens from positionals so flags work in any position.
+	var flagTokens []string
+	var positionals []string
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			flagTokens = append(flagTokens, a)
+			// Consume next token as flag value if it doesn't look like a flag.
+			if !strings.Contains(a, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				flagTokens = append(flagTokens, args[i+1])
+				i++
+			}
+		} else {
+			positionals = append(positionals, a)
+		}
+	}
+
+	if err := fs.Parse(flagTokens); err != nil {
 		return 1
 	}
 
-	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, "usage: todo task mod [--parent <id>] [--due <timestamp>] <id> <name>")
+	if len(positionals) > 1 {
+		fmt.Fprintln(os.Stderr, "usage: todo task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
 		return 1
 	}
 
-	id, err := strconv.ParseInt(fs.Arg(0), 10, 64)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "<id> must be an integer, got %q\n", fs.Arg(0))
+	var newName string
+	hasName := false
+	if len(positionals) == 1 {
+		if positionals[0] == "" {
+			fmt.Fprintln(os.Stderr, "task name cannot be empty")
+			return 1
+		}
+		newName = positionals[0]
+		hasName = true
+	}
+
+	if !hasName && parentStr == "" && dueStr == "" {
+		fmt.Fprintln(os.Stderr, "nothing to update")
 		return 1
 	}
-	name := fs.Arg(1)
 
 	// Fetch current state to preserve unflagged fields (fetch-then-update)
 	getResp, err := client.GetTask(context.Background(), connect.NewRequest(&taskv1.GetTaskRequest{Id: id}))
@@ -184,6 +224,11 @@ func runMod(client taskv1connect.TaskServiceClient, args []string) int {
 		return 1
 	}
 	existing := getResp.Msg.Task
+
+	name := existing.Name
+	if hasName {
+		name = newName
+	}
 
 	req := &taskv1.UpdateTaskRequest{
 		Id:          id,

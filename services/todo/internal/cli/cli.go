@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"connectrpc.com/connect"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
@@ -43,11 +44,6 @@ func printRootUsage() {
 }
 
 func runTask(args []string) int {
-	if len(args) == 0 {
-		printTaskUsage()
-		return 1
-	}
-
 	apiKey := os.Getenv("TODO_API_KEY")
 	if apiKey == "" {
 		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
@@ -66,9 +62,11 @@ func runTask(args []string) int {
 		connect.WithInterceptors(bearerInterceptor(apiKey)),
 	)
 
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return runList(client, args)
+	}
+
 	switch args[0] {
-	case "list":
-		return runList(client, args[1:])
 	case "add":
 		return runAdd(client, args[1:])
 	case "rm":
@@ -85,17 +83,18 @@ func runTask(args []string) int {
 }
 
 func printTaskUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: todo task <subcommand> [arguments]")
+	fmt.Fprintln(os.Stderr, "Usage: todo task [<subcommand>] [arguments]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  list [--completed | --all]")
-	fmt.Fprintln(os.Stderr, "                   List tasks as a tree (default: incomplete only)")
+	fmt.Fprintln(os.Stderr, "Subcommands (if omitted, lists tasks):")
 	fmt.Fprintln(os.Stderr, "  add [--parent <id>] [--due <timestamp>] <name>")
 	fmt.Fprintln(os.Stderr, "                   Add a new task")
 	fmt.Fprintln(os.Stderr, "  rm <id>          Remove a task")
-	fmt.Fprintln(os.Stderr, "  mod [--parent <id>] [--due <timestamp>] <id> <name>")
-	fmt.Fprintln(os.Stderr, "                   Modify a task")
+	fmt.Fprintln(os.Stderr, "  mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+	fmt.Fprintln(os.Stderr, "                   Modify a task (name optional)")
 	fmt.Fprintln(os.Stderr, "  complete <id>    Mark a task complete")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "When invoked with no subcommand, lists tasks as a tree:")
+	fmt.Fprintln(os.Stderr, "  todo task [--completed | --all]")
 }
 
 // bearerInterceptor returns a Connect interceptor that adds an

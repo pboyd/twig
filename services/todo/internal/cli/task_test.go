@@ -405,7 +405,7 @@ func TestModRename(t *testing.T) {
 func TestModChangeDue(t *testing.T) {
 	h := newTestHarness(t)
 	runCmd(runAdd, h.client, []string{"task"})
-	_, stderr, code := runCmd(runMod, h.client, []string{"--due", "2026-07-01", "1", "task"})
+	_, stderr, code := runCmd(runMod, h.client, []string{"1", "--due", "2026-07-01"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -415,7 +415,7 @@ func TestModReparent(t *testing.T) {
 	h := newTestHarness(t)
 	runCmd(runAdd, h.client, []string{"parent"}) // id=1
 	runCmd(runAdd, h.client, []string{"child"})  // id=2
-	_, stderr, code := runCmd(runMod, h.client, []string{"--parent", "1", "2", "child"})
+	_, stderr, code := runCmd(runMod, h.client, []string{"2", "--parent", "1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -449,7 +449,7 @@ func TestModUnknownID(t *testing.T) {
 func TestModSelfAncestorCycle(t *testing.T) {
 	h := newTestHarness(t)
 	runCmd(runAdd, h.client, []string{"task"}) // id=1
-	_, stderr, code := runCmd(runMod, h.client, []string{"--parent", "1", "1", "task"})
+	_, stderr, code := runCmd(runMod, h.client, []string{"1", "--parent", "1"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -637,24 +637,25 @@ func TestListAllFlag(t *testing.T) {
 	}
 }
 
-func TestListCheckboxPrefix(t *testing.T) {
+func TestListNoCheckboxPrefix(t *testing.T) {
 	h := newTestHarness(t)
 	runCmd(runAdd, h.client, []string{"incomplete"}) // id=1
 	runCmd(runAdd, h.client, []string{"complete"})   // id=2
 	runCmd(runComplete, h.client, []string{"2"})
 
 	stdout, _, _ := runCmd(runList, h.client, []string{"--all"})
-	if !strings.Contains(stdout, "[ ]") {
-		t.Errorf("expected [ ] prefix for incomplete task: %s", stdout)
+	if strings.Contains(stdout, "[ ]") || strings.Contains(stdout, "[x]") {
+		t.Errorf("checkbox prefixes must not appear in output: %s", stdout)
 	}
-	if !strings.Contains(stdout, "[x]") {
-		t.Errorf("expected [x] prefix for complete task: %s", stdout)
+	// Tasks should still appear with their id prefix
+	if !strings.Contains(stdout, "[1]") || !strings.Contains(stdout, "[2]") {
+		t.Errorf("expected task id prefixes in output: %s", stdout)
 	}
 }
 
 func TestCompleteParentBlockedCLI(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"})               // id=1
+	runCmd(runAdd, h.client, []string{"parent"}) // id=1
 	runCmd(runComplete, h.client, []string{"1"})
 	_, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "1", "late child"})
 	if code != 1 {
@@ -667,14 +668,124 @@ func TestCompleteParentBlockedCLI(t *testing.T) {
 
 func TestModCompleteParentBlockedCLI(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"})   // id=1
-	runCmd(runAdd, h.client, []string{"orphan"})   // id=2
+	runCmd(runAdd, h.client, []string{"parent"}) // id=1
+	runCmd(runAdd, h.client, []string{"orphan"}) // id=2
 	runCmd(runComplete, h.client, []string{"1"})
-	_, stderr, code := runCmd(runMod, h.client, []string{"--parent", "1", "2", "orphan"})
+	_, stderr, code := runCmd(runMod, h.client, []string{"2", "--parent", "1"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
 	if !strings.Contains(stderr, "parent is complete") {
 		t.Errorf("expected 'parent is complete' message, got: %s", stderr)
+	}
+}
+
+// --- T004: runMod arg-parsing table tests (US1) ---
+
+func TestModArgParsing(t *testing.T) {
+	cases := []struct {
+		name        string
+		args        []string
+		wantCode    int
+		wantErrMsg  string
+		checkUpdate func(t *testing.T, h *testHarness)
+	}{
+		{
+			name:       "id only — nothing to update",
+			args:       []string{"1"},
+			wantCode:   1,
+			wantErrMsg: "nothing to update",
+		},
+		{
+			name:     "name only — name change",
+			args:     []string{"1", "new name"},
+			wantCode: 0,
+			checkUpdate: func(t *testing.T, h *testHarness) {
+				h.svc.mu.Lock()
+				defer h.svc.mu.Unlock()
+				if h.svc.tasks[1].Name != "new name" {
+					t.Errorf("name not updated: %q", h.svc.tasks[1].Name)
+				}
+			},
+		},
+		{
+			name:     "parent flag only — parent change, name preserved",
+			args:     []string{"1", "--parent", "2"},
+			wantCode: 0,
+			checkUpdate: func(t *testing.T, h *testHarness) {
+				h.svc.mu.Lock()
+				defer h.svc.mu.Unlock()
+				task := h.svc.tasks[1]
+				if task.Name != "original" {
+					t.Errorf("name should be preserved, got %q", task.Name)
+				}
+				if task.ParentId == nil || *task.ParentId != 2 {
+					t.Errorf("parent not updated")
+				}
+			},
+		},
+		{
+			name:     "parent flag before name — both updated",
+			args:     []string{"1", "--parent", "2", "updated"},
+			wantCode: 0,
+			checkUpdate: func(t *testing.T, h *testHarness) {
+				h.svc.mu.Lock()
+				defer h.svc.mu.Unlock()
+				task := h.svc.tasks[1]
+				if task.Name != "updated" {
+					t.Errorf("name not updated: %q", task.Name)
+				}
+				if task.ParentId == nil || *task.ParentId != 2 {
+					t.Errorf("parent not updated")
+				}
+			},
+		},
+		{
+			name:     "name before parent flag — both updated",
+			args:     []string{"1", "updated", "--parent", "2"},
+			wantCode: 0,
+			checkUpdate: func(t *testing.T, h *testHarness) {
+				h.svc.mu.Lock()
+				defer h.svc.mu.Unlock()
+				task := h.svc.tasks[1]
+				if task.Name != "updated" {
+					t.Errorf("name not updated: %q", task.Name)
+				}
+				if task.ParentId == nil || *task.ParentId != 2 {
+					t.Errorf("parent not updated")
+				}
+			},
+		},
+		{
+			name:       "empty name — rejected",
+			args:       []string{"1", ""},
+			wantCode:   1,
+			wantErrMsg: "empty",
+		},
+		{
+			name:       "extra positionals — usage error",
+			args:       []string{"1", "a", "b", "c"},
+			wantCode:   1,
+			wantErrMsg: "usage",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHarness(t)
+			runCmd(runAdd, h.client, []string{"original"}) // id=1
+			runCmd(runAdd, h.client, []string{"second"})   // id=2
+
+			_, stderr, code := runCmd(runMod, h.client, tc.args)
+			if code != tc.wantCode {
+				t.Fatalf("exit code %d, want %d; stderr: %s", code, tc.wantCode, stderr)
+			}
+			if tc.wantErrMsg != "" && !strings.Contains(stderr, tc.wantErrMsg) {
+				t.Errorf("expected %q in stderr, got: %s", tc.wantErrMsg, stderr)
+			}
+			if tc.checkUpdate != nil && code == 0 {
+				tc.checkUpdate(t, h)
+			}
+		})
 	}
 }

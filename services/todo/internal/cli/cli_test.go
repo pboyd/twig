@@ -30,9 +30,9 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 	t.Setenv("TODO_ADDR", srv.URL)
 	t.Setenv("TODO_API_KEY", wantKey)
 
-	code := runTask([]string{"list"})
+	code := runTask([]string{})
 	if code != 0 {
-		t.Fatalf("runTask list: exit code %d", code)
+		t.Fatalf("runTask (default list): exit code %d", code)
 	}
 
 	want := "Bearer " + wantKey
@@ -65,5 +65,85 @@ func TestMissingAPIKey(t *testing.T) {
 	}
 	if !strings.Contains(output, "TODO_API_KEY") {
 		t.Errorf("stderr should mention TODO_API_KEY, got: %q", output)
+	}
+}
+
+// --- T006: runTask dispatch tests (US2) ---
+
+func TestRunTaskFlagArgsInvokesList(t *testing.T) {
+	svc := newFakeTaskService()
+	mux := http.NewServeMux()
+	path, handler := taskv1connect.NewTaskServiceHandler(svc)
+	mux.Handle(path, handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	t.Setenv("TODO_ADDR", srv.URL)
+	t.Setenv("TODO_API_KEY", "testkey")
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	code := runTask([]string{"--all"})
+	w.Close()
+	os.Stdout = oldOut
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 for --all flag, got %d; output: %s", code, out)
+	}
+}
+
+func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
+	svc := newFakeTaskService()
+	mux := http.NewServeMux()
+	path, handler := taskv1connect.NewTaskServiceHandler(svc)
+	mux.Handle(path, handler)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	t.Setenv("TODO_ADDR", srv.URL)
+	t.Setenv("TODO_API_KEY", "testkey")
+
+	r, w, _ := os.Pipe()
+	oldOut := os.Stdout
+	os.Stdout = w
+	code := runTask([]string{})
+	w.Close()
+	os.Stdout = oldOut
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	out := string(buf[:n])
+
+	if code != 0 {
+		t.Fatalf("expected exit 0 for empty args, got %d; output: %s", code, out)
+	}
+	// Empty service returns "no tasks"
+	if !strings.Contains(out, "no tasks") {
+		t.Errorf("expected list output, got: %q", out)
+	}
+}
+
+func TestRunTaskListSubcommandUnknown(t *testing.T) {
+	t.Setenv("TODO_API_KEY", "testkey")
+	t.Setenv("TODO_ADDR", "http://localhost:19999")
+
+	r, w, _ := os.Pipe()
+	oldErr := os.Stderr
+	os.Stderr = w
+	code := runTask([]string{"list"})
+	w.Close()
+	os.Stderr = oldErr
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	errOut := string(buf[:n])
+
+	if code == 0 {
+		t.Fatal("expected non-zero exit code for 'list' subcommand")
+	}
+	if !strings.Contains(errOut, "unknown subcommand") {
+		t.Errorf("expected 'unknown subcommand' in stderr, got: %q", errOut)
 	}
 }
