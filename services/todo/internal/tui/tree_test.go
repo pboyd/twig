@@ -177,3 +177,40 @@ func TestExpandCollapse_SetExpanded(t *testing.T) {
 		t.Errorf("parent should remain visible after collapse, got id=%d", rows[0].node.Task.Id)
 	}
 }
+
+func TestMarker_AllChildrenCompletedShowsDash(t *testing.T) {
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "done", CompletedAt: now, ParentId: ptr64(1)},
+	}
+	tree := cli.BuildTree(tasks)
+
+	// showCompleted=false: child is hidden, so root should show [-] not [+].
+	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 visible row (completed child filtered), got %d", len(rows))
+	}
+	if rows[0].marker != "[-]" {
+		t.Errorf("marker should be [-] when all children are filtered out, got %q", rows[0].marker)
+	}
+}
+
+func TestMarker_SomeChildrenCompletedShowsPlus(t *testing.T) {
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "done", CompletedAt: now, ParentId: ptr64(1)},
+		{Id: 3, Name: "incomplete", ParentId: ptr64(1)},
+	}
+	tree := cli.BuildTree(tasks)
+
+	// showCompleted=false: one incomplete child still visible → root should show [+].
+	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 visible row (root only, collapsed), got %d", len(rows))
+	}
+	if rows[0].marker != "[+]" {
+		t.Errorf("marker should be [+] when there is at least one visible child, got %q", rows[0].marker)
+	}
+}

@@ -119,6 +119,156 @@ func TestNavigation_CollapseExpandWithHL(t *testing.T) {
 	}
 }
 
+// TestNavigation_CollapseLeafMovesToParent checks that pressing H/← on a leaf
+// (or already-collapsed node) collapses the parent and moves the cursor to it.
+// TestNavigation_ExpandMovesToFirstChild checks that pressing L moves the
+// cursor to the first revealed child.
+func TestNavigation_ExpandMovesToFirstChild(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "child1"},
+		{Id: 3, Name: "child2"},
+	}
+	tasks[1].ParentId = ptr64(1)
+	tasks[2].ParentId = ptr64(1)
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	// cursor on root, subtree collapsed
+
+	m = pressKey(m, "l")
+	if m.cursor != 1 {
+		t.Errorf("after expand: cursor should be on first child (1), got %d", m.cursor)
+	}
+	if m.visible[1].node.Task.Id != 2 {
+		t.Errorf("cursor should be on task id=2, got id=%d", m.visible[1].node.Task.Id)
+	}
+}
+
+// TestNavigation_ExpandAlreadyExpandedMovesToFirstChild checks that pressing L
+// on an already-expanded node still jumps the cursor to the first child.
+func TestNavigation_ExpandAlreadyExpandedMovesToFirstChild(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "child"},
+	}
+	tasks[1].ParentId = ptr64(1)
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+
+	// First expand: cursor moves to child.
+	m = pressKey(m, "l")
+	if m.cursor != 1 {
+		t.Fatalf("first expand: expected cursor=1, got %d", m.cursor)
+	}
+
+	// Move back to root.
+	m = pressKey(m, "k")
+	if m.cursor != 0 {
+		t.Fatalf("after up: expected cursor=0, got %d", m.cursor)
+	}
+
+	// Second expand on already-expanded root: cursor should still move to child.
+	m = pressKey(m, "l")
+	if m.cursor != 1 {
+		t.Errorf("re-expand already-expanded: expected cursor=1, got %d", m.cursor)
+	}
+}
+
+// TestNavigation_ExpandNoVisibleChildrenLeaveCursor checks that expanding a
+// task whose only children are all-completed (and filtered) does not move the cursor.
+func TestNavigation_ExpandNoVisibleChildrenLeaveCursor(t *testing.T) {
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "done-child", CompletedAt: now},
+	}
+	tasks[1].ParentId = ptr64(1)
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	// showCompleted is false, so child is hidden
+
+	m = pressKey(m, "l")
+	if m.cursor != 0 {
+		t.Errorf("cursor should stay on root when no children are visible, got %d", m.cursor)
+	}
+}
+
+func TestNavigation_CollapseLeafMovesToParent(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "child"},
+	}
+	tasks[1].ParentId = ptr64(1)
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+
+	// Expand root so both rows are visible.
+	m = pressKey(m, "l")
+	if len(m.visible) != 2 {
+		t.Fatalf("setup: expected 2 visible rows, got %d", len(m.visible))
+	}
+
+	// Move cursor to child (index 1, id=2).
+	m = pressKey(m, "j")
+	if m.cursor != 1 {
+		t.Fatalf("setup: expected cursor=1, got %d", m.cursor)
+	}
+
+	// Press H on the child (leaf) — should collapse parent and move cursor to root.
+	m = pressKey(m, "h")
+	if len(m.visible) != 1 {
+		t.Errorf("after collapse-to-parent: want 1 row, got %d", len(m.visible))
+	}
+	if m.cursor != 0 {
+		t.Errorf("after collapse-to-parent: cursor should be on root (0), got %d", m.cursor)
+	}
+	if m.expanded[1] {
+		t.Error("root should be collapsed after H on child")
+	}
+}
+
+// TestNavigation_CollapseAlreadyCollapsedMovesToParent checks the same path
+// when the node has children but they are already hidden.
+func TestNavigation_CollapseAlreadyCollapsedMovesToParent(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "mid"},
+		{Id: 3, Name: "leaf"},
+	}
+	tasks[1].ParentId = ptr64(1)
+	tasks[2].ParentId = ptr64(2)
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+
+	// Expand root then mid so all three rows are visible.
+	m = pressKey(m, "l")        // expand root
+	m = pressKey(m, "j")        // move to mid
+	m = pressKey(m, "l")        // expand mid
+	if len(m.visible) != 3 {
+		t.Fatalf("setup: expected 3 rows, got %d", len(m.visible))
+	}
+
+	// Move cursor to mid (id=2) and collapse it.
+	m.cursor = 1
+	m = pressKey(m, "h") // collapse mid → mid is now collapsed, cursor stays on mid
+	if m.expanded[2] {
+		t.Fatalf("setup: mid should be collapsed")
+	}
+	if m.cursor != 1 {
+		t.Fatalf("setup: cursor should be on mid (1), got %d", m.cursor)
+	}
+
+	// Press H again on mid (collapsed, has children) — should collapse root and
+	// move cursor to root.
+	m = pressKey(m, "h")
+	if len(m.visible) != 1 {
+		t.Errorf("want 1 row (only root), got %d", len(m.visible))
+	}
+	if m.cursor != 0 {
+		t.Errorf("cursor should be on root (0), got %d", m.cursor)
+	}
+}
+
 func TestNavigation_CollapseWithArrowKeys(t *testing.T) {
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "root"},

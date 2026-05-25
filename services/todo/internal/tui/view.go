@@ -8,9 +8,8 @@ import (
 )
 
 var (
-	highlightStyle = lipgloss.NewStyle().Reverse(true)
+	highlightStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("4")).Foreground(lipgloss.Color("15"))
 	errorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	dividerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 // View renders the current model state to a string.
@@ -46,12 +45,11 @@ func (m Model) viewList() string {
 
 	var rows []string
 	for i := 0; i < maxLines; i++ {
-		l := padRight(listLines[i], listWidth)
+		l := padRightAnsi(listLines[i], listWidth)
 		d := ""
 		if i < len(detailLines) {
 			d = detailLines[i]
 		}
-		_ = dividerStyle
 		rows = append(rows, fmt.Sprintf("%s %s", l, d))
 	}
 
@@ -80,7 +78,7 @@ func (m Model) viewWithForm() string {
 
 	var rows []string
 	for i := 0; i < maxLines; i++ {
-		l := padRight(listLines[i], listWidth)
+		l := padRightAnsi(listLines[i], listWidth)
 		f := ""
 		if i < len(formLines) {
 			f = formLines[i]
@@ -99,10 +97,9 @@ func (m Model) renderList(width int) string {
 
 	var sb strings.Builder
 	for i, row := range m.visible {
-		line := fmt.Sprintf("%s%s [%d] %s",
+		line := fmt.Sprintf("%s%s %s",
 			row.treePrefix,
 			row.marker,
-			row.node.Task.Id,
 			row.node.Task.Name,
 		)
 
@@ -154,11 +151,13 @@ func splitLines(s string, n int) []string {
 	return lines
 }
 
-// padRight pads or truncates s to exactly width runes.
-func padRight(s string, width int) string {
-	r := []rune(s)
-	if len(r) >= width {
-		return string(r[:width])
+// padRightAnsi pads s to at least width visible columns, using lipgloss.Width
+// to measure the visible width (ignoring ANSI escape codes). Lines that already
+// meet or exceed width are returned unchanged so ANSI codes are never truncated.
+func padRightAnsi(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
 	}
-	return s + strings.Repeat(" ", width-len(r))
+	return s + strings.Repeat(" ", width-w)
 }

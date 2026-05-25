@@ -256,8 +256,19 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Collapse):
 		if len(m.visible) > 0 {
-			id := m.visible[m.cursor].node.Task.Id
-			m.expanded[id] = false
+			row := m.visible[m.cursor]
+			id := row.node.Task.Id
+			if len(row.node.Children) > 0 && m.expanded[id] {
+				// Task is expanded — collapse it in place.
+				m.expanded[id] = false
+			} else if parent := findParentNode(m.tree, id); parent != nil {
+				// Task is a leaf or already collapsed — collapse the parent and
+				// move the cursor up to it.
+				m.expanded[parent.Task.Id] = false
+				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+				m.cursor = findCursor(m.visible, parent.Task.Id)
+				return m, nil
+			}
 			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
 		}
 
@@ -266,6 +277,13 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			id := m.visible[m.cursor].node.Task.Id
 			m.expanded[id] = true
 			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+			// Move to first child if it is visible immediately after the cursor.
+			// Works whether the subtree was just expanded or was already open.
+			if next := m.cursor + 1; next < len(m.visible) {
+				if pid := m.visible[next].node.Task.ParentId; pid != nil && *pid == id {
+					m.cursor = next
+				}
+			}
 		}
 
 	case key.Matches(msg, m.keys.Edit):
@@ -421,6 +439,22 @@ func (m *Model) ensureVisible(id int64) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+// findParentNode returns the tree node whose Children slice contains childID,
+// or nil if childID is a root task.
+func findParentNode(tree []*cli.TreeNode, childID int64) *cli.TreeNode {
+	for _, node := range tree {
+		for _, child := range node.Children {
+			if child.Task.Id == childID {
+				return node
+			}
+		}
+		if found := findParentNode(node.Children, childID); found != nil {
+			return found
+		}
+	}
+	return nil
+}
 
 func findCursor(visible []*visibleRow, taskID int64) int {
 	for i, r := range visible {

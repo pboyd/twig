@@ -21,7 +21,7 @@ func renderDetails(task *taskv1.Task, width int) string {
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "ID:   %s\n", cli.BuildPostID(task))
+	fmt.Fprintf(&sb, "ID:   %d\n", task.Id)
 	fmt.Fprintf(&sb, "Name: %s\n", name)
 
 	if due := cli.FormatDue(task.Due); due != "" {

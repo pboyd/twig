@@ -46,8 +46,22 @@ func emitNode(
 	hasChildren := len(node.Children) > 0
 	isExpanded := expanded[id]
 
-	marker := "[-]"
+	// [+] only when collapsing would reveal children — i.e. at least one child
+	// would be visible given the current filter settings.
+	hasExpandableChildren := false
 	if hasChildren && !isExpanded {
+		for _, child := range node.Children {
+			childCompleted := child.Task.GetCompletedAt() != nil
+			childIsPending := pendingComplete != nil && *pendingComplete == child.Task.Id
+			if !childCompleted || showCompleted || childIsPending {
+				hasExpandableChildren = true
+				break
+			}
+		}
+	}
+
+	marker := "[-]"
+	if hasExpandableChildren {
 		marker = "[+]"
 	}
 
