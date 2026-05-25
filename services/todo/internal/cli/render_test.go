@@ -13,7 +13,7 @@ import (
 // --- parseDue unit tests (T007 / US1) ---
 
 func TestParseDueRFC3339(t *testing.T) {
-	ts, err := parseDue("2026-06-01T17:00:00Z")
+	ts, err := ParseDue("2026-06-01T17:00:00Z")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestParseDueRFC3339(t *testing.T) {
 }
 
 func TestParseDueBareDate(t *testing.T) {
-	ts, err := parseDue("2026-06-01")
+	ts, err := ParseDue("2026-06-01")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestParseDueBareDate(t *testing.T) {
 func TestParseDueMalformed(t *testing.T) {
 	cases := []string{"not-a-date", "2026/06/01", "June 1, 2026", ""}
 	for _, v := range cases {
-		_, err := parseDue(v)
+		_, err := ParseDue(v)
 		if err == nil {
 			t.Errorf("expected error for %q, got nil", v)
 		}
@@ -45,14 +45,14 @@ func TestParseDueMalformed(t *testing.T) {
 }
 
 func TestFormatDueNil(t *testing.T) {
-	if got := formatDue(nil); got != "" {
+	if got := FormatDue(nil); got != "" {
 		t.Errorf("expected empty string for nil, got %q", got)
 	}
 }
 
 func TestFormatDueUTC(t *testing.T) {
 	ts := timestamppb.New(time.Date(2026, 6, 1, 17, 0, 0, 0, time.UTC))
-	got := formatDue(ts)
+	got := FormatDue(ts)
 	if got != "2026-06-01T17:00:00Z" {
 		t.Errorf("got %q", got)
 	}
@@ -67,11 +67,11 @@ func TestBuildTreeRoots(t *testing.T) {
 		{Id: 1, Name: "a"},
 		{Id: 2, Name: "b"},
 	}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	if len(roots) != 2 {
 		t.Fatalf("expected 2 roots, got %d", len(roots))
 	}
-	if roots[0].task.Id != 1 || roots[1].task.Id != 2 {
+	if roots[0].Task.Id != 1 || roots[1].Task.Id != 2 {
 		t.Errorf("roots not in ascending order")
 	}
 }
@@ -82,14 +82,14 @@ func TestBuildTreeChildren(t *testing.T) {
 		{Id: 2, Name: "child", ParentId: ptr(1)},
 		{Id: 3, Name: "grandchild", ParentId: ptr(2)},
 	}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	if len(roots) != 1 {
 		t.Fatalf("expected 1 root, got %d", len(roots))
 	}
-	if len(roots[0].children) != 1 {
-		t.Fatalf("expected 1 child, got %d", len(roots[0].children))
+	if len(roots[0].Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(roots[0].Children))
 	}
-	if len(roots[0].children[0].children) != 1 {
+	if len(roots[0].Children[0].Children) != 1 {
 		t.Fatalf("expected 1 grandchild")
 	}
 }
@@ -100,7 +100,7 @@ func TestRenderTreeGlyphs(t *testing.T) {
 		{Id: 2, Name: "first", ParentId: ptr(1)},
 		{Id: 3, Name: "second", ParentId: ptr(1)},
 	}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -115,7 +115,7 @@ func TestRenderTreeGlyphs(t *testing.T) {
 
 func TestRenderTreeNoDue(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task"}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -127,7 +127,7 @@ func TestRenderTreeNoDue(t *testing.T) {
 func TestRenderTreeWithDue(t *testing.T) {
 	ts := timestamppb.New(time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC))
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", Due: ts}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -142,8 +142,8 @@ func TestSiblingOrder(t *testing.T) {
 		{Id: 1, Name: "a"},
 		{Id: 2, Name: "b"},
 	}
-	roots := buildTree(tasks)
-	if roots[0].task.Id != 1 || roots[1].task.Id != 2 || roots[2].task.Id != 3 {
+	roots := BuildTree(tasks)
+	if roots[0].Task.Id != 1 || roots[1].Task.Id != 2 || roots[2].Task.Id != 3 {
 		t.Errorf("roots not sorted ascending by id")
 	}
 }
@@ -155,7 +155,7 @@ func TestCompletedAt(t *testing.T) {
 		{Id: 1, Name: "incomplete"},
 		{Id: 2, Name: "complete", CompletedAt: ts},
 	}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -178,7 +178,7 @@ func TestPruneIncomplete(t *testing.T) {
 	t.Run("complete leaf is dropped", func(t *testing.T) {
 		now := timestamppb.New(time.Now())
 		tasks := []*taskv1.Task{{Id: 1, Name: "done", CompletedAt: now}}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		pruned := pruneIncomplete(roots)
 		if len(pruned) != 0 {
 			t.Errorf("expected 0 roots after pruning complete leaf, got %d", len(pruned))
@@ -187,7 +187,7 @@ func TestPruneIncomplete(t *testing.T) {
 
 	t.Run("incomplete leaf is kept", func(t *testing.T) {
 		tasks := []*taskv1.Task{{Id: 1, Name: "todo"}}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		pruned := pruneIncomplete(roots)
 		if len(pruned) != 1 {
 			t.Errorf("expected 1 root after pruning, got %d", len(pruned))
@@ -201,16 +201,16 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 2, Name: "done child", ParentId: ptr(1), CompletedAt: now},
 			{Id: 3, Name: "todo child", ParentId: ptr(1)},
 		}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		pruned := pruneIncomplete(roots)
 		if len(pruned) != 1 {
 			t.Fatalf("expected 1 root, got %d", len(pruned))
 		}
-		if len(pruned[0].children) != 1 {
-			t.Errorf("expected 1 child (incomplete only), got %d", len(pruned[0].children))
+		if len(pruned[0].Children) != 1 {
+			t.Errorf("expected 1 child (incomplete only), got %d", len(pruned[0].Children))
 		}
-		if pruned[0].children[0].task.Id != 3 {
-			t.Errorf("expected incomplete child id=3, got id=%d", pruned[0].children[0].task.Id)
+		if pruned[0].Children[0].Task.Id != 3 {
+			t.Errorf("expected incomplete child id=3, got id=%d", pruned[0].Children[0].Task.Id)
 		}
 	})
 
@@ -220,7 +220,7 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 1, Name: "parent", CompletedAt: now},
 			{Id: 2, Name: "child", ParentId: ptr(1), CompletedAt: now},
 		}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		pruned := pruneIncomplete(roots)
 		if len(pruned) != 0 {
 			t.Errorf("expected 0 roots for fully complete subtree, got %d", len(pruned))
@@ -235,13 +235,13 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 3, Name: "todo-a", ParentId: ptr(1)},
 			{Id: 5, Name: "todo-b", ParentId: ptr(1)},
 		}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		pruned := pruneIncomplete(roots)
-		if len(pruned[0].children) != 2 {
-			t.Fatalf("expected 2 kept children, got %d", len(pruned[0].children))
+		if len(pruned[0].Children) != 2 {
+			t.Fatalf("expected 2 kept children, got %d", len(pruned[0].Children))
 		}
-		if pruned[0].children[0].task.Id != 3 || pruned[0].children[1].task.Id != 5 {
-			t.Errorf("children out of order: %d, %d", pruned[0].children[0].task.Id, pruned[0].children[1].task.Id)
+		if pruned[0].Children[0].Task.Id != 3 || pruned[0].Children[1].Task.Id != 5 {
+			t.Errorf("children out of order: %d, %d", pruned[0].Children[0].Task.Id, pruned[0].Children[1].Task.Id)
 		}
 	})
 }
@@ -250,7 +250,7 @@ func TestFilterCompleted(t *testing.T) {
 	t.Run("complete leaf is kept", func(t *testing.T) {
 		now := timestamppb.New(time.Now())
 		tasks := []*taskv1.Task{{Id: 1, Name: "done", CompletedAt: now}}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		filtered := filterCompleted(roots)
 		if len(filtered) != 1 {
 			t.Errorf("expected 1 root, got %d", len(filtered))
@@ -259,7 +259,7 @@ func TestFilterCompleted(t *testing.T) {
 
 	t.Run("incomplete leaf is dropped", func(t *testing.T) {
 		tasks := []*taskv1.Task{{Id: 1, Name: "todo"}}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		filtered := filterCompleted(roots)
 		if len(filtered) != 0 {
 			t.Errorf("expected 0 roots, got %d", len(filtered))
@@ -273,13 +273,13 @@ func TestFilterCompleted(t *testing.T) {
 			{Id: 2, Name: "done child", ParentId: ptr(1), CompletedAt: now},
 			{Id: 3, Name: "todo child", ParentId: ptr(1)},
 		}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		filtered := filterCompleted(roots)
 		if len(filtered) != 1 {
 			t.Fatalf("expected 1 promoted root (done child), got %d", len(filtered))
 		}
-		if filtered[0].task.Id != 2 {
-			t.Errorf("expected promoted task id=2, got id=%d", filtered[0].task.Id)
+		if filtered[0].Task.Id != 2 {
+			t.Errorf("expected promoted task id=2, got id=%d", filtered[0].Task.Id)
 		}
 	})
 
@@ -290,13 +290,13 @@ func TestFilterCompleted(t *testing.T) {
 			{Id: 2, Name: "done-a", CompletedAt: now},
 			{Id: 3, Name: "done-b", CompletedAt: now},
 		}
-		roots := buildTree(tasks)
+		roots := BuildTree(tasks)
 		filtered := filterCompleted(roots)
 		if len(filtered) != 2 {
 			t.Fatalf("expected 2 roots, got %d", len(filtered))
 		}
-		if filtered[0].task.Id != 2 || filtered[1].task.Id != 3 {
-			t.Errorf("order wrong: %d, %d", filtered[0].task.Id, filtered[1].task.Id)
+		if filtered[0].Task.Id != 2 || filtered[1].Task.Id != 3 {
+			t.Errorf("order wrong: %d, %d", filtered[0].Task.Id, filtered[1].Task.Id)
 		}
 	})
 }
@@ -311,7 +311,7 @@ func TestNestedDepth(t *testing.T) {
 		{Id: 3, Name: "grandchild", ParentId: ptr(2)},
 		{Id: 4, Name: "childB", ParentId: ptr(1)},
 	}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -333,7 +333,7 @@ func TestRenderStyledCompletedTask(t *testing.T) {
 	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
 	ts := timestamppb.New(now)
 	tasks := []*taskv1.Task{{Id: 7, Name: "done task", CompletedAt: ts}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 
 	t.Run("styled=true wraps post-id content", func(t *testing.T) {
 		var buf bytes.Buffer
@@ -371,7 +371,7 @@ func TestRenderStyledCompletedTask(t *testing.T) {
 
 func TestRenderStyledIncompleteTask(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 3, Name: "pending"}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 
 	for _, styled := range []bool{true, false} {
 		var buf bytes.Buffer
@@ -387,7 +387,7 @@ func TestRenderStyledIncompleteTask(t *testing.T) {
 
 func TestRenderEstimateNonZero(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 3}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -398,7 +398,7 @@ func TestRenderEstimateNonZero(t *testing.T) {
 
 func TestRenderEstimateZero(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 0}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -411,7 +411,7 @@ func TestRenderEstimateZero(t *testing.T) {
 func TestRenderEstimateOrderBeforeDue(t *testing.T) {
 	due := timestamppb.New(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", Estimate: 2, Due: due}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, false)
 	out := buf.String()
@@ -428,7 +428,7 @@ func TestRenderEstimateOrderBeforeDue(t *testing.T) {
 func TestRenderEstimateStyledCompleted(t *testing.T) {
 	now := timestamppb.New(time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
 	tasks := []*taskv1.Task{{Id: 5, Name: "done", Estimate: 2, CompletedAt: now}}
-	roots := buildTree(tasks)
+	roots := BuildTree(tasks)
 	var buf bytes.Buffer
 	renderRoots(&buf, roots, true)
 	out := buf.String()

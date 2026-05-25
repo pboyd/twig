@@ -95,7 +95,7 @@ func runTask(args []string) int {
 		&http.Client{},
 		addr,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(bearerInterceptor(apiKey)),
+		connect.WithInterceptors(BearerInterceptor(apiKey)),
 	)
 
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
@@ -135,9 +135,9 @@ func printTaskUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --all            Show all tasks (including completed)")
 }
 
-// bearerInterceptor returns a Connect interceptor that adds an
+// BearerInterceptor returns a Connect interceptor that adds an
 // Authorization: Bearer header to every outgoing unary request.
-func bearerInterceptor(apiKey string) connect.UnaryInterceptorFunc {
+func BearerInterceptor(apiKey string) connect.UnaryInterceptorFunc {
 	return connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
 		return connect.UnaryFunc(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			req.Header().Set("Authorization", "Bearer "+apiKey)

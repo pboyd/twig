@@ -15,7 +15,6 @@ import (
 )
 
 // mapError converts an RPC or transport error to a user-facing message.
-// Returns the message string (to be printed to stderr).
 func mapError(err error, addr string) string {
 	var connectErr *connect.Error
 	if errors.As(err, &connectErr) {
@@ -29,9 +28,9 @@ func mapError(err error, addr string) string {
 	return fmt.Sprintf("cannot reach backend at %s: %v", addr, err)
 }
 
-// parseDue parses a --due flag value. Accepts RFC 3339 or bare YYYY-MM-DD
+// ParseDue parses a --due flag value. Accepts RFC 3339 or bare YYYY-MM-DD
 // (interpreted as 00:00:00Z). Returns a usage error on failure.
-func parseDue(v string) (*timestamppb.Timestamp, error) {
+func ParseDue(v string) (*timestamppb.Timestamp, error) {
 	if t, err := time.Parse(time.RFC3339, v); err == nil {
 		return timestamppb.New(t), nil
 	}
@@ -42,29 +41,30 @@ func parseDue(v string) (*timestamppb.Timestamp, error) {
 	return nil, fmt.Errorf("invalid --due value %q: use RFC 3339 (e.g. 2006-01-02T15:04:05Z) or YYYY-MM-DD", v)
 }
 
-// formatDue formats a proto timestamp as RFC 3339 UTC, or empty string if nil.
-func formatDue(ts *timestamppb.Timestamp) string {
+// FormatDue formats a proto timestamp as RFC 3339 UTC, or empty string if nil.
+func FormatDue(ts *timestamppb.Timestamp) string {
 	if ts == nil {
 		return ""
 	}
 	return ts.AsTime().UTC().Format(time.RFC3339)
 }
 
-// treeNode is used internally for rendering the task tree.
-type treeNode struct {
-	task     *taskv1.Task
-	children []*treeNode
+// TreeNode is the in-memory representation of a task and its children,
+// used for tree rendering by both the CLI and the TUI.
+type TreeNode struct {
+	Task     *taskv1.Task
+	Children []*TreeNode
 }
 
-// buildTree builds a tree from a flat list of tasks.
+// BuildTree builds a tree from a flat list of tasks.
 // Roots are tasks with no parent; children are attached in id-ascending order.
-func buildTree(tasks []*taskv1.Task) []*treeNode {
-	byID := make(map[int64]*treeNode, len(tasks))
+func BuildTree(tasks []*taskv1.Task) []*TreeNode {
+	byID := make(map[int64]*TreeNode, len(tasks))
 	for _, t := range tasks {
-		byID[t.Id] = &treeNode{task: t}
+		byID[t.Id] = &TreeNode{Task: t}
 	}
 
-	var roots []*treeNode
+	var roots []*TreeNode
 	for _, t := range tasks {
 		node := byID[t.Id]
 		if t.ParentId == nil {
@@ -72,42 +72,42 @@ func buildTree(tasks []*taskv1.Task) []*treeNode {
 		} else {
 			parent, ok := byID[t.GetParentId()]
 			if !ok {
-				// Parent not in list — treat as root
 				roots = append(roots, node)
 			} else {
-				parent.children = append(parent.children, node)
+				parent.Children = append(parent.Children, node)
 			}
 		}
 	}
 
-	sortNodes(roots)
+	SortNodes(roots)
 	return roots
 }
 
-func sortNodes(nodes []*treeNode) {
+// SortNodes sorts nodes by id ascending, recursively.
+func SortNodes(nodes []*TreeNode) {
 	sort.Slice(nodes, func(i, j int) bool {
-		return nodes[i].task.Id < nodes[j].task.Id
+		return nodes[i].Task.Id < nodes[j].Task.Id
 	})
 	for _, n := range nodes {
-		sortNodes(n.children)
+		SortNodes(n.Children)
 	}
 }
 
-// formatCompletedAt formats a proto timestamp as RFC 3339 UTC, or empty string if nil.
-func formatCompletedAt(ts *timestamppb.Timestamp) string {
+// FormatCompletedAt formats a proto timestamp as RFC 3339 UTC, or empty string if nil.
+func FormatCompletedAt(ts *timestamppb.Timestamp) string {
 	if ts == nil {
 		return ""
 	}
 	return ts.AsTime().UTC().Format(time.RFC3339)
 }
 
-// dimStrike wraps s with ANSI dim+strikethrough codes.
-func dimStrike(s string) string {
+// DimStrike wraps s with ANSI dim+strikethrough codes.
+func DimStrike(s string) string {
 	return "\x1b[2;9m" + s + "\x1b[0m"
 }
 
-// wantStyled reports whether w supports ANSI styling (i.e. is a TTY).
-func wantStyled(w io.Writer) bool {
+// WantStyled reports whether w supports ANSI styling (i.e. is a TTY).
+func WantStyled(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
 		return false
@@ -115,23 +115,23 @@ func wantStyled(w io.Writer) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
-// buildPostID constructs the post-id portion of a task line (name, estimate, due, completed).
-func buildPostID(task *taskv1.Task) string {
+// BuildPostID constructs the post-id portion of a task line (name, estimate, due, completed).
+func BuildPostID(task *taskv1.Task) string {
 	s := task.Name
 	if task.GetEstimate() > 0 {
 		s += fmt.Sprintf(" (%d)", task.GetEstimate())
 	}
-	if due := formatDue(task.Due); due != "" {
+	if due := FormatDue(task.Due); due != "" {
 		s += fmt.Sprintf(" (due %s)", due)
 	}
-	if cat := formatCompletedAt(task.CompletedAt); cat != "" {
+	if cat := FormatCompletedAt(task.CompletedAt); cat != "" {
 		s += fmt.Sprintf(" (completed %s)", cat)
 	}
 	return s
 }
 
 // renderTree writes the tree to w using tree-style ASCII connectors.
-func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool, styled bool) {
+func renderTree(w io.Writer, nodes []*TreeNode, prefix string, isLast bool, styled bool) {
 	for i, node := range nodes {
 		last := i == len(nodes)-1
 
@@ -142,36 +142,35 @@ func renderTree(w io.Writer, nodes []*treeNode, prefix string, isLast bool, styl
 			childPrefix = prefix + "    "
 		}
 
-		postID := buildPostID(node.task)
-		if styled && node.task.GetCompletedAt() != nil {
-			postID = dimStrike(postID)
+		postID := BuildPostID(node.Task)
+		if styled && node.Task.GetCompletedAt() != nil {
+			postID = DimStrike(postID)
 		}
-		fmt.Fprintln(w, fmt.Sprintf("%s%s[%d] %s", prefix, connector, node.task.Id, postID))
-		renderTree(w, node.children, childPrefix, last, styled)
+		fmt.Fprintln(w, fmt.Sprintf("%s%s[%d] %s", prefix, connector, node.Task.Id, postID))
+		renderTree(w, node.Children, childPrefix, last, styled)
 	}
 }
 
 // renderRoots writes root nodes (no leading connector).
-func renderRoots(w io.Writer, roots []*treeNode, styled bool) {
+func renderRoots(w io.Writer, roots []*TreeNode, styled bool) {
 	for _, root := range roots {
-		postID := buildPostID(root.task)
-		if styled && root.task.GetCompletedAt() != nil {
-			postID = dimStrike(postID)
+		postID := BuildPostID(root.Task)
+		if styled && root.Task.GetCompletedAt() != nil {
+			postID = DimStrike(postID)
 		}
-		fmt.Fprintln(w, fmt.Sprintf("[%d] %s", root.task.Id, postID))
-		renderTree(w, root.children, "", false, styled)
+		fmt.Fprintln(w, fmt.Sprintf("[%d] %s", root.Task.Id, postID))
+		renderTree(w, root.Children, "", false, styled)
 	}
 }
 
 // pruneIncomplete returns nodes where the node itself or any descendant is incomplete.
-// Completed leaf nodes whose entire subtree is complete are dropped.
-func pruneIncomplete(roots []*treeNode) []*treeNode {
-	var result []*treeNode
+func pruneIncomplete(roots []*TreeNode) []*TreeNode {
+	var result []*TreeNode
 	for _, node := range roots {
-		prunedChildren := pruneIncomplete(node.children)
-		incomplete := node.task.GetCompletedAt() == nil
+		prunedChildren := pruneIncomplete(node.Children)
+		incomplete := node.Task.GetCompletedAt() == nil
 		if incomplete || len(prunedChildren) > 0 {
-			kept := &treeNode{task: node.task, children: prunedChildren}
+			kept := &TreeNode{Task: node.Task, Children: prunedChildren}
 			result = append(result, kept)
 		}
 	}
@@ -180,15 +179,14 @@ func pruneIncomplete(roots []*treeNode) []*treeNode {
 
 // filterCompleted returns nodes that are complete, promoting completed descendants
 // of incomplete parents to the nearest kept ancestor's level (or root).
-func filterCompleted(roots []*treeNode) []*treeNode {
-	var result []*treeNode
+func filterCompleted(roots []*TreeNode) []*TreeNode {
+	var result []*TreeNode
 	for _, node := range roots {
-		childResults := filterCompleted(node.children)
-		if node.task.GetCompletedAt() != nil {
-			kept := &treeNode{task: node.task, children: childResults}
+		childResults := filterCompleted(node.Children)
+		if node.Task.GetCompletedAt() != nil {
+			kept := &TreeNode{Task: node.Task, Children: childResults}
 			result = append(result, kept)
 		} else {
-			// Incomplete node: promote any kept children to this level.
 			result = append(result, childResults...)
 		}
 	}

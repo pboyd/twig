@@ -31,7 +31,7 @@ func runPlan(args []string) int {
 		&http.Client{},
 		addr,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(bearerInterceptor(apiKey)),
+		connect.WithInterceptors(BearerInterceptor(apiKey)),
 	)
 
 	// Parse optional --date YYYY-MM-DD flag.

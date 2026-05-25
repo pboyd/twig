@@ -30,8 +30,8 @@ description: "Task list for Interactive TUI implementation"
 
 **Purpose**: Pull in TUI dependencies and create the new package scaffold.
 
-- [ ] T001 Add TUI dependencies to `services/todo/go.mod`: `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles`, `github.com/charmbracelet/lipgloss`. Run `go mod tidy` from `services/todo/`.
-- [ ] T002 [P] Create the empty package skeleton at `services/todo/internal/tui/` with a placeholder `tui.go` declaring `package tui` and an empty exported `Run(ctx context.Context) error` function returning `nil`. This unblocks parallel work on sibling files.
+- [X] T001 Add TUI dependencies to `services/todo/go.mod`: `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles`, `github.com/charmbracelet/lipgloss`. Run `go mod tidy` from `services/todo/`.
+- [X] T002 [P] Create the empty package skeleton at `services/todo/internal/tui/` with a placeholder `tui.go` declaring `package tui` and an empty exported `Run(ctx context.Context) error` function returning `nil`. This unblocks parallel work on sibling files.
 
 ---
 
@@ -39,12 +39,12 @@ description: "Task list for Interactive TUI implementation"
 
 **Purpose**: Promote shared CLI helpers to exported names and add the TTY-gated entry point. Every user story depends on these.
 
-- [ ] T003 In `services/todo/internal/cli/render.go`, export the helpers reused by the TUI: rename `buildTree` → `BuildTree`, `sortNodes` → `SortNodes` (called from within `BuildTree`; export only what the TUI calls directly), `formatDue` → `FormatDue`, `formatCompletedAt` → `FormatCompletedAt`, `dimStrike` → `DimStrike`, `wantStyled` → `WantStyled`, `buildPostID` → `BuildPostID`. Update all internal call sites in `services/todo/internal/cli/*.go` accordingly.
-- [ ] T004 In `services/todo/internal/cli/task.go`, export `parseDue` → `ParseDue` and update all internal call sites. The TUI's edit form uses this for the due-date field per research R7.
-- [ ] T005 Run `go build ./...` and `go test ./internal/cli/...` from `services/todo/` to verify the renames in T003–T004 didn't break the existing CLI.
-- [ ] T006 [P] Create `services/todo/internal/tui/client.go` exposing `NewClients(addr, apiKey string)` that returns both a `TaskServiceClient` and a `PomodoroServiceClient` constructed the same way `runTask`/`runPomTop` already construct theirs (same `bearerInterceptor`, same `connect.WithSendGzip`). Read env vars `TODO_API_KEY` / `TODO_ADDR` with the same defaults as the existing CLI.
-- [ ] T007 [P] Create `services/todo/internal/tui/keymap.go` with a `KeyMap` struct of `key.Binding` values for every entry in `specs/010-interactive-tui/contracts/keymap.md`. Provide a `DefaultKeyMap()` constructor. Implement `ShortHelp()` and `FullHelp()` so the Bubbles `help` component can render the help overlay automatically (research R6).
-- [ ] T008 In `services/todo/internal/cli/cli.go`, modify `Run(args)`: when `len(args) == 0`, check `golang.org/x/term.IsTerminal(int(os.Stdout.Fd()))`. If true, delegate to `internal/tui.Run(context.Background())` and return its exit code (0 on success, 1 on error). If false, keep the existing `printRootUsage` + exit-1 behavior. Add an import for the `tui` package.
+- [X] T003 In `services/todo/internal/cli/render.go`, export the helpers reused by the TUI: rename `buildTree` → `BuildTree`, `sortNodes` → `SortNodes` (called from within `BuildTree`; export only what the TUI calls directly), `formatDue` → `FormatDue`, `formatCompletedAt` → `FormatCompletedAt`, `dimStrike` → `DimStrike`, `wantStyled` → `WantStyled`, `buildPostID` → `BuildPostID`. Update all internal call sites in `services/todo/internal/cli/*.go` accordingly.
+- [X] T004 In `services/todo/internal/cli/task.go`, export `parseDue` → `ParseDue` and update all internal call sites. The TUI's edit form uses this for the due-date field per research R7.
+- [X] T005 Run `go build ./...` and `go test ./internal/cli/...` from `services/todo/` to verify the renames in T003–T004 didn't break the existing CLI.
+- [X] T006 [P] Create `services/todo/internal/tui/client.go` exposing `NewClients(addr, apiKey string)` that returns both a `TaskServiceClient` and a `PomodoroServiceClient` constructed the same way `runTask`/`runPomTop` already construct theirs (same `bearerInterceptor`, same `connect.WithSendGzip`). Read env vars `TODO_API_KEY` / `TODO_ADDR` with the same defaults as the existing CLI.
+- [X] T007 [P] Create `services/todo/internal/tui/keymap.go` with a `KeyMap` struct of `key.Binding` values for every entry in `specs/010-interactive-tui/contracts/keymap.md`. Provide a `DefaultKeyMap()` constructor. Implement `ShortHelp()` and `FullHelp()` so the Bubbles `help` component can render the help overlay automatically (research R6).
+- [X] T008 In `services/todo/internal/cli/cli.go`, modify `Run(args)`: when `len(args) == 0`, check `golang.org/x/term.IsTerminal(int(os.Stdout.Fd()))`. If true, delegate to `internal/tui.Run(context.Background())` and return its exit code (0 on success, 1 on error). If false, keep the existing `printRootUsage` + exit-1 behavior. Add an import for the `tui` package.
 
 **Checkpoint**: The TUI launches (showing nothing yet) when `todo` is invoked with no args on a TTY; piped invocations still print the old usage banner.
 
@@ -58,20 +58,20 @@ description: "Task list for Interactive TUI implementation"
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] In `services/todo/internal/tui/tree_test.go`, table-driven tests for visible-row flattening: given a tree + `expanded` map + `showCompleted` flag + `pendingComplete` pointer, assert the produced `[]*visibleRow` (length, task IDs in order, `depth`, `marker`, `treePrefix`). Cover collapsed subtree skipping, completed-task filtering, and the `[+]`/`[-]` marker rules from `contracts/view-model.md`.
-- [ ] T010 [P] [US1] In `services/todo/internal/tui/update_test.go`, tests for cursor navigation messages: `Up`/`K` and `Down`/`J` clamp at boundaries and skip rows that are not present in `visible`. Use a fake `Model` populated via `export_test.go`.
-- [ ] T011 [P] [US1] In `services/todo/internal/tui/tree_test.go`, tests for expansion: `H`/`Left` on a row sets `expanded[id]=false`; `L`/`Right` sets `expanded[id]=true`; collapsing the parent of the highlighted row does NOT change the highlight (the parent remains visible).
+- [X] T009 [P] [US1] In `services/todo/internal/tui/tree_test.go`, table-driven tests for visible-row flattening: given a tree + `expanded` map + `showCompleted` flag + `pendingComplete` pointer, assert the produced `[]*visibleRow` (length, task IDs in order, `depth`, `marker`, `treePrefix`). Cover collapsed subtree skipping, completed-task filtering, and the `[+]`/`[-]` marker rules from `contracts/view-model.md`.
+- [X] T010 [P] [US1] In `services/todo/internal/tui/update_test.go`, tests for cursor navigation messages: `Up`/`K` and `Down`/`J` clamp at boundaries and skip rows that are not present in `visible`. Use a fake `Model` populated via `export_test.go`.
+- [X] T011 [P] [US1] In `services/todo/internal/tui/tree_test.go`, tests for expansion: `H`/`Left` on a row sets `expanded[id]=false`; `L`/`Right` sets `expanded[id]=true`; collapsing the parent of the highlighted row does NOT change the highlight (the parent remains visible).
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Create `services/todo/internal/tui/model.go` defining `Model`, `viewMode` constants (`modeList`, `modeEdit`, `modeNewSubtask`, `modeNewRoot`, `modeHelp`, `modePomodoro`), and the `Init() tea.Cmd` that fires an initial `ListTasks` command. Fields match `data-model.md`.
-- [ ] T013 [P] [US1] Create `services/todo/internal/tui/tree.go`: define `treeNode`/`visibleRow` (or alias to `cli`'s `treeNode`), implement `buildVisible(tree, expanded, showCompleted, pendingComplete) []*visibleRow` per `contracts/view-model.md` "Visible-row flattening" section. Implement marker (`[+]`/`[-]`) and tree-prefix computation matching `internal/cli.renderTree`'s `├──`/`└──`/`│  `/`   ` rules.
-- [ ] T014 [P] [US1] Create `services/todo/internal/tui/details.go` with `renderDetails(task *taskv1.Task, width int) string` that formats id, name (using `cli.DimStrike` when completed), due (via `cli.FormatDue`), pomodoro estimate, description (wrapped to `width`), and `cli.FormatCompletedAt` when present.
-- [ ] T015 [US1] Create `services/todo/internal/tui/update.go` with `Model.Update(msg tea.Msg) (tea.Model, tea.Cmd)` handling at minimum: `tea.WindowSizeMsg` (store `width`/`height`), `tea.KeyMsg` dispatched through `KeyMap` for `Up/K/Down/J/Left/H/Right/L`, and `listTasksResultMsg` to populate `Model.tree`. Recompute `Model.visible` after any state change that affects it.
-- [ ] T016 [US1] Create `services/todo/internal/tui/view.go` (or extend `model.go`) with `Model.View() string` rendering a two-pane layout using Lipgloss: left pane shows `visible` with the highlighted row inverted; right pane shows `renderDetails(visible[cursor].node.task, rightWidth)`. Handle empty `visible` (placeholder text).
-- [ ] T017 [US1] Replace the placeholder `tui.Run` in `services/todo/internal/tui/tui.go` with a real entry point: construct clients via `NewClients`, build an initial `Model`, run `tea.NewProgram(model, tea.WithAltScreen()).Run()`, return any error.
-- [ ] T018 [US1] Create `services/todo/internal/tui/export_test.go` exposing constructors for `Model` and `visibleRow` and a way to inject a fake `tree` for tests (mirrors the project's `internal/cli/export_test.go` pattern).
-- [ ] T019 [US1] In `services/todo/internal/tui/update.go`, implement initial `ListTasks` flow: `Init()` returns a `tea.Cmd` that calls `TaskServiceClient.ListTasks`, builds the tree via `cli.BuildTree`, and dispatches a `listTasksResultMsg`. On result, set `cursor=0`, all `expanded` empty, `showCompleted=false`. On error, set `Model.err`.
+- [X] T012 [US1] Create `services/todo/internal/tui/model.go` defining `Model`, `viewMode` constants (`modeList`, `modeEdit`, `modeNewSubtask`, `modeNewRoot`, `modeHelp`, `modePomodoro`), and the `Init() tea.Cmd` that fires an initial `ListTasks` command. Fields match `data-model.md`.
+- [X] T013 [P] [US1] Create `services/todo/internal/tui/tree.go`: define `treeNode`/`visibleRow` (or alias to `cli`'s `treeNode`), implement `buildVisible(tree, expanded, showCompleted, pendingComplete) []*visibleRow` per `contracts/view-model.md` "Visible-row flattening" section. Implement marker (`[+]`/`[-]`) and tree-prefix computation matching `internal/cli.renderTree`'s `├──`/`└──`/`│  `/`   ` rules.
+- [X] T014 [P] [US1] Create `services/todo/internal/tui/details.go` with `renderDetails(task *taskv1.Task, width int) string` that formats id, name (using `cli.DimStrike` when completed), due (via `cli.FormatDue`), pomodoro estimate, description (wrapped to `width`), and `cli.FormatCompletedAt` when present.
+- [X] T015 [US1] Create `services/todo/internal/tui/update.go` with `Model.Update(msg tea.Msg) (tea.Model, tea.Cmd)` handling at minimum: `tea.WindowSizeMsg` (store `width`/`height`), `tea.KeyMsg` dispatched through `KeyMap` for `Up/K/Down/J/Left/H/Right/L`, and `listTasksResultMsg` to populate `Model.tree`. Recompute `Model.visible` after any state change that affects it.
+- [X] T016 [US1] Create `services/todo/internal/tui/view.go` (or extend `model.go`) with `Model.View() string` rendering a two-pane layout using Lipgloss: left pane shows `visible` with the highlighted row inverted; right pane shows `renderDetails(visible[cursor].node.task, rightWidth)`. Handle empty `visible` (placeholder text).
+- [X] T017 [US1] Replace the placeholder `tui.Run` in `services/todo/internal/tui/tui.go` with a real entry point: construct clients via `NewClients`, build an initial `Model`, run `tea.NewProgram(model, tea.WithAltScreen()).Run()`, return any error.
+- [X] T018 [US1] Create `services/todo/internal/tui/export_test.go` exposing constructors for `Model` and `visibleRow` and a way to inject a fake `tree` for tests (mirrors the project's `internal/cli/export_test.go` pattern).
+- [X] T019 [US1] In `services/todo/internal/tui/update.go`, implement initial `ListTasks` flow: `Init()` returns a `tea.Cmd` that calls `TaskServiceClient.ListTasks`, builds the tree via `cli.BuildTree`, and dispatches a `listTasksResultMsg`. On result, set `cursor=0`, all `expanded` empty, `showCompleted=false`. On error, set `Model.err`.
 
 **Checkpoint**: User Story 1 is fully functional — running `todo` shows the tree, the user can navigate, expand, collapse, and see details. The MVP slice is complete.
 
@@ -85,18 +85,18 @@ description: "Task list for Interactive TUI implementation"
 
 ### Tests for User Story 2
 
-- [ ] T020 [P] [US2] In `services/todo/internal/tui/edit_test.go`, tests for `editFormModel` lifecycle: opening with an existing task pre-fills all fields; opening "new subtask" leaves fields blank but sets `parentID`; `Tab`/`Shift-Tab` cycles focus including Save/Cancel buttons; `Esc` and `Ctrl-S` global shortcuts behave correctly regardless of focused field.
-- [ ] T021 [P] [US2] In `services/todo/internal/tui/update_test.go`, tests for highlight rules from `contracts/keymap.md`: after `E` Save → same task; after `N` Save → new subtask, parent expanded; after `Ctrl-N` Save → new root highlighted; after `Ctrl-D` → next visible (or previous if last); after `Space` with completed-only-filter → `pendingComplete` set and cleared on next cursor move; after `0`-`9` → same task.
+- [X] T020 [P] [US2] In `services/todo/internal/tui/edit_test.go`, tests for `editFormModel` lifecycle: opening with an existing task pre-fills all fields; opening "new subtask" leaves fields blank but sets `parentID`; `Tab`/`Shift-Tab` cycles focus including Save/Cancel buttons; `Esc` and `Ctrl-S` global shortcuts behave correctly regardless of focused field.
+- [X] T021 [P] [US2] In `services/todo/internal/tui/update_test.go`, tests for highlight rules from `contracts/keymap.md`: after `E` Save → same task; after `N` Save → new subtask, parent expanded; after `Ctrl-N` Save → new root highlighted; after `Ctrl-D` → next visible (or previous if last); after `Space` with completed-only-filter → `pendingComplete` set and cleared on next cursor move; after `0`-`9` → same task.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [P] [US2] Create `services/todo/internal/tui/edit.go` defining `editFormModel` per `data-model.md`. Use `textinput.Model` for name, due, pomodoro-estimate; `textarea.Model` for description. Implement `Init`, `Update`, `View`, plus helpers `NewEditForm(task *taskv1.Task)`, `NewSubtaskForm(parentID int64)`, `NewRootForm()`. Validate due date via `cli.ParseDue` on save; on parse failure return a validation error to be surfaced in `Model.err`.
-- [ ] T023 [US2] In `services/todo/internal/tui/update.go`, handle `E`, `N`, `Ctrl-N` keys: transition to the matching `viewMode`, initialize `Model.edit`, save `originalCursor` so cancel can restore it for new-form flows.
-- [ ] T024 [US2] In `services/todo/internal/tui/update.go`, handle edit-form completion messages: `editSavedMsg{form, result}` and `editCancelledMsg{}`. On save for existing task → call `UpdateTask`, on save for new subtask/root → call `CreateTask`, then re-fetch via `ListTasks` and apply highlight per the contract (same task, or new task id, or original cursor on cancel). On error, keep mode but populate `Model.err`.
-- [ ] T025 [US2] In `services/todo/internal/tui/update.go`, handle `Ctrl-D`: call `DeleteTask` on the highlighted task; on response, re-fetch `ListTasks`; recompute `visible`; move cursor to next visible (or previous if at end; or 0 if list empty).
-- [ ] T026 [US2] In `services/todo/internal/tui/update.go`, handle `Space`: call the existing completion-toggle RPC on the highlighted task. After re-fetch, if `showCompleted == false` and the task is now complete, set `pendingComplete = &taskID` so the task stays visible until cursor moves; clear `pendingComplete` on the next `Up`/`Down` message.
-- [ ] T027 [US2] In `services/todo/internal/tui/update.go`, handle digit keys `0`-`9`: call `UpdateTask` with `pomodoroEstimate` set to the digit value; re-fetch and preserve the highlight.
-- [ ] T028 [US2] In `services/todo/internal/tui/view.go`, extend `View()` to render the edit form (when `mode` is `modeEdit`/`modeNewSubtask`/`modeNewRoot`) in the right pane, replacing the details view. Show validation errors from `Model.err` in a status line below the form.
+- [X] T022 [P] [US2] Create `services/todo/internal/tui/edit.go` defining `editFormModel` per `data-model.md`. Use `textinput.Model` for name, due, pomodoro-estimate; `textarea.Model` for description. Implement `Init`, `Update`, `View`, plus helpers `NewEditForm(task *taskv1.Task)`, `NewSubtaskForm(parentID int64)`, `NewRootForm()`. Validate due date via `cli.ParseDue` on save; on parse failure return a validation error to be surfaced in `Model.err`.
+- [X] T023 [US2] In `services/todo/internal/tui/update.go`, handle `E`, `N`, `Ctrl-N` keys: transition to the matching `viewMode`, initialize `Model.edit`, save `originalCursor` so cancel can restore it for new-form flows.
+- [X] T024 [US2] In `services/todo/internal/tui/update.go`, handle edit-form completion messages: `editSavedMsg{form, result}` and `editCancelledMsg{}`. On save for existing task → call `UpdateTask`, on save for new subtask/root → call `CreateTask`, then re-fetch via `ListTasks` and apply highlight per the contract (same task, or new task id, or original cursor on cancel). On error, keep mode but populate `Model.err`.
+- [X] T025 [US2] In `services/todo/internal/tui/update.go`, handle `Ctrl-D`: call `DeleteTask` on the highlighted task; on response, re-fetch `ListTasks`; recompute `visible`; move cursor to next visible (or previous if at end; or 0 if list empty).
+- [X] T026 [US2] In `services/todo/internal/tui/update.go`, handle `Space`: call the existing completion-toggle RPC on the highlighted task. After re-fetch, if `showCompleted == false` and the task is now complete, set `pendingComplete = &taskID` so the task stays visible until cursor moves; clear `pendingComplete` on the next `Up`/`Down` message.
+- [X] T027 [US2] In `services/todo/internal/tui/update.go`, handle digit keys `0`-`9`: call `UpdateTask` with `pomodoroEstimate` set to the digit value; re-fetch and preserve the highlight.
+- [X] T028 [US2] In `services/todo/internal/tui/view.go`, extend `View()` to render the edit form (when `mode` is `modeEdit`/`modeNewSubtask`/`modeNewRoot`) in the right pane, replacing the details view. Show validation errors from `Model.err` in a status line below the form.
 
 **Checkpoint**: User Story 2 fully functional — all CRUD and completion operations work from the TUI with correct post-action highlight behavior.
 
@@ -110,14 +110,14 @@ description: "Task list for Interactive TUI implementation"
 
 ### Tests for User Story 3
 
-- [ ] T029 [P] [US3] In `services/todo/internal/tui/update_test.go`, tests asserting that `S` dispatches the correct command (verify the `tea.Cmd` returns a `pomodoroRequestMsg` carrying the highlighted task id) and that `pomodoroDoneMsg` restores `mode = modeList` with the same cursor.
+- [X] T029 [P] [US3] In `services/todo/internal/tui/update_test.go`, tests asserting that `S` dispatches the correct command (verify the `tea.Cmd` returns a `pomodoroRequestMsg` carrying the highlighted task id) and that `pomodoroDoneMsg` restores `mode = modeList` with the same cursor.
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] In `services/todo/internal/cli/pom.go`, refactor `runPomStart` and `runPomResume` per research R4: extract the core (no `os.Exit`, no `fmt.Println` directly to stderr for fatal-only errors) into `RunPomodoroForTask(ctx, taskID int64) error` and `ResumeBackgroundedPomodoro(ctx) error`. The existing CLI wrappers translate the returned `error` to an exit code.
-- [ ] T031 [US3] In `services/todo/internal/cli/pom.go`, run `go test ./internal/cli/...` from `services/todo/` to confirm the refactor preserves CLI behavior.
-- [ ] T032 [US3] Create `services/todo/internal/tui/pomodoro.go` with two `tea.Cmd` factories: `startPomodoroCmd(taskID int64)` and `resumePomodoroCmd()`. Both use `tea.ExecProcess`-equivalent (or `tea.Exec` with a custom `tea.ExecCommand`) to yield the terminal, call `cli.RunPomodoroForTask` / `cli.ResumeBackgroundedPomodoro`, then dispatch `pomodoroDoneMsg{err}`. The TUI re-enters the alt-screen automatically when the command returns.
-- [ ] T033 [US3] In `services/todo/internal/tui/update.go`, wire `S` and `R` keys to dispatch the commands from T032 and set `mode = modePomodoro`. On `pomodoroDoneMsg`, set `mode = modeList`, surface error if any, and trigger a `ListTasks` refresh (pomodoro may have updated counters).
+- [X] T030 [US3] In `services/todo/internal/cli/pom.go`, refactor `runPomStart` and `runPomResume` per research R4: extract the core (no `os.Exit`, no `fmt.Println` directly to stderr for fatal-only errors) into `RunPomodoroForTask(ctx, taskID int64) error` and `ResumeBackgroundedPomodoro(ctx) error`. The existing CLI wrappers translate the returned `error` to an exit code.
+- [X] T031 [US3] In `services/todo/internal/cli/pom.go`, run `go test ./internal/cli/...` from `services/todo/` to confirm the refactor preserves CLI behavior.
+- [X] T032 [US3] Create `services/todo/internal/tui/pomodoro.go` with two `tea.Cmd` factories: `startPomodoroCmd(taskID int64)` and `resumePomodoroCmd()`. Both use `tea.ExecProcess`-equivalent (or `tea.Exec` with a custom `tea.ExecCommand`) to yield the terminal, call `cli.RunPomodoroForTask` / `cli.ResumeBackgroundedPomodoro`, then dispatch `pomodoroDoneMsg{err}`. The TUI re-enters the alt-screen automatically when the command returns.
+- [X] T033 [US3] In `services/todo/internal/tui/update.go`, wire `S` and `R` keys to dispatch the commands from T032 and set `mode = modePomodoro`. On `pomodoroDoneMsg`, set `mode = modeList`, surface error if any, and trigger a `ListTasks` refresh (pomodoro may have updated counters).
 
 **Checkpoint**: User Story 3 fully functional — pomodoros run within the TUI session.
 
@@ -131,17 +131,17 @@ description: "Task list for Interactive TUI implementation"
 
 ### Tests for User Story 4
 
-- [ ] T034 [P] [US4] In `services/todo/internal/tui/update_test.go`, tests for `C` filter toggle: highlight preserved when still visible, falls back to first visible task when not (per `contracts/keymap.md`).
-- [ ] T035 [P] [US4] In `services/todo/internal/tui/update_test.go`, tests for `Ctrl-R`: triggers a `ListTasks` command; on result, cursor lands on the same task id when it still exists; otherwise on first visible row.
+- [X] T034 [P] [US4] In `services/todo/internal/tui/update_test.go`, tests for `C` filter toggle: highlight preserved when still visible, falls back to first visible task when not (per `contracts/keymap.md`).
+- [X] T035 [P] [US4] In `services/todo/internal/tui/update_test.go`, tests for `Ctrl-R`: triggers a `ListTasks` command; on result, cursor lands on the same task id when it still exists; otherwise on first visible row.
 
 ### Implementation for User Story 4
 
-- [ ] T036 [P] [US4] Create `services/todo/internal/tui/help.go` with a `helpModel` wrapping `bubbles/help.New()` and the `KeyMap` from T007. Provide `View(width int) string` rendering the full keybinding list. Show on `?`, dismiss on `?` or `Esc`.
-- [ ] T037 [US4] In `services/todo/internal/tui/update.go`, handle `C`: toggle `showCompleted`, recompute `visible`, preserve highlight by task id when possible (otherwise fall back to first visible).
-- [ ] T038 [US4] In `services/todo/internal/tui/update.go`, handle `Q`: only when `mode == modeList`, return `tea.Quit`.
-- [ ] T039 [US4] In `services/todo/internal/tui/update.go`, handle `Ctrl-R`: dispatch a `ListTasks` command; in the result handler, attempt to restore cursor by `task.id`; on miss, set cursor to 0.
-- [ ] T040 [US4] In `services/todo/internal/tui/update.go`, handle `?` (toggle help): set `mode = modeHelp`; the existing `Esc`/`?` handling for `modeHelp` returns to `modeList` with the original cursor.
-- [ ] T041 [US4] In `services/todo/internal/tui/view.go`, render the help overlay when `mode == modeHelp` (full-screen, replaces the two-pane layout).
+- [X] T036 [P] [US4] Create `services/todo/internal/tui/help.go` with a `helpModel` wrapping `bubbles/help.New()` and the `KeyMap` from T007. Provide `View(width int) string` rendering the full keybinding list. Show on `?`, dismiss on `?` or `Esc`.
+- [X] T037 [US4] In `services/todo/internal/tui/update.go`, handle `C`: toggle `showCompleted`, recompute `visible`, preserve highlight by task id when possible (otherwise fall back to first visible).
+- [X] T038 [US4] In `services/todo/internal/tui/update.go`, handle `Q`: only when `mode == modeList`, return `tea.Quit`.
+- [X] T039 [US4] In `services/todo/internal/tui/update.go`, handle `Ctrl-R`: dispatch a `ListTasks` command; in the result handler, attempt to restore cursor by `task.id`; on miss, set cursor to 0.
+- [X] T040 [US4] In `services/todo/internal/tui/update.go`, handle `?` (toggle help): set `mode = modeHelp`; the existing `Esc`/`?` handling for `modeHelp` returns to `modeList` with the original cursor.
+- [X] T041 [US4] In `services/todo/internal/tui/view.go`, render the help overlay when `mode == modeHelp` (full-screen, replaces the two-pane layout).
 
 **Checkpoint**: All four user stories complete. The TUI fully matches the spec and the keymap/view-model contracts.
 
@@ -150,9 +150,9 @@ description: "Task list for Interactive TUI implementation"
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T042 Manual smoke test: follow every step of `specs/010-interactive-tui/quickstart.md` against a real `make dev` environment with a provisioned user. Document any deviations and fix them.
-- [ ] T043 [P] Run `go vet ./...` and `gofmt -l` from `services/todo/`; fix any issues.
-- [ ] T044 [P] Run the full test suite `go test ./...` from `services/todo/`; all packages green.
-- [ ] T045 Update `services/todo/CLAUDE.md` (the project-root CLAUDE.md) with a one-line note that running `todo` with no arguments launches the TUI on a TTY. Only one line — no further docs.
+- [X] T043 [P] Run `go vet ./...` and `gofmt -l` from `services/todo/`; fix any issues.
+- [X] T044 [P] Run the full test suite `go test ./...` from `services/todo/`; all packages green.
+- [X] T045 Update `services/todo/CLAUDE.md` (the project-root CLAUDE.md) with a one-line note that running `todo` with no arguments launches the TUI on a TTY. Only one line — no further docs.
 
 ---
 

@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Running `todo` with no arguments launches the interactive TUI on a TTY.
+
 ## Commands
 
 All Go commands run from `services/todo/`:

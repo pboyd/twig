@@ -37,7 +37,7 @@ func runList(client taskv1connect.TaskServiceClient, args []string) int {
 		return 1
 	}
 
-	roots := buildTree(resp.Msg.Tasks)
+	roots := BuildTree(resp.Msg.Tasks)
 	switch {
 	case showCompleted:
 		roots = filterCompleted(roots)
@@ -52,7 +52,7 @@ func runList(client taskv1connect.TaskServiceClient, args []string) int {
 		return 0
 	}
 
-	renderRoots(os.Stdout, roots, wantStyled(os.Stdout))
+	renderRoots(os.Stdout, roots, WantStyled(os.Stdout))
 	return 0
 }
 
@@ -115,7 +115,7 @@ func runAdd(client taskv1connect.TaskServiceClient, args []string) int {
 	}
 
 	if dueStr != "" {
-		ts, err := parseDue(dueStr)
+		ts, err := ParseDue(dueStr)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return 1
@@ -248,7 +248,7 @@ func runMod(client taskv1connect.TaskServiceClient, args []string) int {
 	}
 
 	if dueStr != "" {
-		ts, err := parseDue(dueStr)
+		ts, err := ParseDue(dueStr)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return 1

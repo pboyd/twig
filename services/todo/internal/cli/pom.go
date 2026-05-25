@@ -36,7 +36,7 @@ func newTaskClient(addr, apiKey string) taskv1connect.TaskServiceClient {
 		&http.Client{},
 		addr,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(bearerInterceptor(apiKey)),
+		connect.WithInterceptors(BearerInterceptor(apiKey)),
 	)
 }
 
@@ -116,6 +116,51 @@ func runEstimate(client taskv1connect.TaskServiceClient, args []string) int {
 	}
 	fmt.Printf("set estimate for task %d to %d\n", resp.Msg.Task.Id, resp.Msg.Task.Estimate)
 	return 0
+}
+
+// RunPomodoroForTask starts a pomodoro for the given task and blocks until the
+// countdown finishes. If another pomodoro is already active on a different task,
+// it is cancelled first; if the same task is already active, it is resumed.
+// Intended for TUI use where interactive prompts are not available.
+func RunPomodoroForTask(ctx context.Context, client taskv1connect.TaskServiceClient, taskID int64) error {
+	taskResp, err := client.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+	if err != nil {
+		return err
+	}
+	task := taskResp.Msg.Task
+	completedCount := taskResp.Msg.CompletedPomodoroCount
+
+	startResp, err := client.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+	if err != nil {
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeAlreadyExists {
+			return err
+		}
+		activeTaskID := extractActiveTaskID(ce)
+		if activeTaskID != taskID {
+			if _, cerr := client.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{})); cerr != nil {
+				return cerr
+			}
+			if startResp, err = client.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID})); err != nil {
+				return err
+			}
+		} else {
+			return ResumeBackgroundedPomodoro(ctx, client)
+		}
+	}
+
+	if code := runCountdownAndComplete(client, ctx, startResp.Msg.Pomodoro, task, completedCount, ""); code != 0 {
+		return fmt.Errorf("pomodoro failed")
+	}
+	return nil
+}
+
+// ResumeBackgroundedPomodoro re-attaches to an active pomodoro and blocks until done.
+func ResumeBackgroundedPomodoro(ctx context.Context, client taskv1connect.TaskServiceClient) error {
+	if code := runResume(client, nil); code != 0 {
+		return fmt.Errorf("resume pomodoro failed")
+	}
+	return nil
 }
 
 func runStart(client taskv1connect.TaskServiceClient, args []string) int {
