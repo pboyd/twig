@@ -8,6 +8,16 @@
 
 **Input**: User description: "The current CLI works OK, but it would be better to have a TUI. The TUI should run if the CLI is run without a command. ..."
 
+## Clarifications
+
+### Session 2026-05-25
+
+- Q: What determines the display order of root tasks and of siblings under a parent? → A: Match the order used by the existing `todo task list` CLI.
+- Q: How should the TUI handle external changes (tasks modified by another client during a session)? → A: Show data as-of-launch; re-fetch after every mutation; provide `Ctrl-R` for a manual full reload.
+- Q: What key dismisses the help overlay? → A: Both `?` and `Esc` dismiss it.
+- Q: Can the edit form be saved/cancelled without tabbing to the buttons? → A: Yes — `Esc` cancels from anywhere in the form, `Ctrl-S` saves from anywhere; the Save/Cancel buttons still work via tab.
+- Q: When the user toggles the completed-task filter with `C`, where should the highlight land? → A: Keep highlight on the same task if still visible; otherwise fall back to the first visible task.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Browse and view tasks in a tree (Priority: P1)
@@ -106,6 +116,7 @@ A user can toggle whether completed tasks are shown, open a help screen listing 
 - **FR-002**: Existing subcommands (e.g. `todo task ...`, `todo pom ...`, `todo plan ...`) MUST continue to behave exactly as today; only the no-argument invocation changes.
 - **FR-003**: The TUI MUST display a two-pane layout: a task tree on the left and a details pane on the right.
 - **FR-004**: On launch, the TUI MUST show incomplete tasks only, with all subtask branches collapsed, and MUST highlight the first task.
+- **FR-004a**: Root tasks and sibling subtasks MUST be displayed in the same order used by the existing `todo task list` CLI, so the TUI is visually consistent with the existing CLI output.
 
 #### Task tree rendering
 
@@ -123,17 +134,18 @@ A user can toggle whether completed tasks are shown, open a help screen listing 
 
 - **FR-011**: `Down` arrow and `J` MUST move the highlight to the next *visible* task (skipping tasks hidden inside collapsed branches).
 - **FR-012**: `Up` arrow and `K` MUST move the highlight to the previous visible task with the same skipping rule.
-- **FR-013**: `?` MUST open a help screen listing every shortcut defined in this spec; dismissing it MUST return to the task list with the prior highlight intact.
+- **FR-013**: `?` MUST open a help screen listing every shortcut defined in this spec. Either `?` (toggle) or `Esc` MUST dismiss it, returning to the task list with the prior highlight intact.
 - **FR-014**: `Ctrl-N` MUST open a blank edit form for a new root-level task.
-- **FR-015**: `C` MUST toggle the list filter between "incomplete tasks only" and "all tasks (including completed)".
+- **FR-015**: `C` MUST toggle the list filter between "incomplete tasks only" and "all tasks (including completed)". After the toggle, the highlight MUST remain on the same task if it is still visible; otherwise it MUST fall back to the first visible task.
 - **FR-016**: `Q` MUST exit the TUI cleanly when no modal or form is focused.
 - **FR-017**: `R` MUST resume a previously backgrounded pomodoro, using the same behavior as the existing pomodoro resume flow.
+- **FR-017a**: `Ctrl-R` MUST trigger a full reload of the task tree from the server, preserving the current highlight if the task still exists (otherwise falling back to the first visible task).
 
 #### Highlighted-task actions
 
 - **FR-018**: `Left` arrow and `H` MUST collapse the highlighted task's subtree.
 - **FR-019**: `Right` arrow and `L` MUST expand the highlighted task's subtree.
-- **FR-020**: `E` MUST move focus to the details pane in edit mode, pre-filled with the highlighted task's current values; `Tab` MUST cycle focus through the editable fields; `Save` and `Cancel` buttons MUST sit at the bottom of the form, and activating either MUST return focus to the task list.
+- **FR-020**: `E` MUST move focus to the details pane in edit mode, pre-filled with the highlighted task's current values; `Tab` MUST cycle focus through the editable fields; `Save` and `Cancel` buttons MUST sit at the bottom of the form, and activating either MUST return focus to the task list. Additionally, `Esc` MUST cancel the form from any field, and `Ctrl-S` MUST save the form from any field, without requiring the user to tab to the buttons.
 - **FR-021**: On `Save` from edit mode, the changes MUST persist to the server and the same task MUST remain highlighted.
 - **FR-022**: On `Cancel` from edit mode, no changes MUST be persisted and the same task MUST remain highlighted.
 - **FR-023**: `S` MUST start a pomodoro on the highlighted task with the same behavior as `todo pom start`, except that on completion the TUI MUST return to the task list instead of exiting the program.
@@ -147,6 +159,7 @@ A user can toggle whether completed tasks are shown, open a help screen listing 
 
 - **FR-029**: All mutations performed in the TUI (edits, creates, deletes, completion toggles, estimate changes, pomodoro records) MUST use the same server APIs that the existing CLI subcommands use, so behavior and authorization are identical.
 - **FR-030**: After any mutation, the visible tree MUST reflect the new server state without requiring the user to restart the TUI.
+- **FR-031**: The TUI MUST NOT auto-poll the server for changes. External modifications made by other clients during a session are accepted as stale until the next mutation triggers a re-fetch, or until the user presses `Ctrl-R` for a full reload.
 
 ### Key Entities
 
