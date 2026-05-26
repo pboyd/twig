@@ -1,4 +1,6 @@
-.PHONY: proto build cli dev migrate-up migrate-down
+.PHONY: proto build cli dev migrate-up migrate-down deploy
+
+INVENTORY ?= deploy/inventories/test.ini
 
 proto:
 	cd services/todo && buf generate
@@ -17,3 +19,6 @@ migrate-up:
 
 migrate-down:
 	migrate -path services/todo/db/migrations -database "$(DATABASE_URL)" down 1
+
+deploy:
+	ansible-playbook -i $(INVENTORY) deploy/site.yml

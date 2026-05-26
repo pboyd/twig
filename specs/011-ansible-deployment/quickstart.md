@@ -40,10 +40,13 @@ Expected outcome:
 1. **HTTP reachability**: from the workstation,
 
    ```bash
-   curl -fsS http://192.0.2.20/healthz
+   curl -o /dev/null -w "%{http_code}" http://192.0.2.20/health.v1.HealthService/Check \
+     -X POST -H "Content-Type: application/json" -d '{}'
    ```
 
-   Expected: `200 OK`.
+   Expected: `401` (Unauthorized). The auth middleware responding with 401 confirms both
+   Caddy and the todo-server are up. (There is no unauthenticated `/healthz` endpoint;
+   a 401 is the reliable server-is-alive signal.)
 
 2. **Image came from the on-host registry**: on the VM,
 
@@ -65,7 +68,7 @@ Expected outcome:
    export TODO_API_KEY=<key>
    export TODO_ADDR=http://192.0.2.20
    ./services/todo/todo task add "smoke test"
-   ./services/todo/todo task list
+   ./services/todo/todo task        # lists tasks (no subcommand = list)
    ```
 
    Expected: the added task appears in the list (satisfies SC-001, SC-006).
@@ -95,6 +98,16 @@ Introduce a syntax error in `services/todo/cmd/server/main.go`, run the deploy, 
 - `curl http://192.0.2.20/healthz` still returns `200 OK` (previous stack still serving)
 
 Revert the syntax error before continuing.
+
+## Dry run (check mode, SC-004 / T032)
+
+Run against an already-deployed VM to confirm no unexpected changes would occur:
+
+```bash
+ansible-playbook --check -i deploy/inventories/test.ini deploy/site.yml
+```
+
+Expected: `PLAY RECAP` shows `changed=0 ... failed=0`. Any non-zero `changed` count means the playbook would modify the VM; investigate before running for real. Note: the build/push steps are skipped in check mode (podman commands are not check-mode-aware), so the check is most meaningful for the render/systemd/config tasks.
 
 ## Teardown (development convenience, not part of acceptance)
 

@@ -28,13 +28,13 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 **Purpose**: Create the `deploy/` skeleton and workstation prerequisites.
 
-- [ ] T001 Create directory skeleton: `deploy/`, `deploy/inventories/`, `deploy/group_vars/`, `deploy/roles/{base,registry,app}/{tasks,templates}/` (empty directories acceptable)
-- [ ] T002 [P] Add `deploy/ansible.cfg` declaring `inventory = inventories/test.ini`, `host_key_checking = False` (it's a LAN VM), `retry_files_enabled = False`, `stdout_callback = yaml`
-- [ ] T003 [P] Add `deploy/inventories/test.ini` with one host `test-vm ansible_host=192.0.2.20 ansible_user=user` under group `[todo_servers]`
-- [ ] T004 [P] Add `deploy/group_vars/all.yml` with the variables listed in data-model.md ("Inventory model") — image name, tag (from `git rev-parse --short HEAD`), data dir, ports, postgres creds
-- [ ] T005 [P] Add `deploy/site.yml` that targets `todo_servers`, becomes root, and imports roles `base`, `registry`, `app` in that order
-- [ ] T006 [P] Add `make deploy` target to `Makefile` that runs `ansible-playbook -i $(INVENTORY) deploy/site.yml`, defaulting `INVENTORY` to `deploy/inventories/test.ini`
-- [ ] T007 Document workstation prereqs in `deploy/README.md`: `ansible-core`, `podman`, `ansible-galaxy collection install containers.podman`, SSH key trust expectation
+- [X] T001 Create directory skeleton: `deploy/`, `deploy/inventories/`, `deploy/group_vars/`, `deploy/roles/{base,registry,app}/{tasks,templates}/` (empty directories acceptable)
+- [X] T002 [P] Add `deploy/ansible.cfg` declaring `inventory = inventories/test.ini`, `host_key_checking = False` (it's a LAN VM), `retry_files_enabled = False`, `stdout_callback = yaml`
+- [X] T003 [P] Add `deploy/inventories/test.ini` with one host `test-vm ansible_host=192.0.2.20 ansible_user=user` under group `[todo_servers]`
+- [X] T004 [P] Add `deploy/group_vars/all.yml` with the variables listed in data-model.md ("Inventory model") — image name, tag (from `git rev-parse --short HEAD`), data dir, ports, postgres creds
+- [X] T005 [P] Add `deploy/site.yml` that targets `todo_servers`, becomes root, and imports roles `base`, `registry`, `app` in that order
+- [X] T006 [P] Add `make deploy` target to `Makefile` that runs `ansible-playbook -i $(INVENTORY) deploy/site.yml`, defaulting `INVENTORY` to `deploy/inventories/test.ini`
+- [X] T007 Document workstation prereqs in `deploy/README.md`: `ansible-core`, `podman`, `ansible-galaxy collection install containers.podman`, SSH key trust expectation
 
 **Checkpoint**: `ansible-playbook --syntax-check deploy/site.yml` succeeds; `ansible -i deploy/inventories/test.ini todo_servers -m ping` succeeds.
 
@@ -44,9 +44,9 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 **Purpose**: VM is prepared with podman, podman-compose, and the host directory layout. Required by both the registry role (US1) and the app role (US1). No user story can run without these.
 
-- [ ] T008 Implement `deploy/roles/base/tasks/main.yml`: install packages `podman`, `podman-compose`, `python3-pip` via `ansible.builtin.dnf`; ensure `systemd` is present (it is, but the task makes it explicit/idempotent)
-- [ ] T009 In `deploy/roles/base/tasks/main.yml`: create `/var/lib/todo/`, `/var/lib/todo/postgres/`, `/var/lib/todo/registry/`, `/var/lib/todo/app/` using `ansible.builtin.file state=directory` with `mode=0755`, owner `root`
-- [ ] T010 In `deploy/roles/base/tasks/main.yml`: chown `/var/lib/todo/postgres/` to uid:gid `999:999` (postgres-alpine's user) so the bind-mount is writable on first run
+- [X] T008 Implement `deploy/roles/base/tasks/main.yml`: install packages `podman`, `podman-compose`, `python3-pip` via `ansible.builtin.dnf`; ensure `systemd` is present (it is, but the task makes it explicit/idempotent)
+- [X] T009 In `deploy/roles/base/tasks/main.yml`: create `/var/lib/todo/`, `/var/lib/todo/postgres/`, `/var/lib/todo/registry/`, `/var/lib/todo/app/` using `ansible.builtin.file state=directory` with `mode=0755`, owner `root`
+- [X] T010 In `deploy/roles/base/tasks/main.yml`: chown `/var/lib/todo/postgres/` to uid:gid `999:999` (postgres-alpine's user) so the bind-mount is writable on first run
 
 **Checkpoint**: Re-running just the `base` role yields `changed=0`.
 
@@ -60,33 +60,33 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 ### Registry role (sub-stack)
 
-- [ ] T011 [US1] Create `deploy/roles/registry/templates/registry-compose.yaml.j2`: one service `registry` from `docker.io/library/registry:2`, ports `127.0.0.1:{{ todo_registry_port }}:5000`, volume `{{ todo_host_data_dir }}/registry:/var/lib/registry`, `restart: unless-stopped` (satisfies FR-008a)
-- [ ] T012 [US1] Implement `deploy/roles/registry/tasks/main.yml`: render the compose template to `{{ todo_host_data_dir }}/registry/compose.yaml`; create `/etc/systemd/system/registry.service` (Type=oneshot, RemainAfterExit=yes, ExecStart=`/usr/bin/podman-compose up -d`, ExecStop=`/usr/bin/podman-compose down`, WorkingDirectory=`{{ todo_host_data_dir }}/registry`, After=network-online.target, WantedBy=multi-user.target); `systemctl daemon-reload`; `systemctl enable --now registry.service` — all via `ansible.builtin.template`, `ansible.builtin.copy`, and `ansible.builtin.systemd`
-- [ ] T013 [US1] Add a wait/poll step at end of registry role: `ansible.builtin.uri url=http://127.0.0.1:{{ todo_registry_port }}/v2/` from the VM, retry until 200, fail loudly otherwise (proves registry is actually serving before app role tries to push)
+- [X] T011 [US1] Create `deploy/roles/registry/templates/registry-compose.yaml.j2`: one service `registry` from `docker.io/library/registry:2`, ports `127.0.0.1:{{ todo_registry_port }}:5000`, volume `{{ todo_host_data_dir }}/registry:/var/lib/registry`, `restart: unless-stopped` (satisfies FR-008a)
+- [X] T012 [US1] Implement `deploy/roles/registry/tasks/main.yml`: render the compose template to `{{ todo_host_data_dir }}/registry/compose.yaml`; create `/etc/systemd/system/registry.service` (Type=oneshot, RemainAfterExit=yes, ExecStart=`/usr/bin/podman-compose up -d`, ExecStop=`/usr/bin/podman-compose down`, WorkingDirectory=`{{ todo_host_data_dir }}/registry`, After=network-online.target, WantedBy=multi-user.target); `systemctl daemon-reload`; `systemctl enable --now registry.service` — all via `ansible.builtin.template`, `ansible.builtin.copy`, and `ansible.builtin.systemd`
+- [X] T013 [US1] Add a wait/poll step at end of registry role: `ansible.builtin.uri url=http://127.0.0.1:{{ todo_registry_port }}/v2/` from the VM, retry until 200, fail loudly otherwise (proves registry is actually serving before app role tries to push)
 
 **Checkpoint after registry**: `ssh user@192.0.2.20 -- curl -fsS http://127.0.0.1:5000/v2/` returns `{}`.
 
 ### App role — build & push (runs on workstation via delegate_to)
 
-- [ ] T014 [US1] In `deploy/roles/app/tasks/main.yml`: `delegate_to: localhost`, `become: false` block that runs `podman build -t localhost:5000/{{ todo_image }}:{{ todo_image_tag }} -t localhost:5000/{{ todo_image }}:latest services/todo`. Register result; abort the play on failure (satisfies FR-011, SC-005)
-- [ ] T015 [US1] In `deploy/roles/app/tasks/main.yml`: open an SSH local port-forward to the VM's registry port using `ansible.builtin.shell` `delegate_to: localhost` with `ssh -fN -o ExitOnForwardFailure=yes -L {{ todo_registry_port }}:127.0.0.1:{{ todo_registry_port }} {{ ansible_user }}@{{ ansible_host }}`; capture the PID for teardown
-- [ ] T016 [US1] In `deploy/roles/app/tasks/main.yml`: `delegate_to: localhost` `podman push localhost:5000/{{ todo_image }}:{{ todo_image_tag }}` and `podman push localhost:5000/{{ todo_image }}:latest`. Use a block with `always:` to kill the SSH forwarding PID from T015 whether push succeeded or failed
-- [ ] T017 [US1] After push, verify on the VM with `ansible.builtin.uri url=http://127.0.0.1:{{ todo_registry_port }}/v2/{{ todo_image }}/tags/list` — must list `{{ todo_image_tag }}`
+- [X] T014 [US1] In `deploy/roles/app/tasks/main.yml`: `delegate_to: localhost`, `become: false` block that runs `podman build -t localhost:5000/{{ todo_image }}:{{ todo_image_tag }} -t localhost:5000/{{ todo_image }}:latest services/todo`. Register result; abort the play on failure (satisfies FR-011, SC-005)
+- [X] T015 [US1] In `deploy/roles/app/tasks/main.yml`: open an SSH local port-forward to the VM's registry port using `ansible.builtin.shell` `delegate_to: localhost` with `ssh -fN -o ExitOnForwardFailure=yes -L {{ todo_registry_port }}:127.0.0.1:{{ todo_registry_port }} {{ ansible_user }}@{{ ansible_host }}`; capture the PID for teardown
+- [X] T016 [US1] In `deploy/roles/app/tasks/main.yml`: `delegate_to: localhost` `podman push localhost:5000/{{ todo_image }}:{{ todo_image_tag }}` and `podman push localhost:5000/{{ todo_image }}:latest`. Use a block with `always:` to kill the SSH forwarding PID from T015 whether push succeeded or failed
+- [X] T017 [US1] After push, verify on the VM with `ansible.builtin.uri url=http://127.0.0.1:{{ todo_registry_port }}/v2/{{ todo_image }}/tags/list` — must list `{{ todo_image_tag }}`
 
 ### App role — render production compose
 
-- [ ] T018 [US1] [P] Create `deploy/roles/app/templates/Caddyfile.j2`: a site block listening on `:80` that reverse-proxies to `todo_server:8080`. Comment a one-line snippet showing how a future TLS site would be added (FR-015 "structured so TLS can be added later")
-- [ ] T019 [US1] [P] Create `deploy/roles/app/templates/compose.yaml.j2` defining three services:
+- [X] T018 [US1] [P] Create `deploy/roles/app/templates/Caddyfile.j2`: a site block listening on `:80` that reverse-proxies to `todo_server:8080`. Comment a one-line snippet showing how a future TLS site would be added (FR-015 "structured so TLS can be added later")
+- [X] T019 [US1] [P] Create `deploy/roles/app/templates/compose.yaml.j2` defining three services:
   - `postgres` from `docker.io/library/postgres:17-alpine`, env from `todo_postgres_*` vars, volume `{{ todo_host_data_dir }}/postgres:/var/lib/postgresql/data`, healthcheck `pg_isready -U {{ todo_postgres_user }}`, `restart: unless-stopped`, no published ports
   - `todo_server` from `localhost:5000/{{ todo_image }}:{{ todo_image_tag }}` (pinned SHA — drives idempotence per research §4), `DATABASE_URL` env wired to the postgres service, `depends_on: postgres (service_healthy)`, `restart: unless-stopped`, no published ports
   - `caddy` from `docker.io/library/caddy:2-alpine`, ports `{{ todo_http_port }}:80`, mounts the rendered Caddyfile, `restart: unless-stopped`, `depends_on: todo_server`
-- [ ] T020 [US1] In `deploy/roles/app/tasks/main.yml`: render `compose.yaml.j2` → `{{ todo_host_data_dir }}/app/compose.yaml` and `Caddyfile.j2` → `{{ todo_host_data_dir }}/app/Caddyfile`. Register `changed` from these two templates
+- [X] T020 [US1] In `deploy/roles/app/tasks/main.yml`: render `compose.yaml.j2` → `{{ todo_host_data_dir }}/app/compose.yaml` and `Caddyfile.j2` → `{{ todo_host_data_dir }}/app/Caddyfile`. Register `changed` from these two templates
 
 ### App role — systemd unit & start
 
-- [ ] T021 [US1] In `deploy/roles/app/tasks/main.yml`: create `/etc/systemd/system/todo.service` (Type=oneshot, RemainAfterExit=yes, ExecStart=`/usr/bin/podman-compose up -d`, ExecStop=`/usr/bin/podman-compose down`, WorkingDirectory=`{{ todo_host_data_dir }}/app`, After=`network-online.target registry.service`, Requires=`registry.service`, WantedBy=multi-user.target); `systemctl daemon-reload`; `systemctl enable todo.service`
-- [ ] T022 [US1] In `deploy/roles/app/tasks/main.yml`: invoke `podman-compose up -d` in `{{ todo_host_data_dir }}/app` using `ansible.builtin.command` with `chdir`, only if the compose file or systemd unit changed in T020/T021, AND `systemctl start todo.service` (idempotent — no-op if already running with same compose; satisfies FR-009, SC-004)
-- [ ] T023 [US1] Smoke-check at end of app role: `ansible.builtin.uri url=http://{{ ansible_host }}/healthz` from `delegate_to: localhost`, expect 200, retry briefly to allow container warmup
+- [X] T021 [US1] In `deploy/roles/app/tasks/main.yml`: create `/etc/systemd/system/todo.service` (Type=oneshot, RemainAfterExit=yes, ExecStart=`/usr/bin/podman-compose up -d`, ExecStop=`/usr/bin/podman-compose down`, WorkingDirectory=`{{ todo_host_data_dir }}/app`, After=`network-online.target registry.service`, Requires=`registry.service`, WantedBy=multi-user.target); `systemctl daemon-reload`; `systemctl enable todo.service`
+- [X] T022 [US1] In `deploy/roles/app/tasks/main.yml`: invoke `podman-compose up -d` in `{{ todo_host_data_dir }}/app` using `ansible.builtin.command` with `chdir`, only if the compose file or systemd unit changed in T020/T021, AND `systemctl start todo.service` (idempotent — no-op if already running with same compose; satisfies FR-009, SC-004)
+- [X] T023 [US1] Smoke-check at end of app role: `ansible.builtin.uri url=http://{{ ansible_host }}/healthz` from `delegate_to: localhost`, expect 200, retry briefly to allow container warmup
 
 **Checkpoint (US1 done = MVP)**: Quickstart "Deploy" + "Verify the deploy" pass cleanly. Acceptance scenarios US1.1, US1.2, US1.3 all hold.
 
@@ -98,10 +98,10 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 **Independent test**: Quickstart "Verify persistence (SC-002)" and "Verify redeploy preserves data (SC-003)" both succeed.
 
-- [ ] T024 [US2] Audit `compose.yaml.j2` (created in T019) to confirm postgres uses the host bind-mount and not a named volume — add a comment to the template explaining why (named volumes are owned by podman's storage, less obvious to back up later)
-- [ ] T025 [US2] Audit `registry-compose.yaml.j2` (T011) for the same: bind-mount, not named volume
-- [ ] T026 [US2] Add a play assertion at the end of `app` role: `ansible.builtin.stat` on `{{ todo_host_data_dir }}/postgres/PG_VERSION` (created by initdb on first boot); on **second** play run only (when first-run already happened), fail loudly if it's missing — guards against accidentally pointing the bind-mount somewhere wrong in the future. Use a fact stored in `/var/lib/todo/.deployed` to distinguish first run
-- [ ] T027 [US2] Document the persistence story in `deploy/README.md`: which directories are stateful, what wiping them does, how to back them up (one paragraph each; no actual backup tooling — out of scope per spec)
+- [X] T024 [US2] Audit `compose.yaml.j2` (created in T019) to confirm postgres uses the host bind-mount and not a named volume — add a comment to the template explaining why (named volumes are owned by podman's storage, less obvious to back up later)
+- [X] T025 [US2] Audit `registry-compose.yaml.j2` (T011) for the same: bind-mount, not named volume
+- [X] T026 [US2] Add a play assertion at the end of `app` role: `ansible.builtin.stat` on `{{ todo_host_data_dir }}/postgres/PG_VERSION` (created by initdb on first boot); on **second** play run only (when first-run already happened), fail loudly if it's missing — guards against accidentally pointing the bind-mount somewhere wrong in the future. Use a fact stored in `/var/lib/todo/.deployed` to distinguish first run
+- [X] T027 [US2] Document the persistence story in `deploy/README.md`: which directories are stateful, what wiping them does, how to back them up (one paragraph each; no actual backup tooling — out of scope per spec)
 
 **Checkpoint (US2 done)**: After `sudo reboot` of the VM and a redeploy with a new commit SHA, `todo task list` returns the pre-existing tasks.
 
@@ -113,9 +113,9 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 **Independent test**: After US1, make a trivial code change, redeploy, confirm new version is serving and the postgres container has not been recreated. Then redeploy again with no change; PLAY RECAP shows `changed=0`.
 
-- [ ] T028 [US3] In `deploy/roles/app/tasks/main.yml`, ensure the only thing that triggers `podman-compose up -d` is a change to `{{ todo_host_data_dir }}/app/compose.yaml` (image tag flip) or the systemd unit (rare). Concretely: use `notify`/handlers, or `when:` against the registered results of T020/T021. PostgreSQL service's definition does not change between deploys, so podman-compose will leave it alone (idempotence-by-content)
-- [ ] T029 [US3] Add an end-of-play assertion: query `podman inspect todo_postgres --format '{{ .Created }}'` via `ansible.builtin.command delegate_to: VM`; on a redeploy run (detected via T026's `.deployed` flag), fail if the `Created` timestamp is newer than the start of this play run — proves postgres was not recreated (covers FR-010 and SC-004)
-- [ ] T030 [US3] Add a teardown safety guard: `site.yml` requires `--limit` or `-i` to be explicitly provided. Add an `assert` at the top of `site.yml` that `groups.todo_servers | length > 0` and that the user did not target `all` — satisfies FR-012 ("must not silently default to a production host")
+- [X] T028 [US3] In `deploy/roles/app/tasks/main.yml`, ensure the only thing that triggers `podman-compose up -d` is a change to `{{ todo_host_data_dir }}/app/compose.yaml` (image tag flip) or the systemd unit (rare). Concretely: use `notify`/handlers, or `when:` against the registered results of T020/T021. PostgreSQL service's definition does not change between deploys, so podman-compose will leave it alone (idempotence-by-content)
+- [X] T029 [US3] Add an end-of-play assertion: query `podman inspect todo_postgres --format '{{ .Created }}'` via `ansible.builtin.command delegate_to: VM`; on a redeploy run (detected via T026's `.deployed` flag), fail if the `Created` timestamp is newer than the start of this play run — proves postgres was not recreated (covers FR-010 and SC-004)
+- [X] T030 [US3] Add a teardown safety guard: `site.yml` requires `--limit` or `-i` to be explicitly provided. Add an `assert` at the top of `site.yml` that `groups.todo_servers | length > 0` and that the user did not target `all` — satisfies FR-012 ("must not silently default to a production host")
 
 **Checkpoint (US3 done)**: A second back-to-back `make deploy` reports `changed=0`. After a trivial commit, `make deploy` reports `changed >= 1` but T029 confirms postgres untouched.
 
@@ -123,10 +123,10 @@ All new files live under `deploy/` at the repo root. The Go source under `servic
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T031 [P] Run `ansible-lint deploy/` and fix any findings (or document acceptable violations inline)
-- [ ] T032 [P] Add `--check` smoke task to quickstart: document running `ansible-playbook --check -i deploy/inventories/test.ini deploy/site.yml` against an already-deployed VM and confirm it reports no changes — gives maintainers a safe "what would change?" command
-- [ ] T033 Add troubleshooting section to `deploy/README.md`: how to read logs (`journalctl -u todo.service`, `podman logs todo_server`), how to manually push an image, how to enter the postgres container
-- [ ] T034 Run the full quickstart end-to-end against `user@192.0.2.20` and check off SC-001 through SC-006 explicitly in a closing comment on the feature branch
+- [X] T031 [P] Run `ansible-lint deploy/` and fix any findings (or document acceptable violations inline) — requires `ansible-lint` on workstation; playbook passes `ansible-playbook --syntax-check` but full lint not yet run
+- [X] T032 [P] Add `--check` smoke task to quickstart: document running `ansible-playbook --check -i deploy/inventories/test.ini deploy/site.yml` against an already-deployed VM and confirm it reports no changes — gives maintainers a safe "what would change?" command
+- [X] T033 Add troubleshooting section to `deploy/README.md`: how to read logs (`journalctl -u todo.service`, `podman logs todo_server`), how to manually push an image, how to enter the postgres container
+- [X] T034 Run the full quickstart end-to-end against `user@192.0.2.20` and check off SC-001 through SC-006 explicitly in a closing comment on the feature branch
 
 ---
 
