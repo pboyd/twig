@@ -8,6 +8,13 @@
 
 **Input**: User description: "A minor update to the 013-plan-calendar-grid feature. The hour grid lines should always be present, and the heavy boxes should look like they're inside them (one-character of padding). Let's also add an extra space in the gutter so that the time indicator is separated from the hour markers."
 
+## Clarifications
+
+### Session 2026-05-27
+
+- Q: Should heavy/light intersections use heavy/light junction Unicode (e.g. `┝`, `┥`, `┿`), or should the light hour line simply terminate one column before the heavy box (as shown in the example)? → A: Match the example exactly — the light hour line terminates with a single light `─` one column before the heavy box; no heavy/light junction characters are used.
+- Q: When the new padding and gutter columns are added, should the total calendar width stay fixed (terminal width, min ~60 cols) or grow to accommodate them? → A: Width stays fixed; the new padding and gutter columns come out of the existing width budget, so box interiors lose ~2 columns and the gutter absorbs the extra space within the prior layout.
+
 ## Overview
 
 A small visual refinement to the calendar grid introduced in feature 013. The hour grid (the light horizontal lines and the light vertical side rails) is always drawn end-to-end, and each entry box is inset by one character on the left and one character on the right so the heavy box visually sits *inside* the lighter grid rather than replacing it. The "now" indicator in the left gutter is separated from the hour label by one extra space so the marker no longer touches the hour text.
@@ -39,7 +46,7 @@ When a user views their daily plan as a calendar, the light hour grid (horizonta
 
 **Why this priority**: This is the core visual change requested. It makes the hour structure of the day legible even when entries fill the space, and it gives the calendar a consistent, contained look.
 
-**Independent Test**: Render a plan containing at least one multi-hour entry that crosses one or more hour boundaries. Verify (a) every hour row, including those inside the entry, shows the light hour divider extending to the outer rails on both sides; (b) the heavy entry box is positioned one column to the right of the left rail and one column to the left of the right rail; (c) on hour rows that intersect an entry, the heavy box's left/right edges meet the light grid via the appropriate junction characters.
+**Independent Test**: Render a plan containing at least one multi-hour entry that crosses one or more hour boundaries. Verify (a) every hour row, including those inside the entry, shows the light hour divider extending to the outer rails on both sides; (b) the heavy entry box is positioned one column to the right of the left rail and one column to the left of the right rail; (c) on hour rows that intersect an entry, the light hour line terminates one column before each heavy box edge (the heavy box is not interrupted by junction glyphs).
 
 **Acceptance Scenarios**:
 
@@ -82,9 +89,9 @@ When the rendered day is today, the "now" marker appears in the left gutter with
 
 ### Edge Cases
 
-- An entry whose top edge sits on an hour boundary: the heavy top of the box must use a junction character that connects horizontally to the light hour line on both sides (one character of light line between the rail and the corner of the heavy box).
+- An entry whose top edge sits on an hour boundary: on that hour row the light hour line is drawn from the left rail up to one column before the heavy top-left corner, and again from one column after the heavy top-right corner to the right rail; no special heavy/light junction characters are used.
 - An entry whose top edge sits *off* the hour (e.g., :15 start): the heavy top of the box appears on a non-hour row; on that row the light rails are still drawn at the outer edges and there is exactly one space of padding between each rail and the heavy box.
-- Two back-to-back entries sharing a horizontal border (carried over from feature 013): the shared heavy line still meets the light grid via the appropriate junction characters, with one column of light line between each rail and the heavy junction.
+- Two back-to-back entries sharing a horizontal border (carried over from feature 013): the shared heavy line uses the same heavy T-junctions inside the box (e.g. `┣`, `┫`); the light hour line still terminates one column before each heavy edge on both sides, with no special heavy/light junction characters at the meeting point.
 - The "now" marker falling on a row that also contains an entry box: the gutter rendering (marker + extra space) is unchanged; the entry box still starts one column inside the left rail.
 - A single-row entry (heavy top and heavy bottom on the same row): the padding rule still applies — one column between each rail and the box on that row.
 
@@ -95,7 +102,7 @@ When the rendered day is today, the "now" marker appears in the left gutter with
 - **FR-001**: The plan calendar view MUST draw the light horizontal hour divider on every hour row across the full width of the calendar, regardless of whether that row is covered by an entry box.
 - **FR-002**: The plan calendar view MUST draw the light left and right vertical rails on every row within the visible time window, including rows covered by entry boxes.
 - **FR-003**: Every heavy entry box MUST be inset by one column from the left rail and one column from the right rail; the column between the rail and the box on every row of the entry MUST be a single space character (or, on hour rows, a single character of the light horizontal hour line) and never a heavy box-drawing character.
-- **FR-004**: Where a heavy entry box edge intersects the light hour grid, the intersection MUST use junction box-drawing characters that join heavy and light lines (rather than truncating either line), so the light grid visually passes "behind" the heavy box on hour rows.
+- **FR-004**: Where a heavy entry box edge meets the light hour grid, the light hour line MUST terminate one column before the heavy box (rendered as a single light `─` between the rail's junction character and the heavy box's corner/edge); no heavy/light junction characters (e.g. `┝`, `┥`, `┿`) are used. The light line visually "stops short" of the heavy box rather than fusing with it.
 - **FR-005**: The left gutter MUST place exactly one blank column between the "now" indicator glyph and the hour-label column, and the marker column MUST be reserved on every row so the position of the left rail is identical across all rows of the rendering.
 - **FR-006**: On days other than today, the marker column MUST be drawn as blank space on every row; the rail and hour-label positions MUST be identical to today's rendering.
 - **FR-007**: All other visual rules from feature 013 (15-minute row resolution, ordinal/time/name labelling inside boxes, label truncation/wrapping, strikethrough on completed entries, dynamic visible window, shared borders for back-to-back entries) MUST continue to apply unchanged.
@@ -112,8 +119,8 @@ When the rendered day is today, the "now" marker appears in the left gutter with
 ## Assumptions
 
 - This refinement applies only to the calendar view introduced in feature 013; the list-style plan rendering (if still reachable) is out of scope.
-- The total calendar width (rails + padding + box interior) continues to scale to terminal width, with the new padding columns counted as part of the calendar width budget rather than added on top of the previous width.
-- The light grid uses the existing single-line box-drawing characters from feature 013 (`│`, `─`, `├`, `┤`); heavy/light junction characters (e.g. `┝`, `┥`, or the appropriate variants where a heavy line meets a light line) are available in the same character set already in use.
+- The total calendar width (rails + padding + box interior) continues to scale to terminal width with the same minimum (~60 cols); the new padding and gutter columns come out of the existing width budget, so each box's interior is ~2 columns narrower than in feature 013.
+- The light grid uses the existing single-line box-drawing characters from feature 013 (`│`, `─`, `├`, `┤`); no heavy/light junction characters are introduced — the light hour line simply terminates one column before each heavy box edge.
 - The "now" marker glyph itself (e.g. `▶`) and its color/styling rules are unchanged from feature 013; only its horizontal position relative to the hour label changes.
 - No new configuration options are introduced; the padding and gutter spacing are fixed parts of the rendering.
 
