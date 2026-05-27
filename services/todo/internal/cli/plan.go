@@ -76,18 +76,19 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  (none)                      Show today's plan as a grid")
-	fmt.Fprintln(w, "  task <id> <start> [dur]     Schedule a task")
-	fmt.Fprintln(w, "  event <name> <start> [dur]  Block off time")
-	fmt.Fprintln(w, "  rm <n>                      Remove entry n")
-	fmt.Fprintln(w, "  rename <n> <name>           Rename entry n")
-	fmt.Fprintln(w, "  mv <n> <start> [dur]        Move entry n")
-	fmt.Fprintln(w, "  clear [start]               Clear entries from start (default: now)")
+	fmt.Fprintln(w, "  task <id> <start> [dur|end]     Schedule a task")
+	fmt.Fprintln(w, "  event <name> <start> [dur|end]  Block off time")
+	fmt.Fprintln(w, "  rm <n>                          Remove entry n")
+	fmt.Fprintln(w, "  rename <n> <name>               Rename entry n")
+	fmt.Fprintln(w, "  mv <n> <start> [dur|end]        Move entry n")
+	fmt.Fprintln(w, "  clear [start]                   Clear entries from start (default: now)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Time formats:     13:15  1315  1:15pm  01:15 PM")
 	fmt.Fprintln(w, "Duration formats: 90m  1h  2h  1h30m")
+	fmt.Fprintln(w, "End time:         use any time format in place of a duration")
 }
 
 func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
@@ -111,7 +112,7 @@ func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
 
 func runPlanTask(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan task <task_id> <start> [duration]")
+		fmt.Fprintln(os.Stderr, "Usage: todo plan task <task_id> <start> [duration|end]")
 		return 1
 	}
 	taskID, err := strconv.ParseInt(args[0], 10, 64)
@@ -126,7 +127,7 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 	}
 	var dur int
 	if len(args) >= 3 {
-		dur, err = timeparse.ParseDuration(args[2])
+		dur, err = timeparse.ParseDurationOrEnd(args[2], start)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1
@@ -147,7 +148,7 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 
 func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan event <name> <start> [duration]")
+		fmt.Fprintln(os.Stderr, "Usage: todo plan event <name> <start> [duration|end]")
 		return 1
 	}
 	name := args[0]
@@ -158,7 +159,7 @@ func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []str
 	}
 	var dur int
 	if len(args) >= 3 {
-		dur, err = timeparse.ParseDuration(args[2])
+		dur, err = timeparse.ParseDurationOrEnd(args[2], start)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1
@@ -227,7 +228,7 @@ func runPlanRename(client planv1connect.PlanServiceClient, day string, args []st
 
 func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan mv <n> <start> [duration]")
+		fmt.Fprintln(os.Stderr, "Usage: todo plan mv <n> <start> [duration|end]")
 		return 1
 	}
 	n, err := strconv.Atoi(args[0])
@@ -242,7 +243,7 @@ func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string
 	}
 	var dur int
 	if len(args) >= 3 {
-		dur, err = timeparse.ParseDuration(args[2])
+		dur, err = timeparse.ParseDurationOrEnd(args[2], start)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1

@@ -102,3 +102,21 @@ func ParseDuration(s string) (int, error) {
 
 	return 0, fmt.Errorf("unrecognized duration format %q; use Nh, Nm, or NhMm", s)
 }
+
+// ParseDurationOrEnd parses either a duration ("90m", "1h30m") or an end
+// time-of-day ("15:00", "1500", "3:00pm"), returning the duration in minutes.
+// startMinute is required when an end time is given, to compute the difference.
+func ParseDurationOrEnd(s string, startMinute int) (int, error) {
+	if dur, err := ParseDuration(s); err == nil {
+		return dur, nil
+	}
+	end, err := ParseStart(s)
+	if err != nil {
+		return 0, fmt.Errorf("unrecognized duration or end time %q; use Nh, Nm, NhMm, or a time like 15:00 / 3:00pm", s)
+	}
+	dur := end - startMinute
+	if dur <= 0 {
+		return 0, fmt.Errorf("end time %q is not after start", s)
+	}
+	return dur, nil
+}

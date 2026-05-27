@@ -61,6 +61,53 @@ func TestParseStart(t *testing.T) {
 	}
 }
 
+func TestParseDurationOrEnd(t *testing.T) {
+	cases := []struct {
+		input       string
+		startMinute int
+		want        int
+		wantErr     bool
+	}{
+		// duration passthrough
+		{"90m", 0, 90, false},
+		{"1h30m", 0, 90, false},
+		{"2h", 720, 120, false},
+		// HH:MM end time
+		{"13:00", 720, 60, false},
+		{"14:30", 720, 150, false},
+		// HHMM no-colon end time
+		{"1300", 720, 60, false},
+		// 12-hour end time
+		{"1:00pm", 720, 60, false},
+		{"2:30pm", 720, 150, false},
+		// end not after start
+		{"11:00", 720, 0, true},
+		{"12:00", 720, 0, true},
+		// garbage
+		{"junk", 0, 0, true},
+		{"", 0, 0, true},
+	}
+	for _, c := range cases {
+		name := c.input
+		t.Run(name, func(t *testing.T) {
+			got, err := timeparse.ParseDurationOrEnd(c.input, c.startMinute)
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("ParseDurationOrEnd(%q, %d) = %d, want error", c.input, c.startMinute, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ParseDurationOrEnd(%q, %d) unexpected error: %v", c.input, c.startMinute, err)
+				return
+			}
+			if got != c.want {
+				t.Errorf("ParseDurationOrEnd(%q, %d) = %d, want %d", c.input, c.startMinute, got, c.want)
+			}
+		})
+	}
+}
+
 func TestParseDuration(t *testing.T) {
 	cases := []struct {
 		input   string
