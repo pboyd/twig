@@ -8,6 +8,16 @@
 
 **Input**: User description: "Change the way that the plan view looks. Each day should have a calendar with the hours marked in a grid… entries shown as boxes with heavier marks covering the hour grid. Each text line represents 15 minutes."
 
+## Clarifications
+
+### Session 2026-05-27
+
+- Q: How should the visible time window of the calendar be determined? → A: Default 08:00–17:00; expand outward (rounded down/up to the hour) to include any entry that starts earlier or ends later.
+- Q: How wide should the calendar render? → A: Fit to terminal width, with a sensible minimum (~60 columns); box and dividers stretch.
+- Q: Should the calendar show a current-time indicator? → A: Yes, but only when rendering today; a subtle marker character in the left gutter at the current 15-minute row.
+- Q: Should tasks and events render with different visual styles? → A: No — identical heavy box-drawing for both; the label conveys identity.
+- Q: Should completed-task entries be visually distinguished? → A: Yes — apply strikethrough (and dim color on TTY) to the label text; box geometry unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - View a day as an hour-by-hour calendar grid (Priority: P1)
@@ -58,10 +68,25 @@ When two entries are scheduled back-to-back (the first one's end time equals the
 
 ---
 
+### User Story 4 - Glanceable "now" indicator on today (Priority: P2)
+
+When the rendered day is today, a small marker appears in the left gutter on the 15-minute row that contains the current time, so the user can immediately see what is happening now and what comes next without consulting a clock.
+
+**Why this priority**: Real practical value for a tool used during the working day, but the calendar is usable without it.
+
+**Independent Test**: Render today's plan at a known wall-clock time. Verify a marker appears in the left gutter on the row corresponding to the current 15-minute slot. Render a non-today date and verify no such marker appears.
+
+**Acceptance Scenarios**:
+
+1. **Given** the rendered day is today and the current local time is 10:37, **When** the plan is rendered, **Then** a marker appears in the left gutter on the row representing 10:30–10:45.
+2. **Given** the rendered day is yesterday or tomorrow, **When** the plan is rendered, **Then** no current-time marker appears anywhere on the calendar.
+
+---
+
 ### Edge Cases
 
 - An entry's start or end time falls between 15-minute marks (for example 09:07): the system has no way to draw sub-15-minute precision, so the entry is snapped to the nearest 15-minute boundary for rendering purposes. The underlying entry data is not modified.
-- An entry extends past the calendar's end hour or starts before its start hour: the box is clipped at the visible boundary and a visual indicator (such as an open/unfinished edge) communicates that the entry continues beyond the visible range.
+- An entry extends past the calendar's end hour or starts before its start hour: cannot occur under the visible-window rule (the window is always extended to contain every entry). No clipping behavior is required.
 - Two entries overlap (one's end is strictly after another's start): out of scope for this feature. The current plan model assumes a single-track schedule; overlap handling is not introduced here.
 - An entry has an empty or whitespace-only name: only the ordinal and time range are shown in the label.
 - The terminal is narrower than the minimum width needed to draw the grid plus a useful label: the grid still renders, label truncation simply happens sooner.
@@ -70,9 +95,11 @@ When two entries are scheduled back-to-back (the first one's end time equals the
 
 ### Functional Requirements
 
+- **FR-000**: When the rendered day is today (in the user's local time zone), the calendar MUST show a current-time indicator: a marker character in the left gutter, on the 15-minute row containing the current time. When the rendered day is not today, no current-time indicator MUST appear.
+
 - **FR-001**: The plan view MUST render each day as a vertical calendar grid with one labelled hour row per hour and three intervening text rows per hour (one row per 15-minute increment).
-- **FR-002**: Hour rows MUST display the hour label (e.g. `08:00`) on the left, followed by a horizontal divider that spans the calendar width using light box-drawing characters.
-- **FR-003**: The calendar MUST render across a fixed time window for the day. The window's start and end hours are derived from the existing plan's configured day boundaries; no new user-facing configuration is introduced.
+- **FR-002**: Hour rows MUST display the hour label (e.g. `08:00`) on the left, followed by a horizontal divider that spans the calendar width using light box-drawing characters. The calendar width MUST adapt to the terminal width, subject to a minimum width (approximately 60 columns) below which rendering may degrade gracefully but must still produce a usable grid.
+- **FR-003**: The calendar MUST render with a default visible window of 08:00 through 17:00. If any entry on the day starts before 08:00, the window's start hour MUST be extended downward to the hour containing that entry's start (rounded down to the nearest hour). If any entry ends after 17:00, the window's end hour MUST be extended upward to the hour containing that entry's end (rounded up to the nearest hour). Empty days MUST still render the full default 08:00–17:00 window.
 - **FR-004**: Each plan entry MUST be rendered as a rectangular box drawn with heavy box-drawing characters, positioned so that the box's top edge aligns with the row corresponding to the entry's start time and its bottom edge aligns with the row corresponding to its end time.
 - **FR-005**: Entry start and end times that do not fall on a 15-minute boundary MUST be snapped to the nearest 15-minute boundary for rendering purposes only; the stored entry data MUST NOT be modified.
 - **FR-006**: Each entry box MUST display, on its first interior text row, the entry's ordinal (e.g. `[3]`), its start–end time range (e.g. `11:15-12:00`), and its name, in that order.
@@ -81,12 +108,12 @@ When two entries are scheduled back-to-back (the first one's end time equals the
 - **FR-009**: When two entries are temporally adjacent (one entry's end time equals another entry's start time after snapping), the two boxes MUST share a single heavy horizontal border line at the join, rather than drawing two stacked borders.
 - **FR-010**: A 15-minute entry (occupying exactly one text row) MUST be drawn as a single row whose left and right ends use junction characters and whose horizontal extent uses heavy horizontal characters, with the label inline on that same row.
 - **FR-011**: Where an entry box crosses an hour row, the box's vertical sides MUST replace the hour row's divider at the entry's column extent, while the divider continues outside the entry on both sides.
-- **FR-012**: Entries that begin before the visible calendar window or end after it MUST be visually clipped at the window edge in a way that signals the entry continues beyond.
+- **FR-013**: When a plan entry references a task whose status is completed, the entry's label text inside the box MUST be rendered with a strikethrough effect; on a TTY supporting color/style codes, the label MAY additionally be rendered dimmed. The box border characters MUST remain unchanged regardless of completion status. Entries that are not task references (e.g. events) are never marked as completed.
 
 ### Key Entities
 
 - **Plan Day**: a day to be rendered. Has a start-of-day hour, an end-of-day hour, and an ordered collection of entries. The hours are existing configuration; no new attributes are introduced by this feature.
-- **Plan Entry**: a scheduled item on a day. Has a start time, an end time, an ordinal (its position within the day), and a name. No new attributes are introduced by this feature.
+- **Plan Entry**: a scheduled item on a day. Has a start time, an end time, an ordinal (its position within the day), a name, and (for task-backed entries) a derived completion status from the referenced task. No new persisted attributes are introduced by this feature; completion status is read from the existing task model.
 
 ## Success Criteria *(mandatory)*
 
@@ -103,5 +130,6 @@ When two entries are scheduled back-to-back (the first one's end time equals the
 - The terminal can render Unicode box-drawing characters, including the heavy variants (`┏ ┓ ┗ ┛ ┃ ━ ┣ ┫`) and the light variants (`├ ┤ │ ─`). Plain-ASCII fallback is out of scope for this feature.
 - The plan model is single-track: at most one entry occupies any given moment. Overlapping entries are out of scope.
 - Sub-15-minute precision is intentionally not supported in this view; any entry whose times are finer-grained snaps to the nearest 15-minute boundary for display purposes only.
-- The hour grid is rendered at a fixed width (the full calendar column width) and label truncation adapts to whatever that width is.
+- The hour grid stretches to the terminal width with a sensible minimum (~60 columns); label truncation adapts to that width.
 - This change replaces the current plan view rendering; no toggle is provided to switch between the old and new presentations.
+- Task entries and event entries render identically; the visible distinction is only their label text.
