@@ -28,9 +28,14 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		}
 	}
 
-	fieldWidth := width - 8 // gutter(6) + leftEdge(1) + rightEdge(1)
-	if fieldWidth < 1 {
-		fieldWidth = 1
+	// gutter(7) + leftRail(1) + leftPad(1) + rightPad(1) + rightRail(1) = 11
+	boxWidth := width - 11
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	contentWidth := boxWidth - 2
+	if contentWidth < 0 {
+		contentWidth = 0
 	}
 
 	rowOf := func(t int) int { return (t - winStart) / 15 }
@@ -67,7 +72,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		}
 
 		fullLabel := fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, sn/60, sn%60, se/60, se%60, e.Name)
-		rows := wrapLabel(fullLabel, fieldWidth, labelRowCount)
+		rows := wrapLabel(fullLabel, contentWidth, labelRowCount)
 
 		layouts = append(layouts, entryLayout{e, tl, bl, sn, se, rows})
 	}
@@ -102,29 +107,41 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		}
 	}
 
-	hLight := strings.Repeat("─", fieldWidth)
-	hHeavy := strings.Repeat("━", fieldWidth)
+	hLight := strings.Repeat("─", boxWidth+2) // fills inner region for empty hour rows
+	hHeavy := strings.Repeat("━", contentWidth) // fills between heavy box corners
 
 	var sb strings.Builder
 	for L := 0; L < totalLines; L++ {
 		t := winStart + L*15
 		isHour := t%60 == 0
 
-		// Build gutter (6 display columns).
+		// Build gutter (7 display columns): label + space + marker-col.
 		var gutter string
 		if isHour {
 			label := fmt.Sprintf("%02d:%02d", t/60, t%60)
 			if L == nowLine {
-				gutter = label + "▶"
+				gutter = label + " ▶"
 			} else {
-				gutter = label + " "
+				gutter = label + "  "
 			}
 		} else {
 			if L == nowLine {
-				gutter = "     ▶"
+				gutter = "      ▶"
 			} else {
-				gutter = "      "
+				gutter = "       "
 			}
+		}
+
+		// Rail and padding chars: hour rows use ├/┤ and ─; non-hour use │ and space.
+		var leftRail, rightRail, padChar string
+		if isHour {
+			leftRail = "├"
+			rightRail = "┤"
+			padChar = "─"
+		} else {
+			leftRail = "│"
+			rightRail = "│"
+			padChar = " "
 		}
 
 		top := topAt[L]
@@ -140,36 +157,36 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			if rowIdx < len(interior.labelRows) {
 				label = interior.labelRows[rowIdx]
 			}
-			content := padRight(label, fieldWidth)
+			content := padRight(label, contentWidth)
 			content = applyCompletion(content, interior.e, isTTY)
-			sb.WriteString(gutter + "┃" + content + "┃\n")
+			sb.WriteString(gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail + "\n")
 
 		case top != nil && bot != nil:
 			// Shared border: multi-row entry A ends here, entry B starts here.
-			sb.WriteString(gutter + "┣" + hHeavy + "┫\n")
+			sb.WriteString(gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail + "\n")
 
 		case bot != nil && single != nil:
 			// Shared: multi-row entry ends here AND single-row entry starts here.
-			label := singleLabelContent(single.labelRows, fieldWidth)
+			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			sb.WriteString(gutter + "┣" + label + "┫\n")
+			sb.WriteString(gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail + "\n")
 
 		case top != nil:
-			sb.WriteString(gutter + "┏" + hHeavy + "┓\n")
+			sb.WriteString(gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail + "\n")
 
 		case bot != nil:
-			sb.WriteString(gutter + "┗" + hHeavy + "┛\n")
+			sb.WriteString(gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail + "\n")
 
 		case single != nil:
-			label := singleLabelContent(single.labelRows, fieldWidth)
+			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			sb.WriteString(gutter + "┣" + label + "┫\n")
+			sb.WriteString(gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail + "\n")
 
 		default:
 			if isHour {
 				sb.WriteString(gutter + "├" + hLight + "┤\n")
 			} else {
-				sb.WriteString(gutter + "│" + strings.Repeat(" ", fieldWidth) + "│\n")
+				sb.WriteString(gutter + "│" + strings.Repeat(" ", boxWidth+2) + "│\n")
 			}
 		}
 	}
