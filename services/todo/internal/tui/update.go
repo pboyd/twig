@@ -49,6 +49,9 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			Name:        msg.name,
 			Description: msg.description,
 		}
+		if msg.parentID != nil {
+			req.ParentId = msg.parentID
+		}
 		if msg.dueStr != "" {
 			ts, err := cli.ParseDue(msg.dueStr)
 			if err != nil {

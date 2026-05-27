@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"connectrpc.com/connect"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -642,6 +645,45 @@ func TestPomodoro_DoneWithErrorSetsErr(t *testing.T) {
 	if nm.err == nil {
 		t.Error("expected err to be set after pomodoroDoneMsg with error")
 	}
+}
+
+// TestUpdateTaskCmd_PreservesParentID checks that editing a subtask does not
+// clear its parent.
+func TestUpdateTaskCmd_PreservesParentID(t *testing.T) {
+	fc := &fakeTaskClient{}
+	taskID := int64(5)
+	parentID := int64(2)
+	msg := editSavedMsg{
+		taskID:   &taskID,
+		parentID: &parentID,
+		name:     "edited name",
+	}
+	cmd := ExportUpdateTaskCmd(fc, msg)
+	cmd()
+	if fc.lastUpdateReq == nil {
+		t.Fatal("UpdateTask was not called")
+	}
+	if fc.lastUpdateReq.ParentId == nil {
+		t.Fatal("ParentId was nil — subtask parent was cleared by edit")
+	}
+	if *fc.lastUpdateReq.ParentId != parentID {
+		t.Errorf("ParentId: want %d, got %d", parentID, *fc.lastUpdateReq.ParentId)
+	}
+}
+
+// fakeTaskClient is a minimal TaskServiceClient for unit tests.
+type fakeTaskClient struct {
+	taskv1connect.TaskServiceClient
+	lastUpdateReq *taskv1.UpdateTaskRequest
+}
+
+func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[taskv1.UpdateTaskRequest]) (*connect.Response[taskv1.UpdateTaskResponse], error) {
+	f.lastUpdateReq = req.Msg
+	return connect.NewResponse(&taskv1.UpdateTaskResponse{Task: &taskv1.Task{Id: req.Msg.Id}}), nil
+}
+
+func (f *fakeTaskClient) ListTasks(_ context.Context, _ *connect.Request[taskv1.ListTasksRequest]) (*connect.Response[taskv1.ListTasksResponse], error) {
+	return connect.NewResponse(&taskv1.ListTasksResponse{}), nil
 }
 
 // TestHighlight_RefreshedErrorKeepsListMode checks error in refreshedMsg.

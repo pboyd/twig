@@ -1,6 +1,7 @@
 package tui
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
 )
@@ -20,3 +21,8 @@ func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode
 
 // ExportVisibleRow exposes the visibleRow type for inspection in tests.
 type ExportVisibleRow = visibleRow
+
+// ExportUpdateTaskCmd exposes updateTaskCmd for unit tests.
+func ExportUpdateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea.Cmd {
+	return updateTaskCmd(client, msg)
+}
