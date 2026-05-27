@@ -46,6 +46,9 @@ message PlanEntry {
   int32 start_minute = 5;
   // Length of the entry, in minutes. > 0, and start_minute + duration_minute <= 1440.
   int32 duration_minute = 6;
+  // True iff this entry references a completed task (task_id != 0 and tasks.completed_at IS NOT NULL).
+  // Always false for event entries. Populated server-side by ListPlanEntries; ignored on writes.
+  bool completed = 7;
 }
 
 message ListPlanEntriesRequest { string day = 1; }

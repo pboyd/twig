@@ -36,12 +36,12 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Constitution gate (II. API-First)**: The proto edit (T001) must land in the same commit as, or before, any code that consumes the new field.
 
-- [ ] T001 Add `bool completed = 7;` to the `PlanEntry` message in `services/todo/proto/plan/v1/plan.proto`, per `specs/013-plan-calendar-grid/contracts/plan.proto.patch.md`
-- [ ] T002 Run `make proto` from the repo root to regenerate `services/todo/gen/plan/v1/`; verify the new `Completed` field appears on the Go struct
-- [ ] T003 Update the `ListPlanEntries` SELECT in `services/todo/db/queries/plan.sql` to LEFT JOIN `tasks` on `task_id` and project `(plan_entries.task_id <> 0 AND tasks.completed_at IS NOT NULL) AS completed`
-- [ ] T004 Run `cd services/todo && sqlc generate` to regenerate `services/todo/internal/db/`; verify the new column appears on the returned row struct
-- [ ] T005 Update the entry-mapping path in `services/todo/internal/handler/plan.go` so `ListPlanEntries` copies the new row column onto `PlanEntry.Completed`
-- [ ] T006 [P] Add handler unit tests in `services/todo/internal/handler/plan_test.go` covering three cases: event entry → `Completed == false`; task entry with `completed_at == NULL` → `false`; task entry with `completed_at` set → `true`
+- [X] T001 Add `bool completed = 7;` to the `PlanEntry` message in `services/todo/proto/plan/v1/plan.proto`, per `specs/013-plan-calendar-grid/contracts/plan.proto.patch.md`
+- [X] T002 Run `make proto` from the repo root to regenerate `services/todo/gen/plan/v1/`; verify the new `Completed` field appears on the Go struct
+- [X] T003 Update the `ListPlanEntries` SELECT in `services/todo/db/queries/plan.sql` to LEFT JOIN `tasks` on `task_id` and project `(plan_entries.task_id <> 0 AND tasks.completed_at IS NOT NULL) AS completed`
+- [X] T004 Run `cd services/todo && sqlc generate` to regenerate `services/todo/internal/db/`; verify the new column appears on the returned row struct
+- [X] T005 Update the entry-mapping path in `services/todo/internal/handler/plan.go` so `ListPlanEntries` copies the new row column onto `PlanEntry.Completed`
+- [X] T006 [P] Add handler unit tests in `services/todo/internal/handler/plan_test.go` covering three cases: event entry → `Completed == false`; task entry with `completed_at == NULL` → `false`; task entry with `completed_at` set → `true`
 
 **Checkpoint**: A CLI built against the updated server can read `entry.Completed` from any `ListPlanEntries` response.
 
@@ -53,11 +53,11 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Independent Test**: Call `RenderGrid([], "2026-05-27", now, 80, false)` and confirm the output is an 08:00–17:00 grid with no boxes, three blank text rows between hour labels, and a right-edge border at column 80.
 
-- [ ] T007 [US1] Rewrite the signature in `services/todo/internal/cli/plan_grid.go` to `func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width int, isTTY bool) string`; gut the existing body
-- [ ] T008 [US1] In `services/todo/internal/cli/plan_grid.go`, implement the window computation: default `[8*60, 17*60)`, extended outward (rounded to hour) to contain every entry's snapped span
-- [ ] T009 [US1] In `services/todo/internal/cli/plan_grid.go`, implement the row-by-row scaffold rendering: for each 15-minute row, emit the hour label (or 6-space gutter), the left edge (`├` on hour rows, `│` between), the horizontal field (light `─` on hour rows, spaces between), and the right edge
-- [ ] T010 [US1] Update the call site in `services/todo/internal/cli/plan.go` to pass `time.Now()`, a terminal width obtained from `golang.org/x/term.GetSize(int(os.Stdout.Fd()))` (floor 60, default 80 on non-TTY), and the existing TTY check
-- [ ] T011 [P] [US1] In `services/todo/internal/cli/plan_grid_test.go`, replace the existing goldens with: (a) empty-day default window, (b) empty-day with an entry that forces window extension to 07:00 or 18:00
+- [X] T007 [US1] Rewrite the signature in `services/todo/internal/cli/plan_grid.go` to `func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width int, isTTY bool) string`; gut the existing body
+- [X] T008 [US1] In `services/todo/internal/cli/plan_grid.go`, implement the window computation: default `[8*60, 17*60)`, extended outward (rounded to hour) to contain every entry's snapped span
+- [X] T009 [US1] In `services/todo/internal/cli/plan_grid.go`, implement the row-by-row scaffold rendering: for each 15-minute row, emit the hour label (or 6-space gutter), the left edge (`├` on hour rows, `│` between), the horizontal field (light `─` on hour rows, spaces between), and the right edge
+- [X] T010 [US1] Update the call site in `services/todo/internal/cli/plan.go` to pass `time.Now()`, a terminal width obtained from `golang.org/x/term.GetSize(int(os.Stdout.Fd()))` (floor 60, default 80 on non-TTY), and the existing TTY check
+- [X] T011 [P] [US1] In `services/todo/internal/cli/plan_grid_test.go`, replace the existing goldens with: (a) empty-day default window, (b) empty-day with an entry that forces window extension to 07:00 or 18:00
 
 **Checkpoint**: `todo plan` against an empty day shows an 08:00–17:00 calendar that fills the terminal width.
 
@@ -69,11 +69,11 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Independent Test**: Render a single entry from 08:00–10:00 with a short label and a single entry from 11:15–12:00 with a long label; visually compare against the spec's mock for those cases.
 
-- [ ] T012 [US2] In `services/todo/internal/cli/plan_grid.go`, add a per-entry layout step: snap `start_minute` and `start_minute + duration_minute` to the nearest 15 minutes, clamp `endRow >= startRow + 1`
-- [ ] T013 [US2] In `services/todo/internal/cli/plan_grid.go`, integrate entry rendering into the row loop: top edge uses `┏━┓` joined to the surrounding `├─┤`; bottom edge uses `┗━┛`; interior uses `┃ … ┃`
-- [ ] T014 [US2] In `services/todo/internal/cli/plan_grid.go`, implement the label formatter: first text row gets `[id] HH:MM-HH:MM name`; wrap the name across subsequent interior rows; if the wrapped name would exceed the box's interior rows, truncate the last visible row with `...`
-- [ ] T015 [US2] In `services/todo/internal/cli/plan_grid.go`, handle the single-row (15-minute) entry case: emit the box as one row with `┣` left, heavy `━` field, `┫` right, and the label inline on the same row
-- [ ] T016 [P] [US2] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: 08:00–10:00 short label, 10:00–10:30 with truncation, 11:15–12:00 with wrapping, 13:00–13:15 single-row entry
+- [X] T012 [US2] In `services/todo/internal/cli/plan_grid.go`, add a per-entry layout step: snap `start_minute` and `start_minute + duration_minute` to the nearest 15 minutes, clamp `endRow >= startRow + 1`
+- [X] T013 [US2] In `services/todo/internal/cli/plan_grid.go`, integrate entry rendering into the row loop: top edge uses `┏━┓` joined to the surrounding `├─┤`; bottom edge uses `┗━┛`; interior uses `┃ … ┃`
+- [X] T014 [US2] In `services/todo/internal/cli/plan_grid.go`, implement the label formatter: first text row gets `[id] HH:MM-HH:MM name`; wrap the name across subsequent interior rows; if the wrapped name would exceed the box's interior rows, truncate the last visible row with `...`
+- [X] T015 [US2] In `services/todo/internal/cli/plan_grid.go`, handle the single-row (15-minute) entry case: emit the box as one row with `┣` left, heavy `━` field, `┫` right, and the label inline on the same row
+- [X] T016 [P] [US2] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: 08:00–10:00 short label, 10:00–10:30 with truncation, 11:15–12:00 with wrapping, 13:00–13:15 single-row entry
 
 **Checkpoint**: `todo plan` renders a believable calendar for any single-entry or multi-entry day, matching the spec mock for those cases.
 
@@ -85,8 +85,8 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Independent Test**: Render entries 10:00–10:30 immediately after an 08:00–10:00 entry; the 10:00 row must be a single heavy line that is also the bottom of the first box and the top of the second.
 
-- [ ] T017 [US3] In `services/todo/internal/cli/plan_grid.go`, in the per-row drawing branch, detect when the current row is simultaneously some entry's bottom and another entry's top and emit a single shared `┣━━━━┫` row instead of stacking two borders
-- [ ] T018 [P] [US3] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: 08:00–10:00 + 10:00–10:30 sharing a border at 10:00; 13:00–13:15 + 13:15–13:30 sharing a border at 13:15
+- [X] T017 [US3] In `services/todo/internal/cli/plan_grid.go`, in the per-row drawing branch, detect when the current row is simultaneously some entry's bottom and another entry's top and emit a single shared `┣━━━━┫` row instead of stacking two borders
+- [X] T018 [P] [US3] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: 08:00–10:00 + 10:00–10:30 sharing a border at 10:00; 13:00–13:15 + 13:15–13:30 sharing a border at 13:15
 
 **Checkpoint**: Two adjacent entries consume exactly the sum of their durations in 15-minute units — no extra row.
 
@@ -98,9 +98,9 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Independent Test**: Render with `day == "2026-05-27"` and `now == 10:37` and verify the row representing 10:30–10:45 has `▶` in the gutter; render with `day == "2026-05-26"` and confirm no marker appears anywhere.
 
-- [ ] T019 [US4] In `services/todo/internal/cli/plan_grid.go`, compute `nowRow` from the injected `now` and the day under render; if the day is not today (in `now.Location()`), set `nowRow = -1`
-- [ ] T020 [US4] In `services/todo/internal/cli/plan_grid.go`, while emitting each row, write `▶` into the leftmost gutter column when the row index equals `nowRow` (taking priority over the blank gutter; the hour-label gutter still wins on hour rows — render the marker as a small overlay, e.g. between the label and the left edge, to avoid clobbering the hour text)
-- [ ] T021 [P] [US4] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: today + now=10:37 (marker on the 10:30 row); not-today (no marker anywhere)
+- [X] T019 [US4] In `services/todo/internal/cli/plan_grid.go`, compute `nowRow` from the injected `now` and the day under render; if the day is not today (in `now.Location()`), set `nowRow = -1`
+- [X] T020 [US4] In `services/todo/internal/cli/plan_grid.go`, while emitting each row, write `▶` into the leftmost gutter column when the row index equals `nowRow` (taking priority over the blank gutter; the hour-label gutter still wins on hour rows — render the marker as a small overlay, e.g. between the label and the left edge, to avoid clobbering the hour text)
+- [X] T021 [P] [US4] In `services/todo/internal/cli/plan_grid_test.go`, add goldens for: today + now=10:37 (marker on the 10:30 row); not-today (no marker anywhere)
 
 **Checkpoint**: The marker is helpful on today's plan and invisible on past/future days.
 
@@ -110,10 +110,10 @@ No new setup is required — this feature lives entirely inside an existing Go m
 
 **Goal**: Apply strikethrough + dim styling to the label text of any entry whose `Completed` is true, but only when `isTTY` is true. Box border characters are never restyled.
 
-- [ ] T022 In `services/todo/internal/cli/plan_grid.go`, when emitting label text inside an entry box, wrap the label substring with `\x1b[2;9m` and reset with `\x1b[0m` if `entry.Completed && isTTY`; otherwise emit the plain string. Reuse the existing TTY/style helpers in `services/todo/internal/cli/render.go` rather than introducing new constants
-- [ ] T023 [P] In `services/todo/internal/cli/plan_grid_test.go`, add two goldens for completion: `isTTY=false` (no escape codes; label text is plain), `isTTY=true` (label is wrapped in the SGR sequence). Keep the TTY-false golden as the canonical comparison; the TTY-true golden documents the escape-code contract
-- [ ] T024 Run `cd services/todo && go test ./...` and confirm the whole suite passes
-- [ ] T025 Build and run the dev stack (`make dev`), provision a user, schedule the entries from `quickstart.md` step 6, complete one task, run `todo plan`, and visually verify the rendering matches the spec mock (hour grid, boxes, shared borders, now-marker, strikethrough on the completed task)
+- [X] T022 In `services/todo/internal/cli/plan_grid.go`, when emitting label text inside an entry box, wrap the label substring with `\x1b[2;9m` and reset with `\x1b[0m` if `entry.Completed && isTTY`; otherwise emit the plain string. Reuse the existing TTY/style helpers in `services/todo/internal/cli/render.go` rather than introducing new constants
+- [X] T023 [P] In `services/todo/internal/cli/plan_grid_test.go`, add two goldens for completion: `isTTY=false` (no escape codes; label text is plain), `isTTY=true` (label is wrapped in the SGR sequence). Keep the TTY-false golden as the canonical comparison; the TTY-true golden documents the escape-code contract
+- [X] T024 Run `cd services/todo && go test ./...` and confirm the whole suite passes
+- [X] T025 Build and run the dev stack (`make dev`), provision a user, schedule the entries from `quickstart.md` step 6, complete one task, run `todo plan`, and visually verify the rendering matches the spec mock (hour grid, boxes, shared borders, now-marker, strikethrough on the completed task)
 
 ---
 

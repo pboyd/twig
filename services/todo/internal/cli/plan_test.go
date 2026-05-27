@@ -285,8 +285,9 @@ func TestRunPlanShow_EmptyPlan(t *testing.T) {
 	if code != 0 {
 		t.Error("expected exit 0 for empty plan")
 	}
-	if !strings.Contains(stdout, "Plan is empty") {
-		t.Errorf("expected empty plan message, got: %q", stdout)
+	// Empty day renders the default 08:00–17:00 calendar grid.
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected calendar grid for empty plan, got: %q", stdout)
 	}
 }
 

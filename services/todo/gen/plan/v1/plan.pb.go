@@ -39,8 +39,11 @@ type PlanEntry struct {
 	StartMinute int32 `protobuf:"varint,5,opt,name=start_minute,json=startMinute,proto3" json:"start_minute,omitempty"`
 	// Length of the entry, in minutes. > 0, and start_minute + duration_minute <= 1440.
 	DurationMinute int32 `protobuf:"varint,6,opt,name=duration_minute,json=durationMinute,proto3" json:"duration_minute,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// True iff this entry references a completed task (task_id != 0 and tasks.completed_at IS NOT NULL).
+	// Always false for event entries. Populated server-side by ListPlanEntries; ignored on writes.
+	Completed     bool `protobuf:"varint,7,opt,name=completed,proto3" json:"completed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlanEntry) Reset() {
@@ -113,6 +116,13 @@ func (x *PlanEntry) GetDurationMinute() int32 {
 		return x.DurationMinute
 	}
 	return 0
+}
+
+func (x *PlanEntry) GetCompleted() bool {
+	if x != nil {
+		return x.Completed
+	}
+	return false
 }
 
 type ListPlanEntriesRequest struct {
@@ -844,14 +854,15 @@ var File_plan_v1_plan_proto protoreflect.FileDescriptor
 
 const file_plan_v1_plan_proto_rawDesc = "" +
 	"\n" +
-	"\x12plan/v1/plan.proto\x12\aplan.v1\"\xa6\x01\n" +
+	"\x12plan/v1/plan.proto\x12\aplan.v1\"\xc4\x01\n" +
 	"\tPlanEntry\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x05R\x02id\x12\x17\n" +
 	"\atask_id\x18\x03 \x01(\x03R\x06taskId\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12!\n" +
 	"\fstart_minute\x18\x05 \x01(\x05R\vstartMinute\x12'\n" +
-	"\x0fduration_minute\x18\x06 \x01(\x05R\x0edurationMinute\"*\n" +
+	"\x0fduration_minute\x18\x06 \x01(\x05R\x0edurationMinute\x12\x1c\n" +
+	"\tcompleted\x18\a \x01(\bR\tcompleted\"*\n" +
 	"\x16ListPlanEntriesRequest\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\"G\n" +
 	"\x17ListPlanEntriesResponse\x12,\n" +

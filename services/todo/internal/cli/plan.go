@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"golang.org/x/term"
 
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 	planv1connect "github.com/pboyd/todo/services/todo/gen/plan/v1/planv1connect"
@@ -95,7 +96,16 @@ func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
 	}
-	fmt.Print(RenderGrid(resp.Msg.Entries))
+
+	isTTY := term.IsTerminal(int(os.Stdout.Fd()))
+	width := 80
+	if isTTY {
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w >= 60 {
+			width = w
+		}
+	}
+
+	fmt.Print(RenderGrid(resp.Msg.Entries, day, time.Now(), width, isTTY))
 	return 0
 }
 

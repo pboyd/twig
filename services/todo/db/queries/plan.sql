@@ -1,5 +1,10 @@
 -- name: ListPlanEntriesForDay :many
-SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 ORDER BY start_minute;
+SELECT plan_entries.*,
+  (plan_entries.task_id IS NOT NULL AND tasks.completed_at IS NOT NULL) AS completed
+FROM plan_entries
+LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
+WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
+ORDER BY plan_entries.start_minute;
 
 -- name: GetPlanEntry :one
 SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3;

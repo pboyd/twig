@@ -111,7 +111,12 @@ func (q *Queries) InsertPlanEntry(ctx context.Context, arg InsertPlanEntryParams
 }
 
 const listPlanEntriesForDay = `-- name: ListPlanEntriesForDay :many
-SELECT user_id, day, id, task_id, name, start_minute, duration_minute FROM plan_entries WHERE user_id = $1 AND day = $2 ORDER BY start_minute
+SELECT plan_entries.user_id, plan_entries.day, plan_entries.id, plan_entries.task_id, plan_entries.name, plan_entries.start_minute, plan_entries.duration_minute,
+  (plan_entries.task_id IS NOT NULL AND tasks.completed_at IS NOT NULL) AS completed
+FROM plan_entries
+LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
+WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
+ORDER BY plan_entries.start_minute
 `
 
 type ListPlanEntriesForDayParams struct {
@@ -119,15 +124,26 @@ type ListPlanEntriesForDayParams struct {
 	Day    pgtype.Date
 }
 
-func (q *Queries) ListPlanEntriesForDay(ctx context.Context, arg ListPlanEntriesForDayParams) ([]PlanEntry, error) {
+type ListPlanEntriesForDayRow struct {
+	UserID         int64
+	Day            pgtype.Date
+	ID             int32
+	TaskID         pgtype.Int8
+	Name           pgtype.Text
+	StartMinute    int16
+	DurationMinute int16
+	Completed      pgtype.Bool
+}
+
+func (q *Queries) ListPlanEntriesForDay(ctx context.Context, arg ListPlanEntriesForDayParams) ([]ListPlanEntriesForDayRow, error) {
 	rows, err := q.db.Query(ctx, listPlanEntriesForDay, arg.UserID, arg.Day)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PlanEntry
+	var items []ListPlanEntriesForDayRow
 	for rows.Next() {
-		var i PlanEntry
+		var i ListPlanEntriesForDayRow
 		if err := rows.Scan(
 			&i.UserID,
 			&i.Day,
@@ -136,6 +152,7 @@ func (q *Queries) ListPlanEntriesForDay(ctx context.Context, arg ListPlanEntries
 			&i.Name,
 			&i.StartMinute,
 			&i.DurationMinute,
+			&i.Completed,
 		); err != nil {
 			return nil, err
 		}

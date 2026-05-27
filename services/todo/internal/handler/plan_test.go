@@ -799,6 +799,64 @@ func TestClearPlan(t *testing.T) {
 	})
 }
 
+// ---- T006: ListPlanEntries.Completed field ----
+
+func TestListPlanEntries_Completed(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-08-01"
+
+	// Create a task that we'll mark completed.
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Finish it"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Create a second task that remains incomplete.
+	taskResp2, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Keep going"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID2 := taskResp2.Msg.Task.Id
+
+	// Event entry (no task_id) → always completed=false.
+	insertPlanEntry(t, planH.Queries, userID, day, 0, "Standup", 540, 15)
+	// Task entry, task not yet completed → completed=false.
+	insertPlanEntry(t, planH.Queries, userID, day, taskID2, "", 600, 30)
+	// Task entry, task completed → completed=true.
+	insertPlanEntry(t, planH.Queries, userID, day, taskID, "", 660, 30)
+
+	// Complete taskID.
+	_, err = taskH.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: taskID}))
+	if err != nil {
+		t.Fatalf("CompleteTask: %v", err)
+	}
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if len(resp.Msg.Entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(resp.Msg.Entries))
+	}
+
+	// entries are sorted by start_minute: 540 (event), 600 (incomplete task), 660 (completed task).
+	event := resp.Msg.Entries[0]
+	incompleteTask := resp.Msg.Entries[1]
+	completedTask := resp.Msg.Entries[2]
+
+	if event.Completed {
+		t.Errorf("event entry: Completed = true, want false")
+	}
+	if incompleteTask.Completed {
+		t.Errorf("incomplete task entry: Completed = true, want false")
+	}
+	if !completedTask.Completed {
+		t.Errorf("completed task entry: Completed = false, want true")
+	}
+}
+
 // Ensure fmt is used.
 var _ = fmt.Sprintf
 var _ = pgxpool.Pool{}

@@ -123,11 +123,23 @@ func (p *Plan) ListPlanEntries(
 
 	entries := make([]*planv1.PlanEntry, len(rows))
 	for i, r := range rows {
-		e := dbPlanEntryToProto(r)
-		if r.TaskID.Valid && !r.Name.Valid {
-			e.Name = taskNames[r.TaskID.Int64]
+		pe := &planv1.PlanEntry{
+			Day:            r.Day.Time.Format("2006-01-02"),
+			Id:             r.ID,
+			StartMinute:    int32(r.StartMinute),
+			DurationMinute: int32(r.DurationMinute),
+			Completed:      r.Completed.Bool,
 		}
-		entries[i] = e
+		if r.TaskID.Valid {
+			pe.TaskId = r.TaskID.Int64
+		}
+		if r.Name.Valid {
+			pe.Name = r.Name.String
+		}
+		if r.TaskID.Valid && !r.Name.Valid {
+			pe.Name = taskNames[r.TaskID.Int64]
+		}
+		entries[i] = pe
 	}
 	return connect.NewResponse(&planv1.ListPlanEntriesResponse{Entries: entries}), nil
 }
