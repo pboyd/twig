@@ -21,7 +21,7 @@ func Run(args []string) int {
 		return 1
 	}
 
-	if args[0] == "--help" {
+	if args[0] == "--help" || args[0] == "-h" {
 		return runHelp(nil)
 	}
 
@@ -75,7 +75,7 @@ func printRootUsage(w io.Writer) {
 }
 
 func runTask(args []string) int {
-	if len(args) > 0 && args[0] == "--help" {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		printTaskUsage(os.Stdout)
 		return 0
 	}

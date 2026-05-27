@@ -46,7 +46,7 @@ func runPlan(args []string) int {
 		return runPlanShow(client, day)
 	}
 
-	if args[0] == "--help" {
+	if args[0] == "--help" || args[0] == "-h" {
 		printPlanUsage(os.Stdout)
 		return 0
 	}

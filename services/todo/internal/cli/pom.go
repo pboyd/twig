@@ -41,7 +41,7 @@ func newTaskClient(addr, apiKey string) taskv1connect.TaskServiceClient {
 }
 
 func runPom(client taskv1connect.TaskServiceClient, args []string) int {
-	if len(args) > 0 && args[0] == "--help" {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		printPomUsage(os.Stdout)
 		return 0
 	}
