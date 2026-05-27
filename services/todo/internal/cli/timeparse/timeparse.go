@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	re24h   = regexp.MustCompile(`^(\d{1,2}):(\d{2})$`)
-	re12h   = regexp.MustCompile(`^(\d{1,2}):(\d{2})\s*(am|pm)$`)
+	re24h        = regexp.MustCompile(`^(\d{1,2}):(\d{2})$`)
+	re24hNoColon = regexp.MustCompile(`^(\d{2})(\d{2})$`)
+	re12h        = regexp.MustCompile(`^(\d{1,2}):(\d{2})\s*(am|pm)$`)
 	reDurH  = regexp.MustCompile(`^(\d+)h$`)
 	reDurM  = regexp.MustCompile(`^(\d+)m$`)
 	reDurHM = regexp.MustCompile(`^(\d+)h(\d+)m$`)
@@ -25,6 +26,19 @@ func ParseStart(s string) (int, error) {
 
 	// Try 24-hour first.
 	if m := re24h.FindStringSubmatch(s); m != nil {
+		h, _ := strconv.Atoi(m[1])
+		min, _ := strconv.Atoi(m[2])
+		if h > 23 {
+			return 0, fmt.Errorf("hour %d out of range (0-23)", h)
+		}
+		if min > 59 {
+			return 0, fmt.Errorf("minute %d out of range (0-59)", min)
+		}
+		return h*60 + min, nil
+	}
+
+	// Try 4-digit no-colon 24-hour (e.g. "0815", "1400").
+	if m := re24hNoColon.FindStringSubmatch(s); m != nil {
 		h, _ := strconv.Atoi(m[1])
 		min, _ := strconv.Atoi(m[2])
 		if h > 23 {
@@ -60,7 +74,7 @@ func ParseStart(s string) (int, error) {
 		return h*60 + min, nil
 	}
 
-	return 0, fmt.Errorf("unrecognized time format %q; use HH:MM or H:MMam/pm", s)
+	return 0, fmt.Errorf("unrecognized time format %q; use HH:MM, HHMM, or H:MMam/pm", s)
 }
 
 // ParseDuration parses a duration string and returns minutes.

@@ -86,7 +86,7 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Time formats:     13:15  1:15pm  01:15 PM")
+	fmt.Fprintln(w, "Time formats:     13:15  1315  1:15pm  01:15 PM")
 	fmt.Fprintln(w, "Duration formats: 90m  1h  2h  1h30m")
 }
 

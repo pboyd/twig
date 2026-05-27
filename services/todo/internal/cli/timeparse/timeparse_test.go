@@ -26,6 +26,14 @@ func TestParseStart(t *testing.T) {
 		{"12:00am", 0, false},
 		{"12:30pm", 750, false},
 		{"12:30am", 30, false},
+		// 4-digit no-colon 24-hour
+		{"0815", 495, false},
+		{"1400", 840, false},
+		{"0000", 0, false},
+		{"2359", 1439, false},
+		{"2400", 0, true},
+		{"1360", 0, true},
+		{"815", 0, true}, // 3-digit not accepted
 		// error cases
 		{"", 0, true},
 		{"junk", 0, true},
