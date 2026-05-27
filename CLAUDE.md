@@ -104,5 +104,5 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/011-ansible-deployment/plan.md`.
+`specs/013-plan-calendar-grid/plan.md`.
 <!-- SPECKIT END -->
