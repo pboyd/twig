@@ -195,8 +195,8 @@ func TestRunPlanTask_HappyPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "→ entry 1") {
-		t.Errorf("expected '→ entry 1', got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 }
 
@@ -207,8 +207,8 @@ func TestRunPlanEvent_HappyPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "→ entry 1") {
-		t.Errorf("expected '→ entry 1', got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 }
 
@@ -313,8 +313,8 @@ func TestRunPlanRm_HappyPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "removed entry 1") {
-		t.Errorf("expected removal message, got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 }
 
@@ -340,8 +340,8 @@ func TestRunPlanRename_HappyPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "renamed entry 1") {
-		t.Errorf("expected rename message, got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 }
 
@@ -356,8 +356,8 @@ func TestRunPlanMv_HappyPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "moved entry 1") {
-		t.Errorf("expected move message, got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 }
 
@@ -388,11 +388,8 @@ func TestRunPlanClear_ExplicitStart(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "Cleared 2 entries") {
-		t.Errorf("expected clear message, got: %q", stdout)
-	}
-	if !strings.Contains(stdout, "trimmed 1") {
-		t.Errorf("expected trimmed count, got: %q", stdout)
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("expected plan grid in output, got: %q", stdout)
 	}
 	h.svc.mu.Lock()
 	defer h.svc.mu.Unlock()

@@ -133,7 +133,7 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 		}
 	}
 
-	resp, err := client.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
+	_, err = client.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
 		Day:            day,
 		TaskId:         taskID,
 		StartMinute:    int32(start),
@@ -142,8 +142,7 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 	if err != nil {
 		return printPlanError(err)
 	}
-	fmt.Printf("→ entry %d\n", resp.Msg.Entry.Id)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []string) int {
@@ -166,7 +165,7 @@ func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []str
 		}
 	}
 
-	resp, err := client.AddPlanEvent(context.Background(), connect.NewRequest(&planv1.AddPlanEventRequest{
+	_, err = client.AddPlanEvent(context.Background(), connect.NewRequest(&planv1.AddPlanEventRequest{
 		Day:            day,
 		Name:           name,
 		StartMinute:    int32(start),
@@ -175,8 +174,7 @@ func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []str
 	if err != nil {
 		return printPlanError(err)
 	}
-	fmt.Printf("→ entry %d\n", resp.Msg.Entry.Id)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func runPlanRm(client planv1connect.PlanServiceClient, day string, args []string) int {
@@ -200,8 +198,7 @@ func runPlanRm(client planv1connect.PlanServiceClient, day string, args []string
 		}
 		return printPlanError(err)
 	}
-	fmt.Printf("removed entry %d\n", n)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func runPlanRename(client planv1connect.PlanServiceClient, day string, args []string) int {
@@ -225,8 +222,7 @@ func runPlanRename(client planv1connect.PlanServiceClient, day string, args []st
 		}
 		return printPlanError(err)
 	}
-	fmt.Printf("renamed entry %d\n", n)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string) int {
@@ -262,8 +258,7 @@ func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string
 	if err != nil {
 		return printPlanError(err)
 	}
-	fmt.Printf("moved entry %d\n", n)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func runPlanClear(client planv1connect.PlanServiceClient, day string, args []string) int {
@@ -280,19 +275,14 @@ func runPlanClear(client planv1connect.PlanServiceClient, day string, args []str
 		startMinute = now.Hour()*60 + now.Minute()
 	}
 
-	resp, err := client.ClearPlan(context.Background(), connect.NewRequest(&planv1.ClearPlanRequest{
+	_, err := client.ClearPlan(context.Background(), connect.NewRequest(&planv1.ClearPlanRequest{
 		Day:         day,
 		StartMinute: int32(startMinute),
 	}))
 	if err != nil {
 		return printPlanError(err)
 	}
-	trimCount := 0
-	if resp.Msg.TrimmedStraddlingEntry {
-		trimCount = 1
-	}
-	fmt.Printf("Cleared %d entries; trimmed %d straddling entries.\n", resp.Msg.DeletedCount, trimCount)
-	return 0
+	return runPlanShow(client, day)
 }
 
 func printPlanError(err error) int {
