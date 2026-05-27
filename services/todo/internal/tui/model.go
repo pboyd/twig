@@ -43,6 +43,6 @@ func newModel(client taskv1connect.TaskServiceClient, addr string) Model {
 		addr:     addr,
 		expanded: make(map[int64]bool),
 		keys:     DefaultKeyMap(),
-		help:     help.New(),
+		help:     newHelpModel(),
 	}
 }
