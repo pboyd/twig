@@ -61,6 +61,8 @@ The CLI requires:
 - `TODO_API_KEY` — API key from provisioning
 - `TODO_ADDR` — server address (defaults to `http://localhost:8080`)
 
+Both can also be set in the optional config file at `~/.config/todo/config.toml`; env vars take precedence. See `specs/015-pomodoro-config-file/contracts/config-schema.md` for the full schema including pomodoro lifecycle hooks (`on_start`, `on_cancel`, `on_complete`).
+
 ## Architecture
 
 Single Go module at `services/todo/` with two binaries:
@@ -76,6 +78,7 @@ Single Go module at `services/todo/` with two binaries:
 | `internal/handler` | ConnectRPC service implementations (`Task`, `Plan`, `Health`, `Pomodoro`). Each handler holds a `*db.Queries`. |
 | `internal/auth` | Session/API-key management and HTTP middleware. |
 | `internal/cli` | All CLI rendering and command dispatch. TTY detection gates ANSI styling. |
+| `internal/config` | Config file loading (`~/.config/todo/config.toml`), env-var precedence resolution. |
 | `internal/plan` | Daily plan business logic (separate from CLI rendering). |
 | `internal/pomodoro` | Pomodoro timer logic. |
 | `gen/` | Protobuf + ConnectRPC generated code. **Do not edit by hand** — regenerate with `make proto`. |

@@ -14,9 +14,7 @@ import (
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 )
 
-func runList(client taskv1connect.TaskServiceClient, args []string) int {
-	addr := backendAddr()
-
+func runList(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var showCompleted bool
@@ -56,8 +54,7 @@ func runList(client taskv1connect.TaskServiceClient, args []string) int {
 	return 0
 }
 
-func runComplete(client taskv1connect.TaskServiceClient, args []string) int {
-	addr := backendAddr()
+func runComplete(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: todo task complete <id>")
 		return 1
@@ -85,8 +82,7 @@ func runComplete(client taskv1connect.TaskServiceClient, args []string) int {
 	return 0
 }
 
-func runAdd(client taskv1connect.TaskServiceClient, args []string) int {
-	addr := backendAddr()
+func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var parentStr string
@@ -132,8 +128,7 @@ func runAdd(client taskv1connect.TaskServiceClient, args []string) int {
 	return 0
 }
 
-func runRm(client taskv1connect.TaskServiceClient, args []string) int {
-	addr := backendAddr()
+func runRm(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: todo task rm <id>")
 		return 1
@@ -154,9 +149,7 @@ func runRm(client taskv1connect.TaskServiceClient, args []string) int {
 	return 0
 }
 
-func runMod(client taskv1connect.TaskServiceClient, args []string) int {
-	addr := backendAddr()
-
+func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: todo task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
 		return 1
@@ -263,12 +256,4 @@ func runMod(client taskv1connect.TaskServiceClient, args []string) int {
 	}
 	fmt.Printf("updated task %d\n", id)
 	return 0
-}
-
-func backendAddr() string {
-	addr := os.Getenv("TODO_ADDR")
-	if addr == "" {
-		addr = defaultAddr
-	}
-	return addr
 }

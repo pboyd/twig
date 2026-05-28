@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 type viewMode int
@@ -21,6 +22,7 @@ const (
 type Model struct {
 	client          taskv1connect.TaskServiceClient
 	addr            string
+	pomConfig       config.PomodoroConfig
 	tree            []*cli.TreeNode
 	visible         []*visibleRow
 	cursor          int
@@ -37,12 +39,13 @@ type Model struct {
 	height          int
 }
 
-func newModel(client taskv1connect.TaskServiceClient, addr string) Model {
+func newModel(client taskv1connect.TaskServiceClient, addr string, pomConfig config.PomodoroConfig) Model {
 	return Model{
-		client:   client,
-		addr:     addr,
-		expanded: make(map[int64]bool),
-		keys:     DefaultKeyMap(),
-		help:     newHelpModel(),
+		client:    client,
+		addr:      addr,
+		pomConfig: pomConfig,
+		expanded:  make(map[int64]bool),
+		keys:      DefaultKeyMap(),
+		help:      newHelpModel(),
 	}
 }

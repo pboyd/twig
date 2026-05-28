@@ -202,9 +202,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pomodoroRequestMsg:
 		m.mode = modePomodoro
 		if msg.resume {
-			return m, execPomodoroResume(m.client)
+			return m, execPomodoroResume(m.client, m.pomConfig)
 		}
-		return m, execPomodoroStart(m.client, msg.taskID)
+		return m, execPomodoroStart(m.client, m.pomConfig, msg.taskID)
 
 	case pomodoroDoneMsg:
 		m.mode = modeList

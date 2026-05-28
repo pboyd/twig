@@ -15,24 +15,26 @@ import (
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 	planv1connect "github.com/pboyd/todo/services/todo/gen/plan/v1/planv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli/timeparse"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 func runPlan(args []string) int {
-	apiKey := os.Getenv("TODO_API_KEY")
-	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	addr := os.Getenv("TODO_ADDR")
-	if addr == "" {
-		addr = defaultAddr
+	if cfg.APIKey == "" {
+		path, _ := config.DefaultPath()
+		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
+		return 1
 	}
 
 	client := planv1connect.NewPlanServiceClient(
 		&http.Client{},
-		addr,
+		cfg.APIURL,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(BearerInterceptor(apiKey)),
+		connect.WithInterceptors(BearerInterceptor(cfg.APIKey)),
 	)
 
 	// Parse optional --date YYYY-MM-DD flag.

@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 // ExportBuildVisible exposes buildVisible for tests.
@@ -13,7 +14,7 @@ func ExportBuildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompl
 
 // ExportNewModel creates a Model with a fake tree for unit tests.
 func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode) Model {
-	m := newModel(client, "")
+	m := newModel(client, "", config.PomodoroConfig{})
 	m.tree = tree
 	m.visible = buildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete)
 	return m

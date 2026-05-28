@@ -10,9 +10,22 @@ import (
 
 	"connectrpc.com/connect"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 const defaultAddr = "http://localhost:8080"
+
+func loadConfig() (config.Config, error) {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return config.Config{}, err
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return config.Config{}, err
+	}
+	return cfg.Resolve(), nil
+}
 
 // Run is the entrypoint for the CLI. It returns the process exit code.
 func Run(args []string) int {
@@ -72,6 +85,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plan   Daily planning (schedule tasks and events)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'todo help <command>' for command-specific help.")
+	fmt.Fprintln(w, "Config file: ~/.config/todo/config.toml (see specs/015-pomodoro-config-file/contracts/config-schema.md)")
 }
 
 func runTask(args []string) int {
@@ -80,37 +94,38 @@ func runTask(args []string) int {
 		return 0
 	}
 
-	apiKey := os.Getenv("TODO_API_KEY")
-	if apiKey == "" {
-		fmt.Fprintln(os.Stderr, "error: TODO_API_KEY is not set")
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if cfg.APIKey == "" {
+		path, _ := config.DefaultPath()
+		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
 		return 1
 	}
 
-	addr := os.Getenv("TODO_ADDR")
-	if addr == "" {
-		addr = defaultAddr
-	}
-
+	addr := cfg.APIURL
 	client := taskv1connect.NewTaskServiceClient(
 		&http.Client{},
 		addr,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(BearerInterceptor(apiKey)),
+		connect.WithInterceptors(BearerInterceptor(cfg.APIKey)),
 	)
 
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return runList(client, args)
+		return runList(client, addr, args)
 	}
 
 	switch args[0] {
 	case "add":
-		return runAdd(client, args[1:])
+		return runAdd(client, addr, args[1:])
 	case "rm":
-		return runRm(client, args[1:])
+		return runRm(client, addr, args[1:])
 	case "mod":
-		return runMod(client, args[1:])
+		return runMod(client, addr, args[1:])
 	case "complete":
-		return runComplete(client, args[1:])
+		return runComplete(client, addr, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'todo help task' for usage.")

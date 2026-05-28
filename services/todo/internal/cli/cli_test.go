@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,6 +31,7 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 
 	t.Setenv("TODO_ADDR", srv.URL)
 	t.Setenv("TODO_API_KEY", wantKey)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	code := runTask([]string{})
 	if code != 0 {
@@ -46,6 +49,8 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 func TestMissingAPIKey(t *testing.T) {
 	t.Setenv("TODO_API_KEY", "")
 	t.Setenv("TODO_ADDR", "http://localhost:19999") // won't be reached
+	// Point XDG_CONFIG_HOME at an empty temp dir so there's no config file.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	// Capture stderr.
 	origStderr := os.Stderr
@@ -66,6 +71,9 @@ func TestMissingAPIKey(t *testing.T) {
 	if !strings.Contains(output, "TODO_API_KEY") {
 		t.Errorf("stderr should mention TODO_API_KEY, got: %q", output)
 	}
+	if !strings.Contains(output, "api_key") {
+		t.Errorf("stderr should mention config file api_key, got: %q", output)
+	}
 }
 
 // --- T006: runTask dispatch tests (US2) ---
@@ -80,6 +88,7 @@ func TestRunTaskFlagArgsInvokesList(t *testing.T) {
 
 	t.Setenv("TODO_ADDR", srv.URL)
 	t.Setenv("TODO_API_KEY", "testkey")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
@@ -106,6 +115,7 @@ func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
 
 	t.Setenv("TODO_ADDR", srv.URL)
 	t.Setenv("TODO_API_KEY", "testkey")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
@@ -129,6 +139,7 @@ func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
 func TestRunTaskListSubcommandUnknown(t *testing.T) {
 	t.Setenv("TODO_API_KEY", "testkey")
 	t.Setenv("TODO_ADDR", "http://localhost:19999")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
 	oldErr := os.Stderr
@@ -214,5 +225,79 @@ func TestRunHelpUnknown(t *testing.T) {
 	}
 	if !strings.Contains(errOut, "unknown command") {
 		t.Errorf("Run(help unknown): expected 'unknown command' in stderr, got: %q", errOut)
+	}
+}
+
+// writeConfigFile writes a TOML config to a temp dir and returns its XDG_CONFIG_HOME.
+func writeConfigFile(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, "todo")
+	if err := os.MkdirAll(cfgDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return dir // this is what XDG_CONFIG_HOME should be set to
+}
+
+// TestConfigFileAPIKeyUsedWhenEnvUnset verifies config file api_key is used when env is unset.
+func TestConfigFileAPIKeyUsedWhenEnvUnset(t *testing.T) {
+	svc := newFakeTaskService()
+	mux := http.NewServeMux()
+	path, handler := taskv1connect.NewTaskServiceHandler(svc)
+
+	var gotAuth string
+	mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		handler.ServeHTTP(w, r)
+	}))
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	t.Setenv("TODO_API_KEY", "")
+	t.Setenv("TODO_ADDR", "")
+	xdgHome := writeConfigFile(t, fmt.Sprintf(`api_url = %q
+api_key = "config-key-xyz"
+`, srv.URL))
+	t.Setenv("XDG_CONFIG_HOME", xdgHome)
+
+	code := runTask([]string{})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if gotAuth != "Bearer config-key-xyz" {
+		t.Errorf("expected config-file key, got %q", gotAuth)
+	}
+}
+
+// TestEnvKeyWinsOverConfigKey verifies env var takes precedence over config file.
+func TestEnvKeyWinsOverConfigKey(t *testing.T) {
+	svc := newFakeTaskService()
+	mux := http.NewServeMux()
+	path, handler := taskv1connect.NewTaskServiceHandler(svc)
+
+	var gotAuth string
+	mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		handler.ServeHTTP(w, r)
+	}))
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	t.Setenv("TODO_API_KEY", "env-key-wins")
+	t.Setenv("TODO_ADDR", srv.URL)
+	xdgHome := writeConfigFile(t, `api_key = "config-key-should-lose"`)
+	t.Setenv("XDG_CONFIG_HOME", xdgHome)
+
+	code := runTask([]string{})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if gotAuth != "Bearer env-key-wins" {
+		t.Errorf("expected env key to win, got %q", gotAuth)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 // ---- countdown exports ----
@@ -46,6 +47,9 @@ func ExportRunCountdown(
 	return runCountdown(ctx, inner, activePom, task, completedCount)
 }
 
+// ExportPomodoroConfig re-exports config.PomodoroConfig for use in _test packages.
+type ExportPomodoroConfig = config.PomodoroConfig
+
 // ---- pom.go exports ----
 
 func ExportExecHook(cmd string) error {
@@ -66,7 +70,11 @@ func ExportRunStatusWith(
 }
 
 func ExportRunCancelWith(cancelFn func(ctx context.Context) error) int {
-	return runCancelWith(cancelFn)
+	return runCancelWith(cancelFn, config.PomodoroConfig{})
+}
+
+func ExportRunCancelWithHooks(cancelFn func(ctx context.Context) error, hooks config.PomodoroConfig) int {
+	return runCancelWith(cancelFn, hooks)
 }
 
 func ExportRunResumeWith(
@@ -75,7 +83,7 @@ func ExportRunResumeWith(
 	getTaskFn func(ctx context.Context, id int64) (*taskv1.GetTaskResponse, error),
 	countdownFn func(pom *taskv1.Pomodoro, task *taskv1.Task, completedCount int64) int,
 	now time.Time,
-	execCmd string,
+	hooks config.PomodoroConfig,
 ) int {
-	return runResumeWith(getActiveFn, completeFn, getTaskFn, countdownFn, now, execCmd)
+	return runResumeWith(getActiveFn, completeFn, getTaskFn, countdownFn, now, hooks)
 }

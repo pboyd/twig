@@ -3,28 +3,23 @@ package tui
 import (
 	"context"
 	"net/http"
-	"os"
 
 	"connectrpc.com/connect"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 const defaultAddr = "http://localhost:8080"
 
-// NewClient returns a TaskServiceClient using TODO_API_KEY and TODO_ADDR env vars.
-func NewClient() (taskv1connect.TaskServiceClient, string) {
-	apiKey := os.Getenv("TODO_API_KEY")
-	addr := os.Getenv("TODO_ADDR")
-	if addr == "" {
-		addr = defaultAddr
-	}
+// NewClient returns a TaskServiceClient using the resolved Config values.
+func NewClient(cfg config.Config) (taskv1connect.TaskServiceClient, string) {
 	client := taskv1connect.NewTaskServiceClient(
 		&http.Client{},
-		addr,
+		cfg.APIURL,
 		connect.WithSendGzip(),
-		connect.WithInterceptors(bearerInterceptor(apiKey)),
+		connect.WithInterceptors(bearerInterceptor(cfg.APIKey)),
 	)
-	return client, addr
+	return client, cfg.APIURL
 }
 
 func bearerInterceptor(apiKey string) connect.UnaryInterceptorFunc {

@@ -215,7 +215,7 @@ func newTestHarness(t *testing.T) *testHarness {
 }
 
 // runCmd runs a CLI subcommand function and captures stdout/stderr.
-func runCmd(fn func(taskv1connect.TaskServiceClient, []string) int, client taskv1connect.TaskServiceClient, args []string) (stdout, stderr string, code int) {
+func runCmd(fn func(taskv1connect.TaskServiceClient, string, []string) int, h *testHarness, args []string) (stdout, stderr string, code int) {
 	oldOut := os.Stdout
 	oldErr := os.Stderr
 
@@ -224,7 +224,7 @@ func runCmd(fn func(taskv1connect.TaskServiceClient, []string) int, client taskv
 	os.Stdout = wOut
 	os.Stderr = wErr
 
-	code = fn(client, args)
+	code = fn(h.client, h.addr, args)
 
 	wOut.Close()
 	wErr.Close()
@@ -241,7 +241,7 @@ func runCmd(fn func(taskv1connect.TaskServiceClient, []string) int, client taskv
 
 func TestAddNameOnly(t *testing.T) {
 	h := newTestHarness(t)
-	stdout, stderr, code := runCmd(runAdd, h.client, []string{"my task"})
+	stdout, stderr, code := runCmd(runAdd, h, []string{"my task"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -252,7 +252,7 @@ func TestAddNameOnly(t *testing.T) {
 
 func TestAddWithDue(t *testing.T) {
 	h := newTestHarness(t)
-	stdout, stderr, code := runCmd(runAdd, h.client, []string{"--due", "2026-06-01T17:00:00Z", "my task"})
+	stdout, stderr, code := runCmd(runAdd, h, []string{"--due", "2026-06-01T17:00:00Z", "my task"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -264,11 +264,11 @@ func TestAddWithDue(t *testing.T) {
 func TestAddWithParent(t *testing.T) {
 	h := newTestHarness(t)
 	// Create parent first
-	_, _, code := runCmd(runAdd, h.client, []string{"parent task"})
+	_, _, code := runCmd(runAdd, h, []string{"parent task"})
 	if code != 0 {
 		t.Fatal("failed to create parent")
 	}
-	stdout, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "1", "child task"})
+	stdout, stderr, code := runCmd(runAdd, h, []string{"--parent", "1", "child task"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -279,7 +279,7 @@ func TestAddWithParent(t *testing.T) {
 
 func TestAddMissingName(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runAdd, h.client, []string{})
+	_, stderr, code := runCmd(runAdd, h, []string{})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -290,7 +290,7 @@ func TestAddMissingName(t *testing.T) {
 
 func TestAddUnknownParent(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "999", "task"})
+	_, stderr, code := runCmd(runAdd, h, []string{"--parent", "999", "task"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -301,7 +301,7 @@ func TestAddUnknownParent(t *testing.T) {
 
 func TestAddMalformedDue(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runAdd, h.client, []string{"--due", "not-a-date", "task"})
+	_, stderr, code := runCmd(runAdd, h, []string{"--due", "not-a-date", "task"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -312,7 +312,7 @@ func TestAddMalformedDue(t *testing.T) {
 
 func TestAddMalformedParent(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "abc", "task"})
+	_, stderr, code := runCmd(runAdd, h, []string{"--parent", "abc", "task"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -325,7 +325,7 @@ func TestAddMalformedParent(t *testing.T) {
 
 func TestListEmpty(t *testing.T) {
 	h := newTestHarness(t)
-	stdout, stderr, code := runCmd(runList, h.client, []string{})
+	stdout, stderr, code := runCmd(runList, h, []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -337,12 +337,12 @@ func TestListEmpty(t *testing.T) {
 func TestListMultiLevel(t *testing.T) {
 	h := newTestHarness(t)
 	// Build: root1 -> child1 -> grandchild, root2
-	runCmd(runAdd, h.client, []string{"root1"})                       // id=1
-	runCmd(runAdd, h.client, []string{"root2"})                       // id=2
-	runCmd(runAdd, h.client, []string{"--parent", "1", "child1"})     // id=3
-	runCmd(runAdd, h.client, []string{"--parent", "3", "grandchild"}) // id=4
+	runCmd(runAdd, h, []string{"root1"})                       // id=1
+	runCmd(runAdd, h, []string{"root2"})                       // id=2
+	runCmd(runAdd, h, []string{"--parent", "1", "child1"})     // id=3
+	runCmd(runAdd, h, []string{"--parent", "3", "grandchild"}) // id=4
 
-	stdout, stderr, code := runCmd(runList, h.client, []string{})
+	stdout, stderr, code := runCmd(runList, h, []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -362,8 +362,8 @@ func TestListMultiLevel(t *testing.T) {
 
 func TestListNoDueDate(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"task without deadline"})
-	stdout, stderr, code := runCmd(runList, h.client, []string{})
+	runCmd(runAdd, h, []string{"task without deadline"})
+	stdout, stderr, code := runCmd(runList, h, []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -375,11 +375,11 @@ func TestListNoDueDate(t *testing.T) {
 
 func TestListSiblingsAscendingOrder(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"alpha"}) // id=1
-	runCmd(runAdd, h.client, []string{"beta"})  // id=2
-	runCmd(runAdd, h.client, []string{"gamma"}) // id=3
+	runCmd(runAdd, h, []string{"alpha"}) // id=1
+	runCmd(runAdd, h, []string{"beta"})  // id=2
+	runCmd(runAdd, h, []string{"gamma"}) // id=3
 
-	stdout, _, _ := runCmd(runList, h.client, []string{})
+	stdout, _, _ := runCmd(runList, h, []string{})
 	idx1 := strings.Index(stdout, "alpha")
 	idx2 := strings.Index(stdout, "beta")
 	idx3 := strings.Index(stdout, "gamma")
@@ -392,8 +392,8 @@ func TestListSiblingsAscendingOrder(t *testing.T) {
 
 func TestModRename(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"original"})
-	stdout, stderr, code := runCmd(runMod, h.client, []string{"1", "renamed"})
+	runCmd(runAdd, h, []string{"original"})
+	stdout, stderr, code := runCmd(runMod, h, []string{"1", "renamed"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -404,8 +404,8 @@ func TestModRename(t *testing.T) {
 
 func TestModChangeDue(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"task"})
-	_, stderr, code := runCmd(runMod, h.client, []string{"1", "--due", "2026-07-01"})
+	runCmd(runAdd, h, []string{"task"})
+	_, stderr, code := runCmd(runMod, h, []string{"1", "--due", "2026-07-01"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -413,9 +413,9 @@ func TestModChangeDue(t *testing.T) {
 
 func TestModReparent(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"}) // id=1
-	runCmd(runAdd, h.client, []string{"child"})  // id=2
-	_, stderr, code := runCmd(runMod, h.client, []string{"2", "--parent", "1"})
+	runCmd(runAdd, h, []string{"parent"}) // id=1
+	runCmd(runAdd, h, []string{"child"})  // id=2
+	_, stderr, code := runCmd(runMod, h, []string{"2", "--parent", "1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -425,11 +425,11 @@ func TestModReparent(t *testing.T) {
 func TestModUnflaggedFieldsPreserved(t *testing.T) {
 	h := newTestHarness(t)
 	// Add with due date
-	runCmd(runAdd, h.client, []string{"--due", "2026-06-01T00:00:00Z", "task"})
+	runCmd(runAdd, h, []string{"--due", "2026-06-01T00:00:00Z", "task"})
 	// Mod only the name — due should be preserved
-	runCmd(runMod, h.client, []string{"1", "renamed"})
+	runCmd(runMod, h, []string{"1", "renamed"})
 	// Check list shows due date
-	stdout, _, _ := runCmd(runList, h.client, []string{})
+	stdout, _, _ := runCmd(runList, h, []string{})
 	if !strings.Contains(stdout, "due") {
 		t.Errorf("expected due date preserved after mod: %s", stdout)
 	}
@@ -437,7 +437,7 @@ func TestModUnflaggedFieldsPreserved(t *testing.T) {
 
 func TestModUnknownID(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runMod, h.client, []string{"999", "new name"})
+	_, stderr, code := runCmd(runMod, h, []string{"999", "new name"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -448,8 +448,8 @@ func TestModUnknownID(t *testing.T) {
 
 func TestModSelfAncestorCycle(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"task"}) // id=1
-	_, stderr, code := runCmd(runMod, h.client, []string{"1", "--parent", "1"})
+	runCmd(runAdd, h, []string{"task"}) // id=1
+	_, stderr, code := runCmd(runMod, h, []string{"1", "--parent", "1"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -462,8 +462,8 @@ func TestModSelfAncestorCycle(t *testing.T) {
 
 func TestRmLeaf(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"task"})
-	stdout, stderr, code := runCmd(runRm, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"task"})
+	stdout, stderr, code := runCmd(runRm, h, []string{"1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -474,14 +474,14 @@ func TestRmLeaf(t *testing.T) {
 
 func TestRmParentCascades(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"})                 // id=1
-	runCmd(runAdd, h.client, []string{"--parent", "1", "child"}) // id=2
-	_, _, code := runCmd(runRm, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"parent"})                 // id=1
+	runCmd(runAdd, h, []string{"--parent", "1", "child"}) // id=2
+	_, _, code := runCmd(runRm, h, []string{"1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0 removing parent")
 	}
 	// Both should be gone
-	stdout, _, _ := runCmd(runList, h.client, []string{})
+	stdout, _, _ := runCmd(runList, h, []string{})
 	if strings.Contains(stdout, "parent") || strings.Contains(stdout, "child") {
 		t.Errorf("expected both deleted, got: %s", stdout)
 	}
@@ -489,7 +489,7 @@ func TestRmParentCascades(t *testing.T) {
 
 func TestRmUnknownID(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runRm, h.client, []string{"999"})
+	_, stderr, code := runCmd(runRm, h, []string{"999"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -500,7 +500,7 @@ func TestRmUnknownID(t *testing.T) {
 
 func TestRmMalformedID(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runRm, h.client, []string{"abc"})
+	_, stderr, code := runCmd(runRm, h, []string{"abc"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -513,8 +513,8 @@ func TestRmMalformedID(t *testing.T) {
 
 func TestCompleteLeaf(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"leaf task"}) // id=1
-	stdout, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"leaf task"}) // id=1
+	stdout, stderr, code := runCmd(runComplete, h, []string{"1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -525,11 +525,11 @@ func TestCompleteLeaf(t *testing.T) {
 
 func TestCompleteIdempotent(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"leaf"}) // id=1
-	runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"leaf"}) // id=1
+	runCmd(runComplete, h, []string{"1"})
 	// Small sleep so the second call timestamp is definitely after the first.
 	time.Sleep(5 * time.Millisecond)
-	stdout, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	stdout, stderr, code := runCmd(runComplete, h, []string{"1"})
 	if code != 0 {
 		t.Fatalf("expected exit 0 on re-complete, got %d; stderr: %s", code, stderr)
 	}
@@ -540,7 +540,7 @@ func TestCompleteIdempotent(t *testing.T) {
 
 func TestCompleteMalformedID(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runComplete, h.client, []string{"abc"})
+	_, stderr, code := runCmd(runComplete, h, []string{"abc"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -551,7 +551,7 @@ func TestCompleteMalformedID(t *testing.T) {
 
 func TestCompleteNotFound(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runComplete, h.client, []string{"999"})
+	_, stderr, code := runCmd(runComplete, h, []string{"999"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -562,9 +562,9 @@ func TestCompleteNotFound(t *testing.T) {
 
 func TestCompleteBlockedByIncompleteDescendant(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"})                 // id=1
-	runCmd(runAdd, h.client, []string{"--parent", "1", "child"}) // id=2
-	_, stderr, code := runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"parent"})                 // id=1
+	runCmd(runAdd, h, []string{"--parent", "1", "child"}) // id=2
+	_, stderr, code := runCmd(runComplete, h, []string{"1"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -577,7 +577,7 @@ func TestCompleteBlockedByIncompleteDescendant(t *testing.T) {
 
 func TestListFlagsMutuallyExclusive(t *testing.T) {
 	h := newTestHarness(t)
-	_, stderr, code := runCmd(runList, h.client, []string{"--completed", "--all"})
+	_, stderr, code := runCmd(runList, h, []string{"--completed", "--all"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -588,11 +588,11 @@ func TestListFlagsMutuallyExclusive(t *testing.T) {
 
 func TestListDefaultHidesCompleted(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"done"})    // id=1
-	runCmd(runAdd, h.client, []string{"pending"}) // id=2
-	runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"done"})    // id=1
+	runCmd(runAdd, h, []string{"pending"}) // id=2
+	runCmd(runComplete, h, []string{"1"})
 
-	stdout, stderr, code := runCmd(runList, h.client, []string{})
+	stdout, stderr, code := runCmd(runList, h, []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -606,11 +606,11 @@ func TestListDefaultHidesCompleted(t *testing.T) {
 
 func TestListCompletedFlag(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"done"})    // id=1
-	runCmd(runAdd, h.client, []string{"pending"}) // id=2
-	runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"done"})    // id=1
+	runCmd(runAdd, h, []string{"pending"}) // id=2
+	runCmd(runComplete, h, []string{"1"})
 
-	stdout, stderr, code := runCmd(runList, h.client, []string{"--completed"})
+	stdout, stderr, code := runCmd(runList, h, []string{"--completed"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -624,11 +624,11 @@ func TestListCompletedFlag(t *testing.T) {
 
 func TestListAllFlag(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"done"})    // id=1
-	runCmd(runAdd, h.client, []string{"pending"}) // id=2
-	runCmd(runComplete, h.client, []string{"1"})
+	runCmd(runAdd, h, []string{"done"})    // id=1
+	runCmd(runAdd, h, []string{"pending"}) // id=2
+	runCmd(runComplete, h, []string{"1"})
 
-	stdout, stderr, code := runCmd(runList, h.client, []string{"--all"})
+	stdout, stderr, code := runCmd(runList, h, []string{"--all"})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
 	}
@@ -639,11 +639,11 @@ func TestListAllFlag(t *testing.T) {
 
 func TestListNoCheckboxPrefix(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"incomplete"}) // id=1
-	runCmd(runAdd, h.client, []string{"complete"})   // id=2
-	runCmd(runComplete, h.client, []string{"2"})
+	runCmd(runAdd, h, []string{"incomplete"}) // id=1
+	runCmd(runAdd, h, []string{"complete"})   // id=2
+	runCmd(runComplete, h, []string{"2"})
 
-	stdout, _, _ := runCmd(runList, h.client, []string{"--all"})
+	stdout, _, _ := runCmd(runList, h, []string{"--all"})
 	if strings.Contains(stdout, "[ ]") || strings.Contains(stdout, "[x]") {
 		t.Errorf("checkbox prefixes must not appear in output: %s", stdout)
 	}
@@ -655,9 +655,9 @@ func TestListNoCheckboxPrefix(t *testing.T) {
 
 func TestCompleteParentBlockedCLI(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"}) // id=1
-	runCmd(runComplete, h.client, []string{"1"})
-	_, stderr, code := runCmd(runAdd, h.client, []string{"--parent", "1", "late child"})
+	runCmd(runAdd, h, []string{"parent"}) // id=1
+	runCmd(runComplete, h, []string{"1"})
+	_, stderr, code := runCmd(runAdd, h, []string{"--parent", "1", "late child"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -668,10 +668,10 @@ func TestCompleteParentBlockedCLI(t *testing.T) {
 
 func TestModCompleteParentBlockedCLI(t *testing.T) {
 	h := newTestHarness(t)
-	runCmd(runAdd, h.client, []string{"parent"}) // id=1
-	runCmd(runAdd, h.client, []string{"orphan"}) // id=2
-	runCmd(runComplete, h.client, []string{"1"})
-	_, stderr, code := runCmd(runMod, h.client, []string{"2", "--parent", "1"})
+	runCmd(runAdd, h, []string{"parent"}) // id=1
+	runCmd(runAdd, h, []string{"orphan"}) // id=2
+	runCmd(runComplete, h, []string{"1"})
+	_, stderr, code := runCmd(runMod, h, []string{"2", "--parent", "1"})
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
@@ -773,10 +773,10 @@ func TestModArgParsing(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHarness(t)
-			runCmd(runAdd, h.client, []string{"original"}) // id=1
-			runCmd(runAdd, h.client, []string{"second"})   // id=2
+			runCmd(runAdd, h, []string{"original"}) // id=1
+			runCmd(runAdd, h, []string{"second"})   // id=2
 
-			_, stderr, code := runCmd(runMod, h.client, tc.args)
+			_, stderr, code := runCmd(runMod, h, tc.args)
 			if code != tc.wantCode {
 				t.Fatalf("exit code %d, want %d; stderr: %s", code, tc.wantCode, stderr)
 			}

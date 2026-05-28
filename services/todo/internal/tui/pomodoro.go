@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
+	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
 // pomodoroRequestMsg is dispatched by startPomodoroCmd / resumePomodoroCmd so
@@ -50,9 +51,9 @@ func resumePomodoroCmd() tea.Cmd {
 
 // execPomodoroStart yields the terminal to RunPomodoroForTask and dispatches
 // pomodoroDoneMsg when the countdown finishes.
-func execPomodoroStart(client taskv1connect.TaskServiceClient, taskID int64) tea.Cmd {
+func execPomodoroStart(client taskv1connect.TaskServiceClient, pomConfig config.PomodoroConfig, taskID int64) tea.Cmd {
 	return tea.Exec(&funcExecCommand{fn: func() error {
-		return cli.RunPomodoroForTask(context.Background(), client, taskID)
+		return cli.RunPomodoroForTask(context.Background(), client, taskID, pomConfig)
 	}}, func(err error) tea.Msg {
 		return pomodoroDoneMsg{err: err}
 	})
@@ -60,9 +61,9 @@ func execPomodoroStart(client taskv1connect.TaskServiceClient, taskID int64) tea
 
 // execPomodoroResume yields the terminal to ResumeBackgroundedPomodoro and
 // dispatches pomodoroDoneMsg when the countdown finishes.
-func execPomodoroResume(client taskv1connect.TaskServiceClient) tea.Cmd {
+func execPomodoroResume(client taskv1connect.TaskServiceClient, pomConfig config.PomodoroConfig) tea.Cmd {
 	return tea.Exec(&funcExecCommand{fn: func() error {
-		return cli.ResumeBackgroundedPomodoro(context.Background(), client)
+		return cli.ResumeBackgroundedPomodoro(context.Background(), client, pomConfig)
 	}}, func(err error) tea.Msg {
 		return pomodoroDoneMsg{err: err}
 	})
