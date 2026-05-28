@@ -931,6 +931,32 @@ func TestMove_MKeyWithEmptyListIsNoOp(t *testing.T) {
 	}
 }
 
+// TestHelp_AnyKeyDismisses verifies that while the help pane is open, any key
+// press returns the model to modeList.
+func TestHelp_AnyKeyDismisses(t *testing.T) {
+	keys := []struct {
+		name string
+		msg  tea.KeyMsg
+	}{
+		{"letter x", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}},
+		{"question mark", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}},
+		{"escape", tea.KeyMsg{Type: tea.KeyEsc}},
+		{"arrow up", tea.KeyMsg{Type: tea.KeyUp}},
+		{"space", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}},
+	}
+	for _, tc := range keys {
+		t.Run(tc.name, func(t *testing.T) {
+			m := buildTestModel()
+			m.mode = modeHelp
+			next, _ := m.Update(tc.msg)
+			nm := next.(Model)
+			if nm.mode != modeList {
+				t.Errorf("expected modeList after %s, got %v", tc.name, nm.mode)
+			}
+		})
+	}
+}
+
 // TestMove_SuccessfulResultReturnsModeList checks that a successful moveTaskResultMsg
 // resets the dialog and refreshes the list.
 func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {

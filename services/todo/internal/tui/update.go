@@ -448,11 +448,8 @@ func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Help), key.Matches(msg, m.keys.Cancel):
-		m.mode = modeList
-	}
+func (m Model) handleHelpKey(_ tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.mode = modeList
 	return m, nil
 }
 
