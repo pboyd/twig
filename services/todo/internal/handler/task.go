@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -105,7 +106,7 @@ func (t *Task) CreateTask(
 		}
 		if parentCompletion.Valid {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("cannot add a subtask under task %d: parent is complete", *req.Msg.ParentId))
+				fmt.Errorf("Task %d is already crossed off — no new sub-tasks for a finished job.", *req.Msg.ParentId))
 		}
 		params.ParentID = pgtype.Int8{Int64: *req.Msg.ParentId, Valid: true}
 	}
@@ -241,7 +242,7 @@ func (t *Task) UpdateTask(
 		}
 		if parentCompletion.Valid {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("cannot move task under task %d: parent is complete", newParentID))
+				fmt.Errorf("Task %d is already crossed off — nothing moves under a finished job.", newParentID))
 		}
 		params.ParentID = pgtype.Int8{Int64: newParentID, Valid: true}
 	}
@@ -288,7 +289,7 @@ func (t *Task) CompleteTask(
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("incomplete descendants: %v", ids))
+			fmt.Errorf("Whoa there — sub-tasks %s still need doing first.", joinIDs(ids)))
 	}
 
 	row, err := t.Queries.CompleteTask(ctx, db.CompleteTaskParams{ID: req.Msg.Id, UserID: userID})
@@ -299,6 +300,15 @@ func (t *Task) CompleteTask(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&taskv1.CompleteTaskResponse{Task: dbTaskToProto(row)}), nil
+}
+
+// joinIDs renders a slice of int64 IDs as a comma-separated string (e.g. "3, 4, 5").
+func joinIDs(ids []int64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (t *Task) UncompleteTask(
@@ -322,7 +332,7 @@ func (t *Task) UncompleteTask(
 		}
 		if parentCompletion.Valid {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("cannot uncomplete: parent task %d is complete", task.ParentID.Int64))
+				fmt.Errorf("Its parent (task %d) is still done. Reopen that one first.", task.ParentID.Int64))
 		}
 	}
 

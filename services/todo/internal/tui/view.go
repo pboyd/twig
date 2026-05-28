@@ -262,7 +262,7 @@ func (m Model) renderDetailPane(width int) string {
 
 func (m Model) renderStatus() string {
 	if m.err != nil {
-		return errorStyle.Render("error: " + m.err.Error())
+		return errorStyle.Render("error: " + cli.UserMessage(m.err))
 	}
 	return m.help.View(m.keys)
 }

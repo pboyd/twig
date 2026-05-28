@@ -294,7 +294,7 @@ func printPlanError(err error) int {
 	case connect.CodeNotFound:
 		fmt.Fprintln(os.Stderr, "not found:", err)
 	case connect.CodeFailedPrecondition, connect.CodeInvalidArgument:
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, UserMessage(err))
 	default:
 		fmt.Fprintln(os.Stderr, "error:", err)
 	}

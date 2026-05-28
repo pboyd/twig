@@ -48,7 +48,7 @@ func (s *fakeTaskService) CreateTask(_ context.Context, req *connect.Request[tas
 		}
 		if parent.CompletedAt != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("cannot add a subtask under task %d: parent is complete", *req.Msg.ParentId))
+				fmt.Errorf("Task %d is already crossed off — no new sub-tasks for a finished job.", *req.Msg.ParentId))
 		}
 	}
 
@@ -114,7 +114,7 @@ func (s *fakeTaskService) UpdateTask(_ context.Context, req *connect.Request[tas
 		}
 		if parent := s.tasks[*req.Msg.ParentId]; parent != nil && parent.CompletedAt != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("cannot move task under task %d: parent is complete", *req.Msg.ParentId))
+				fmt.Errorf("Task %d is already crossed off — nothing moves under a finished job.", *req.Msg.ParentId))
 		}
 	}
 
@@ -151,7 +151,7 @@ func (s *fakeTaskService) CompleteTask(_ context.Context, req *connect.Request[t
 	for _, t := range s.tasks {
 		if t.CompletedAt == nil && s.isDescendant(req.Msg.Id, t.Id) {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("incomplete descendants: [%d]", t.Id))
+				fmt.Errorf("Whoa there — sub-tasks %d still need doing first.", t.Id))
 		}
 	}
 
@@ -568,8 +568,8 @@ func TestCompleteBlockedByIncompleteDescendant(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "incomplete descendants") {
-		t.Errorf("expected 'incomplete descendants' message, got: %s", stderr)
+	if !strings.Contains(stderr, "still need doing first") {
+		t.Errorf("expected 'still need doing first' message, got: %s", stderr)
 	}
 }
 
@@ -661,8 +661,8 @@ func TestCompleteParentBlockedCLI(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "parent is complete") {
-		t.Errorf("expected 'parent is complete' message, got: %s", stderr)
+	if !strings.Contains(stderr, "already crossed off") {
+		t.Errorf("expected 'already crossed off' message, got: %s", stderr)
 	}
 }
 
@@ -675,8 +675,8 @@ func TestModCompleteParentBlockedCLI(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "parent is complete") {
-		t.Errorf("expected 'parent is complete' message, got: %s", stderr)
+	if !strings.Contains(stderr, "already crossed off") {
+		t.Errorf("expected 'already crossed off' message, got: %s", stderr)
 	}
 }
 

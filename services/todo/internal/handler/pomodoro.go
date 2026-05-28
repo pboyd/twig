@@ -93,7 +93,7 @@ func (t *Task) CancelPomodoro(
 	userID := auth.UserID(ctx)
 	p, err := t.Queries.CancelActivePomodoro(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no active pomodoro"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("There's no pomodoro ticking. Start one first."))
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -108,7 +108,7 @@ func (t *Task) CompletePomodoro(
 	userID := auth.UserID(ctx)
 	p, err := t.Queries.CompleteActivePomodoro(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no active pomodoro"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("There's no pomodoro ticking. Start one first."))
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

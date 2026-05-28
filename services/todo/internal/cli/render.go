@@ -28,6 +28,16 @@ func mapError(err error, addr string) string {
 	return fmt.Sprintf("cannot reach backend at %s: %v", addr, err)
 }
 
+// UserMessage returns the human-facing text of err, stripping the connect code
+// prefix for connect errors (e.g. "failed_precondition: …" → "…").
+func UserMessage(err error) string {
+	var connectErr *connect.Error
+	if errors.As(err, &connectErr) {
+		return connectErr.Message()
+	}
+	return err.Error()
+}
+
 // ParseDue parses a --due flag value. Accepts RFC 3339 or bare YYYY-MM-DD
 // (interpreted as 00:00:00Z). Returns a usage error on failure.
 func ParseDue(v string) (*timestamppb.Timestamp, error) {

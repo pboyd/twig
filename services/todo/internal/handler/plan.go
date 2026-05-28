@@ -185,7 +185,7 @@ func (p *Plan) AddPlanEvent(
 	}
 	if conflictID, overlaps := checkOverlap(locked, req.Msg.StartMinute, dur, 0); overlaps {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("overlaps with existing entry %d", conflictID))
+			fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
 	}
 
 	nextID, err := txq.NextPlanEntryId(ctx, db.NextPlanEntryIdParams{UserID: userID, Day: day})
@@ -274,7 +274,7 @@ func (p *Plan) AddPlanTask(
 	}
 	if conflictID, overlaps := checkOverlap(locked, req.Msg.StartMinute, dur, 0); overlaps {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("overlaps with existing entry %d", conflictID))
+			fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
 	}
 
 	nextID, err := txq.NextPlanEntryId(ctx, db.NextPlanEntryIdParams{UserID: userID, Day: day})
@@ -405,7 +405,7 @@ func (p *Plan) MovePlanEntry(
 	}
 	if conflictID, overlaps := checkOverlap(locked, req.Msg.StartMinute, dur, req.Msg.Id); overlaps {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("overlaps with existing entry %d", conflictID))
+			fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
 	}
 
 	row, err := txq.UpdatePlanEntryTime(ctx, db.UpdatePlanEntryTimeParams{

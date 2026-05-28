@@ -123,7 +123,7 @@ func TestRunStatus_StaleActive(t *testing.T) {
 
 func TestRunCancel_NoActive(t *testing.T) {
 	code := cli.ExportRunCancelWith(func(_ context.Context) error {
-		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no active pomodoro"))
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("There's no pomodoro ticking. Start one first."))
 	})
 	if code == 0 {
 		t.Error("expected non-zero exit for no active pomodoro")
