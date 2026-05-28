@@ -842,3 +842,32 @@ func TestComplete_RefreshClearsPendingComplete(t *testing.T) {
 		t.Error("pendingComplete should be nil after Refresh key")
 	}
 }
+
+// TestUncomplete_SpaceOnCompletedTaskDoesNotSetPendingComplete verifies that
+// pressing Space on an already-completed task fires uncompleteTaskCmd and does
+// NOT set pendingComplete (that field is only used for the complete direction).
+func TestUncomplete_SpaceOnCompletedTaskDoesNotSetPendingComplete(t *testing.T) {
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "a", CompletedAt: now},
+		{Id: 2, Name: "b"},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	m.showCompleted = true
+	m.visible = buildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete)
+
+	m.cursor = 0 // task id=1, already completed
+
+	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	next, cmd := m.Update(spaceMsg)
+	m = next.(Model)
+
+	if m.pendingComplete != nil {
+		t.Errorf("pendingComplete must be nil when uncompleting; got %v", *m.pendingComplete)
+	}
+	// A Cmd must be returned (the uncompleteTaskCmd goroutine).
+	if cmd == nil {
+		t.Error("expected a Cmd to be returned for uncomplete, got nil")
+	}
+}

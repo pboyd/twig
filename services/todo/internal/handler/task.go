@@ -301,6 +301,41 @@ func (t *Task) CompleteTask(
 	return connect.NewResponse(&taskv1.CompleteTaskResponse{Task: dbTaskToProto(row)}), nil
 }
 
+func (t *Task) UncompleteTask(
+	ctx context.Context,
+	req *connect.Request[taskv1.UncompleteTaskRequest],
+) (*connect.Response[taskv1.UncompleteTaskResponse], error) {
+	userID := auth.UserID(ctx)
+
+	task, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	if task.ParentID.Valid {
+		parentCompletion, err := t.Queries.GetParentCompletion(ctx, db.GetParentCompletionParams{ID: task.ParentID.Int64, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if parentCompletion.Valid {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("cannot uncomplete: parent task %d is complete", task.ParentID.Int64))
+		}
+	}
+
+	row, err := t.Queries.UncompleteTask(ctx, db.UncompleteTaskParams{ID: req.Msg.Id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&taskv1.UncompleteTaskResponse{Task: dbTaskToProto(row)}), nil
+}
+
 func (t *Task) DeleteTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.DeleteTaskRequest],

@@ -119,6 +119,16 @@ func completeTaskCmd(client taskv1connect.TaskServiceClient, id int64) tea.Cmd {
 	}
 }
 
+func uncompleteTaskCmd(client taskv1connect.TaskServiceClient, id int64) tea.Cmd {
+	return func() tea.Msg {
+		_, err := client.UncompleteTask(context.Background(), connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: id}))
+		if err != nil {
+			return refreshedMsg{err: err}
+		}
+		return fetchAfterMutation(client, id)
+	}
+}
+
 func setEstimateCmd(client taskv1connect.TaskServiceClient, id int64, estimate int32) tea.Cmd {
 	return func() tea.Msg {
 		_, err := client.SetEstimate(context.Background(), connect.NewRequest(&taskv1.SetEstimateRequest{
@@ -336,10 +346,15 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Complete):
 		if len(m.visible) > 0 {
-			id := m.visible[m.cursor].node.Task.Id
-			m.pendingComplete = &id
+			node := m.visible[m.cursor].node
+			id := node.Task.Id
 			m.err = nil
-			return m, completeTaskCmd(m.client, id)
+			if node.Task.GetCompletedAt() == nil {
+				m.pendingComplete = &id
+				return m, completeTaskCmd(m.client, id)
+			}
+			m.pendingComplete = nil
+			return m, uncompleteTaskCmd(m.client, id)
 		}
 
 	case key.Matches(msg, m.keys.Refresh):

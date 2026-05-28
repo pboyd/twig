@@ -28,6 +28,12 @@ SET completed_at = COALESCE(completed_at, NOW())
 WHERE id = $1 AND user_id = $2
 RETURNING *;
 
+-- name: UncompleteTask :one
+UPDATE tasks
+SET completed_at = NULL
+WHERE id = $1 AND user_id = $2
+RETURNING *;
+
 -- name: HasIncompleteDescendants :one
 WITH RECURSIVE descendants AS (
     SELECT tasks.id, tasks.completed_at

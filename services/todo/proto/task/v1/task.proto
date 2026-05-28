@@ -39,6 +39,14 @@ service TaskService {
   //   FailedPrecondition — the task has at least one incomplete descendant
   rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
 
+  // UncompleteTask clears completed_at, marking the task incomplete again.
+  // Idempotent on already-incomplete tasks.
+  //
+  // Errors:
+  //   NotFound           — no task with the given id for this user
+  //   FailedPrecondition — the task's parent is complete
+  rpc UncompleteTask(UncompleteTaskRequest) returns (UncompleteTaskResponse);
+
   // SetEstimate overwrites a task's estimate.
   rpc SetEstimate(SetEstimateRequest) returns (SetEstimateResponse);
 
@@ -93,6 +101,14 @@ message CompleteTaskRequest {
 message CompleteTaskResponse {
   // The task in its post-completion state. For a task that was already
   // complete, this is the unchanged row.
+  Task task = 1;
+}
+
+message UncompleteTaskRequest {
+  int64 id = 1;
+}
+
+message UncompleteTaskResponse {
   Task task = 1;
 }
 

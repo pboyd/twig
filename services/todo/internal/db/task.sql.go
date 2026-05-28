@@ -275,6 +275,34 @@ func (q *Queries) TaskExists(ctx context.Context, arg TaskExistsParams) (bool, e
 	return exists, err
 }
 
+const uncompleteTask = `-- name: UncompleteTask :one
+UPDATE tasks
+SET completed_at = NULL
+WHERE id = $1 AND user_id = $2
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate
+`
+
+type UncompleteTaskParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) UncompleteTask(ctx context.Context, arg UncompleteTaskParams) (Task, error) {
+	row := q.db.QueryRow(ctx, uncompleteTask, arg.ID, arg.UserID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Due,
+		&i.ParentID,
+		&i.UserID,
+		&i.CompletedAt,
+		&i.Estimate,
+	)
+	return i, err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
 SET name = $2, description = $3, due = $4, parent_id = $5

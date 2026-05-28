@@ -687,6 +687,81 @@ func TestCompleteTask_Integration(t *testing.T) {
 	})
 }
 
+func TestUncompleteTask_Integration(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Create and complete a leaf task to use in sub-tests.
+	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "leaf"}))
+	if err != nil {
+		t.Fatalf("setup CreateTask: %v", err)
+	}
+	leafID := resp.Msg.Task.Id
+	if _, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: leafID})); err != nil {
+		t.Fatalf("setup CompleteTask: %v", err)
+	}
+
+	t.Run("clears completed_at", func(t *testing.T) {
+		ur, err := h.UncompleteTask(ctx, connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: leafID}))
+		if err != nil {
+			t.Fatalf("UncompleteTask: %v", err)
+		}
+		if ur.Msg.Task.CompletedAt != nil {
+			t.Errorf("expected completed_at nil, got %v", ur.Msg.Task.CompletedAt)
+		}
+	})
+
+	t.Run("idempotent on already-incomplete task", func(t *testing.T) {
+		// leaf is now incomplete from the previous sub-test.
+		_, err := h.UncompleteTask(ctx, connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: leafID}))
+		if err != nil {
+			t.Fatalf("UncompleteTask on incomplete task: %v", err)
+		}
+	})
+
+	t.Run("not found for unknown id", func(t *testing.T) {
+		_, err := h.UncompleteTask(ctx, connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: 999999}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("FailedPrecondition when parent is complete", func(t *testing.T) {
+		parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent"}))
+		if err != nil {
+			t.Fatalf("create parent: %v", err)
+		}
+		parentID := parentResp.Msg.Task.Id
+		childResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+			Name:     "child",
+			ParentId: &parentID,
+		}))
+		if err != nil {
+			t.Fatalf("create child: %v", err)
+		}
+		childID := childResp.Msg.Task.Id
+		if _, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: childID})); err != nil {
+			t.Fatalf("complete child: %v", err)
+		}
+		if _, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: parentID})); err != nil {
+			t.Fatalf("complete parent: %v", err)
+		}
+
+		_, err = h.UncompleteTask(ctx, connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: childID}))
+		if err == nil {
+			t.Fatal("expected FailedPrecondition, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeFailedPrecondition {
+			t.Errorf("expected CodeFailedPrecondition, got %v", err)
+		}
+	})
+}
+
 func TestCreateTask_CompleteParentRejected(t *testing.T) {
 	h, userID := newTestHandler(t)
 	ctx := ctxWithUser(userID)

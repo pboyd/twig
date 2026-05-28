@@ -52,6 +52,9 @@ const (
 	// TaskServiceCompleteTaskProcedure is the fully-qualified name of the TaskService's CompleteTask
 	// RPC.
 	TaskServiceCompleteTaskProcedure = "/task.v1.TaskService/CompleteTask"
+	// TaskServiceUncompleteTaskProcedure is the fully-qualified name of the TaskService's
+	// UncompleteTask RPC.
+	TaskServiceUncompleteTaskProcedure = "/task.v1.TaskService/UncompleteTask"
 	// TaskServiceSetEstimateProcedure is the fully-qualified name of the TaskService's SetEstimate RPC.
 	TaskServiceSetEstimateProcedure = "/task.v1.TaskService/SetEstimate"
 	// TaskServiceStartPomodoroProcedure is the fully-qualified name of the TaskService's StartPomodoro
@@ -90,6 +93,14 @@ type TaskServiceClient interface {
 	//	NotFound          — no task exists with the given id (for this user)
 	//	FailedPrecondition — the task has at least one incomplete descendant
 	CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error)
+	// UncompleteTask clears completed_at, marking the task incomplete again.
+	// Idempotent on already-incomplete tasks.
+	//
+	// Errors:
+	//
+	//	NotFound           — no task with the given id for this user
+	//	FailedPrecondition — the task's parent is complete
+	UncompleteTask(context.Context, *connect.Request[v1.UncompleteTaskRequest]) (*connect.Response[v1.UncompleteTaskResponse], error)
 	// SetEstimate overwrites a task's estimate.
 	SetEstimate(context.Context, *connect.Request[v1.SetEstimateRequest]) (*connect.Response[v1.SetEstimateResponse], error)
 	// StartPomodoro creates a new active pomodoro for the calling user
@@ -150,6 +161,12 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(taskServiceMethods.ByName("CompleteTask")),
 			connect.WithClientOptions(opts...),
 		),
+		uncompleteTask: connect.NewClient[v1.UncompleteTaskRequest, v1.UncompleteTaskResponse](
+			httpClient,
+			baseURL+TaskServiceUncompleteTaskProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("UncompleteTask")),
+			connect.WithClientOptions(opts...),
+		),
 		setEstimate: connect.NewClient[v1.SetEstimateRequest, v1.SetEstimateResponse](
 			httpClient,
 			baseURL+TaskServiceSetEstimateProcedure,
@@ -191,6 +208,7 @@ type taskServiceClient struct {
 	updateTask        *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
 	deleteTask        *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
 	completeTask      *connect.Client[v1.CompleteTaskRequest, v1.CompleteTaskResponse]
+	uncompleteTask    *connect.Client[v1.UncompleteTaskRequest, v1.UncompleteTaskResponse]
 	setEstimate       *connect.Client[v1.SetEstimateRequest, v1.SetEstimateResponse]
 	startPomodoro     *connect.Client[v1.StartPomodoroRequest, v1.StartPomodoroResponse]
 	cancelPomodoro    *connect.Client[v1.CancelPomodoroRequest, v1.CancelPomodoroResponse]
@@ -226,6 +244,11 @@ func (c *taskServiceClient) DeleteTask(ctx context.Context, req *connect.Request
 // CompleteTask calls task.v1.TaskService.CompleteTask.
 func (c *taskServiceClient) CompleteTask(ctx context.Context, req *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error) {
 	return c.completeTask.CallUnary(ctx, req)
+}
+
+// UncompleteTask calls task.v1.TaskService.UncompleteTask.
+func (c *taskServiceClient) UncompleteTask(ctx context.Context, req *connect.Request[v1.UncompleteTaskRequest]) (*connect.Response[v1.UncompleteTaskResponse], error) {
+	return c.uncompleteTask.CallUnary(ctx, req)
 }
 
 // SetEstimate calls task.v1.TaskService.SetEstimate.
@@ -275,6 +298,14 @@ type TaskServiceHandler interface {
 	//	NotFound          — no task exists with the given id (for this user)
 	//	FailedPrecondition — the task has at least one incomplete descendant
 	CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error)
+	// UncompleteTask clears completed_at, marking the task incomplete again.
+	// Idempotent on already-incomplete tasks.
+	//
+	// Errors:
+	//
+	//	NotFound           — no task with the given id for this user
+	//	FailedPrecondition — the task's parent is complete
+	UncompleteTask(context.Context, *connect.Request[v1.UncompleteTaskRequest]) (*connect.Response[v1.UncompleteTaskResponse], error)
 	// SetEstimate overwrites a task's estimate.
 	SetEstimate(context.Context, *connect.Request[v1.SetEstimateRequest]) (*connect.Response[v1.SetEstimateResponse], error)
 	// StartPomodoro creates a new active pomodoro for the calling user
@@ -331,6 +362,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(taskServiceMethods.ByName("CompleteTask")),
 		connect.WithHandlerOptions(opts...),
 	)
+	taskServiceUncompleteTaskHandler := connect.NewUnaryHandler(
+		TaskServiceUncompleteTaskProcedure,
+		svc.UncompleteTask,
+		connect.WithSchema(taskServiceMethods.ByName("UncompleteTask")),
+		connect.WithHandlerOptions(opts...),
+	)
 	taskServiceSetEstimateHandler := connect.NewUnaryHandler(
 		TaskServiceSetEstimateProcedure,
 		svc.SetEstimate,
@@ -375,6 +412,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 			taskServiceDeleteTaskHandler.ServeHTTP(w, r)
 		case TaskServiceCompleteTaskProcedure:
 			taskServiceCompleteTaskHandler.ServeHTTP(w, r)
+		case TaskServiceUncompleteTaskProcedure:
+			taskServiceUncompleteTaskHandler.ServeHTTP(w, r)
 		case TaskServiceSetEstimateProcedure:
 			taskServiceSetEstimateHandler.ServeHTTP(w, r)
 		case TaskServiceStartPomodoroProcedure:
@@ -416,6 +455,10 @@ func (UnimplementedTaskServiceHandler) DeleteTask(context.Context, *connect.Requ
 
 func (UnimplementedTaskServiceHandler) CompleteTask(context.Context, *connect.Request[v1.CompleteTaskRequest]) (*connect.Response[v1.CompleteTaskResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.CompleteTask is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) UncompleteTask(context.Context, *connect.Request[v1.UncompleteTaskRequest]) (*connect.Response[v1.UncompleteTaskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.UncompleteTask is not implemented"))
 }
 
 func (UnimplementedTaskServiceHandler) SetEstimate(context.Context, *connect.Request[v1.SetEstimateRequest]) (*connect.Response[v1.SetEstimateResponse], error) {
