@@ -41,7 +41,7 @@ All major decisions were settled in a prior brainstorming session; this document
 ## R7. Status-area layout (one line → two lines)
 
 - **Decision**: While `m.pom != nil`, the bottom status area renders two lines: a pomodoro line (`🍅 mm:ss · <task>  [x] cancel`, or the completion banner) above the existing help/error line. A `statusHeight()` helper returns 1 or 2 and feeds the pane height math (`m.height - 3` styled / `maxLines := m.height - 2` plain) in every view function so panes shrink by one row instead of overflowing. Emoji/color are gated by `m.styled` for legible plain-terminal output.
-- **Rationale**: Satisfies FR-002, FR-004, the "plain terminals" edge case, and keeps the timer visible across all modes (list/edit/move/help) since the status area is shared by every view function.
+- **Rationale**: Satisfies FR-002, FR-004, and the "plain terminals" edge case. The status area is shared by the list/edit/move view functions, so the timer stays visible across those modes. The full-screen help overlay (`viewHelp`) does not use the shared status area and is exempt per FR-002 (it is a whole-screen, any-key-to-dismiss overlay).
 - **Alternatives considered**: A fixed two-line status area even when idle — rejected to avoid permanently shrinking the panes when no pomodoro is running.
 
 ## R8. Quit guard

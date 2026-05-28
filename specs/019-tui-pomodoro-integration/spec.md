@@ -91,12 +91,12 @@ A user with a running pomodoro tries to quit the TUI. Rather than silently quitt
 ### Functional Requirements
 
 - **FR-001**: The TUI MUST allow the user to start a pomodoro on the selected task and MUST display a live countdown for the active pomodoro without leaving or obscuring the task view.
-- **FR-002**: The running timer MUST update at least once per second and MUST remain visible across all interface modes (task list, edit/new forms, move, help).
+- **FR-002**: The running timer MUST update at least once per second and MUST remain visible in the task-list, edit/new-form, and move views. The transient full-screen help overlay is exempt: it covers the whole screen and is dismissed by any key, so the timer need not be shown there.
 - **FR-003**: While a pomodoro is running, all existing task interactions (navigate, expand/collapse, edit, create, delete, complete, move, set estimate, refresh, filter, help) MUST remain fully functional.
 - **FR-004**: The timer MUST be shown in the bottom status area; while a pomodoro is active the status area MAY occupy an additional line, and the surrounding content MUST adjust so nothing is overlapped or pushed off-screen.
 - **FR-005**: Remaining time MUST be derived from the pomodoro's authoritative start time and fixed length, so the displayed countdown stays consistent with the shared pomodoro state.
 - **FR-006**: When the remaining time reaches zero while the TUI is open, the system MUST record the pomodoro as completed and MUST run the configured completion hook exactly once.
-- **FR-007**: On completion the TUI MUST show a brief, non-blocking message identifying the completed task, and that message MUST clear on the next key press or after a short timeout.
+- **FR-007**: On completion the TUI MUST show a brief, non-blocking message identifying the completed task, and that message MUST clear on the next key press or after a short timeout. A key press that clears the message MUST still perform its normal action (clearing the message is a side effect, not a substitute for the keystroke).
 - **FR-008**: The user MUST be able to cancel the active pomodoro from the TUI, which MUST run the configured cancel hook and remove the timer.
 - **FR-009**: On launch the TUI MUST detect an already-active pomodoro and display it immediately with the correct remaining time and task, with no manual resume step.
 - **FR-010**: When the user starts a pomodoro while one is already active, the system MUST, without prompting for typed input: leave the existing one running if it is the same task, or end it and start a new one if it is a different task.

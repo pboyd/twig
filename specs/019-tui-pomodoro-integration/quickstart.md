@@ -37,7 +37,7 @@ cd services/todo && go build -o todo ./cmd/todo && ./todo
 1. Select a task and press `s`.
 2. **Expect**: a `🍅 mm:ss · <task>` timer appears in the status bar and counts down; the status area is now two lines.
 3. Navigate (`j`/`k`), expand/collapse, edit (`e`), add a subtask (`n`), move (`m`).
-4. **Expect**: every action works normally and the timer keeps ticking and stays visible in each mode (including the help screen `?`).
+4. **Expect**: every action works normally and the timer keeps ticking and stays visible in the list, edit, and move views. (The full-screen help overlay `?` is exempt — it covers the whole screen; dismiss it with any key and the timer reappears, still counting.)
 5. Press `x`.
 6. **Expect**: the pomodoro ends, the `on_cancel` hook fires, and the timer disappears (status area back to one line).
 
