@@ -6,6 +6,14 @@
 
 **Status**: Draft
 
+## Clarifications
+
+### Session 2026-05-28
+
+- Q: Does Ctrl-C during a running pomodoro countdown fire `on_cancel`? → A: No — Ctrl-C only detaches from the countdown; the pomodoro is still running server-side and can be resumed. Only an explicit cancel (via `todo pom cancel` or the TUI cancel action) fires `on_cancel`.
+- Q: Do hook commands receive pomodoro context (task ID, task name) as environment variables? → A: No. Hooks inherit only the parent CLI environment in v1. No `TODO_POMODORO_*` contract is established (it can be added later without breaking existing configs).
+- Q: When `todo pom resume` is invoked and no pomodoro is active on the server, what happens? → A: Error out. `resume` is strictly reattach-only; it never implicitly starts a new pomodoro and therefore never fires `on_start`. Only `todo pom start` fires `on_start`.
+
 **Input**: User description: "Specifying an `--exec` command whenever starting or resuming a pomodoro is cumbersome, and there's no way to even set it in TUI. Users will probably want the same command to run every time, so it makes sense to configure the command in a config file. The `--exec` flag can be removed completely. In addition to a command that runs after the pomodoro ends, it would be helpful to add commands to run when the pomodoro begins and is canceled (the use-case is turning on and off do-not-disturb). Since there will be a config file, it should have options to set the API URL and auth token too."
 
 ## User Scenarios & Testing *(mandatory)*
@@ -67,7 +75,7 @@ A user wants to avoid setting `TODO_ADDR` and `TODO_API_KEY` environment variabl
 - The config file exists but is malformed (syntactically invalid). The CLI must report a clear, actionable error pointing at the file path and refuse to start, rather than silently falling back to defaults.
 - The config file references a hook command that is not on `$PATH`. The hook exec fails; the pomodoro itself continues and a non-fatal warning is shown.
 - A start hook is configured but the pomodoro server-side start call fails. The start hook must NOT run, because no pomodoro actually began.
-- Cancel happens because the user exits the TUI / terminates the CLI process before completion. The cancel hook runs on explicit user-initiated cancel; ungraceful termination (SIGKILL, terminal close, machine sleep) does not invoke any hook, matching today's behavior.
+- Cancel happens because the user exits the TUI / terminates the CLI process before completion. The cancel hook runs only on explicit user-initiated cancel (`todo pom cancel` or the TUI cancel action). Ctrl-C, ungraceful termination (SIGKILL, terminal close, machine sleep), and any other early CLI exit do NOT fire `on_cancel` — the underlying pomodoro is still running server-side and can be resumed.
 - The same command is configured for multiple events (start and cancel). Each event still triggers an independent invocation.
 
 ## Requirements *(mandatory)*
@@ -77,10 +85,10 @@ A user wants to avoid setting `TODO_ADDR` and `TODO_API_KEY` environment variabl
 - **FR-001**: The system MUST read a user-level configuration file at a well-known path on CLI startup. The file is optional; absence is not an error.
 - **FR-002**: The configuration file MUST support, at minimum, the following settings: API server URL, API auth token, pomodoro start-hook command, pomodoro cancel-hook command, and pomodoro completion-hook command.
 - **FR-003**: The `--exec` flag MUST be removed from `todo pom start` and `todo pom resume`. Passing `--exec` MUST result in an unknown-flag error.
-- **FR-004**: When a pomodoro begins (start, or resume of a not-yet-running pomodoro from the user's perspective), the system MUST execute the configured start-hook command, if any, exactly once.
-- **FR-005**: When a pomodoro is explicitly canceled by the user, the system MUST execute the configured cancel-hook command, if any, exactly once, and MUST NOT execute the completion-hook command.
+- **FR-004**: When a pomodoro begins via `todo pom start` (and the start RPC succeeds), the system MUST execute the configured start-hook command, if any, exactly once. `todo pom resume` MUST NOT fire `on_start` — resume is strictly reattach-only, and if no pomodoro is active it MUST error out without starting one.
+- **FR-005**: When a pomodoro is explicitly canceled by the user via `todo pom cancel` or the TUI cancel action, the system MUST execute the configured cancel-hook command, if any, exactly once, and MUST NOT execute the completion-hook command. Ctrl-C and other early-exit signals MUST NOT fire `on_cancel`; the pomodoro remains running server-side and is resumable.
 - **FR-006**: When a pomodoro completes naturally (timer reaches zero / server reports completion), the system MUST execute the configured completion-hook command, if any, exactly once, and MUST NOT execute the cancel-hook command.
-- **FR-007**: Hook commands MUST be executed via the user's shell so common shell syntax (pipes, quoting, environment expansion) works in the configured string.
+- **FR-007**: Hook commands MUST be executed via the user's shell so common shell syntax (pipes, quoting, environment expansion) works in the configured string. Hooks inherit the parent CLI process environment unchanged; no `TODO_POMODORO_*` context variables are injected in v1.
 - **FR-008**: A hook command failure (non-zero exit, command not found) MUST NOT abort or alter the pomodoro itself. The failure MUST be surfaced as a non-fatal warning to the user.
 - **FR-009**: When both an environment variable and a config-file value provide the API URL or API key, the environment variable MUST take precedence. This preserves the current env-var workflow as an override.
 - **FR-010**: When no API key is available from either the environment or the config file, the CLI MUST report an actionable error that names both possible sources.
