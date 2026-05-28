@@ -18,6 +18,7 @@ const (
 	modeNewRoot
 	modeHelp
 	modePomodoro
+	modeMove
 )
 
 // Model is the root Bubble Tea model for the TUI.
@@ -33,6 +34,7 @@ type Model struct {
 	pendingComplete *int64
 	mode            viewMode
 	edit            editFormModel
+	move            *moveState
 	originalCursor  int
 	help            help.Model
 	keys            KeyMap

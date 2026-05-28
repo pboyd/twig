@@ -20,9 +20,44 @@ func (m Model) View() string {
 		return m.viewHelp()
 	case modeEdit, modeNewSubtask, modeNewRoot:
 		return m.viewWithForm()
+	case modeMove:
+		return m.viewWithMove()
 	default:
 		return m.viewList()
 	}
+}
+
+func (m Model) viewWithMove() string {
+	if m.width == 0 || m.move == nil {
+		return "loading..."
+	}
+
+	listWidth := m.width / 2
+	moveWidth := m.width - listWidth - 1
+
+	list := m.renderList(listWidth)
+	moveView := m.move.View(moveWidth, m.height-2)
+
+	maxLines := m.height - 2
+	if maxLines < 1 {
+		maxLines = 1
+	}
+
+	listLines := splitLines(list, maxLines)
+	moveLines := splitLines(moveView, maxLines)
+
+	var rows []string
+	for i := 0; i < maxLines; i++ {
+		l := padRightAnsi(listLines[i], listWidth)
+		mv := ""
+		if i < len(moveLines) {
+			mv = moveLines[i]
+		}
+		rows = append(rows, fmt.Sprintf("%s %s", l, mv))
+	}
+
+	status := m.renderStatus()
+	return strings.Join(rows, "\n") + "\n" + status
 }
 
 func (m Model) viewList() string {

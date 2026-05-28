@@ -29,6 +29,13 @@ type refreshedMsg struct {
 	err         error
 }
 
+// moveTaskResultMsg carries the result of a move-parent UpdateTask call.
+type moveTaskResultMsg struct {
+	taskID int64
+	tree   []*cli.TreeNode
+	err    error
+}
+
 // ── command factories ───────────────────────────────────────────────────────
 
 func listTasksCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
@@ -142,6 +149,31 @@ func setEstimateCmd(client taskv1connect.TaskServiceClient, id int64, estimate i
 	}
 }
 
+func moveTaskCmd(client taskv1connect.TaskServiceClient, task *taskv1.Task, newParentID *int64) tea.Cmd {
+	return func() tea.Msg {
+		req := &taskv1.UpdateTaskRequest{
+			Id:          task.Id,
+			Name:        task.Name,
+			Description: task.GetDescription(),
+		}
+		if task.Due != nil {
+			req.Due = task.Due
+		}
+		if newParentID != nil {
+			req.ParentId = newParentID
+		}
+		_, err := client.UpdateTask(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return moveTaskResultMsg{taskID: task.Id, err: err}
+		}
+		resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
+		if err != nil {
+			return moveTaskResultMsg{taskID: task.Id, err: err}
+		}
+		return moveTaskResultMsg{taskID: task.Id, tree: cli.BuildTree(resp.Msg.Tasks)}
+	}
+}
+
 func fetchAfterMutation(client taskv1connect.TaskServiceClient, highlightID int64) tea.Msg {
 	resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 	if err != nil {
@@ -223,6 +255,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, listTasksCmd(m.client)
 
+	case moveTaskResultMsg:
+		return m.handleMoveTaskResult(msg)
+
 	case editSavedMsg:
 		return m.handleEditSaved(msg)
 
@@ -246,6 +281,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEditKey(msg)
 	case modeHelp:
 		return m.handleHelpKey(msg)
+	case modeMove:
+		return m.handleMoveKey(msg)
 	}
 	return m, nil
 }
@@ -325,6 +362,15 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.edit = NewRootForm(m.cursor)
 		m.mode = modeNewRoot
 		m.err = nil
+
+	case key.Matches(msg, m.keys.Move):
+		if len(m.visible) > 0 {
+			id := m.visible[m.cursor].node.Task.Id
+			if ms := newMoveState(&m, id); ms != nil {
+				m.move = ms
+				m.mode = modeMove
+			}
+		}
 
 	case key.Matches(msg, m.keys.PomStart):
 		if len(m.visible) > 0 {
@@ -440,6 +486,41 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 		m.expanded[*msg.parentID] = true
 	}
 	return m, createTaskCmd(m.client, msg)
+}
+
+func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.move == nil {
+		m.mode = modeList
+		return m, nil
+	}
+	cmd, keepOpen := m.move.Update(msg, &m)
+	if !keepOpen {
+		m.mode = modeList
+		m.move = nil
+	}
+	return m, cmd
+}
+
+func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		if m.move != nil {
+			m.move.errMsg = msg.err.Error()
+		}
+		return m, nil
+	}
+	m.mode = modeList
+	m.move = nil
+	m.err = nil
+	m.tree = msg.tree
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	if msg.taskID != 0 {
+		m.ensureVisible(msg.taskID)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.cursor = findCursor(m.visible, msg.taskID)
+	} else {
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+	}
+	return m, nil
 }
 
 // ensureVisible walks the tree to find the task with the given id and expands

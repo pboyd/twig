@@ -871,3 +871,64 @@ func TestUncomplete_SpaceOnCompletedTaskDoesNotSetPendingComplete(t *testing.T) 
 		t.Error("expected a Cmd to be returned for uncomplete, got nil")
 	}
 }
+
+// ── Move-task key dispatch ────────────────────────────────────────────────────
+
+// TestMove_MKeyEntersModeMove checks that pressing m in modeList opens the dialog.
+func TestMove_MKeyEntersModeMove(t *testing.T) {
+	m := buildTestModel()
+	m.cursor = 1 // task id=2
+	m = pressKey(m, "m")
+	if m.mode != modeMove {
+		t.Errorf("expected modeMove after M key, got %v", m.mode)
+	}
+	if m.move == nil {
+		t.Fatal("move state should be non-nil after M key")
+	}
+	if m.move.taskID != 2 {
+		t.Errorf("move.taskID: want 2, got %d", m.move.taskID)
+	}
+}
+
+// TestMove_MKeyWithEmptyListIsNoOp checks that pressing m with no tasks is a no-op.
+func TestMove_MKeyWithEmptyListIsNoOp(t *testing.T) {
+	m := buildTestModel()
+	m.visible = nil
+	m = pressKey(m, "m")
+	if m.mode != modeList {
+		t.Errorf("mode should remain modeList with empty list, got %v", m.mode)
+	}
+	if m.move != nil {
+		t.Error("move state should be nil when no task is selected")
+	}
+}
+
+// TestMove_SuccessfulResultReturnsModeList checks that a successful moveTaskResultMsg
+// resets the dialog and refreshes the list.
+func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {
+	m := buildTestModel()
+	m.cursor = 0 // task id=1
+	m = pressKey(m, "m")
+	if m.mode != modeMove {
+		t.Fatalf("setup: expected modeMove, got %v", m.mode)
+	}
+
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "a"},
+		{Id: 2, Name: "b"},
+		{Id: 3, Name: "c"},
+	}
+	tree := cli.BuildTree(tasks)
+	next, _ := m.Update(moveTaskResultMsg{taskID: 1, tree: tree})
+	nm := next.(Model)
+
+	if nm.mode != modeList {
+		t.Errorf("expected modeList after successful move, got %v", nm.mode)
+	}
+	if nm.move != nil {
+		t.Error("move state should be nil after successful move")
+	}
+	if len(nm.visible) == 0 {
+		t.Error("visible list should be repopulated after move")
+	}
+}
