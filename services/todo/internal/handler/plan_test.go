@@ -716,8 +716,16 @@ func TestMovePlanEntry(t *testing.T) {
 // ---- T041: ClearPlan tests ----
 
 func TestClearPlan(t *testing.T) {
-	planH, _, userID := newTestPlanHandler(t)
+	planH, taskH, userID := newTestPlanHandler(t)
 	ctx := ctxWithUser(userID)
+
+	newTask := func(name string) int64 {
+		r, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: name}))
+		if err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+		return r.Msg.Task.Id
+	}
 
 	t.Run("empty day no-op", func(t *testing.T) {
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
@@ -731,10 +739,10 @@ func TestClearPlan(t *testing.T) {
 		}
 	})
 
-	t.Run("cutoff before all entries removes everything", func(t *testing.T) {
+	t.Run("cutoff before all task entries removes everything", func(t *testing.T) {
 		day := "2099-07-02"
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "A", 480, 30)
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "B", 540, 30)
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("A"), "", 480, 30)
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("B"), "", 540, 30)
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
 			Day: day, StartMinute: 400,
 		}))
@@ -748,7 +756,7 @@ func TestClearPlan(t *testing.T) {
 
 	t.Run("cutoff after all entries removes nothing", func(t *testing.T) {
 		day := "2099-07-03"
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "A", 480, 30)
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("A"), "", 480, 30)
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
 			Day: day, StartMinute: 600,
 		}))
@@ -762,7 +770,7 @@ func TestClearPlan(t *testing.T) {
 
 	t.Run("exact start is deleted not trimmed", func(t *testing.T) {
 		day := "2099-07-04"
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "Exact", 480, 60)
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("Exact"), "", 480, 60)
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
 			Day: day, StartMinute: 480,
 		}))
@@ -776,8 +784,8 @@ func TestClearPlan(t *testing.T) {
 
 	t.Run("straddle trims and removes later", func(t *testing.T) {
 		day := "2099-07-05"
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "Straddle", 480, 90) // 8:00–9:30
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "After", 600, 30)    // 10:00–10:30
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("Straddle"), "", 480, 90) // 8:00–9:30
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("After"), "", 600, 30)    // 10:00–10:30
 		// Cutoff at 510 (8:30) — straddles the first entry, deletes the second.
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
 			Day: day, StartMinute: 510,
@@ -795,6 +803,61 @@ func TestClearPlan(t *testing.T) {
 		}
 		if listResp.Msg.Entries[0].DurationMinute != 30 {
 			t.Errorf("trimmed duration = %d, want 30", listResp.Msg.Entries[0].DurationMinute)
+		}
+	})
+
+	t.Run("meeting after cutoff is preserved", func(t *testing.T) {
+		day := "2099-07-06"
+		insertPlanEntry(t, planH.Queries, userID, day, 0, "Standup", 600, 30) // meeting, no task
+		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
+			Day: day, StartMinute: 480,
+		}))
+		if err != nil {
+			t.Fatalf("ClearPlan: %v", err)
+		}
+		if resp.Msg.DeletedCount != 0 || resp.Msg.TrimmedStraddlingEntry {
+			t.Errorf("expected {0, false}, got {%d, %v}", resp.Msg.DeletedCount, resp.Msg.TrimmedStraddlingEntry)
+		}
+		listResp, _ := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+		if len(listResp.Msg.Entries) != 1 {
+			t.Fatalf("expected meeting to be preserved, got %d entries", len(listResp.Msg.Entries))
+		}
+	})
+
+	t.Run("meeting straddling cutoff is not trimmed", func(t *testing.T) {
+		day := "2099-07-07"
+		insertPlanEntry(t, planH.Queries, userID, day, 0, "Long meeting", 480, 90) // 8:00–9:30
+		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
+			Day: day, StartMinute: 510,
+		}))
+		if err != nil {
+			t.Fatalf("ClearPlan: %v", err)
+		}
+		if resp.Msg.DeletedCount != 0 || resp.Msg.TrimmedStraddlingEntry {
+			t.Errorf("expected {0, false}, got {%d, %v}", resp.Msg.DeletedCount, resp.Msg.TrimmedStraddlingEntry)
+		}
+		listResp, _ := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+		if len(listResp.Msg.Entries) != 1 || listResp.Msg.Entries[0].DurationMinute != 90 {
+			t.Fatalf("expected meeting intact (90 min), got %v", listResp.Msg.Entries)
+		}
+	})
+
+	t.Run("mixed day: task deleted, meeting preserved", func(t *testing.T) {
+		day := "2099-07-08"
+		insertPlanEntry(t, planH.Queries, userID, day, 0, "Daily standup", 540, 15)  // meeting at 9:00
+		insertPlanEntry(t, planH.Queries, userID, day, newTask("Feature"), "", 600, 60) // task at 10:00
+		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
+			Day: day, StartMinute: 480,
+		}))
+		if err != nil {
+			t.Fatalf("ClearPlan: %v", err)
+		}
+		if resp.Msg.DeletedCount != 1 || resp.Msg.TrimmedStraddlingEntry {
+			t.Errorf("expected {1, false}, got {%d, %v}", resp.Msg.DeletedCount, resp.Msg.TrimmedStraddlingEntry)
+		}
+		listResp, _ := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+		if len(listResp.Msg.Entries) != 1 || listResp.Msg.Entries[0].Name != "Daily standup" {
+			t.Fatalf("expected only meeting to remain, got %v", listResp.Msg.Entries)
 		}
 	})
 }

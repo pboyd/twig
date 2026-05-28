@@ -456,6 +456,9 @@ func (p *Plan) ClearPlan(
 	var trimmed bool
 	cutoff := req.Msg.StartMinute
 	for _, r := range locked {
+		if !r.TaskID.Valid {
+			continue
+		}
 		start := int32(r.StartMinute)
 		end := start + int32(r.DurationMinute)
 		if start < cutoff && cutoff < end {

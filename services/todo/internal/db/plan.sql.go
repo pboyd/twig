@@ -12,7 +12,7 @@ import (
 )
 
 const deletePlanEntriesFromMinute = `-- name: DeletePlanEntriesFromMinute :execrows
-DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3
+DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 AND task_id IS NOT NULL
 `
 
 type DeletePlanEntriesFromMinuteParams struct {

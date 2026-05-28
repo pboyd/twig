@@ -30,7 +30,7 @@ UPDATE plan_entries SET start_minute = $4, duration_minute = $5 WHERE user_id = 
 DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING id;
 
 -- name: DeletePlanEntriesFromMinute :execrows
-DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3;
+DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 AND task_id IS NOT NULL;
 
 -- name: TrimPlanEntryDuration :one
 UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING *;
