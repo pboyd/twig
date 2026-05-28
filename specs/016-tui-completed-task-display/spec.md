@@ -10,11 +10,19 @@
 
 Additionally, tasks that are completed don't appear completed in the tree. The name in the detail pane does not need to be styled differently, but that styling should be applied in the tree."
 
+## Clarifications
+
+### Session 2026-05-28
+
+- Q: Which user actions remove the lingering completed task from the tree? → A: Only actions that change which row is selected (e.g. up/down/jump-to). Same-row actions like expand/collapse or opening edit mode leave the lingering task in place. Tree refresh/reload also removes it (already covered).
+- Q: Should the detail pane render a completed task's name with completion styling? → A: No — remove completion styling from the detail-pane name. The explicit "Completed: <timestamp>" line already conveys state; the tree is the canonical place for the visual cue.
+- Q: What specific visual treatment should "completion styling" use in the tree? → A: Strikethrough on the task name, no color change. Matches the project's existing vocabulary (formerly used in the detail pane) and avoids color-palette conflicts with selection highlighting.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Completed task lingers with completion styling (Priority: P1)
 
-When a user marks a task as completed in the TUI tree view, the task does not vanish immediately. Instead, it stays in its current position, takes on a "completed" visual style (e.g. strikethrough or muted/dim coloring), and remains the highlighted (selected) row. The task only disappears from the tree the next time the user moves the selection to a different task.
+When a user marks a task as completed in the TUI tree view, the task does not vanish immediately. Instead, it stays in its current position, takes on the "completed" visual style (strikethrough on the task name), and remains the highlighted (selected) row. The task only disappears from the tree the next time the user moves the selection to a different task.
 
 **Why this priority**: This is the core UX complaint from the user. Today, completing a task causes the cursor to jump back to the top of the list, which feels like punishment rather than reward. Fixing this delivers the emotional payoff the user wants from finishing a task and is the central reason this feature exists.
 
@@ -57,10 +65,10 @@ Tasks that are already completed (e.g. completed earlier in this session, or com
 ### Functional Requirements
 
 - **FR-001**: When a task is marked completed from the TUI tree view, the tree view MUST continue to display that task in its current position, with completion styling applied, and MUST keep it as the currently highlighted row.
-- **FR-002**: The lingering completed task MUST be removed from the tree on the next user action that changes the selected row (e.g. moving up/down to another task), at which point the newly selected task is highlighted normally.
+- **FR-002**: The lingering completed task MUST be removed from the tree on the next user action that changes which row is selected (e.g. up/down navigation, jump-to). Same-row actions (expanding/collapsing a parent, opening an edit prompt, viewing the detail pane, etc.) MUST NOT remove the lingering task. After removal, the newly selected task is highlighted normally.
 - **FR-003**: The tree view MUST render every task whose state is completed with a visually distinct "completed" style (consistent with how the lingering completed task is styled), regardless of nesting depth.
 - **FR-004**: The detail pane MUST render the task name without the completed styling, even when the selected task is completed.
-- **FR-005**: The completion styling in the tree MUST clearly distinguish a completed task from an incomplete task (so the user can tell at a glance which tasks are done).
+- **FR-005**: The completion styling in the tree MUST be strikethrough applied to the task name (with no color change), and MUST clearly distinguish a completed task from an incomplete task at a glance. The same styling applies to both lingering just-completed tasks (Story 1) and already-completed tasks (Story 2).
 - **FR-006**: If the tree is refreshed/reloaded while a just-completed task is in its lingering state, that task MUST be filtered out of the new render (the linger does not survive a reload).
 - **FR-007**: If the user un-completes the lingering task before moving selection, the row MUST revert to normal (incomplete) styling in place and remain selected.
 
@@ -80,7 +88,7 @@ Tasks that are already completed (e.g. completed earlier in this session, or com
 ## Assumptions
 
 - The TUI tree view is the only surface that needs this behavior change. Non-TUI surfaces (CLI commands that complete tasks) are out of scope.
-- "Completion styling" can be any visually clear differentiation (strikethrough, dim color, etc.); the spec does not require a specific visual treatment, only that it be clearly distinguishable from incomplete tasks and consistent between the two stories.
+- "Completion styling" is strikethrough applied to the task name in the tree (no color change), used consistently across Story 1 and Story 2.
 - The lingering completed task is a view-only state — no new field is persisted to the database or sent over the API. It is reset whenever the tree is rebuilt from a fresh data source.
 - The user's current keybinding for "complete task" in the TUI is preserved; this feature changes only what happens visually and to selection after completion.
 - The detail pane already renders the task name independently of the tree's styling, so applying tree-only completion styling does not require structural changes to the detail pane.
