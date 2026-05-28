@@ -10,6 +10,14 @@
 
 Pressing `m` (for move) in the TUI should bring up a dialog box listing incomplete tasks. The user can select a new parent task from the list and save it. The existing parent task should be pre-selected."
 
+## Clarifications
+
+### Session 2026-05-28
+
+- Q: How are candidate parent tasks arranged in the move dialog? → A: Hierarchical tree (indented by parent/child), matching the main TUI
+- Q: Which tasks are listed as candidate parents — all incomplete tasks, or only those visible in the current TUI view? → A: All incomplete tasks across the user's account
+- Q: Which keys confirm and cancel the move dialog? → A: Enter confirms, Esc cancels
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Move a task under a new parent (Priority: P1)
@@ -56,10 +64,11 @@ A user has a sub-task that should no longer be nested under another task — the
 ### Functional Requirements
 
 - **FR-001**: The TUI MUST bind the `m` key, while a task is selected, to open a "move task" dialog for that task.
-- **FR-002**: The move dialog MUST display the list of incomplete tasks as candidate parents, plus an explicit entry representing "no parent" (top-level).
+- **FR-002**: The move dialog MUST display all incomplete tasks across the user's account as candidate parents (independent of any filter applied to the main TUI view), plus an explicit entry representing "no parent" (top-level).
+- **FR-002a**: Candidate parents MUST be rendered as a hierarchical tree (indented to show parent/child relationships), matching how the main TUI presents the task list.
 - **FR-003**: The move dialog MUST pre-select the task's current parent on open; if the task is currently top-level, the "no parent" entry MUST be pre-selected.
-- **FR-004**: The dialog MUST allow keyboard navigation through the candidate list and a confirm action that commits the selection.
-- **FR-005**: The dialog MUST allow the user to cancel without changing the task's parent.
+- **FR-004**: The dialog MUST allow keyboard navigation through the candidate list and confirm the selection when the user presses Enter.
+- **FR-005**: The dialog MUST allow the user to cancel without changing the task's parent by pressing Esc.
 - **FR-006**: On confirm, the system MUST persist the new parent so the change survives restarting the TUI.
 - **FR-007**: The system MUST prevent reparenting a task to itself or to any of its descendants, and MUST surface the rejection to the user within the dialog without losing their selection state.
 - **FR-008**: The task being moved MUST NOT appear as a selectable parent candidate in the dialog.
@@ -86,4 +95,4 @@ A user has a sub-task that should no longer be nested under another task — the
 - "Incomplete tasks" means tasks not marked complete, consistent with the existing completion model used elsewhere in the TUI.
 - The candidate-parent list is drawn from the same task set the TUI already loads; no new server endpoint is assumed beyond what is needed to update a task's parent.
 - Mouse interaction is out of scope; the dialog is keyboard-driven, matching the rest of the TUI.
-- Sorting/grouping of candidate parents in the dialog follows the same ordering the TUI uses elsewhere when listing tasks.
+- Sorting/grouping of candidate parents in the dialog follows the same ordering the TUI uses elsewhere when listing tasks (within the hierarchical tree layout).
