@@ -301,10 +301,16 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = clampCursor(m.cursor, len(m.visible))
 
 	case key.Matches(msg, m.keys.Down):
+		var targetID int64
+		if m.cursor+1 < len(m.visible) {
+			targetID = m.visible[m.cursor+1].node.Task.Id
+		}
 		m.pendingComplete = nil
 		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
-		if m.cursor < len(m.visible)-1 {
-			m.cursor++
+		if targetID != 0 {
+			m.cursor = findCursor(m.visible, targetID)
+		} else {
+			m.cursor = clampCursor(m.cursor, len(m.visible))
 		}
 
 	case key.Matches(msg, m.keys.Collapse):

@@ -301,6 +301,34 @@ func TestNavigation_PendingCompleteClearedOnMove(t *testing.T) {
 	}
 }
 
+// TestNavigation_DownAfterLingeringComplete checks that pressing j while on a
+// lingering completed task (pendingComplete set) moves to the immediately next
+// task, not the one after it.
+func TestNavigation_DownAfterLingeringComplete(t *testing.T) {
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "a", CompletedAt: now},
+		{Id: 2, Name: "b"},
+		{Id: 3, Name: "c"},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	// Simulate task 1 just completed and lingering at cursor 0.
+	id := int64(1)
+	m.pendingComplete = &id
+	m.visible = ExportBuildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.cursor = 0
+
+	m = pressKey(m, "j")
+
+	if m.cursor != 0 {
+		t.Errorf("after down from lingering completed task: want cursor=0 (task 2), got %d", m.cursor)
+	}
+	if m.visible[m.cursor].node.Task.Id != 2 {
+		t.Errorf("cursor should be on task 2, got task id %d", m.visible[m.cursor].node.Task.Id)
+	}
+}
+
 func TestWindowSizeMsg(t *testing.T) {
 	m := buildTestModel()
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
