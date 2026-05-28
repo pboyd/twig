@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+
 	"github.com/charmbracelet/bubbles/help"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
@@ -37,6 +39,7 @@ type Model struct {
 	err             error
 	width           int
 	height          int
+	styled          bool
 }
 
 func newModel(client taskv1connect.TaskServiceClient, addr string, pomConfig config.PomodoroConfig) Model {
@@ -47,5 +50,6 @@ func newModel(client taskv1connect.TaskServiceClient, addr string, pomConfig con
 		expanded:  make(map[int64]bool),
 		keys:      DefaultKeyMap(),
 		help:      newHelpModel(),
+		styled:    cli.WantStyled(os.Stdout),
 	}
 }

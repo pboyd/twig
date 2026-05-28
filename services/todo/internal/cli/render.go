@@ -106,6 +106,14 @@ func DimStrike(s string) string {
 	return "\x1b[2;9m" + s + "\x1b[0m"
 }
 
+// Strike wraps s with ANSI strikethrough (no dim). Returns s unchanged when isTTY is false.
+func Strike(s string, isTTY bool) string {
+	if !isTTY {
+		return s
+	}
+	return "\x1b[9m" + s + "\x1b[0m"
+}
+
 // WantStyled reports whether w supports ANSI styling (i.e. is a TTY).
 func WantStyled(w io.Writer) bool {
 	f, ok := w.(*os.File)

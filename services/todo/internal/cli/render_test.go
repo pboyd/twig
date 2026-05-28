@@ -10,6 +10,22 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// --- Strike helper tests (T-A) ---
+
+func TestStrike_TTYOn(t *testing.T) {
+	got := Strike("hello", true)
+	if got != "\x1b[9m"+"hello"+"\x1b[0m" {
+		t.Errorf("Strike with isTTY=true: got %q", got)
+	}
+}
+
+func TestStrike_TTYOff(t *testing.T) {
+	got := Strike("hello", false)
+	if got != "hello" {
+		t.Errorf("Strike with isTTY=false: got %q, want %q", got, "hello")
+	}
+}
+
 // --- parseDue unit tests (T007 / US1) ---
 
 func TestParseDueRFC3339(t *testing.T) {

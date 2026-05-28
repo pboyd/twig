@@ -247,12 +247,15 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
 		if m.cursor > 0 {
 			m.cursor--
 		}
+		m.cursor = clampCursor(m.cursor, len(m.visible))
 
 	case key.Matches(msg, m.keys.Down):
 		m.pendingComplete = nil
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
 		if m.cursor < len(m.visible)-1 {
 			m.cursor++
 		}
@@ -334,11 +337,13 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Complete):
 		if len(m.visible) > 0 {
 			id := m.visible[m.cursor].node.Task.Id
+			m.pendingComplete = &id
 			m.err = nil
 			return m, completeTaskCmd(m.client, id)
 		}
 
 	case key.Matches(msg, m.keys.Refresh):
+		m.pendingComplete = nil
 		m.err = nil
 		return m, listTasksCmd(m.client)
 

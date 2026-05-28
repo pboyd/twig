@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/pboyd/todo/services/todo/internal/cli"
 )
 
 var (
@@ -97,20 +98,27 @@ func (m Model) renderList(width int) string {
 
 	var sb strings.Builder
 	for i, row := range m.visible {
-		line := fmt.Sprintf("%s%s %s",
-			row.treePrefix,
-			row.marker,
-			row.node.Task.Name,
-		)
-
-		if len(line) > width {
-			line = line[:width]
+		prefix := row.treePrefix + row.marker + " "
+		prefixW := lipgloss.Width(prefix)
+		maxNameW := width - prefixW
+		if maxNameW < 0 {
+			maxNameW = 0
 		}
 
+		name := row.node.Task.Name
+		if len(name) > maxNameW {
+			name = name[:maxNameW]
+		}
+		if row.node.Task.GetCompletedAt() != nil {
+			name = cli.Strike(name, m.styled)
+		}
+
+		line := prefix + name
+
 		if i == m.cursor {
-			line = highlightStyle.Render(fmt.Sprintf("%-*s", width, line))
+			line = highlightStyle.Render(padRightAnsi(line, width))
 		} else {
-			line = fmt.Sprintf("%-*s", width, line)
+			line = padRightAnsi(line, width)
 		}
 
 		sb.WriteString(line)

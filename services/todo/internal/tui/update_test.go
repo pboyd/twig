@@ -700,3 +700,145 @@ func TestHighlight_RefreshedError(t *testing.T) {
 		t.Errorf("expected modeList after error, got %v", nm.mode)
 	}
 }
+
+// ── T006–T009: pendingComplete linger behaviour ─────────────────────────────
+
+// buildLingeringModel returns a model that has just received a Complete press on
+// task id=2 (the middle task) followed by the refreshedMsg that sets task 2 as
+// completed. pendingComplete is non-nil and task 2 is still visible.
+func buildLingeringModel(t *testing.T) Model {
+	t.Helper()
+	m := buildTestModel()
+	m.cursor = 1 // task id=2
+
+	// Press space (Complete key).
+	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	next, _ := m.Update(spaceMsg)
+	m = next.(Model)
+
+	if m.pendingComplete == nil || *m.pendingComplete != 2 {
+		t.Fatalf("setup: pendingComplete should be &2, got %v", m.pendingComplete)
+	}
+
+	// Simulate the refreshedMsg that arrives after the RPC completes.
+	// Task 2 is now completed.
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "a"},
+		{Id: 2, Name: "b", CompletedAt: now},
+		{Id: 3, Name: "c"},
+	}
+	tree := cli.BuildTree(tasks)
+	next, _ = m.Update(refreshedMsg{tree: tree, highlightID: 2})
+	m = next.(Model)
+	return m
+}
+
+// TestComplete_LingerPendingCompleteIsSet (T-B) asserts that after pressing
+// Complete and receiving the refreshedMsg, pendingComplete is set and task 2 is
+// still in m.visible.
+func TestComplete_LingerPendingCompleteIsSet(t *testing.T) {
+	m := buildLingeringModel(t)
+
+	if m.pendingComplete == nil {
+		t.Fatal("pendingComplete should be non-nil after complete+refresh")
+	}
+	if *m.pendingComplete != 2 {
+		t.Errorf("pendingComplete: want 2, got %d", *m.pendingComplete)
+	}
+
+	found := false
+	for _, row := range m.visible {
+		if row.node.Task.Id == 2 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("task 2 should still be in m.visible after linger")
+	}
+
+	// Cursor should still point at task 2.
+	if m.cursor >= len(m.visible) || m.visible[m.cursor].node.Task.Id != 2 {
+		t.Errorf("cursor should be on task 2 after linger")
+	}
+}
+
+// TestComplete_LingerClearedOnDown (T-C) asserts Down clears pendingComplete.
+func TestComplete_LingerClearedOnDown(t *testing.T) {
+	m := buildLingeringModel(t)
+
+	m = pressKey(m, "j")
+
+	if m.pendingComplete != nil {
+		t.Error("pendingComplete should be nil after Down")
+	}
+	for _, row := range m.visible {
+		if row.node.Task.Id == 2 {
+			t.Error("task 2 should not be in m.visible after Down (showCompleted=false)")
+		}
+	}
+}
+
+// TestComplete_LingerClearedOnUp (T-C sibling) asserts Up also clears pendingComplete.
+func TestComplete_LingerClearedOnUp(t *testing.T) {
+	m := buildLingeringModel(t)
+
+	m = pressKey(m, "k")
+
+	if m.pendingComplete != nil {
+		t.Error("pendingComplete should be nil after Up")
+	}
+	for _, row := range m.visible {
+		if row.node.Task.Id == 2 {
+			t.Error("task 2 should not be in m.visible after Up (showCompleted=false)")
+		}
+	}
+}
+
+// TestComplete_LingerNotClearedByOtherKeys (T-D) asserts that Expand, Collapse,
+// Edit, Help, and Filter do not clear pendingComplete.
+func TestComplete_LingerNotClearedByOtherKeys(t *testing.T) {
+	keys := []struct {
+		name string
+		msg  tea.Msg
+	}{
+		{"Expand", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}},
+		{"Collapse", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")}},
+		{"Edit", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")}},
+		{"Help", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}},
+		{"Filter", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")}},
+	}
+	for _, tc := range keys {
+		t.Run(tc.name, func(t *testing.T) {
+			m := buildLingeringModel(t)
+			next, _ := m.Update(tc.msg)
+			m = next.(Model)
+			if m.pendingComplete == nil {
+				t.Errorf("%s key must NOT clear pendingComplete", tc.name)
+			}
+			found := false
+			for _, row := range m.visible {
+				if row.node.Task.Id == 2 {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%s key: task 2 should still be in m.visible", tc.name)
+			}
+		})
+	}
+}
+
+// TestComplete_RefreshClearsPendingComplete (T-E) asserts Ctrl-R clears pendingComplete.
+func TestComplete_RefreshClearsPendingComplete(t *testing.T) {
+	m := buildLingeringModel(t)
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m = next.(Model)
+
+	if m.pendingComplete != nil {
+		t.Error("pendingComplete should be nil after Refresh key")
+	}
+}

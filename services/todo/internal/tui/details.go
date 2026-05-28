@@ -16,9 +16,6 @@ func renderDetails(task *taskv1.Task, width int) string {
 	}
 
 	name := task.Name
-	if task.GetCompletedAt() != nil {
-		name = cli.DimStrike(name)
-	}
 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "ID:   %d\n", task.Id)
