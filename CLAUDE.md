@@ -107,5 +107,5 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/017-tui-move-task/plan.md`.
+`specs/018-tui-theme-pass/plan.md`.
 <!-- SPECKIT END -->
