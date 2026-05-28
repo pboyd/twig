@@ -9,7 +9,8 @@ type visibleRow struct {
 	node       *cli.TreeNode
 	depth      int
 	treePrefix string
-	marker     string
+	expandable bool
+	expanded   bool
 }
 
 // buildVisible flattens the tree into visible rows applying expansion state and
@@ -60,11 +61,6 @@ func emitNode(
 		}
 	}
 
-	marker := "[-]"
-	if hasExpandableChildren {
-		marker = "[+]"
-	}
-
 	// Compute this row's connector and the prefix for children.
 	var connector string
 	var childPrefix string
@@ -83,11 +79,17 @@ func emitNode(
 
 	treePrefix := parentPrefix + connector
 
+	// expandable: has children that can be toggled (collapsed-with-visible-children,
+	// or currently expanded). expanded: is currently open.
+	nodeExpandable := hasExpandableChildren || (hasChildren && isExpanded)
+	nodeExpanded := hasChildren && isExpanded
+
 	*rows = append(*rows, &visibleRow{
 		node:       node,
 		depth:      depth,
 		treePrefix: treePrefix,
-		marker:     marker,
+		expandable: nodeExpandable,
+		expanded:   nodeExpanded,
 	})
 
 	if hasChildren && isExpanded {

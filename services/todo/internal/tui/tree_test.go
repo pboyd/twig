@@ -100,31 +100,37 @@ func TestBuildVisible_PendingCompleteStaysVisible(t *testing.T) {
 	}
 }
 
-func TestBuildVisible_MarkerPlus(t *testing.T) {
+func TestBuildVisible_ExpandableCollapsed(t *testing.T) {
 	tree := makeTree()
 	rows := buildVisible(tree, map[int64]bool{}, false, nil)
-	// root is collapsed and has children → marker should be [+]
-	if rows[0].marker != "[+]" {
-		t.Errorf("expected [+] for collapsed node with children, got %q", rows[0].marker)
+	// root is collapsed and has visible children → expandable=true, expanded=false
+	if !rows[0].expandable {
+		t.Errorf("expected expandable=true for collapsed node with children")
+	}
+	if rows[0].expanded {
+		t.Errorf("expected expanded=false for collapsed node")
 	}
 }
 
-func TestBuildVisible_MarkerMinus(t *testing.T) {
+func TestBuildVisible_ExpandedNode(t *testing.T) {
 	tree := makeTree()
 	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil)
-	// root is expanded → marker should be [-]
-	if rows[0].marker != "[-]" {
-		t.Errorf("expected [-] for expanded node, got %q", rows[0].marker)
+	// root is expanded → expandable=true, expanded=true
+	if !rows[0].expandable {
+		t.Errorf("expected expandable=true for node with visible children")
+	}
+	if !rows[0].expanded {
+		t.Errorf("expected expanded=true for expanded node")
 	}
 }
 
-func TestBuildVisible_MarkerLeaf(t *testing.T) {
+func TestBuildVisible_LeafNode(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "leaf"}}
 	tree := cli.BuildTree(tasks)
 	rows := buildVisible(tree, map[int64]bool{}, false, nil)
-	// leaf node (no children) → marker should be [-]
-	if rows[0].marker != "[-]" {
-		t.Errorf("expected [-] for leaf, got %q", rows[0].marker)
+	// leaf node (no children) → expandable=false
+	if rows[0].expandable {
+		t.Errorf("expected expandable=false for leaf node")
 	}
 }
 
@@ -178,7 +184,7 @@ func TestExpandCollapse_SetExpanded(t *testing.T) {
 	}
 }
 
-func TestMarker_AllChildrenCompletedShowsDash(t *testing.T) {
+func TestMarker_AllChildrenCompletedNotExpandable(t *testing.T) {
 	now := timestamppb.Now()
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "root"},
@@ -186,17 +192,17 @@ func TestMarker_AllChildrenCompletedShowsDash(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 
-	// showCompleted=false: child is hidden, so root should show [-] not [+].
+	// showCompleted=false: child is hidden, so root should not be expandable.
 	rows := buildVisible(tree, map[int64]bool{}, false, nil)
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 visible row (completed child filtered), got %d", len(rows))
 	}
-	if rows[0].marker != "[-]" {
-		t.Errorf("marker should be [-] when all children are filtered out, got %q", rows[0].marker)
+	if rows[0].expandable {
+		t.Errorf("expandable should be false when all children are filtered out")
 	}
 }
 
-func TestMarker_SomeChildrenCompletedShowsPlus(t *testing.T) {
+func TestMarker_SomeChildrenCompletedIsExpandable(t *testing.T) {
 	now := timestamppb.Now()
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "root"},
@@ -205,12 +211,12 @@ func TestMarker_SomeChildrenCompletedShowsPlus(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 
-	// showCompleted=false: one incomplete child still visible → root should show [+].
+	// showCompleted=false: one incomplete child still visible → root should be expandable.
 	rows := buildVisible(tree, map[int64]bool{}, false, nil)
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 visible row (root only, collapsed), got %d", len(rows))
 	}
-	if rows[0].marker != "[+]" {
-		t.Errorf("marker should be [+] when there is at least one visible child, got %q", rows[0].marker)
+	if !rows[0].expandable {
+		t.Errorf("expandable should be true when there is at least one visible child")
 	}
 }

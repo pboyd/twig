@@ -4,29 +4,64 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
 	"github.com/pboyd/todo/services/todo/internal/cli"
 )
 
 // renderDetails formats the details pane for the given task, wrapping text to
-// the given width.
-func renderDetails(task *taskv1.Task, width int) string {
+// the given width. When styled, the name is rendered as a bold accent header
+// and labels are dim and column-aligned.
+func renderDetails(task *taskv1.Task, width int, styled bool) string {
 	if task == nil {
 		return ""
 	}
 
-	name := task.Name
+	if !styled {
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "ID:   %d\n", task.Id)
+		fmt.Fprintf(&sb, "Name: %s\n", task.Name)
+
+		if due := cli.FormatDue(task.Due); due != "" {
+			fmt.Fprintf(&sb, "Due:  %s\n", due)
+		}
+
+		if task.GetEstimate() > 0 {
+			fmt.Fprintf(&sb, "Est:  %d pomodoros\n", task.GetEstimate())
+		}
+
+		if task.GetDescription() != "" {
+			fmt.Fprintln(&sb)
+			desc := wordWrap(task.GetDescription(), width)
+			fmt.Fprintln(&sb, desc)
+		}
+
+		if cat := cli.FormatCompletedAt(task.CompletedAt); cat != "" {
+			fmt.Fprintf(&sb, "\nCompleted: %s\n", cat)
+		}
+
+		return sb.String()
+	}
+
+	// Styled path: bold accent header + dim column-aligned labels.
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(accent)
+	labelStyle := lipgloss.NewStyle().Foreground(dim)
+	completedStyle := lipgloss.NewStyle().Foreground(completed)
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "ID:   %d\n", task.Id)
-	fmt.Fprintf(&sb, "Name: %s\n", name)
+
+	// Task name as bold accent header.
+	fmt.Fprintln(&sb, headerStyle.Render(task.Name))
+
+	// Column-aligned labels (4-char label + ": " = 6 chars).
+	fmt.Fprintf(&sb, "%s %d\n", labelStyle.Render("ID:  "), task.Id)
 
 	if due := cli.FormatDue(task.Due); due != "" {
-		fmt.Fprintf(&sb, "Due:  %s\n", due)
+		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Due: "), due)
 	}
 
 	if task.GetEstimate() > 0 {
-		fmt.Fprintf(&sb, "Est:  %d pomodoros\n", task.GetEstimate())
+		fmt.Fprintf(&sb, "%s %d pomodoros\n", labelStyle.Render("Est: "), task.GetEstimate())
 	}
 
 	if task.GetDescription() != "" {
@@ -36,7 +71,7 @@ func renderDetails(task *taskv1.Task, width int) string {
 	}
 
 	if cat := cli.FormatCompletedAt(task.CompletedAt); cat != "" {
-		fmt.Fprintf(&sb, "\nCompleted: %s\n", cat)
+		fmt.Fprintf(&sb, "\n%s %s\n", labelStyle.Render("Completed:"), completedStyle.Render(cat))
 	}
 
 	return sb.String()

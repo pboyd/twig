@@ -42,6 +42,6 @@ func ExportRenderList(m Model, width int) string {
 }
 
 // ExportRenderDetails exposes renderDetails for unit tests.
-func ExportRenderDetails(task *taskv1.Task, width int) string {
-	return renderDetails(task, width)
+func ExportRenderDetails(task *taskv1.Task, width int, styled bool) string {
+	return renderDetails(task, width, styled)
 }
