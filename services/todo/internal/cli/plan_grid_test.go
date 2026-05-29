@@ -22,7 +22,7 @@ func fixedTime(hour, min int) time.Time {
 // TestRenderGrid_EmptyDay verifies that an empty day renders the default
 // 08:00–17:00 window: 10 hour lines and 27 quarter-hour text rows (37 total).
 func TestRenderGrid_EmptyDay(t *testing.T) {
-	out := cli.RenderGrid(nil, "2026-05-27", fixedTime(9, 0), 80, false)
+	out := cli.RenderGrid(nil, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
 	want := 37 // 9 hours × 4 rows + 1 closing hour line
@@ -57,7 +57,7 @@ func TestRenderGrid_WindowExtensionEarly(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Day: "2026-05-27", Id: 1, Name: "Early start", StartMinute: 450, DurationMinute: 60},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
 	wantFirst := "07:00  ├" + strings.Repeat("─", 71) + "┤"
@@ -79,7 +79,7 @@ func TestRenderGrid_WindowExtensionLate(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Day: "2026-05-27", Id: 1, Name: "Late end", StartMinute: 1035, DurationMinute: 30},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
 	wantLast := "18:00  ├" + strings.Repeat("─", 71) + "┤"
@@ -102,7 +102,7 @@ func TestRenderGrid_EntryBox_TwoHour(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 0 = 08:00: top edge; box is inset one column from each rail.
@@ -137,7 +137,7 @@ func TestRenderGrid_EntryBox_Truncation(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 2, Name: longName, StartMinute: 600, DurationMinute: 30},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 9 = 10:15: only interior row; must end with "..." (after closing │/┃)
@@ -156,7 +156,7 @@ func TestRenderGrid_EntryBox_Wrapping(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: name, StartMinute: 675, DurationMinute: 45},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// 11:15 = minute 675; winStart=480; topLine=(675-480)/15=13
@@ -179,7 +179,7 @@ func TestRenderGrid_EntryBox_SingleRow(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// 13:00 = minute 780; winStart=480; topLine=(780-480)/15=20
@@ -208,10 +208,10 @@ func TestRenderGrid_EntryBox_SingleRow(t *testing.T) {
 // and a second entry starting at 10:00 share a single ┣━━━┫ line at that row.
 func TestRenderGrid_AdjacentSharedBorder(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Morning", StartMinute: 480, DurationMinute: 120},  // 08:00-10:00
-		{Id: 2, Name: "Review", StartMinute: 600, DurationMinute: 30},    // 10:00-10:30
+		{Id: 1, Name: "Morning", StartMinute: 480, DurationMinute: 120}, // 08:00-10:00
+		{Id: 2, Name: "Review", StartMinute: 600, DurationMinute: 30},   // 10:00-10:30
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 8 = 10:00: must be the shared ┣━━━┫ border (not ┗ or ┏).
@@ -232,10 +232,10 @@ func TestRenderGrid_AdjacentSharedBorder(t *testing.T) {
 // render as their own ┣━━━┫ row on consecutive lines.
 func TestRenderGrid_AdjacentSingleRows(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15},  // 13:00-13:15
-		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},    // 13:15-13:30
+		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15}, // 13:00-13:15
+		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},   // 13:15-13:30
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 20 = 13:00: first single-row entry; hour row so rail+─ flank the box.
@@ -261,7 +261,7 @@ func TestRenderGrid_AdjacentSingleRows(t *testing.T) {
 // gutter on the 10:30 row when now=10:37 and day is today.
 func TestRenderGrid_NowMarker_Today(t *testing.T) {
 	now := time.Date(2026, 5, 27, 10, 37, 0, 0, time.UTC)
-	out := cli.RenderGrid(nil, "2026-05-27", now, 80, false)
+	out := cli.RenderGrid(nil, "2026-05-27", now, 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// 10:30 = minute 630; winStart=480; row=(630-480)/15=10
@@ -286,7 +286,7 @@ func TestRenderGrid_NowMarker_Today(t *testing.T) {
 func TestRenderGrid_NowMarker_NotToday(t *testing.T) {
 	now := time.Date(2026, 5, 27, 10, 37, 0, 0, time.UTC)
 	// Render yesterday.
-	out := cli.RenderGrid(nil, "2026-05-26", now, 80, false)
+	out := cli.RenderGrid(nil, "2026-05-26", now, 80, false, cli.GridOptions{})
 	if strings.Contains(out, "▶") {
 		t.Errorf("expected no ▶ marker on non-today render, but found one:\n%s", out)
 	}
@@ -300,7 +300,7 @@ func TestRenderGrid_CompletedTask_NoTTY(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Done task", StartMinute: 480, DurationMinute: 120, Completed: true},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("isTTY=false: unexpected escape codes in output:\n%s", out)
 	}
@@ -316,7 +316,7 @@ func TestRenderGrid_CompletedTask_TTY(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Done task", StartMinute: 480, DurationMinute: 120, Completed: true},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{})
 	if !strings.Contains(out, "\x1b[2;9m") {
 		t.Errorf("isTTY=true: expected dim+strikethrough code \\x1b[2;9m in output")
 	}
@@ -339,7 +339,7 @@ func TestPlanGrid_MultiHourEntry_HourLinesFlankBox(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120}, // 08:00-10:00
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 0 = 08:00: top edge row (hour) — light ─ between rail and heavy corner on both sides.
@@ -374,7 +374,7 @@ func TestPlanGrid_OffHourEntry_PaddingPreserved(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Quick sync", StartMinute: 555, DurationMinute: 30},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 5 = 09:15: top edge on a non-hour row — space (not ─) between rail and box.
@@ -398,10 +398,10 @@ func TestPlanGrid_OffHourEntry_PaddingPreserved(t *testing.T) {
 // entries produce a single ┣━…━┫ at the :15 row with space padding (non-hour, US1, T010).
 func TestPlanGrid_SharedBorder_PaddingPreserved(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15},  // 13:00-13:15
-		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},    // 13:15-13:30
+		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15}, // 13:00-13:15
+		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},   // 13:15-13:30
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 21 = 13:15: second single-row entry on a non-hour row.
@@ -422,7 +422,7 @@ func TestPlanGrid_EmptyHours_FullGrid(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Deep work", StartMinute: 540, DurationMinute: 60},
 	}
-	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	wantHour := "08:00  ├" + strings.Repeat("─", 71) + "┤"
@@ -445,7 +445,7 @@ func TestPlanGrid_EmptyHours_FullGrid(t *testing.T) {
 // TestPlanGrid_FirstAndLastHourRows_FullGrid verifies the first and last rows of the
 // visible window are full light hour lines with no entries present (US2, T013).
 func TestPlanGrid_FirstAndLastHourRows_FullGrid(t *testing.T) {
-	out := cli.RenderGrid(nil, "2026-05-27", fixedTime(6, 0), 80, false)
+	out := cli.RenderGrid(nil, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	wantFirst := "08:00  ├" + strings.Repeat("─", 71) + "┤"
@@ -464,7 +464,7 @@ func TestPlanGrid_FirstAndLastHourRows_FullGrid(t *testing.T) {
 func TestPlanGrid_NowMarker_GutterSpacing(t *testing.T) {
 	// now=08:00 → nowLine=0 (the 08:00 row itself carries the marker).
 	now := time.Date(2026, 5, 27, 8, 0, 0, 0, time.UTC)
-	out := cli.RenderGrid(nil, "2026-05-27", now, 80, false)
+	out := cli.RenderGrid(nil, "2026-05-27", now, 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	// Row 0 (08:00, marker present): gutter = "08:00 ▶" (label + 1 space + marker).
@@ -496,7 +496,7 @@ func TestPlanGrid_NowMarker_GutterSpacing(t *testing.T) {
 func TestPlanGrid_NonTodayRender_MarkerColumnBlank(t *testing.T) {
 	now := time.Date(2026, 5, 27, 8, 0, 0, 0, time.UTC)
 	// Render yesterday — no marker should appear.
-	out := cli.RenderGrid(nil, "2026-05-26", now, 80, false)
+	out := cli.RenderGrid(nil, "2026-05-26", now, 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
 	if strings.Contains(out, "▶") {
@@ -514,5 +514,71 @@ func TestPlanGrid_NonTodayRender_MarkerColumnBlank(t *testing.T) {
 		if r != '├' && r != '│' {
 			t.Errorf("row %d: rune at index 7 = %q, want ├ or │", i, r)
 		}
+	}
+}
+
+// TestRenderGrid_GridOptions_Default verifies that zero-value GridOptions reproduces
+// the same output as the prior no-options call (id shown, no selection highlight).
+func TestRenderGrid_GridOptions_Default(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 3, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
+	if !strings.Contains(out, "[3]") {
+		t.Errorf("default options: expected [3] id prefix in output:\n%s", out)
+	}
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("default options isTTY=false: unexpected escape codes:\n%s", out)
+	}
+}
+
+// TestRenderGrid_GridOptions_HideID verifies that HideID:true removes the "[id] " prefix.
+func TestRenderGrid_GridOptions_HideID(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 7, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true})
+	if strings.Contains(out, "[7]") {
+		t.Errorf("HideID: unexpected [7] prefix in output:\n%s", out)
+	}
+	if !strings.Contains(out, "Standup") {
+		t.Errorf("HideID: entry name missing from output:\n%s", out)
+	}
+	if !strings.Contains(out, "13:00-13:15") {
+		t.Errorf("HideID: time prefix missing from output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_GridOptions_SelectedID_Styled verifies that SelectedID highlights
+// only the target entry's rows with bold ANSI codes when isTTY=true.
+func TestRenderGrid_GridOptions_SelectedID_Styled(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+		{Id: 2, Name: "Review", StartMinute: 600, DurationMinute: 60},
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{SelectedID: 1})
+	lines := rowsOf(out)
+
+	// Interior rows of entry 1 (rows 1–7) should have bold codes.
+	for _, i := range []int{1, 2, 3} {
+		if !strings.Contains(lines[i], "\x1b[1m") {
+			t.Errorf("row %d (entry 1 interior): expected bold code, got %q", i, lines[i])
+		}
+	}
+	// Entry 2 interior row should NOT have bold codes.
+	if strings.Contains(lines[9], "\x1b[1m") {
+		t.Errorf("row 9 (entry 2 interior): unexpected bold code on non-selected entry, got %q", lines[9])
+	}
+}
+
+// TestRenderGrid_GridOptions_SelectedID_NoStyle verifies that SelectedID produces
+// no ANSI codes when isTTY=false.
+func TestRenderGrid_GridOptions_SelectedID_NoStyle(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{SelectedID: 5})
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("SelectedID with isTTY=false: unexpected escape codes:\n%s", out)
 	}
 }

@@ -9,11 +9,17 @@ import (
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 )
 
+// GridOptions controls optional rendering behaviour for RenderGrid.
+type GridOptions struct {
+	HideID     bool  // omit the "[id] " prefix from entry labels
+	SelectedID int32 // highlight this entry's rows (0 = none); applied only when isTTY
+}
+
 // RenderGrid renders a day's plan entries as a calendar grid.
 // Rows represent 15-minute slots; hour boundaries get a horizontal divider.
 // The visible window defaults to 08:00–17:00 and is extended outward (rounded
 // to the nearest hour) to contain every entry's snapped span.
-func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width int, isTTY bool) string {
+func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width int, isTTY bool, opts GridOptions) string {
 	winStart := 8 * 60
 	winEnd := 17 * 60
 
@@ -71,7 +77,12 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			labelRowCount = bl - tl - 1 // interior rows
 		}
 
-		fullLabel := fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, sn/60, sn%60, se/60, se%60, e.Name)
+		var fullLabel string
+		if opts.HideID {
+			fullLabel = fmt.Sprintf("%02d:%02d-%02d:%02d %s", sn/60, sn%60, se/60, se%60, e.Name)
+		} else {
+			fullLabel = fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, sn/60, sn%60, se/60, se%60, e.Name)
+		}
 		rows := wrapLabel(fullLabel, contentWidth, labelRowCount)
 
 		layouts = append(layouts, entryLayout{e, tl, bl, sn, se, rows})
@@ -107,7 +118,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		}
 	}
 
-	hLight := strings.Repeat("─", boxWidth+2) // fills inner region for empty hour rows
+	hLight := strings.Repeat("─", boxWidth+2)   // fills inner region for empty hour rows
 	hHeavy := strings.Repeat("━", contentWidth) // fills between heavy box corners
 
 	var sb strings.Builder
@@ -149,6 +160,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		single := singleAt[L]
 		interior := interiorAt[L]
 
+		var line string
 		switch {
 		case interior != nil:
 			// Interior row of a multi-row entry.
@@ -159,36 +171,47 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			}
 			content := padRight(label, contentWidth)
 			content = applyCompletion(content, interior.e, isTTY)
-			sb.WriteString(gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
+			line = applySelection(line, interior.e.Id, opts, isTTY)
 
 		case top != nil && bot != nil:
 			// Shared border: multi-row entry A ends here, entry B starts here.
-			sb.WriteString(gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail
+			if isTTY && opts.SelectedID != 0 && (top.e.Id == opts.SelectedID || bot.e.Id == opts.SelectedID) {
+				line = "\x1b[1m" + line + "\x1b[0m"
+			}
 
 		case bot != nil && single != nil:
 			// Shared: multi-row entry ends here AND single-row entry starts here.
 			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			sb.WriteString(gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+			if isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID) {
+				line = "\x1b[1m" + line + "\x1b[0m"
+			}
 
 		case top != nil:
-			sb.WriteString(gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
+			line = applySelection(line, top.e.Id, opts, isTTY)
 
 		case bot != nil:
-			sb.WriteString(gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
+			line = applySelection(line, bot.e.Id, opts, isTTY)
 
 		case single != nil:
 			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			sb.WriteString(gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail + "\n")
+			line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+			line = applySelection(line, single.e.Id, opts, isTTY)
 
 		default:
 			if isHour {
-				sb.WriteString(gutter + "├" + hLight + "┤\n")
+				line = gutter + "├" + hLight + "┤"
 			} else {
-				sb.WriteString(gutter + "│" + strings.Repeat(" ", boxWidth+2) + "│\n")
+				line = gutter + "│" + strings.Repeat(" ", boxWidth+2) + "│"
 			}
 		}
+		sb.WriteString(line + "\n")
 	}
 	return sb.String()
 }
@@ -212,6 +235,15 @@ func applyCompletion(content string, e *planv1.PlanEntry, isTTY bool) string {
 		return DimStrike(content)
 	}
 	return content
+}
+
+// applySelection wraps a rendered line with bold ANSI codes when the entry id
+// matches opts.SelectedID and isTTY is true.
+func applySelection(line string, id int32, opts GridOptions, isTTY bool) string {
+	if isTTY && opts.SelectedID != 0 && id == opts.SelectedID {
+		return "\x1b[1m" + line + "\x1b[0m"
+	}
+	return line
 }
 
 // wrapLabel wraps text into at most maxRows lines of at most width runes each.

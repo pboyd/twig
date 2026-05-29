@@ -10,8 +10,14 @@ import (
 	"github.com/pboyd/todo/services/todo/internal/pomodoro"
 )
 
+// tabBarHeight is the number of lines consumed by the tab bar.
+const tabBarHeight = 1
+
 // View renders the current model state to a string.
 func (m Model) View() string {
+	if m.activeTab == tabPlanning {
+		return m.viewPlanning()
+	}
 	switch m.mode {
 	case modeHelp:
 		return m.viewHelp()
@@ -22,6 +28,19 @@ func (m Model) View() string {
 	default:
 		return m.viewList()
 	}
+}
+
+func (m Model) viewPlanning() string {
+	if m.width == 0 {
+		return "loading..."
+	}
+	tabBar := m.renderTabBar(m.width)
+	contentH := m.height - tabBarHeight - m.statusHeight()
+	if contentH < 1 {
+		contentH = 1
+	}
+	content := m.renderPlanningView(m.width, contentH, time.Now())
+	return tabBar + "\n" + content + m.renderStatus()
 }
 
 // statusHeight returns 2 while a pomodoro is active (timer + help line), else 1.
@@ -41,7 +60,7 @@ func (m Model) viewWithMove() string {
 	moveWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 2 - m.statusHeight()
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -61,11 +80,11 @@ func (m Model) viewWithMove() string {
 		movePane := paneBox(moveContent, moveWidth, innerH, "Move", true)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, movePane)
-		return joined + "\n" + m.renderStatus()
+		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
 	}
 
 	moveWidth = m.width - listWidth - 1
-	maxLines := m.height - 1 - m.statusHeight()
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -86,7 +105,7 @@ func (m Model) viewWithMove() string {
 		rows = append(rows, fmt.Sprintf("%s %s", l, mv))
 	}
 
-	return strings.Join(rows, "\n") + "\n" + m.renderStatus()
+	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
 }
 
 func (m Model) viewList() string {
@@ -98,7 +117,7 @@ func (m Model) viewList() string {
 	detailWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 2 - m.statusHeight()
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -118,11 +137,11 @@ func (m Model) viewList() string {
 		detailPane := paneBox(detailContent, detailWidth, innerH, "Details", false)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, detailPane)
-		return joined + "\n" + m.renderStatus()
+		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
 	}
 
 	detailWidth = m.width - listWidth - 1
-	maxLines := m.height - 1 - m.statusHeight()
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -143,7 +162,7 @@ func (m Model) viewList() string {
 		rows = append(rows, fmt.Sprintf("%s %s", l, d))
 	}
 
-	return strings.Join(rows, "\n") + "\n" + m.renderStatus()
+	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
 }
 
 func (m Model) viewWithForm() string {
@@ -155,7 +174,7 @@ func (m Model) viewWithForm() string {
 	formWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 2 - m.statusHeight()
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -175,11 +194,11 @@ func (m Model) viewWithForm() string {
 		formPane := paneBox(formContent, formWidth, innerH, "", true)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, formPane)
-		return joined + "\n" + m.renderStatus()
+		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
 	}
 
 	formWidth = m.width - listWidth - 1
-	maxLines := m.height - 1 - m.statusHeight()
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -200,7 +219,7 @@ func (m Model) viewWithForm() string {
 		rows = append(rows, fmt.Sprintf("%s %s", l, f))
 	}
 
-	return strings.Join(rows, "\n") + "\n" + m.renderStatus()
+	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
 }
 
 func (m Model) renderList(width int) string {
@@ -297,8 +316,13 @@ func (m Model) renderStatus() string {
 		}
 	}
 
-	if m.err != nil {
-		lines = append(lines, errorStyle.Render("error: "+cli.UserMessage(m.err)))
+	activeErr := m.err
+	if m.activeTab == tabPlanning && m.plan.err != nil {
+		activeErr = m.plan.err
+	}
+
+	if activeErr != nil {
+		lines = append(lines, errorStyle.Render("error: "+cli.UserMessage(activeErr)))
 	} else {
 		lines = append(lines, m.help.View(m.keys))
 	}

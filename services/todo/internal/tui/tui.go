@@ -26,8 +26,8 @@ func Run(_ context.Context) error {
 		os.Exit(1)
 	}
 
-	client, addr := NewClient(cfg)
-	m := newModel(client, addr, cfg.Pomodoro)
+	taskClient, planClient, addr := NewClient(cfg)
+	m := newModel(taskClient, planClient, addr, cfg.Pomodoro)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

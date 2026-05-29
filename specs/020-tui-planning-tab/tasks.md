@@ -27,7 +27,7 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 **Purpose**: Confirm a clean starting point before changes.
 
-- [ ] T001 Establish a green baseline: from `services/todo/` run `go test ./...` and confirm it passes before making changes.
+- [X] T001 Establish a green baseline: from `services/todo/` run `go test ./...` and confirm it passes before making changes.
 
 ---
 
@@ -37,11 +37,11 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Parametrize the grid renderer: add a `GridOptions{HideID bool, SelectedID int32}` parameter to `RenderGrid` in `services/todo/internal/cli/plan_grid.go` (drop the `[%d] ` label prefix when `HideID`; apply a highlight style to the lines of the entry whose id == `SelectedID` when styled), and update the CLI caller in `services/todo/internal/cli/plan.go` to pass the zero-value options so existing CLI output is byte-identical.
-- [ ] T003 [P] Extend `services/todo/internal/cli/plan_grid_test.go` with cases proving: default options reproduce current output, `HideID` removes the id prefix, and `SelectedID` highlights only that entry's rows under styled output.
-- [ ] T004 Build a `planv1connect.PlanServiceClient` in `services/todo/internal/tui/client.go` (same HTTP client, base URL, gzip, and bearer interceptor as the task client) and thread it through `services/todo/internal/tui/tui.go` into `newModel`.
-- [ ] T005 Add planning state types in `services/todo/internal/tui/model.go`: `tab` enum (`tabTasks`, `tabPlanning`), `planMode` enum (`planList`, `planPickTask`, `planTaskTime`, `planEventForm`, `planRename`, `planMove`, `planClear`), and the `planState`, `pickerState`, `planFormState` structs; add `activeTab`, `planClient`, and `plan` fields to `Model`, initializing `plan.day` to today in `newModel`.
-- [ ] T006 Add planning test shims to `services/todo/internal/tui/export_test.go` (constructor/accessors to set `activeTab`, seed `planState.entries`/`cursor`/`day`/`mode`, and read the selected entry) so reducer/view tests can drive planning state.
+- [X] T002 [P] Parametrize the grid renderer: add a `GridOptions{HideID bool, SelectedID int32}` parameter to `RenderGrid` in `services/todo/internal/cli/plan_grid.go` (drop the `[%d] ` label prefix when `HideID`; apply a highlight style to the lines of the entry whose id == `SelectedID` when styled), and update the CLI caller in `services/todo/internal/cli/plan.go` to pass the zero-value options so existing CLI output is byte-identical.
+- [X] T003 [P] Extend `services/todo/internal/cli/plan_grid_test.go` with cases proving: default options reproduce current output, `HideID` removes the id prefix, and `SelectedID` highlights only that entry's rows under styled output.
+- [X] T004 Build a `planv1connect.PlanServiceClient` in `services/todo/internal/tui/client.go` (same HTTP client, base URL, gzip, and bearer interceptor as the task client) and thread it through `services/todo/internal/tui/tui.go` into `newModel`.
+- [X] T005 Add planning state types in `services/todo/internal/tui/model.go`: `tab` enum (`tabTasks`, `tabPlanning`), `planMode` enum (`planList`, `planPickTask`, `planTaskTime`, `planEventForm`, `planRename`, `planMove`, `planClear`), and the `planState`, `pickerState`, `planFormState` structs; add `activeTab`, `planClient`, and `plan` fields to `Model`, initializing `plan.day` to today in `newModel`.
+- [X] T006 Add planning test shims to `services/todo/internal/tui/export_test.go` (constructor/accessors to set `activeTab`, seed `planState.entries`/`cursor`/`day`/`mode`, and read the selected entry) so reducer/view tests can drive planning state.
 
 **Checkpoint**: Shared types, plan client, and parametrized renderer compile; `go test ./...` still green.
 
@@ -55,17 +55,17 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] In `services/todo/internal/tui/view_test.go`, test that the tab bar renders with the active tab highlighted, and (new `plan_view_test.go` if cleaner) that the Planning view renders the grid via `cli.RenderGrid` with `HideID` set, shows the day header with a today indicator, draws the now-marker only when the day is today, and strikes through completed-task entries.
-- [ ] T008 [P] [US1] In `services/todo/internal/tui/update_test.go`, test that Tab/Shift-Tab toggles `activeTab`, that switching to Planning issues a list command and back preserves the Tasks cursor/expansion, that a `planEntriesMsg` populates and clamps the selection, and that the pomodoro tick continues while the Planning tab is active.
+- [X] T007 [P] [US1] In `services/todo/internal/tui/view_test.go`, test that the tab bar renders with the active tab highlighted, and (new `plan_view_test.go` if cleaner) that the Planning view renders the grid via `cli.RenderGrid` with `HideID` set, shows the day header with a today indicator, draws the now-marker only when the day is today, and strikes through completed-task entries.
+- [X] T008 [P] [US1] In `services/todo/internal/tui/update_test.go`, test that Tab/Shift-Tab toggles `activeTab`, that switching to Planning issues a list command and back preserves the Tasks cursor/expansion, that a `planEntriesMsg` populates and clamps the selection, and that the pomodoro tick continues while the Planning tab is active.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add `NextTab`/`PrevTab` key bindings (Tab / Shift+Tab) to `services/todo/internal/tui/keymap.go`.
-- [ ] T010 [US1] Add `listPlanCmd(day)` + `planEntriesMsg{entries, err}` and its reducer handling in new file `services/todo/internal/tui/plan_update.go` (store entries in `start_minute` order, set `loaded`, clamp `cursor`, surface `err`).
-- [ ] T011 [US1] Add `planTickCmd()` + `planTickMsg` in `services/todo/internal/tui/plan_update.go`: a 1-second `tea.Tick` that re-renders and re-arms only while the Planning tab is active and `plan.day` == today (drives the now-marker, FR-008a).
-- [ ] T012 [US1] Handle tab switching in `services/todo/internal/tui/update.go`: Tab/Shift+Tab toggles `activeTab`; on activating Planning, fire `listPlanCmd(plan.day)` and start `planTickCmd`; route key/tick messages to the planning reducer when `activeTab == tabPlanning`.
-- [ ] T013 [US1] Render the tab bar and Planning content: add the one-line `Tasks │ Planning` bar (active highlighted) and the planning view (day header + grid via `cli.RenderGrid(..., GridOptions{HideID:true, SelectedID:selectedID})`) in `services/todo/internal/tui/view.go` and new `services/todo/internal/tui/plan_view.go`; pass `now` so the marker shows only for today.
-- [ ] T014 [US1] Subtract the tab-bar line from inner-height math in every view function in `services/todo/internal/tui/view.go` (alongside the existing status-bar height) so both tabs lay out correctly; add a thin `services/todo/internal/tui/plan_grid.go` helper mapping the selection cursor ↔ entry id for `SelectedID`.
+- [X] T009 [US1] Add `NextTab`/`PrevTab` key bindings (Tab / Shift+Tab) to `services/todo/internal/tui/keymap.go`.
+- [X] T010 [US1] Add `listPlanCmd(day)` + `planEntriesMsg{entries, err}` and its reducer handling in new file `services/todo/internal/tui/plan_update.go` (store entries in `start_minute` order, set `loaded`, clamp `cursor`, surface `err`).
+- [X] T011 [US1] Add `planTickCmd()` + `planTickMsg` in `services/todo/internal/tui/plan_update.go`: a 1-second `tea.Tick` that re-renders and re-arms only while the Planning tab is active and `plan.day` == today (drives the now-marker, FR-008a).
+- [X] T012 [US1] Handle tab switching in `services/todo/internal/tui/update.go`: Tab/Shift+Tab toggles `activeTab`; on activating Planning, fire `listPlanCmd(plan.day)` and start `planTickCmd`; route key/tick messages to the planning reducer when `activeTab == tabPlanning`.
+- [X] T013 [US1] Render the tab bar and Planning content: add the one-line `Tasks │ Planning` bar (active highlighted) and the planning view (day header + grid via `cli.RenderGrid(..., GridOptions{HideID:true, SelectedID:selectedID})`) in `services/todo/internal/tui/view.go` and new `services/todo/internal/tui/plan_view.go`; pass `now` so the marker shows only for today.
+- [X] T014 [US1] Subtract the tab-bar line from inner-height math in every view function in `services/todo/internal/tui/view.go` (alongside the existing status-bar height) so both tabs lay out correctly; add a thin `services/todo/internal/tui/plan_grid.go` helper mapping the selection cursor ↔ entry id for `SelectedID`.
 
 **Checkpoint**: Planning tab is viewable, the grid matches the CLI, the marker advances unattended, and the pomodoro spans tabs. MVP complete.
 
@@ -79,17 +79,17 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 ### Tests for User Story 2
 
-- [ ] T015 [P] [US2] In `services/todo/internal/tui/plan_update_test.go`, test the add-task flow (pick task → time form → `AddPlanTask` called with parsed minutes; blank duration → `0`; new entry highlighted on reload), the add-event flow (`AddPlanEvent`), invalid-time → error with form still open, Esc → no change, and that the tab-switch keys are ignored while a picker/form is open (FR-023).
-- [ ] T016 [P] [US2] In `services/todo/internal/tui/plan_view_test.go`, test that the task picker renders the tree and that the task/event prompt forms render their fields and focus.
+- [X] T015 [P] [US2] In `services/todo/internal/tui/plan_update_test.go`, test the add-task flow (pick task → time form → `AddPlanTask` called with parsed minutes; blank duration → `0`; new entry highlighted on reload), the add-event flow (`AddPlanEvent`), invalid-time → error with form still open, Esc → no change, and that the tab-switch keys are ignored while a picker/form is open (FR-023).
+- [X] T016 [P] [US2] In `services/todo/internal/tui/plan_view_test.go`, test that the task picker renders the tree and that the task/event prompt forms render their fields and focus.
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Add `AddTask` (`a`) and `AddEvent` (`e`) bindings and reuse Save/Cancel/Tab field-nav bindings for planning forms in `services/todo/internal/tui/keymap.go`.
-- [ ] T018 [US2] Add `listTasksForPickerCmd()` + `planTasksMsg{tree, err}` in `services/todo/internal/tui/plan_update.go` (fetch via `ListTasks`, build with `cli.BuildTree`, keep incomplete tasks) and enter `planPickTask`.
-- [ ] T019 [US2] Implement the task picker (tree flatten/render/navigation, reusing the Tasks-tab row helpers) in `services/todo/internal/tui/plan_view.go` + `plan_update.go`; selecting a node captures its task id and advances to `planTaskTime`; an empty picker is cancellable.
-- [ ] T020 [US2] Implement the `planTaskTime` (start, optional duration) and `planEventForm` (name, start, optional duration) forms with Bubbles `textinput` in `services/todo/internal/tui/plan_view.go` (field nav, prefill, submit/cancel).
-- [ ] T021 [US2] Add `addPlanTaskCmd` + `addPlanEventCmd` + `planMutatedMsg{highlightID, err}` handling in `services/todo/internal/tui/plan_update.go`: validate inputs with `internal/cli/timeparse`, send duration `0` when blank, on success reload `plan.day` and select the returned entry id, on error surface a readable message and leave entries unchanged.
-- [ ] T022 [US2] Enforce the modal tab-switch guard in `services/todo/internal/tui/update.go`: while `plan.mode != planList` (or a Tasks-tab form is open) the tab-switch keys are consumed/ignored (FR-023).
+- [X] T017 [US2] Add `AddTask` (`a`) and `AddEvent` (`e`) bindings and reuse Save/Cancel/Tab field-nav bindings for planning forms in `services/todo/internal/tui/keymap.go`.
+- [X] T018 [US2] Add `listTasksForPickerCmd()` + `planTasksMsg{tree, err}` in `services/todo/internal/tui/plan_update.go` (fetch via `ListTasks`, build with `cli.BuildTree`, keep incomplete tasks) and enter `planPickTask`.
+- [X] T019 [US2] Implement the task picker (tree flatten/render/navigation, reusing the Tasks-tab row helpers) in `services/todo/internal/tui/plan_view.go` + `plan_update.go`; selecting a node captures its task id and advances to `planTaskTime`; an empty picker is cancellable.
+- [X] T020 [US2] Implement the `planTaskTime` (start, optional duration) and `planEventForm` (name, start, optional duration) forms with Bubbles `textinput` in `services/todo/internal/tui/plan_view.go` (field nav, prefill, submit/cancel).
+- [X] T021 [US2] Add `addPlanTaskCmd` + `addPlanEventCmd` + `planMutatedMsg{highlightID, err}` handling in `services/todo/internal/tui/plan_update.go`: validate inputs with `internal/cli/timeparse`, send duration `0` when blank, on success reload `plan.day` and select the returned entry id, on error surface a readable message and leave entries unchanged.
+- [X] T022 [US2] Enforce the modal tab-switch guard in `services/todo/internal/tui/update.go`: while `plan.mode != planList` (or a Tasks-tab form is open) the tab-switch keys are consumed/ignored (FR-023).
 
 **Checkpoint**: Users can populate today's plan with tasks and events from the TUI.
 
@@ -103,14 +103,14 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] In `services/todo/internal/tui/plan_update_test.go`, test that up/down (and j/k) move `cursor` (updating `SelectedID`), that rename/move/remove/clear call the right RPCs with parsed values (move with blank duration sends `0` to keep existing), that selection follows the edited entry and clamps after delete, and that entry actions are no-ops on an empty day.
+- [X] T023 [P] [US3] In `services/todo/internal/tui/plan_update_test.go`, test that up/down (and j/k) move `cursor` (updating `SelectedID`), that rename/move/remove/clear call the right RPCs with parsed values (move with blank duration sends `0` to keep existing), that selection follows the edited entry and clamps after delete, and that entry actions are no-ops on an empty day.
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Add selection navigation (up/`k`, down/`j`) for `planList` in `services/todo/internal/tui/plan_update.go`, moving `cursor` over entries in chronological order with clamping.
-- [ ] T025 [US3] Add `Rename` (`r`), `Move` (`m`), `Remove` (`ctrl+d`, matching the Tasks-tab delete), and `Clear` (`c`) bindings in `services/todo/internal/tui/keymap.go`.
-- [ ] T026 [US3] Implement the `planRename` (prefilled name), `planMove` (start + optional duration), and `planClear` (start prefilled with now) forms in `services/todo/internal/tui/plan_view.go`.
-- [ ] T027 [US3] Add `renamePlanCmd`, `movePlanCmd`, `removePlanCmd`, and `clearPlanCmd` + `planMutatedMsg` handling in `services/todo/internal/tui/plan_update.go`: validate with `timeparse`, reload after success, keep selection on the edited entry (or clamp after remove/clear), surface errors (FR-021).
+- [X] T024 [US3] Add selection navigation (up/`k`, down/`j`) for `planList` in `services/todo/internal/tui/plan_update.go`, moving `cursor` over entries in chronological order with clamping.
+- [X] T025 [US3] Add `Rename` (`r`), `Move` (`m`), `Remove` (`ctrl+d`, matching the Tasks-tab delete), and `Clear` (`c`) bindings in `services/todo/internal/tui/keymap.go`.
+- [X] T026 [US3] Implement the `planRename` (prefilled name), `planMove` (start + optional duration), and `planClear` (start prefilled with now) forms in `services/todo/internal/tui/plan_view.go`.
+- [X] T027 [US3] Add `renamePlanCmd`, `movePlanCmd`, `removePlanCmd`, and `clearPlanCmd` + `planMutatedMsg` handling in `services/todo/internal/tui/plan_update.go`: validate with `timeparse`, reload after success, keep selection on the edited entry (or clamp after remove/clear), surface errors (FR-021).
 
 **Checkpoint**: Full in-place editing parity with the CLI day-planner (except the intentionally-absent complete toggle).
 
@@ -124,13 +124,13 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 ### Tests for User Story 4
 
-- [ ] T028 [P] [US4] In `services/todo/internal/tui/plan_update_test.go`, test that `[`/`]` change `plan.day` by one day and reload, that `t` resets to today, that the loaded entries are per-day, that `Ctrl+R` reloads the current day, and (via `plan_view_test.go`) that no now-marker renders when the day is not today.
+- [X] T028 [P] [US4] In `services/todo/internal/tui/plan_update_test.go`, test that `[`/`]` change `plan.day` by one day and reload, that `t` resets to today, that the loaded entries are per-day, that `Ctrl+R` reloads the current day, and (via `plan_view_test.go`) that no now-marker renders when the day is not today.
 
 ### Implementation for User Story 4
 
-- [ ] T029 [US4] Add `PrevDay` (`[`), `NextDay` (`]`), `Today` (`t`), and `Refresh` (`Ctrl+R`) bindings for the Planning tab in `services/todo/internal/tui/keymap.go`.
-- [ ] T030 [US4] Implement day navigation and manual refresh in `services/todo/internal/tui/plan_update.go`: adjust `plan.day` ±1 day or to today and reload via `listPlanCmd`; `Ctrl+R` reloads the current day.
-- [ ] T031 [US4] Ensure the day header in `services/todo/internal/tui/plan_view.go` shows the in-view date with a today/not-today indicator and that the now-marker is suppressed when `plan.day != today` (and the planning tick does not re-arm off today).
+- [X] T029 [US4] Add `PrevDay` (`[`), `NextDay` (`]`), `Today` (`t`), and `Refresh` (`Ctrl+R`) bindings for the Planning tab in `services/todo/internal/tui/keymap.go`.
+- [X] T030 [US4] Implement day navigation and manual refresh in `services/todo/internal/tui/plan_update.go`: adjust `plan.day` ±1 day or to today and reload via `listPlanCmd`; `Ctrl+R` reloads the current day.
+- [X] T031 [US4] Ensure the day header in `services/todo/internal/tui/plan_view.go` shows the in-view date with a today/not-today indicator and that the now-marker is suppressed when `plan.day != today` (and the planning tick does not re-arm off today).
 
 **Checkpoint**: All four user stories independently functional.
 
@@ -138,9 +138,9 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T032 [P] Make help context-aware per active tab: update `ShortHelp`/`FullHelp` in `services/todo/internal/tui/keymap.go` and the help pane in `services/todo/internal/tui/help.go` to list the planning keys when the Planning tab is active.
-- [ ] T033 Run `gofmt`/`go vet ./...` and the full suite `go test ./...` from `services/todo/`; fix any failures.
-- [ ] T034 Walk through `specs/020-tui-planning-tab/quickstart.md` against a running server to confirm all scenarios (including the auto-advancing marker and cross-CLI consistency).
+- [X] T032 [P] Make help context-aware per active tab: update `ShortHelp`/`FullHelp` in `services/todo/internal/tui/keymap.go` and the help pane in `services/todo/internal/tui/help.go` to list the planning keys when the Planning tab is active.
+- [X] T033 Run `gofmt`/`go vet ./...` and the full suite `go test ./...` from `services/todo/`; fix any failures.
+- [X] T034 Walk through `specs/020-tui-planning-tab/quickstart.md` against a running server to confirm all scenarios (including the auto-advancing marker and cross-CLI consistency).
 
 ---
 

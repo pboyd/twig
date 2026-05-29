@@ -108,7 +108,7 @@ func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
 		}
 	}
 
-	fmt.Print(RenderGrid(resp.Msg.Entries, day, time.Now(), width, isTTY))
+	fmt.Print(RenderGrid(resp.Msg.Entries, day, time.Now(), width, isTTY, GridOptions{}))
 	return 0
 }
 

@@ -327,6 +327,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		return m, nil
 
+	case planEntriesMsg:
+		m = m.handlePlanEntriesMsg(msg, msg.highlightID)
+		return m, nil
+
+	case planTasksMsg:
+		if msg.err != nil {
+			m.plan.err = msg.err
+			m.plan.mode = planList
+			return m, nil
+		}
+		m.plan.picker = pickerState{
+			tree:     msg.tree,
+			visible:  buildVisible(msg.tree, make(map[int64]bool), false, nil),
+			cursor:   0,
+			expanded: make(map[int64]bool),
+		}
+		// mode was already set to planPickTask by initAddTaskForm
+		return m, nil
+
+	case planMutatedMsg:
+		if msg.err != nil {
+			m.plan.err = msg.err
+			return m, nil
+		}
+		return m, listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID)
+
+	case planTickMsg:
+		if m.activeTab == tabPlanning && planIsToday(m.plan.day) {
+			return m, planTickCmd()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -334,6 +366,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.activeTab == tabPlanning {
+		return m.handlePlanningKey(msg)
+	}
 	switch m.mode {
 	case modeList:
 		return m.handleListKey(msg)
@@ -343,6 +378,157 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleHelpKey(msg)
 	case modeMove:
 		return m.handleMoveKey(msg)
+	}
+	return m, nil
+}
+
+// handlePlanningKey handles all key events while the Planning tab is active.
+func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Quit is always available.
+	if key.Matches(msg, m.keys.Quit) {
+		if m.pom != nil && !m.pom.completed {
+			m.confirmingQuit = true
+			return m, nil
+		}
+		return m, tea.Quit
+	}
+
+	// While a modal is open, route to the modal handler; tab-switch is ignored.
+	if m.plan.mode != planList {
+		return m.handlePlanModalKey(msg)
+	}
+
+	// Tab / Shift+Tab switches to the Tasks tab (not blocked — planList mode).
+	if key.Matches(msg, m.keys.NextTab) || key.Matches(msg, m.keys.PrevTab) {
+		m.activeTab = tabTasks
+		m.keys.PlanningMode = false
+		m.plan.err = nil
+		return m, nil
+	}
+
+	// Navigation.
+	switch {
+	case key.Matches(msg, m.keys.Up):
+		if m.plan.cursor > 0 {
+			m.plan.cursor--
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.plan.cursor < len(m.plan.entries)-1 {
+			m.plan.cursor++
+		}
+
+	// Day navigation.
+	case key.Matches(msg, m.keys.PlanPrevDay):
+		t, err := time.Parse("2006-01-02", m.plan.day)
+		if err == nil {
+			m.plan.day = t.AddDate(0, 0, -1).Format("2006-01-02")
+			m.plan.loaded = false
+			return m, listPlanCmd(m.planClient, m.plan.day)
+		}
+	case key.Matches(msg, m.keys.PlanNextDay):
+		t, err := time.Parse("2006-01-02", m.plan.day)
+		if err == nil {
+			m.plan.day = t.AddDate(0, 0, 1).Format("2006-01-02")
+			m.plan.loaded = false
+			return m, listPlanCmd(m.planClient, m.plan.day)
+		}
+	case key.Matches(msg, m.keys.PlanToday):
+		today := time.Now().Format("2006-01-02")
+		if m.plan.day != today {
+			m.plan.day = today
+			m.plan.loaded = false
+			return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day), planTickCmd())
+		}
+	case key.Matches(msg, m.keys.Refresh):
+		m.plan.loaded = false
+		return m, listPlanCmd(m.planClient, m.plan.day)
+
+	// Entry actions.
+	case key.Matches(msg, m.keys.PlanAddTask):
+		m.initAddTaskForm()
+		return m, listTasksForPickerCmd(m.client)
+	case key.Matches(msg, m.keys.PlanAddEvent):
+		m.initAddEventForm()
+	case key.Matches(msg, m.keys.PlanRename):
+		if len(m.plan.entries) > 0 {
+			m.initRenameForm()
+		}
+	case key.Matches(msg, m.keys.PlanMove):
+		if len(m.plan.entries) > 0 {
+			m.initMoveForm()
+		}
+	case key.Matches(msg, m.keys.PlanRemove):
+		if len(m.plan.entries) > 0 {
+			entry := m.plan.entries[m.plan.cursor]
+			return m, removePlanCmd(m.planClient, m.plan.day, entry.Id)
+		}
+	case key.Matches(msg, m.keys.PlanClear):
+		m.initClearForm()
+	}
+
+	return m, nil
+}
+
+// handlePlanModalKey handles keys when a planning modal is open.
+func (m Model) handlePlanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.plan.mode {
+	case planPickTask:
+		return m.handlePickerKey(msg)
+	case planTaskTime, planEventForm, planRename, planMove, planClear:
+		return m.handlePlanFormKey(msg)
+	}
+	return m, nil
+}
+
+// handlePickerKey handles key events in the task picker.
+func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.plan.mode = planList
+		m.plan.err = nil
+	case key.Matches(msg, m.keys.Up):
+		if m.plan.picker.cursor > 0 {
+			m.plan.picker.cursor--
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.plan.picker.cursor < len(m.plan.picker.visible)-1 {
+			m.plan.picker.cursor++
+		}
+	case msg.Type == tea.KeyEnter:
+		if len(m.plan.picker.visible) > 0 {
+			row := m.plan.picker.visible[m.plan.picker.cursor]
+			taskID := row.node.Task.Id
+			m.initTaskTimeForm(taskID)
+		} else {
+			m.plan.mode = planList
+		}
+	}
+	return m, nil
+}
+
+// handlePlanFormKey handles key events in a planning text-input form.
+func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.plan.mode = planList
+		m.plan.err = nil
+		return m, nil
+	case key.Matches(msg, m.keys.Save) || msg.Type == tea.KeyEnter:
+		cmd := m.submitPlanForm()
+		return m, cmd
+	case key.Matches(msg, m.keys.Tab):
+		m.cyclePlanFormFocus(1)
+		return m, nil
+	case key.Matches(msg, m.keys.ShiftTab):
+		m.cyclePlanFormFocus(-1)
+		return m, nil
+	}
+
+	// Forward to focused text input.
+	if len(m.plan.form.fields) > 0 {
+		var cmd tea.Cmd
+		m.plan.form.fields[m.plan.form.focus], cmd = m.plan.form.fields[m.plan.form.focus].Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -371,6 +557,17 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.NextTab) || key.Matches(msg, m.keys.PrevTab):
+		m.activeTab = tabPlanning
+		m.keys.PlanningMode = true
+		m.err = nil
+		var cmds []tea.Cmd
+		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day))
+		if planIsToday(m.plan.day) {
+			cmds = append(cmds, planTickCmd())
+		}
+		return m, tea.Batch(cmds...)
 
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil
