@@ -101,9 +101,9 @@ description: "Task list for Planning Tab Polish"
 
 ## Phase 6: User Story 4 - Planning tab matches the Tasks tab's look and feel (Priority: P2)
 
-**Goal**: Blue accent theme on the Planning grid, a polished tab bar, no redundant in-pane titles (both tabs), and the status line pinned to the bottom row.
+**Goal**: Blue accent theme on the Planning grid, a polished tab bar, and no redundant in-pane titles (both tabs). (The status line lands on the bottom row via US5's two-pane layout — T025.)
 
-**Independent Test**: Side-by-side, the Planning grid uses the accent highlight (not monotone bold), the tab bar clearly marks the active tab, neither tab shows a redundant `Tasks`/`Planning` pane title, and the status line sits on the bottom row at tall and short heights.
+**Independent Test**: Side-by-side, the Planning grid uses the accent highlight (not monotone bold), the tab bar clearly marks the active tab, and neither tab shows a redundant `Tasks`/`Planning` pane title.
 
 ### Tests for User Story 4 ⚠️
 
@@ -117,9 +117,10 @@ description: "Task list for Planning Tab Polish"
 - [ ] T018 [US4] In `services/todo/internal/tui/plan_grid.go` `planGridOptions()`: set `Styled: m.styled` so the TUI grid is themed while non-ANSI terminals stay plain.
 - [ ] T019 [US4] In `services/todo/internal/tui/view.go`: drop the redundant `"Tasks"` left-pane title in `viewList`, `viewWithForm`, and `viewWithMove` (pass `""`); keep the right pane's `"Details"` title.
 - [ ] T020 [US4] In `services/todo/internal/tui/plan_view.go` `renderTabBar`: polish the tab bar using the theme palette (accent for the active tab, dim separator) consistent with the Tasks styling.
-- [ ] T021 [US4] In `services/todo/internal/tui/view.go` `viewPlanning`: pad the content region to the full computed content height so `renderStatus()` is pinned to the bottom row (interim single-pane fix; preserved by US5's two-pane layout). Theme the day header/selection consistent with the accent palette in `plan_view.go`.
 
-**Checkpoint**: Planning matches the Tasks look; status pinned to bottom; CLI output unchanged; tests green.
+> **Note**: The interim single-pane status-line fix (formerly T021) is dropped — US4 and US5 land together, so US5's two-pane restructure (T025) is the single owner of `viewPlanning` and delivers the bottom-pinned status line. T021 is intentionally unused; IDs are not renumbered to keep references stable.
+
+**Checkpoint**: Planning grid themed (accent), tab bar polished, no redundant pane titles, CLI output unchanged; tests green. (Bottom-pinned status arrives with US5/T025.)
 
 ---
 
@@ -137,7 +138,7 @@ description: "Task list for Planning Tab Polish"
 ### Implementation for User Story 5
 
 - [ ] T024 [US5] Add `renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string` in `services/todo/internal/tui/plan_view.go` (read-only; name as accent header mirroring `renderDetails`; window/duration; linked task + completion for task entries; placeholder when nil).
-- [ ] T025 [US5] Restructure `viewPlanning` in `services/todo/internal/tui/view.go` to a two-pane layout: left = day header + grid, right = `renderPlanDetail`, composed with `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join fallback (non-styled), reusing `viewList`'s height arithmetic so the status line stays bottom-pinned. Left pane title `""`, right pane title `"Details"`.
+- [ ] T025 [US5] Restructure `viewPlanning` in `services/todo/internal/tui/view.go` to a two-pane layout: left = day header + grid, right = `renderPlanDetail`, composed with `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join fallback (non-styled), reusing `viewList`'s height arithmetic so the status line stays bottom-pinned (this is the sole `viewPlanning` rewrite; absorbs the dropped T021). Theme the day header consistent with the accent palette. Left pane title `""`, right pane title `"Details"`.
 - [ ] T026 [US5] Wire the details pane to `selectedPlanEntry(m.plan.entries, m.plan.cursor)` so it updates on `↑`/`↓`, and confirm narrow-terminal degradation matches the Tasks tab.
 
 **Checkpoint**: Two-pane Planning works; details track selection; tests green.
@@ -164,8 +165,9 @@ description: "Task list for Planning Tab Polish"
 ### Cross-story file notes (avoid same-file conflicts)
 
 - `update.go` is edited by US1 (T004), US2 (T007), and US3 (T013). These edits are independent (different handlers/cases) but touch one file — sequence them or coordinate to avoid merge conflicts; do **not** mark them `[P]` together.
-- `view.go` `viewPlanning` is edited by US4 (T021, interim status fix) and US5 (T025, two-pane). **US5's T025 supersedes T021's single-pane padding** while preserving the bottom-pinned status. If US5 is in the same delivery, T021 can be folded into T025; if US4 ships alone, T021 stands.
-- `plan_view.go` is edited by US2 (T008), US4 (T020/T021), and US5 (T024). Independent functions; sequence within the file.
+- `view.go` `viewPlanning` is rewritten **once**, by US5's T025 (two-pane). The former interim US4 fix (T021) is dropped since both stories ship together; T025 owns status-line positioning and day-header theming.
+- `view.go` is also edited by US4's T019 (pane-title removal in `viewList`/`viewWithForm`/`viewWithMove`) — a different region from `viewPlanning`, so US4/US5 `view.go` edits don't collide.
+- `plan_view.go` is edited by US2 (T008), US4 (T020), and US5 (T024). Independent functions; sequence within the file.
 
 ### Within Each User Story
 
