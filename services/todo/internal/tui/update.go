@@ -337,11 +337,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.plan.mode = planList
 			return m, nil
 		}
+		// Expand all nodes so sub-tasks are visible in the picker.
+		expanded := allTaskIDs(msg.tree)
 		m.plan.picker = pickerState{
 			tree:     msg.tree,
-			visible:  buildVisible(msg.tree, make(map[int64]bool), false, nil),
+			visible:  buildVisible(msg.tree, expanded, false, nil),
 			cursor:   0,
-			expanded: make(map[int64]bool),
+			expanded: expanded,
 		}
 		// mode was already set to planPickTask by initAddTaskForm
 		return m, nil
@@ -384,6 +386,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePlanningKey handles all key events while the Planning tab is active.
 func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Dismiss help overlay — any key closes it, mirroring handleHelpKey.
+	if m.mode == modeHelp {
+		m.mode = modeList
+		return m, nil
+	}
+
+	// Handle quit confirmation overlay (mirrors handleListKey).
+	if m.confirmingQuit {
+		switch msg.String() {
+		case "y":
+			return m, tea.Quit
+		case "n", "esc":
+			m.confirmingQuit = false
+		}
+		return m, nil
+	}
+
 	// Quit is always available.
 	if key.Matches(msg, m.keys.Quit) {
 		if m.pom != nil && !m.pom.completed {
@@ -464,6 +483,17 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, m.keys.PlanClear):
 		m.initClearForm()
+
+	// Pomodoro cancel — mirrors the Tasks tab handler.
+	case key.Matches(msg, m.keys.PomCancel):
+		if m.pom != nil && !m.pom.completed {
+			m.err = nil
+			return m, cancelPomCmd(m.client)
+		}
+
+	// Help.
+	case key.Matches(msg, m.keys.Help):
+		m.mode = modeHelp
 	}
 
 	return m, nil

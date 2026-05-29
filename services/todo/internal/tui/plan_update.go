@@ -423,3 +423,18 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 func planIsToday(day string) bool {
 	return day == time.Now().Format("2006-01-02")
 }
+
+// allTaskIDs returns a map of every task ID present in the tree (parents +
+// all descendants). Used to build a fully-expanded picker visible list.
+func allTaskIDs(tree []*cli.TreeNode) map[int64]bool {
+	ids := make(map[int64]bool)
+	var walk func([]*cli.TreeNode)
+	walk = func(nodes []*cli.TreeNode) {
+		for _, n := range nodes {
+			ids[n.Task.Id] = true
+			walk(n.Children)
+		}
+	}
+	walk(tree)
+	return ids
+}

@@ -11,9 +11,9 @@ var (
 	re24h        = regexp.MustCompile(`^(\d{1,2}):(\d{2})$`)
 	re24hNoColon = regexp.MustCompile(`^(\d{2})(\d{2})$`)
 	re12h        = regexp.MustCompile(`^(\d{1,2}):(\d{2})\s*(am|pm)$`)
-	reDurH  = regexp.MustCompile(`^(\d+)h$`)
-	reDurM  = regexp.MustCompile(`^(\d+)m$`)
-	reDurHM = regexp.MustCompile(`^(\d+)h(\d+)m$`)
+	reDurH       = regexp.MustCompile(`^(\d+)h$`)
+	reDurM       = regexp.MustCompile(`^(\d+)m$`)
+	reDurHM      = regexp.MustCompile(`^(\d+)h(\d+)m$`)
 )
 
 // ParseStart parses a time-of-day string and returns minutes since midnight.

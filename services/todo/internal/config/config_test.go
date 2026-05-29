@@ -21,10 +21,10 @@ func writeConfig(t *testing.T, content string) string {
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
-		name      string
-		setup     func(t *testing.T) string // returns path
-		wantErr   string
-		wantCfg   config.Config
+		name    string
+		setup   func(t *testing.T) string // returns path
+		wantErr string
+		wantCfg config.Config
 	}{
 		{
 			name: "missing file returns zero config",

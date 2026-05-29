@@ -13,6 +13,7 @@ import (
 type GridOptions struct {
 	HideID     bool  // omit the "[id] " prefix from entry labels
 	SelectedID int32 // highlight this entry's rows (0 = none); applied only when isTTY
+	Styled     bool  // when true (and isTTY): use accent-color highlight instead of plain bold
 }
 
 // RenderGrid renders a day's plan entries as a calendar grid.
@@ -178,7 +179,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			// Shared border: multi-row entry A ends here, entry B starts here.
 			line = gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail
 			if isTTY && opts.SelectedID != 0 && (top.e.Id == opts.SelectedID || bot.e.Id == opts.SelectedID) {
-				line = "\x1b[1m" + line + "\x1b[0m"
+				line = accentOpen(opts) + line + "\x1b[0m"
 			}
 
 		case bot != nil && single != nil:
@@ -187,7 +188,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			label = applyCompletion(label, single.e, isTTY)
 			line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
 			if isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID) {
-				line = "\x1b[1m" + line + "\x1b[0m"
+				line = accentOpen(opts) + line + "\x1b[0m"
 			}
 
 		case top != nil:
@@ -237,11 +238,21 @@ func applyCompletion(content string, e *planv1.PlanEntry, isTTY bool) string {
 	return content
 }
 
-// applySelection wraps a rendered line with bold ANSI codes when the entry id
-// matches opts.SelectedID and isTTY is true.
+// accentOpen returns the ANSI open code for the selection highlight: accent blue
+// when Styled, plain bold otherwise.
+func accentOpen(opts GridOptions) string {
+	if opts.Styled {
+		return "\x1b[94m" // bright blue — matches terminal accent palette
+	}
+	return "\x1b[1m"
+}
+
+// applySelection wraps a rendered line with highlight ANSI codes when the entry
+// id matches opts.SelectedID and isTTY is true. When opts.Styled is true, an
+// accent-color foreground is applied; otherwise plain bold is used.
 func applySelection(line string, id int32, opts GridOptions, isTTY bool) string {
 	if isTTY && opts.SelectedID != 0 && id == opts.SelectedID {
-		return "\x1b[1m" + line + "\x1b[0m"
+		return accentOpen(opts) + line + "\x1b[0m"
 	}
 	return line
 }

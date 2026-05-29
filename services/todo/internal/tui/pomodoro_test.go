@@ -19,18 +19,18 @@ import (
 type fakePomClient struct {
 	taskv1connect.TaskServiceClient
 	// StartPomodoro config
-	startErr        error
-	startResp       *taskv1.Pomodoro
+	startErr  error
+	startResp *taskv1.Pomodoro
 	// GetActivePomodoro config
-	activeResp      *taskv1.Pomodoro
-	activeErr       error
+	activeResp *taskv1.Pomodoro
+	activeErr  error
 	// CancelPomodoro config
-	cancelErr       error
+	cancelErr error
 	// CompletePomodoro config
-	completeErr     error
+	completeErr error
 	// GetTask config
-	getTaskResp     *taskv1.Task
-	getTaskErr      error
+	getTaskResp *taskv1.Task
+	getTaskErr  error
 	// call tracking
 	startCallCount  int
 	cancelCallCount int

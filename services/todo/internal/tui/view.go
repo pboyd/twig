@@ -16,6 +16,9 @@ const tabBarHeight = 1
 // View renders the current model state to a string.
 func (m Model) View() string {
 	if m.activeTab == tabPlanning {
+		if m.mode == modeHelp {
+			return m.viewHelp()
+		}
 		return m.viewPlanning()
 	}
 	switch m.mode {
@@ -34,13 +37,74 @@ func (m Model) viewPlanning() string {
 	if m.width == 0 {
 		return "loading..."
 	}
-	tabBar := m.renderTabBar(m.width)
-	contentH := m.height - tabBarHeight - m.statusHeight()
-	if contentH < 1 {
-		contentH = 1
+	now := time.Now()
+
+	// Modals (picker, forms) take full width — use the existing single-pane renderer.
+	if m.plan.mode != planList {
+		contentH := m.height - tabBarHeight - m.statusHeight()
+		if contentH < 1 {
+			contentH = 1
+		}
+		return m.renderTabBar(m.width) + "\n" + m.renderPlanningView(m.width, contentH, now) + m.renderStatus()
 	}
-	content := m.renderPlanningView(m.width, contentH, time.Now())
-	return tabBar + "\n" + content + m.renderStatus()
+
+	if !m.plan.loaded {
+		return m.renderTabBar(m.width) + "\nLoading...\n" + m.renderStatus()
+	}
+
+	// Two-pane layout (mirrors viewList): left = grid, right = entry details.
+	gridWidth := m.width / 2
+	detailWidth := m.width - gridWidth
+
+	if m.styled {
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
+		if innerH < 1 {
+			innerH = 1
+		}
+		innerGridW := gridWidth - 2
+		if innerGridW < 0 {
+			innerGridW = 0
+		}
+		innerDetailW := detailWidth - 2
+		if innerDetailW < 0 {
+			innerDetailW = 0
+		}
+
+		gridContent := m.renderPlanGrid(innerGridW, innerH, now)
+		detailContent := renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), innerDetailW, m.styled)
+
+		// Date lives in the pane title; grid pane is focused (accent border).
+		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), true)
+		detailPane := paneBox(detailContent, detailWidth, innerH, "Details", false)
+
+		joined := lipgloss.JoinHorizontal(lipgloss.Top, gridPane, detailPane)
+		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
+	}
+
+	// Non-styled fallback: row-join with padRightAnsi.
+	detailWidth = m.width - gridWidth - 1
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
+	if maxLines < 1 {
+		maxLines = 1
+	}
+
+	gridContent := m.renderPlanGridContent(gridWidth, maxLines, now)
+	detailContent := renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), detailWidth, m.styled)
+
+	gridLines := splitLines(gridContent, maxLines)
+	detailLines := splitLines(detailContent, maxLines)
+
+	var rows []string
+	for i := 0; i < maxLines; i++ {
+		l := padRightAnsi(gridLines[i], gridWidth)
+		d := ""
+		if i < len(detailLines) {
+			d = detailLines[i]
+		}
+		rows = append(rows, fmt.Sprintf("%s %s", l, d))
+	}
+
+	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
 }
 
 // statusHeight returns 2 while a pomodoro is active (timer + help line), else 1.
@@ -76,7 +140,7 @@ func (m Model) viewWithMove() string {
 		listContent := m.renderList(innerListW)
 		moveContent := m.move.View(innerMoveW, innerH)
 
-		listPane := paneBox(listContent, listWidth, innerH, "Tasks", false)
+		listPane := paneBox(listContent, listWidth, innerH, "", false)
 		movePane := paneBox(moveContent, moveWidth, innerH, "Move", true)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, movePane)
@@ -133,7 +197,7 @@ func (m Model) viewList() string {
 		listContent := m.renderList(innerListW)
 		detailContent := m.renderDetailPane(innerDetailW)
 
-		listPane := paneBox(listContent, listWidth, innerH, "Tasks", true)
+		listPane := paneBox(listContent, listWidth, innerH, "", true)
 		detailPane := paneBox(detailContent, detailWidth, innerH, "Details", false)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, detailPane)
@@ -190,7 +254,7 @@ func (m Model) viewWithForm() string {
 		listContent := m.renderList(innerListW)
 		formContent := m.edit.View(innerFormW)
 
-		listPane := paneBox(listContent, listWidth, innerH, "Tasks", false)
+		listPane := paneBox(listContent, listWidth, innerH, "", false)
 		formPane := paneBox(formContent, formWidth, innerH, "", true)
 
 		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, formPane)

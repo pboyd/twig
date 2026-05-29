@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"connectrpc.com/connect"
+	tea "github.com/charmbracelet/bubbletea"
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
@@ -244,9 +244,9 @@ func TestNavigation_CollapseAlreadyCollapsedMovesToParent(t *testing.T) {
 	m := ExportNewModel(nil, tree)
 
 	// Expand root then mid so all three rows are visible.
-	m = pressKey(m, "l")        // expand root
-	m = pressKey(m, "j")        // move to mid
-	m = pressKey(m, "l")        // expand mid
+	m = pressKey(m, "l") // expand root
+	m = pressKey(m, "j") // move to mid
+	m = pressKey(m, "l") // expand mid
 	if len(m.visible) != 3 {
 		t.Fatalf("setup: expected 3 rows, got %d", len(m.visible))
 	}
@@ -889,6 +889,84 @@ func TestHelp_AnyKeyDismisses(t *testing.T) {
 				t.Errorf("expected modeList after %s, got %v", tc.name, nm.mode)
 			}
 		})
+	}
+}
+
+// ── US1: quit-confirm on Planning tab ──────────────────────────────────────
+
+// TestQuitConfirm_OnPlanning_Y checks that 'y' while confirmingQuit quits (T003).
+func TestQuitConfirm_OnPlanning_Y(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.confirmingQuit = true
+
+	_, cmd := pressKeyStr(m, "y")
+
+	if cmd == nil {
+		t.Error("y while confirmingQuit on Planning: expected tea.Quit cmd, got nil")
+	}
+}
+
+// TestQuitConfirm_OnPlanning_N checks that 'n' while confirmingQuit cancels the
+// quit confirmation without quitting (T003).
+func TestQuitConfirm_OnPlanning_N(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.confirmingQuit = true
+
+	m2, cmd := pressKeyStr(m, "n")
+
+	if m2.confirmingQuit {
+		t.Error("n while confirmingQuit: should clear confirmingQuit")
+	}
+	if cmd != nil {
+		t.Errorf("n while confirmingQuit: expected nil cmd, got %v", cmd)
+	}
+}
+
+// TestQuitConfirm_OnPlanning_Esc checks that Esc while confirmingQuit cancels (T003).
+func TestQuitConfirm_OnPlanning_Esc(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.confirmingQuit = true
+
+	m2, _ := pressSpecialKey(m, tea.KeyEsc)
+
+	if m2.confirmingQuit {
+		t.Error("esc while confirmingQuit on Planning: should clear confirmingQuit")
+	}
+}
+
+// ── US2: help on Planning tab ───────────────────────────────────────────────
+
+// TestHelp_OpensOnPlanning checks that '?' on the Planning tab sets modeHelp (T005).
+func TestHelp_OpensOnPlanning(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+
+	m2, _ := pressKeyStr(m, "?")
+
+	if m2.mode != modeHelp {
+		t.Errorf("? on Planning: expected modeHelp, got %v", m2.mode)
+	}
+	// Plan cursor should be preserved.
+	if m2.plan.cursor != m.plan.cursor {
+		t.Errorf("? on Planning: plan.cursor changed (%d → %d)", m.plan.cursor, m2.plan.cursor)
+	}
+}
+
+// TestHelp_DismissOnPlanning checks that any key while in modeHelp on Planning
+// returns to planList (T005).
+func TestHelp_DismissOnPlanning(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.mode = modeHelp
+
+	m2, _ := pressKeyStr(m, "?")
+
+	if m2.mode != modeList {
+		t.Errorf("? while in modeHelp on Planning: expected modeList, got %v", m2.mode)
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 	planv1connect "github.com/pboyd/todo/services/todo/gen/plan/v1/planv1connect"
+	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
+	"github.com/pboyd/todo/services/todo/internal/cli"
 )
 
 // fakePlanClient is a minimal PlanServiceClient for unit tests.
@@ -558,5 +560,96 @@ func TestDayNav_RefreshCtrlR(t *testing.T) {
 
 	if cmd == nil {
 		t.Error("ctrl+r: expected reload command, got nil")
+	}
+}
+
+// ── US1: pomodoro cancel on Planning tab ───────────────────────────────────
+
+// TestPomCancel_CancelsWhenRunningOnPlanning checks that 'x' issues cancelPomCmd
+// when a pomodoro is running while on the Planning tab (T002).
+func TestPomCancel_CancelsWhenRunningOnPlanning(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.pom = &activePom{
+		taskID:   1,
+		taskName: "focus",
+		startAt:  time.Now().Add(-5 * time.Minute),
+	}
+
+	_, cmd := pressKeyStr(m, "x")
+
+	if cmd == nil {
+		t.Error("x with running pom on Planning: expected cancelPomCmd, got nil")
+	}
+}
+
+// TestPomCancel_InertWhenNoneRunning checks that 'x' is inert when no pomodoro
+// is active on the Planning tab (T002).
+func TestPomCancel_InertWhenNoneRunning(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.pom = nil
+
+	_, cmd := pressKeyStr(m, "x")
+
+	if cmd != nil {
+		t.Errorf("x with no pom on Planning: expected nil cmd, got %v", cmd)
+	}
+}
+
+// ── US3: sub-tasks in task picker ──────────────────────────────────────────
+
+// TestPickerSubtasks_VisibleAfterPlanTasksMsg checks that after a planTasksMsg
+// with a parent+child tree, the picker's visible rows include the sub-task (T010).
+func TestPickerSubtasks_VisibleAfterPlanTasksMsg(t *testing.T) {
+	parentID := int64(1)
+	tree := cli.BuildTree([]*taskv1.Task{
+		{Id: 1, Name: "parent"},
+		{Id: 2, Name: "child", ParentId: &parentID},
+	})
+
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planPickTask
+
+	next, _ := m.Update(planTasksMsg{tree: tree})
+	nm := next.(Model)
+
+	if len(nm.plan.picker.visible) < 2 {
+		t.Errorf("picker visible: expected at least 2 rows (parent+child), got %d", len(nm.plan.picker.visible))
+	}
+	// Verify child is present.
+	found := false
+	for _, row := range nm.plan.picker.visible {
+		if row.node.Task.Id == 2 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("picker visible: child task (id=2) not found in visible rows")
+	}
+}
+
+// TestAllTaskIDs_CollectsAllIDs checks that allTaskIDs returns every id in the
+// tree, including nested descendants (T011).
+func TestAllTaskIDs_CollectsAllIDs(t *testing.T) {
+	p1ID := int64(1)
+	p2ID := int64(2)
+	tree := cli.BuildTree([]*taskv1.Task{
+		{Id: 1, Name: "root"},
+		{Id: 2, Name: "child", ParentId: &p1ID},
+		{Id: 3, Name: "grandchild", ParentId: &p2ID},
+	})
+
+	ids := allTaskIDs(tree)
+
+	for _, wantID := range []int64{1, 2, 3} {
+		if !ids[wantID] {
+			t.Errorf("allTaskIDs: missing id=%d", wantID)
+		}
+	}
+	if len(ids) != 3 {
+		t.Errorf("allTaskIDs: expected 3 ids, got %d", len(ids))
 	}
 }

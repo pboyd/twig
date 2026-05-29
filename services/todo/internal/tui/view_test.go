@@ -288,6 +288,30 @@ func TestRenderList_CursorHighlight(t *testing.T) {
 	}
 }
 
+// ── US4: no redundant pane titles ──────────────────────────────────────────
+
+// TestViewList_NoRedundantTasksTitle checks that viewList (styled) does not
+// render a "Tasks" left-pane title (T015).
+func TestViewList_NoRedundantTasksTitle(t *testing.T) {
+	tasks := []*taskv1.Task{{Id: 1, Name: "task A"}}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.width = 80
+	m.height = 24
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+
+	out := m.viewList()
+
+	// The left pane title "Tasks" must not appear in the border.
+	// The right pane "Details" is expected.
+	if strings.Contains(out, "─ Tasks ─") {
+		t.Errorf("viewList: left pane should not have 'Tasks' title in border; found it in:\n%q", out[:min(len(out), 300)])
+	}
+	if !strings.Contains(out, "Details") {
+		t.Errorf("viewList: right pane should still have 'Details' title; got:\n%q", out[:min(len(out), 300)])
+	}
+}
+
 // TestRenderStatus_FooterWidth (T019) asserts the status line is available (non-empty) and
 // error messages use the error color style (C7).
 func TestRenderStatus_FooterAndError(t *testing.T) {

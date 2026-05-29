@@ -25,7 +25,7 @@ description: "Task list for Planning Tab Polish"
 
 **Purpose**: Establish a green baseline before changing behavior.
 
-- [ ] T001 Confirm the starting point is green: run `cd services/todo && go build ./... && go test ./...` and note the passing baseline (especially `internal/cli` grid tests and existing `internal/tui` tests).
+- [X] T001 Confirm the starting point is green: run `cd services/todo && go build ./... && go test ./...` and note the passing baseline (especially `internal/cli` grid tests and existing `internal/tui` tests).
 
 ---
 
@@ -47,12 +47,12 @@ description: "Task list for Planning Tab Polish"
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T002 [P] [US1] Reducer test: `x` (PomCancel) while Planning is active and a pomodoro is running issues `cancelPomCmd`; inert when none running — in `services/todo/internal/tui/plan_update_test.go` (or `update_test.go`), using the stub client + `export_test.go` shims.
-- [ ] T003 [P] [US1] Reducer test: with `confirmingQuit` set on the Planning tab, `n`/`esc` cancels the quit and `y` quits — in `services/todo/internal/tui/update_test.go`.
+- [X] T002 [P] [US1] Reducer test: `x` (PomCancel) while Planning is active and a pomodoro is running issues `cancelPomCmd`; inert when none running — in `services/todo/internal/tui/plan_update_test.go` (or `update_test.go`), using the stub client + `export_test.go` shims.
+- [X] T003 [P] [US1] Reducer test: with `confirmingQuit` set on the Planning tab, `n`/`esc` cancels the quit and `y` quits — in `services/todo/internal/tui/update_test.go`.
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] In `services/todo/internal/tui/update.go` `handlePlanningKey`: (a) handle the running quit-confirmation (`y`/`n`/`esc`) at the top, mirroring `handleListKey`; (b) add a `key.Matches(msg, m.keys.PomCancel)` case in the planList branch that runs `cancelPomCmd(m.client)` when `m.pom != nil && !m.pom.completed`.
+- [X] T004 [US1] In `services/todo/internal/tui/update.go` `handlePlanningKey`: (a) handle the running quit-confirmation (`y`/`n`/`esc`) at the top, mirroring `handleListKey`; (b) add a `key.Matches(msg, m.keys.PomCancel)` case in the planList branch that runs `cancelPomCmd(m.client)` when `m.pom != nil && !m.pom.completed`.
 
 **Checkpoint**: Pomodoro cancel and quit-confirm work on Planning; `go test ./...` green.
 
@@ -66,14 +66,14 @@ description: "Task list for Planning Tab Polish"
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T005 [P] [US2] Reducer test: `?` on Planning enters help; the dismiss key returns to planList with the prior `m.plan.cursor` intact — in `services/todo/internal/tui/update_test.go`.
-- [ ] T006 [P] [US2] View test: help rendered while on the Planning tab shows Planning bindings (PlanningMode `FullHelp`), including a pomodoro-cancel entry — in `services/todo/internal/tui/view_test.go`.
+- [X] T005 [P] [US2] Reducer test: `?` on Planning enters help; the dismiss key returns to planList with the prior `m.plan.cursor` intact — in `services/todo/internal/tui/update_test.go`.
+- [X] T006 [P] [US2] View test: help rendered while on the Planning tab shows Planning bindings (PlanningMode `FullHelp`), including a pomodoro-cancel entry — in `services/todo/internal/tui/view_test.go`.
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] In `services/todo/internal/tui/update.go` `handlePlanningKey`: route `m.keys.Help` to enter help (reuse `modeHelp`, or add a `planHelp` `planMode` value) and handle dismissal back to planList without losing `m.plan.cursor`.
-- [ ] T008 [US2] In `services/todo/internal/tui/plan_view.go` (and/or `view.go` `viewPlanning`): when the help flag is set on Planning, render `m.viewHelp()` so the shared `help.Model` full-help view is shown (consistent style/dismissal with Tasks).
-- [ ] T009 [US2] In `services/todo/internal/tui/keymap.go`: ensure the Planning branches of `ShortHelp()`/`FullHelp()` surface `PomCancel` (and any other status-bar-advertised control) so the help screen matches the advertised keys.
+- [X] T007 [US2] In `services/todo/internal/tui/update.go` `handlePlanningKey`: route `m.keys.Help` to enter help (reuse `modeHelp`, or add a `planHelp` `planMode` value) and handle dismissal back to planList without losing `m.plan.cursor`.
+- [X] T008 [US2] In `services/todo/internal/tui/plan_view.go` (and/or `view.go` `viewPlanning`): when the help flag is set on Planning, render `m.viewHelp()` so the shared `help.Model` full-help view is shown (consistent style/dismissal with Tasks).
+- [X] T009 [US2] In `services/todo/internal/tui/keymap.go`: ensure the Planning branches of `ShortHelp()`/`FullHelp()` surface `PomCancel` (and any other status-bar-advertised control) so the help screen matches the advertised keys.
 
 **Checkpoint**: `?` opens/closes Planning help; bindings match the status bar; tests green.
 
@@ -87,13 +87,13 @@ description: "Task list for Planning Tab Polish"
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T010 [P] [US3] Reducer test: after `planTasksMsg` with a parent+child tree, `m.plan.picker.visible` includes the sub-task rows (with tree connectors), and selecting a sub-task opens the task-time form with that task's id — in `services/todo/internal/tui/plan_update_test.go`.
-- [ ] T011 [P] [US3] Unit test: `allTaskIDs` returns every id (parents + descendants) for a nested tree — in `services/todo/internal/tui/plan_update_test.go`.
+- [X] T010 [P] [US3] Reducer test: after `planTasksMsg` with a parent+child tree, `m.plan.picker.visible` includes the sub-task rows (with tree connectors), and selecting a sub-task opens the task-time form with that task's id — in `services/todo/internal/tui/plan_update_test.go`.
+- [X] T011 [P] [US3] Unit test: `allTaskIDs` returns every id (parents + descendants) for a nested tree — in `services/todo/internal/tui/plan_update_test.go`.
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Add `allTaskIDs(tree []*cli.TreeNode) map[int64]bool` helper in `services/todo/internal/tui/plan_update.go` (or `tree.go`).
-- [ ] T013 [US3] In `services/todo/internal/tui/update.go` `planTasksMsg` handler: build `m.plan.picker.visible` via `buildVisible(msg.tree, allTaskIDs(msg.tree), false, nil)` and set `picker.expanded` to that map, so sub-tasks are visible (replacing the empty-map call at the current `buildVisible(msg.tree, make(map[int64]bool), false, nil)`).
+- [X] T012 [US3] Add `allTaskIDs(tree []*cli.TreeNode) map[int64]bool` helper in `services/todo/internal/tui/plan_update.go` (or `tree.go`).
+- [X] T013 [US3] In `services/todo/internal/tui/update.go` `planTasksMsg` handler: build `m.plan.picker.visible` via `buildVisible(msg.tree, allTaskIDs(msg.tree), false, nil)` and set `picker.expanded` to that map, so sub-tasks are visible (replacing the empty-map call at the current `buildVisible(msg.tree, make(map[int64]bool), false, nil)`).
 
 **Checkpoint**: Picker shows sub-tasks consistent with the move dialog; sub-tasks schedulable; tests green.
 
@@ -107,16 +107,16 @@ description: "Task list for Planning Tab Polish"
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T014 [P] [US4] CLI regression + opt-in test: `RenderGrid` with `GridOptions{Styled:false}` is byte-for-byte unchanged from current output; with `Styled:true` (and TTY) the selected entry uses the accent highlight — in `services/todo/internal/cli/plan_grid_test.go`.
-- [ ] T015 [P] [US4] View test: Tasks-tab views render no redundant left-pane `Tasks` title while keeping the `Details` title; the tab bar marks the active tab — in `services/todo/internal/tui/view_test.go`.
-- [ ] T016 [P] [US4] View test: the Planning view fills content height so `renderStatus()` is on the bottom row at small and large heights (assert in both styled and `!styled` modes) — in `services/todo/internal/tui/plan_view_test.go`.
+- [X] T014 [P] [US4] CLI regression + opt-in test: `RenderGrid` with `GridOptions{Styled:false}` is byte-for-byte unchanged from current output; with `Styled:true` (and TTY) the selected entry uses the accent highlight — in `services/todo/internal/cli/plan_grid_test.go`.
+- [X] T015 [P] [US4] View test: Tasks-tab views render no redundant left-pane `Tasks` title while keeping the `Details` title; the tab bar marks the active tab — in `services/todo/internal/tui/view_test.go`.
+- [X] T016 [P] [US4] View test: the Planning view fills content height so `renderStatus()` is on the bottom row at small and large heights (assert in both styled and `!styled` modes) — in `services/todo/internal/tui/plan_view_test.go`.
 
 ### Implementation for User Story 4
 
-- [ ] T017 [US4] Extend `GridOptions` with the additive `Styled` field and apply the accent highlight for the selected entry (and accent box borders) in `applySelection`/border rendering in `services/todo/internal/cli/plan_grid.go`, keeping the `Styled:false` path identical to today (per `contracts/grid-options.md`).
-- [ ] T018 [US4] In `services/todo/internal/tui/plan_grid.go` `planGridOptions()`: set `Styled: m.styled` so the TUI grid is themed while non-ANSI terminals stay plain.
-- [ ] T019 [US4] In `services/todo/internal/tui/view.go`: drop the redundant `"Tasks"` left-pane title in `viewList`, `viewWithForm`, and `viewWithMove` (pass `""`); keep the right pane's `"Details"` title.
-- [ ] T020 [US4] In `services/todo/internal/tui/plan_view.go` `renderTabBar`: polish the tab bar using the theme palette (accent for the active tab, dim separator) consistent with the Tasks styling.
+- [X] T017 [US4] Extend `GridOptions` with the additive `Styled` field and apply the accent highlight for the selected entry (and accent box borders) in `applySelection`/border rendering in `services/todo/internal/cli/plan_grid.go`, keeping the `Styled:false` path identical to today (per `contracts/grid-options.md`).
+- [X] T018 [US4] In `services/todo/internal/tui/plan_grid.go` `planGridOptions()`: set `Styled: m.styled` so the TUI grid is themed while non-ANSI terminals stay plain.
+- [X] T019 [US4] In `services/todo/internal/tui/view.go`: drop the redundant `"Tasks"` left-pane title in `viewList`, `viewWithForm`, and `viewWithMove` (pass `""`); keep the right pane's `"Details"` title.
+- [X] T020 [US4] In `services/todo/internal/tui/plan_view.go` `renderTabBar`: polish the tab bar using the theme palette (accent for the active tab, dim separator) consistent with the Tasks styling.
 
 > **Note**: The interim single-pane status-line fix (formerly T021) is dropped — US4 and US5 land together, so US5's two-pane restructure (T025) is the single owner of `viewPlanning` and delivers the bottom-pinned status line. T021 is intentionally unused; IDs are not renumbered to keep references stable.
 
@@ -132,14 +132,14 @@ description: "Task list for Planning Tab Polish"
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T022 [P] [US5] View test: `viewPlanning` renders a left grid pane + right details pane; details reflect the selected entry and differ for a task entry vs. an event entry; empty day shows a placeholder; assert both styled and `!styled` paths — in `services/todo/internal/tui/plan_view_test.go`.
-- [ ] T023 [P] [US5] Unit test: `renderPlanDetail` projects a `PlanEntry` to the expected read-only fields (and omits task-only fields for events) — in `services/todo/internal/tui/plan_view_test.go`.
+- [X] T022 [P] [US5] View test: `viewPlanning` renders a left grid pane + right details pane; details reflect the selected entry and differ for a task entry vs. an event entry; empty day shows a placeholder; assert both styled and `!styled` paths — in `services/todo/internal/tui/plan_view_test.go`.
+- [X] T023 [P] [US5] Unit test: `renderPlanDetail` projects a `PlanEntry` to the expected read-only fields (and omits task-only fields for events) — in `services/todo/internal/tui/plan_view_test.go`.
 
 ### Implementation for User Story 5
 
-- [ ] T024 [US5] Add `renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string` in `services/todo/internal/tui/plan_view.go` (read-only; name as accent header mirroring `renderDetails`; window/duration; linked task + completion for task entries; placeholder when nil).
-- [ ] T025 [US5] Restructure `viewPlanning` in `services/todo/internal/tui/view.go` to a two-pane layout: left = day header + grid, right = `renderPlanDetail`, composed with `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join fallback (non-styled), reusing `viewList`'s height arithmetic so the status line stays bottom-pinned (this is the sole `viewPlanning` rewrite; absorbs the dropped T021). Theme the day header consistent with the accent palette. Left pane title `""`, right pane title `"Details"`.
-- [ ] T026 [US5] Wire the details pane to `selectedPlanEntry(m.plan.entries, m.plan.cursor)` so it updates on `↑`/`↓`, and confirm narrow-terminal degradation matches the Tasks tab.
+- [X] T024 [US5] Add `renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string` in `services/todo/internal/tui/plan_view.go` (read-only; name as accent header mirroring `renderDetails`; window/duration; linked task + completion for task entries; placeholder when nil).
+- [X] T025 [US5] Restructure `viewPlanning` in `services/todo/internal/tui/view.go` to a two-pane layout: left = day header + grid, right = `renderPlanDetail`, composed with `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join fallback (non-styled), reusing `viewList`'s height arithmetic so the status line stays bottom-pinned (this is the sole `viewPlanning` rewrite; absorbs the dropped T021). Theme the day header consistent with the accent palette. Left pane title `""`, right pane title `"Details"`.
+- [X] T026 [US5] Wire the details pane to `selectedPlanEntry(m.plan.entries, m.plan.cursor)` so it updates on `↑`/`↓`, and confirm narrow-terminal degradation matches the Tasks tab.
 
 **Checkpoint**: Two-pane Planning works; details track selection; tests green.
 
@@ -147,9 +147,9 @@ description: "Task list for Planning Tab Polish"
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T027 Run `cd services/todo && gofmt -l . && go vet ./... && go test ./...`; fix any formatting/vet/test issues.
-- [ ] T028 [P] Execute the `quickstart.md` manual walkthrough end-to-end (all 7 sections) against `make dev` + a built `todo` binary; confirm visual parity and the non-ANSI fallback.
-- [ ] T029 [P] Verify no regressions to prior Planning behaviors (now-marker auto-advance, add/edit/remove/clear, day nav, refresh, completion strike-through, modal tab-switch blocking) — spot-check via existing tests and quickstart (SC-007 / FR-015).
+- [X] T027 Run `cd services/todo && gofmt -l . && go vet ./... && go test ./...`; fix any formatting/vet/test issues.
+- [X] T028 [P] Execute the `quickstart.md` manual walkthrough end-to-end (all 7 sections) against `make dev` + a built `todo` binary; confirm visual parity and the non-ANSI fallback.
+- [X] T029 [P] Verify no regressions to prior Planning behaviors (now-marker auto-advance, add/edit/remove/clear, day nav, refresh, completion strike-through, modal tab-switch blocking) — spot-check via existing tests and quickstart (SC-007 / FR-015).
 
 ---
 

@@ -6,9 +6,9 @@ import (
 )
 
 // planGridOptions returns the cli.GridOptions for the current plan state:
-// always HideID, and SelectedID set from the cursor position.
+// always HideID, SelectedID from the cursor, and Styled from m.styled.
 func (m Model) planGridOptions() cli.GridOptions {
-	opts := cli.GridOptions{HideID: true}
+	opts := cli.GridOptions{HideID: true, Styled: m.styled}
 	if len(m.plan.entries) > 0 && m.plan.cursor < len(m.plan.entries) {
 		opts.SelectedID = m.plan.entries[m.plan.cursor].Id
 	}

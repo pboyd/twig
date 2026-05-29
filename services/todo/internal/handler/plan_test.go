@@ -844,7 +844,7 @@ func TestClearPlan(t *testing.T) {
 
 	t.Run("mixed day: task deleted, meeting preserved", func(t *testing.T) {
 		day := "2099-07-08"
-		insertPlanEntry(t, planH.Queries, userID, day, 0, "Daily standup", 540, 15)  // meeting at 9:00
+		insertPlanEntry(t, planH.Queries, userID, day, 0, "Daily standup", 540, 15)     // meeting at 9:00
 		insertPlanEntry(t, planH.Queries, userID, day, newTask("Feature"), "", 600, 60) // task at 10:00
 		resp, err := planH.ClearPlan(ctx, connect.NewRequest(&planv1.ClearPlanRequest{
 			Day: day, StartMinute: 480,

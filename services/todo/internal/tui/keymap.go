@@ -187,7 +187,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			{k.Up, k.Down, k.PlanPrevDay, k.PlanNextDay},
 			{k.PlanAddTask, k.PlanAddEvent, k.PlanRename, k.PlanMove},
 			{k.PlanRemove, k.PlanClear, k.PlanToday, k.Refresh},
-			{k.NextTab, k.Help, k.Quit},
+			{k.PomCancel, k.NextTab, k.Help, k.Quit},
 		}
 	}
 	return [][]key.Binding{

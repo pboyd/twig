@@ -582,3 +582,39 @@ func TestRenderGrid_GridOptions_SelectedID_NoStyle(t *testing.T) {
 		t.Errorf("SelectedID with isTTY=false: unexpected escape codes:\n%s", out)
 	}
 }
+
+// ── US4: GridOptions.Styled regression (T014) ──────────────────────────────
+
+// TestRenderGrid_StyledFalseIsUnchanged verifies that Styled:false produces
+// byte-for-byte identical output to the zero-value GridOptions (T014).
+func TestRenderGrid_StyledFalseIsUnchanged(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+		{Id: 2, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+	}
+	baseline := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true, SelectedID: 1})
+	withStyled := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true, SelectedID: 1, Styled: false})
+
+	if baseline != withStyled {
+		t.Errorf("Styled:false must produce identical output to zero-value Styled field")
+	}
+}
+
+// TestRenderGrid_StyledTrueAccentHighlight verifies that Styled:true + isTTY=true
+// highlights the selected entry with a different style than plain bold (T014).
+func TestRenderGrid_StyledTrueAccentHighlight(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+	}
+	boldOnly := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 1, Styled: false})
+	accented := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 1, Styled: true})
+
+	// The accent output should contain ANSI codes (styled=true, isTTY=true).
+	if !strings.Contains(accented, "\x1b[") {
+		t.Errorf("Styled:true + isTTY=true: expected ANSI codes in output")
+	}
+	// The two outputs should differ (accent ≠ plain bold).
+	if boldOnly == accented {
+		t.Errorf("Styled:true should produce different output from Styled:false when isTTY=true")
+	}
+}

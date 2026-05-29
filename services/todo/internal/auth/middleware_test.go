@@ -17,7 +17,7 @@ import (
 
 // stubQuerier is a test double for the auth.Querier interface.
 type stubQuerier struct {
-	apiKey *db.ApiKey
+	apiKey  *db.ApiKey
 	session *db.Session
 }
 

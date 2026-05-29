@@ -276,7 +276,7 @@ func TestMoveState_EnterWithSentinelSendsNilParentID(t *testing.T) {
 	m := ExportNewModel(fc, tree)
 
 	ms := newMoveState(&m, 2) // move child; cursor starts on parent (root=1)
-	ms.cursor = 0              // move cursor to sentinel "(no parent)"
+	ms.cursor = 0             // move cursor to sentinel "(no parent)"
 
 	cmd, _ := ms.Update(tea.KeyMsg{Type: tea.KeyEnter}, &m)
 	if cmd == nil {
