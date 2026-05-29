@@ -48,7 +48,7 @@ The label builder drops the `[%d] ` prefix when `HideID` is set; the per-line wr
 | `e` | add event (name, then start/duration prompt) |
 | `r` | rename selected entry |
 | `m` | move selected entry (start and/or duration) |
-| `d` | remove selected entry |
+| `ctrl+d` | remove selected entry |
 | `c` | clear from a start time (defaults to now) |
 | `[` / `]` | previous / next day |
 | `t` | jump to today |
@@ -57,7 +57,7 @@ The label builder drops the `[%d] ` prefix when `HideID` is set; the per-line wr
 
 **Rationale**: Mirrors the Tasks-tab muscle memory where it makes sense (`m` move, `ctrl+r` refresh, `?`/`q`, `esc` cancel, hjkl/arrows) and uses mnemonic letters for planning-only verbs (`a`dd, `e`vent, `r`ename, `c`lear, `t`oday). Because each tab routes keys independently, reusing letters that mean something different on the Tasks tab (e.g. `c` = filter-completed there, clear here; `e` = edit there, add-event here) is safe and not surprising within a tab's own context.
 
-**Note on `d` vs `ctrl+d`**: the Tasks tab uses `ctrl+d` to delete (guarding against accidents on a destructive, cascading task delete). Removing a plan entry is low-stakes and reversible by re-adding, so `d` is used for ergonomics, consistent with the brainstormed design. Open to switching to `ctrl+d` in review if parity is preferred.
+**Remove key**: standardized on `ctrl+d`, matching the Tasks tab's delete binding for cross-tab consistency (the same finger-memory removes the selected item on either tab).
 
 ## 4. Deferred item — task picker contents
 

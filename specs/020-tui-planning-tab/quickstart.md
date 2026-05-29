@@ -41,7 +41,7 @@ Launch the TUI on a TTY: `./todo`.
 1. With ≥2 entries, press **↓/↑** (or `j`/`k`) → the highlight moves between entries in time order.
 2. **r** → rename the highlighted entry; confirm the label updates.
 3. **m** → move it to a new start and/or duration; confirm it relocates.
-4. **d** → remove it; confirm it disappears and the highlight settles on a neighbor.
+4. **Ctrl+D** → remove it; confirm it disappears and the highlight settles on a neighbor.
 5. **c** → clear from a chosen time (default = now); confirm entries at/after that time are gone and earlier ones remain.
 
 ## 6. Plan another day (User Story 4 — P3)

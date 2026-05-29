@@ -108,7 +108,7 @@ Single Go module at `services/todo/`. All commands run from `services/todo/` (e.
 ### Implementation for User Story 3
 
 - [ ] T024 [US3] Add selection navigation (up/`k`, down/`j`) for `planList` in `services/todo/internal/tui/plan_update.go`, moving `cursor` over entries in chronological order with clamping.
-- [ ] T025 [US3] Add `Rename` (`r`), `Move` (`m`), `Remove` (`d`), and `Clear` (`c`) bindings in `services/todo/internal/tui/keymap.go`.
+- [ ] T025 [US3] Add `Rename` (`r`), `Move` (`m`), `Remove` (`ctrl+d`, matching the Tasks-tab delete), and `Clear` (`c`) bindings in `services/todo/internal/tui/keymap.go`.
 - [ ] T026 [US3] Implement the `planRename` (prefilled name), `planMove` (start + optional duration), and `planClear` (start prefilled with now) forms in `services/todo/internal/tui/plan_view.go`.
 - [ ] T027 [US3] Add `renamePlanCmd`, `movePlanCmd`, `removePlanCmd`, and `clearPlanCmd` + `planMutatedMsg` handling in `services/todo/internal/tui/plan_update.go`: validate with `timeparse`, reload after success, keep selection on the edited entry (or clamp after remove/clear), surface errors (FR-021).
 
