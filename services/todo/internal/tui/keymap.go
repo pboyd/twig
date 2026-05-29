@@ -14,7 +14,7 @@ type KeyMap struct {
 	Delete    key.Binding
 	Complete  key.Binding
 	PomStart  key.Binding
-	PomResume key.Binding
+	PomCancel key.Binding
 	Move      key.Binding
 	Filter    key.Binding
 	Refresh   key.Binding
@@ -70,9 +70,9 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("s"),
 			key.WithHelp("s", "start pomodoro"),
 		),
-		PomResume: key.NewBinding(
-			key.WithKeys("r"),
-			key.WithHelp("r", "resume pomodoro"),
+		PomCancel: key.NewBinding(
+			key.WithKeys("x"),
+			key.WithHelp("x", "cancel pomodoro"),
 		),
 		Move: key.NewBinding(
 			key.WithKeys("m"),
@@ -123,7 +123,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Collapse, k.Expand},
 		{k.Edit, k.NewSub, k.NewRoot, k.Delete},
-		{k.Complete, k.PomStart, k.PomResume, k.Move},
+		{k.Complete, k.PomStart, k.PomCancel, k.Move},
 		{k.Filter, k.Refresh, k.Help, k.Quit},
 	}
 }

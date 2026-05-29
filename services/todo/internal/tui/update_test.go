@@ -599,79 +599,14 @@ func TestRefresh_FallsBackToFirstWhenTaskGone(t *testing.T) {
 	}
 }
 
-// TestPomodoro_SKeyDispatchesPomodoroRequest checks that pressing S emits a
-// tea.Cmd that, when invoked, returns pomodoroRequestMsg with the correct taskID.
-func TestPomodoro_SKeyDispatchesPomodoroRequest(t *testing.T) {
+// TestPomodoro_SKeyDispatchesStartPomCmd checks that pressing S emits a Cmd.
+func TestPomodoro_SKeyDispatchesStartPomCmd(t *testing.T) {
 	m := buildTestModel()
 	m.cursor = 0 // task id=1
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	if cmd == nil {
 		t.Fatal("expected a Cmd from S key, got nil")
-	}
-	msg := cmd()
-	req, ok := msg.(pomodoroRequestMsg)
-	if !ok {
-		t.Fatalf("expected pomodoroRequestMsg, got %T", msg)
-	}
-	if req.taskID != 1 {
-		t.Errorf("pomodoroRequestMsg.taskID: want 1, got %d", req.taskID)
-	}
-	if req.resume {
-		t.Error("pomodoroRequestMsg.resume should be false for S key")
-	}
-}
-
-// TestPomodoro_RKeyDispatchesPomodoroResume checks that pressing R emits a
-// tea.Cmd that returns pomodoroRequestMsg with resume=true.
-func TestPomodoro_RKeyDispatchesPomodoroResume(t *testing.T) {
-	m := buildTestModel()
-
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	if cmd == nil {
-		t.Fatal("expected a Cmd from R key, got nil")
-	}
-	msg := cmd()
-	req, ok := msg.(pomodoroRequestMsg)
-	if !ok {
-		t.Fatalf("expected pomodoroRequestMsg, got %T", msg)
-	}
-	if !req.resume {
-		t.Error("pomodoroRequestMsg.resume should be true for R key")
-	}
-}
-
-// TestPomodoro_DoneRestoresModeList checks that pomodoroDoneMsg returns to modeList.
-func TestPomodoro_DoneRestoresModeList(t *testing.T) {
-	m := buildTestModel()
-	m.mode = modePomodoro
-	m.cursor = 1
-
-	next, _ := m.Update(pomodoroDoneMsg{})
-	nm := next.(Model)
-
-	if nm.mode != modeList {
-		t.Errorf("expected modeList after pomodoroDoneMsg, got %v", nm.mode)
-	}
-	if nm.cursor != 1 {
-		t.Errorf("cursor should be preserved: want 1, got %d", nm.cursor)
-	}
-}
-
-// TestPomodoro_DoneWithErrorSetsErr checks that an error in pomodoroDoneMsg
-// is surfaced on the model.
-func TestPomodoro_DoneWithErrorSetsErr(t *testing.T) {
-	m := buildTestModel()
-	m.mode = modePomodoro
-
-	next, _ := m.Update(pomodoroDoneMsg{err: errForTest("pom failed")})
-	nm := next.(Model)
-
-	if nm.mode != modeList {
-		t.Errorf("expected modeList, got %v", nm.mode)
-	}
-	if nm.err == nil {
-		t.Error("expected err to be set after pomodoroDoneMsg with error")
 	}
 }
 

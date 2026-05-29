@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/charmbracelet/bubbles/key"
@@ -12,6 +13,7 @@ import (
 	taskv1 "github.com/pboyd/todo/services/todo/gen/task/v1"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
 	"github.com/pboyd/todo/services/todo/internal/cli"
+	"github.com/pboyd/todo/services/todo/internal/pomodoro"
 )
 
 // ── message types ──────────────────────────────────────────────────────────
@@ -184,8 +186,12 @@ func fetchAfterMutation(client taskv1connect.TaskServiceClient, highlightID int6
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
+func pomodoroRemaining(startAt time.Time, now time.Time) time.Duration {
+	return pomodoro.Remaining(startAt, now)
+}
+
 func (m Model) Init() tea.Cmd {
-	return listTasksCmd(m.client)
+	return tea.Batch(listTasksCmd(m.client), getActivePomCmd(m.client, m.tree))
 }
 
 // ── Update ─────────────────────────────────────────────────────────────────
@@ -241,19 +247,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case pomodoroRequestMsg:
-		m.mode = modePomodoro
-		if msg.resume {
-			return m, execPomodoroResume(m.client, m.pomConfig)
+	case pomTickMsg:
+		if m.pom == nil || m.pom.completed {
+			return m, nil
 		}
-		return m, execPomodoroStart(m.client, m.pomConfig, msg.taskID)
+		remaining := pomodoroRemaining(m.pom.startAt, time.Now())
+		if remaining == 0 && !m.pom.completed {
+			m.pom.completed = true
+			taskName := m.pom.taskName
+			return m, completePomCmd(m.client, taskName)
+		}
+		return m, pomTickCmd()
 
-	case pomodoroDoneMsg:
-		m.mode = modeList
+	case pomStartedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.pom = &activePom{
+			taskID:   msg.taskID,
+			taskName: msg.taskName,
+			startAt:  msg.startAt,
+		}
+		m.err = nil
+		return m, tea.Batch(pomTickCmd(), runPomHook(m.pomConfig.OnStart, "on_start"))
+
+	case pomCancelledMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		hookCmd := runPomHook(m.pomConfig.OnCancel, "on_cancel")
+		m.pom = nil
+		m.err = nil
+		return m, hookCmd
+
+	case pomCompletedMsg:
+		if m.pom != nil {
+			banner := "🍅 Pomodoro complete! · " + msg.taskName
+			if !m.styled {
+				banner = "Pomodoro complete! " + msg.taskName
+			}
+			m.pom.banner = banner
+		}
 		if msg.err != nil {
 			m.err = msg.err
 		}
-		return m, listTasksCmd(m.client)
+		hookCmd := runPomHook(m.pomConfig.OnComplete, "on_complete")
+		return m, tea.Batch(hookCmd, pomBannerExpireCmd())
+
+	case pomBannerExpireMsg:
+		m.pom = nil
+		return m, nil
+
+	case pomHookErrMsg:
+		m.err = msg.err
+		return m, nil
+
+	case pomActiveMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.pom != nil {
+			m.pom = msg.pom
+			return m, pomTickCmd()
+		}
+		return m, nil
 
 	case moveTaskResultMsg:
 		return m.handleMoveTaskResult(msg)
@@ -288,8 +348,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle quit confirmation overlay.
+	if m.confirmingQuit {
+		switch msg.String() {
+		case "y":
+			return m, tea.Quit
+		case "n", "esc":
+			m.confirmingQuit = false
+		}
+		return m, nil
+	}
+
+	// Clear completion banner on any keypress (banner clears, key still acts).
+	if m.pom != nil && m.pom.completed && m.pom.banner != "" {
+		m.pom = nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Quit):
+		if m.pom != nil && !m.pom.completed {
+			m.confirmingQuit = true
+			return m, nil
+		}
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Up):
@@ -380,14 +460,16 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.PomStart):
 		if len(m.visible) > 0 {
-			id := m.visible[m.cursor].node.Task.Id
+			task := m.visible[m.cursor].node.Task
 			m.err = nil
-			return m, startPomodoroCmd(id)
+			return m, startPomCmd(m.client, task.Id, task.Name)
 		}
 
-	case key.Matches(msg, m.keys.PomResume):
-		m.err = nil
-		return m, resumePomodoroCmd()
+	case key.Matches(msg, m.keys.PomCancel):
+		if m.pom != nil && !m.pom.completed {
+			m.err = nil
+			return m, cancelPomCmd(m.client)
+		}
 
 	case key.Matches(msg, m.keys.Delete):
 		if len(m.visible) > 0 {

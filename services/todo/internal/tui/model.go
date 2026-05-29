@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	taskv1connect "github.com/pboyd/todo/services/todo/gen/task/v1/taskv1connect"
@@ -17,9 +18,17 @@ const (
 	modeNewSubtask
 	modeNewRoot
 	modeHelp
-	modePomodoro
 	modeMove
 )
+
+// activePom holds the TUI's in-memory view of the one running pomodoro.
+type activePom struct {
+	taskID    int64
+	taskName  string
+	startAt   time.Time
+	completed bool
+	banner    string
+}
 
 // Model is the root Bubble Tea model for the TUI.
 type Model struct {
@@ -42,6 +51,8 @@ type Model struct {
 	width           int
 	height          int
 	styled          bool
+	pom             *activePom
+	confirmingQuit  bool
 }
 
 func newModel(client taskv1connect.TaskServiceClient, addr string, pomConfig config.PomodoroConfig) Model {

@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pboyd/todo/services/todo/internal/cli"
+	"github.com/pboyd/todo/services/todo/internal/pomodoro"
 )
 
 // View renders the current model state to a string.
@@ -22,6 +24,14 @@ func (m Model) View() string {
 	}
 }
 
+// statusHeight returns 2 while a pomodoro is active (timer + help line), else 1.
+func (m Model) statusHeight() int {
+	if m.pom != nil {
+		return 2
+	}
+	return 1
+}
+
 func (m Model) viewWithMove() string {
 	if m.width == 0 || m.move == nil {
 		return "loading..."
@@ -31,7 +41,7 @@ func (m Model) viewWithMove() string {
 	moveWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 3
+		innerH := m.height - 2 - m.statusHeight()
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -55,13 +65,13 @@ func (m Model) viewWithMove() string {
 	}
 
 	moveWidth = m.width - listWidth - 1
-	maxLines := m.height - 2
+	maxLines := m.height - 1 - m.statusHeight()
 	if maxLines < 1 {
 		maxLines = 1
 	}
 
 	list := m.renderList(listWidth)
-	moveView := m.move.View(moveWidth, m.height-2)
+	moveView := m.move.View(moveWidth, maxLines)
 
 	listLines := splitLines(list, maxLines)
 	moveLines := splitLines(moveView, maxLines)
@@ -88,7 +98,7 @@ func (m Model) viewList() string {
 	detailWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 3
+		innerH := m.height - 2 - m.statusHeight()
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -112,7 +122,7 @@ func (m Model) viewList() string {
 	}
 
 	detailWidth = m.width - listWidth - 1
-	maxLines := m.height - 2
+	maxLines := m.height - 1 - m.statusHeight()
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -145,7 +155,7 @@ func (m Model) viewWithForm() string {
 	formWidth := m.width - listWidth
 
 	if m.styled {
-		innerH := m.height - 3
+		innerH := m.height - 2 - m.statusHeight()
 		if innerH < 1 {
 			innerH = 1
 		}
@@ -169,7 +179,7 @@ func (m Model) viewWithForm() string {
 	}
 
 	formWidth = m.width - listWidth - 1
-	maxLines := m.height - 2
+	maxLines := m.height - 1 - m.statusHeight()
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -261,10 +271,39 @@ func (m Model) renderDetailPane(width int) string {
 }
 
 func (m Model) renderStatus() string {
-	if m.err != nil {
-		return errorStyle.Render("error: " + cli.UserMessage(m.err))
+	var lines []string
+
+	if m.pom != nil {
+		if m.confirmingQuit {
+			remaining := pomodoro.Remaining(m.pom.startAt, time.Now())
+			mm := int(remaining.Minutes())
+			ss := int(remaining.Seconds()) % 60
+			if m.styled {
+				lines = append(lines, fmt.Sprintf("🍅 %02d:%02d still running. Quit anyway? [y]es [n]o", mm, ss))
+			} else {
+				lines = append(lines, fmt.Sprintf("Pom %02d:%02d still running. Quit anyway? [y]es [n]o", mm, ss))
+			}
+		} else if m.pom.completed && m.pom.banner != "" {
+			lines = append(lines, m.pom.banner)
+		} else if !m.pom.completed {
+			remaining := pomodoro.Remaining(m.pom.startAt, time.Now())
+			mm := int(remaining.Minutes())
+			ss := int(remaining.Seconds()) % 60
+			if m.styled {
+				lines = append(lines, fmt.Sprintf("🍅 %02d:%02d · %s  [x] cancel", mm, ss, m.pom.taskName))
+			} else {
+				lines = append(lines, fmt.Sprintf("Pom %02d:%02d %s  [x] cancel", mm, ss, m.pom.taskName))
+			}
+		}
 	}
-	return m.help.View(m.keys)
+
+	if m.err != nil {
+		lines = append(lines, errorStyle.Render("error: "+cli.UserMessage(m.err)))
+	} else {
+		lines = append(lines, m.help.View(m.keys))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewHelp() string {
