@@ -8,6 +8,15 @@
 
 **Input**: User description: "Bring the daily planning mode into the interactive TUI as a new Planning tab alongside the existing Tasks tab, looking like the CLI day-planner grid and offering the same planning features."
 
+## Clarifications
+
+### Session 2026-05-28
+
+- Q: When a modal/prompt is open (Tasks edit/move form, or a Planning picker/rename/move/time prompt), what should the tab-switch key do? → A: Block tab-switching while any modal/prompt is open; the user must confirm or cancel it first, and the active form keeps consuming the Tab keys.
+- Q: When does the Planning grid refresh from the server? → A: Reload the day's entries each time the Planning tab is activated and after every successful mutation, plus offer a manual refresh key for parity with the Tasks tab.
+- Q: Is the running pomodoro shown while the Planning tab is active? → A: Yes — the shared status bar (including a running pomodoro) is displayed identically on both tabs (already required by FR-004).
+- Q: Does the now-marker advance on its own while the tab is open? → A: Yes — the now-marker MUST advance automatically over time via a periodic refresh, independent of any running pomodoro, so it stays current even with no user input.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - View the day's plan inside the TUI (Priority: P1)
@@ -91,7 +100,7 @@ The user plans ahead or reviews a past day. The Planning tab defaults to today a
 - **No tasks to schedule**: Invoking add-task when the user has no tasks shows an empty picker that can be cancelled without creating an entry.
 - **Server rejects a change** (e.g. invalid time range, overlapping precondition, entry not found): a readable error appears in the status bar and the grid reflects the last known good state.
 - **Narrow terminal**: The grid and tab bar degrade gracefully on small widths without corrupting the layout, consistent with the existing TUI's handling.
-- **Switching tabs mid-action**: An in-progress planning prompt (picker, rename, move, etc.) is cancelled or preserved consistently so the other tab is never left in a broken modal state.
+- **Switching tabs mid-action**: While any modal/prompt is open (a Planning picker, rename, move, or time prompt, or a Tasks edit/move form), the tab-switch key is blocked; the user must confirm or cancel the prompt before switching tabs, so neither tab is ever left in a broken modal state.
 - **Highlight after mutation**: After adding, moving, or removing an entry, the highlight settles on a sensible entry rather than disappearing or jumping arbitrarily.
 
 ## Requirements *(mandatory)*
@@ -106,6 +115,7 @@ The user plans ahead or reviews a past day. The Planning tab defaults to today a
 - **FR-006**: The Planning grid MUST NOT display the per-entry number prefix used by the CLI; entries are identified by cursor selection instead.
 - **FR-007**: The Planning tab MUST visually highlight one selected entry and MUST let the user move the selection between entries in chronological order.
 - **FR-008**: When the in-view day is today, the grid MUST show a marker for the current time; when it is any other day, no such marker is shown.
+- **FR-008a**: When the Planning tab is active on today, the now-marker MUST advance automatically as time passes, without requiring user input and independent of whether a pomodoro is running, so a long-open tab keeps showing the correct current time slot.
 - **FR-009**: Entries linked to a completed task MUST render struck through; event entries MUST never render as completed.
 - **FR-010**: Users MUST be able to schedule an existing task onto the in-view day by selecting it from a task picker and providing a start time and an optional duration.
 - **FR-011**: Users MUST be able to add an event to the in-view day by providing a name, a start time, and an optional duration.
@@ -120,6 +130,8 @@ The user plans ahead or reviews a past day. The Planning tab defaults to today a
 - **FR-020**: Users MUST be able to cancel any planning prompt (picker, name entry, time entry) without changing the plan.
 - **FR-021**: When a planning action fails validation or is rejected by the server, the system MUST show a readable error and leave the plan in its last known good state.
 - **FR-022**: Planning actions MUST operate on the same stored plan data as the CLI, so a change made in the TUI is visible from the CLI and vice versa.
+- **FR-023**: While any modal or prompt is open (a Tasks edit/move form or a Planning picker, rename, move, or time prompt), the system MUST NOT switch tabs; the open form retains control of all keys until the user confirms or cancels it.
+- **FR-024**: The Planning tab MUST reload the in-view day's entries each time it becomes active and after every successful mutation, and MUST provide a manual refresh key (consistent with the Tasks tab) that reloads the current day on demand.
 
 ### Key Entities *(include if feature involves data)*
 
