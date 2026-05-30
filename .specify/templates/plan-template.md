@@ -40,7 +40,12 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. Simplicity / YAGNI | ✅ / ⚠️ VIOLATION | [Justify any complexity in Complexity Tracking table below] |
+| II. API-First Design | ✅ / ⚠️ VIOLATION | [Contracts committed before implementation?] |
+| III. UI/UX Consistency | ✅ / ⚠️ VIOLATION | [New surfaces use shared theme/conventions?] |
+| IV. Playful User Messages | ✅ / ⚠️ VIOLATION | [New user-facing text reviewed for tone?] |
 
 ## Project Structure
 
