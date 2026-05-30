@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package plan.v1;
+
+option go_package = "github.com/pboyd/twig/services/twig/gen/plan/v1;planv1";
+
+// PlanService manages day-scoped plan entries for the calling user.
+service PlanService {
+  // ListPlanEntries returns every entry on the given day, ordered by start_minute ascending.
+  rpc ListPlanEntries(ListPlanEntriesRequest) returns (ListPlanEntriesResponse);
+
+  // AddPlanTask appends an entry linked to a task. Server allocates the per-day id.
+  rpc AddPlanTask(AddPlanTaskRequest) returns (AddPlanTaskResponse);
+
+  // AddPlanEvent appends an entry not linked to a task (a name is required).
+  rpc AddPlanEvent(AddPlanEventRequest) returns (AddPlanEventResponse);
+
+  // RemovePlanEntry deletes the entry identified by (day, id).
+  rpc RemovePlanEntry(RemovePlanEntryRequest) returns (RemovePlanEntryResponse);
+
+  // RenamePlanEntry replaces the entry's display name.
+  rpc RenamePlanEntry(RenamePlanEntryRequest) returns (RenamePlanEntryResponse);
+
+  // MovePlanEntry changes start_minute and optionally duration_minute.
+  rpc MovePlanEntry(MovePlanEntryRequest) returns (MovePlanEntryResponse);
+
+  // ClearPlan removes every entry starting at or after start_minute on day; if an
+  // entry straddles start_minute, its duration is shortened so it ends at start_minute.
+  rpc ClearPlan(ClearPlanRequest) returns (ClearPlanResponse);
+}
+
+// PlanEntry is a single scheduled segment of one day. Identity within a user's
+// data is (day, id). user_id is implicit from the authenticated caller and
+// not carried on the wire.
+message PlanEntry {
+  // The day this entry belongs to, in YYYY-MM-DD.
+  string day = 1;
+  // Server-assigned, per-day sequential, never renumbered.
+  int32 id = 2;
+  // Optional link to a task. 0 (default) means no task.
+  int64 task_id = 3;
+  // Display name override. Empty string when omitted; clients should fall back
+  // to the linked task's name in that case.
+  string name = 4;
+  // Minutes since local midnight on `day`. Range: 0..1439.
+  int32 start_minute = 5;
+  // Length of the entry, in minutes. > 0, and start_minute + duration_minute <= 1440.
+  int32 duration_minute = 6;
+  // True iff this entry references a completed task (task_id != 0 and tasks.completed_at IS NOT NULL).
+  // Always false for event entries. Populated server-side by ListPlanEntries; ignored on writes.
+  bool completed = 7;
+}
+
+message ListPlanEntriesRequest { string day = 1; }
+message ListPlanEntriesResponse { repeated PlanEntry entries = 1; }
+
+message AddPlanTaskRequest {
+  string day = 1;
+  int64 task_id = 2;
+  int32 start_minute = 3;
+  // 0 means "let the server choose": (estimate - completed) * 30 if positive, else 30.
+  int32 duration_minute = 4;
+}
+message AddPlanTaskResponse { PlanEntry entry = 1; }
+
+message AddPlanEventRequest {
+  string day = 1;
+  string name = 2;
+  int32 start_minute = 3;
+  // 0 means "use the 30-minute default".
+  int32 duration_minute = 4;
+}
+message AddPlanEventResponse { PlanEntry entry = 1; }
+
+message RemovePlanEntryRequest { string day = 1; int32 id = 2; }
+message RemovePlanEntryResponse {}
+
+message RenamePlanEntryRequest { string day = 1; int32 id = 2; string name = 3; }
+message RenamePlanEntryResponse { PlanEntry entry = 1; }
+
+message MovePlanEntryRequest {
+  string day = 1;
+  int32 id = 2;
+  int32 start_minute = 3;
+  // 0 means "keep the existing duration unchanged".
+  int32 duration_minute = 4;
+}
+message MovePlanEntryResponse { PlanEntry entry = 1; }
+
+message ClearPlanRequest { string day = 1; int32 start_minute = 2; }
+message ClearPlanResponse {
+  // Number of entries deleted outright (not counting the one that was trimmed, if any).
+  int32 deleted_count = 1;
+  // True iff exactly one entry was shortened to end at start_minute.
+  bool trimmed_straddling_entry = 2;
+}

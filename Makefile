@@ -3,22 +3,22 @@
 INVENTORY ?= deploy/inventories/test.ini
 
 proto:
-	cd services/todo && buf generate
+	cd services/twig && buf generate
 
 build:
-	podman build -t twig-server services/todo
+	podman build -t twig-server services/twig
 
 cli:
-	cd services/todo && go build -o twig ./cmd/todo
+	cd services/twig && go build -o twig ./cmd/twig
 
 dev:
 	podman-compose up -d --build --force-recreate server
 
 migrate-up:
-	migrate -path services/todo/db/migrations -database "$(DATABASE_URL)" up
+	migrate -path services/twig/db/migrations -database "$(DATABASE_URL)" up
 
 migrate-down:
-	migrate -path services/todo/db/migrations -database "$(DATABASE_URL)" down 1
+	migrate -path services/twig/db/migrations -database "$(DATABASE_URL)" down 1
 
 deploy:
 	ansible-playbook -i $(INVENTORY) deploy/site.yml

@@ -6,17 +6,17 @@ Running `twig` with no arguments launches the interactive TUI on a TTY.
 
 ## Commands
 
-All Go commands run from `services/todo/`:
+All Go commands run from `services/twig/`:
 
 ```bash
 # Run all tests
-cd services/todo && go test ./...
+cd services/twig && go test ./...
 
 # Run tests for a specific package
-cd services/todo && go test ./internal/cli/...
+cd services/twig && go test ./internal/cli/...
 
 # Build the CLI binary
-cd services/todo && go build -o twig ./cmd/todo
+cd services/twig && go build -o twig ./cmd/twig
 
 # Build and run the server (via podman-compose)
 make dev
@@ -25,7 +25,7 @@ make dev
 make proto
 
 # Regenerate sqlc DB query code (requires sqlc CLI)
-cd services/todo && sqlc generate
+cd services/twig && sqlc generate
 
 # Run DB migrations manually
 make migrate-up   # requires DATABASE_URL env var
@@ -43,18 +43,18 @@ make dev   # builds and (re)starts the server container; postgres starts automat
 This is equivalent to `podman-compose up -d --build --force-recreate server`.
 
 **PostgreSQL** is exposed on `localhost:5432`:
-- User: `todo`, Password: `todo`, Database: `todo`
-- Connection string: `postgres://todo:todo@localhost:5432/todo?sslmode=disable`
-- Connect directly: `psql postgres://todo:todo@localhost:5432/todo`
+- User: `twig`, Password: `twig`, Database: `twig`
+- Connection string: `postgres://twig:twig@localhost:5432/twig?sslmode=disable`
+- Connect directly: `psql postgres://twig:twig@localhost:5432/twig`
 
-The server container connects to postgres via the internal hostname `postgres` (not `localhost`). The `DATABASE_URL` for the server is `postgres://todo:todo@postgres:5432/todo?sslmode=disable`.
+The server container connects to postgres via the internal hostname `postgres` (not `localhost`). The `DATABASE_URL` for the server is `postgres://twig:twig@postgres:5432/twig?sslmode=disable`.
 
 The server auto-runs migrations on startup, so no separate migration step is needed when using `make dev`.
 
 To provision a user (generates an API key):
 ```bash
 # Inside the running server container, or against a local binary with DATABASE_URL set:
-./todo-server --provision-user name:password
+./twig-server --provision-user name:password
 ```
 
 The CLI requires:
@@ -65,10 +65,10 @@ Both can also be set in the optional config file at `~/.config/twig/config.toml`
 
 ## Architecture
 
-Single Go module at `services/todo/` with two binaries:
+Single Go module at `services/twig/` with two binaries:
 
 - **`cmd/server`** — HTTP/2 server (port 8080) with ConnectRPC (gRPC-compatible) handlers and a plain HTTP auth layer (`/auth/login`, `/auth/logout`). Runs migrations on startup.
-- **`cmd/todo`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning).
+- **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning).
 
 ### Key internal packages
 
@@ -86,7 +86,7 @@ Single Go module at `services/todo/` with two binaries:
 ### Data flow
 
 ```
-CLI (cmd/todo) → ConnectRPC over HTTP/2 → handler/ → db/ → PostgreSQL
+CLI (cmd/twig) → ConnectRPC over HTTP/2 → handler/ → db/ → PostgreSQL
 ```
 
 Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP endpoints; all ConnectRPC routes are wrapped by `auth.Middleware`.
@@ -104,17 +104,17 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 - Handler tests and CLI tests use `export_test.go` shims to access unexported helpers.
 - No integration test infrastructure — tests do not require a running database.
 
-## Frontend (services/todo-web/)
+## Frontend (services/twig-web/)
 
-A React 19 + TypeScript SPA at `services/todo-web/` — sibling to the Go module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
+A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the Go module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
 
-All frontend commands run from `services/todo-web/`:
+All frontend commands run from `services/twig-web/`:
 
 ```bash
 # Install dependencies
 npm install
 
-# Generate TypeScript from proto (re-run when services/todo/proto changes)
+# Generate TypeScript from proto (re-run when services/twig/proto changes)
 npm run gen
 
 # Run the Vite dev server (proxies /auth, /task.v1, /health.v1 → :8080)

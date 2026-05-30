@@ -2,11 +2,11 @@ services:
   postgres:
     image: docker.io/library/postgres:17-alpine
     environment:
-      POSTGRES_USER: todo
-      POSTGRES_PASSWORD: todo
-      POSTGRES_DB: todo
+      POSTGRES_USER: twig
+      POSTGRES_PASSWORD: twig
+      POSTGRES_DB: twig
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo"]
+      test: ["CMD-SHELL", "pg_isready -U twig"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -16,9 +16,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   server:
-    build: services/todo
+    build: services/twig
     environment:
-      DATABASE_URL: postgres://todo:todo@postgres:5432/todo?sslmode=disable
+      DATABASE_URL: postgres://twig:twig@postgres:5432/twig?sslmode=disable
     ports:
       - "8080:8080"
     depends_on:
