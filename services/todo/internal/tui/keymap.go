@@ -28,10 +28,8 @@ type KeyMap struct {
 	// Planning actions
 	PlanAddTask  key.Binding
 	PlanAddEvent key.Binding
-	PlanRename   key.Binding
-	PlanMove     key.Binding
+	PlanEdit     key.Binding
 	PlanRemove   key.Binding
-	PlanClear    key.Binding
 	PlanPrevDay  key.Binding
 	PlanNextDay  key.Binding
 	PlanToday    key.Binding
@@ -62,8 +60,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("→/l", "expand"),
 		),
 		Edit: key.NewBinding(
-			key.WithKeys("e"),
-			key.WithHelp("e", "edit task"),
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "edit task"),
 		),
 		NewSub: key.NewBinding(
 			key.WithKeys("n"),
@@ -118,28 +116,20 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("shift+tab", "prev tab"),
 		),
 		PlanAddTask: key.NewBinding(
-			key.WithKeys("a"),
-			key.WithHelp("a", "add task"),
+			key.WithKeys("t"),
+			key.WithHelp("t", "add task"),
 		),
 		PlanAddEvent: key.NewBinding(
 			key.WithKeys("e"),
 			key.WithHelp("e", "add event"),
 		),
-		PlanRename: key.NewBinding(
-			key.WithKeys("r"),
-			key.WithHelp("r", "rename"),
-		),
-		PlanMove: key.NewBinding(
-			key.WithKeys("m"),
-			key.WithHelp("m", "move entry"),
+		PlanEdit: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "edit entry"),
 		),
 		PlanRemove: key.NewBinding(
 			key.WithKeys("ctrl+d"),
 			key.WithHelp("ctrl+d", "remove entry"),
-		),
-		PlanClear: key.NewBinding(
-			key.WithKeys("c"),
-			key.WithHelp("c", "clear from time"),
 		),
 		PlanPrevDay: key.NewBinding(
 			key.WithKeys("["),
@@ -150,8 +140,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("]", "next day"),
 		),
 		PlanToday: key.NewBinding(
-			key.WithKeys("t"),
-			key.WithHelp("t", "today"),
+			key.WithKeys("."),
+			key.WithHelp(".", "today"),
 		),
 		Save: key.NewBinding(
 			key.WithKeys("ctrl+s"),
@@ -185,9 +175,9 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	if k.PlanningMode {
 		return [][]key.Binding{
 			{k.Up, k.Down, k.PlanPrevDay, k.PlanNextDay},
-			{k.PlanAddTask, k.PlanAddEvent, k.PlanRename, k.PlanMove},
-			{k.PlanRemove, k.PlanClear, k.PlanToday, k.Refresh},
-			{k.PomCancel, k.NextTab, k.Help, k.Quit},
+			{k.PlanAddTask, k.PlanAddEvent, k.PlanEdit, k.PlanRemove},
+			{k.PlanToday, k.Refresh, k.PomCancel, k.NextTab},
+			{k.Help, k.Quit},
 		}
 	}
 	return [][]key.Binding{

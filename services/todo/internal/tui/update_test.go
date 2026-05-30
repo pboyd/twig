@@ -370,17 +370,40 @@ func (e errForTest) Error() string { return string(e) }
 
 // ── T021: highlight rules after mutations ───────────────────────────────────
 
-// TestHighlight_EditOpensFormAndPreservesMode checks that pressing E sets
-// modeEdit without changing the cursor.
+// TestHighlight_EditOpensModeEdit checks that pressing Enter sets modeEdit
+// on the Tasks tab (US2/T009).
 func TestHighlight_EditOpensModeEdit(t *testing.T) {
 	m := buildTestModel()
 	m.cursor = 1
-	m = pressKey(m, "e")
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	next, _ := m.Update(msg)
+	m = next.(Model)
 	if m.mode != modeEdit {
 		t.Errorf("expected modeEdit, got %v", m.mode)
 	}
 	if m.originalCursor != 1 {
 		t.Errorf("originalCursor: want 1, got %d", m.originalCursor)
+	}
+}
+
+// TestEdit_EKeyInertOnTasksTab checks that 'e' does not open edit mode on Tasks tab (US2/T009).
+func TestEdit_EKeyInertOnTasksTab(t *testing.T) {
+	m := buildTestModel()
+	m.cursor = 1
+	m = pressKey(m, "e")
+	if m.mode != modeList {
+		t.Errorf("'e' on Tasks: expected modeList, got %v", m.mode)
+	}
+}
+
+// TestEdit_EnterOnEmptyListIsInert checks that Enter on an empty task list is inert (US2/T009).
+func TestEdit_EnterOnEmptyListIsInert(t *testing.T) {
+	m := ExportNewModel(nil, nil) // empty tree
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	next, _ := m.Update(msg)
+	m = next.(Model)
+	if m.mode != modeList {
+		t.Errorf("Enter on empty list: expected modeList, got %v", m.mode)
 	}
 }
 
@@ -768,7 +791,7 @@ func TestComplete_LingerNotClearedByOtherKeys(t *testing.T) {
 	}{
 		{"Expand", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}},
 		{"Collapse", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")}},
-		{"Edit", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")}},
+		{"Edit", tea.KeyMsg{Type: tea.KeyEnter}},
 		{"Help", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}},
 		{"Filter", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")}},
 	}

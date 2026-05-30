@@ -129,19 +129,6 @@ func removePlanCmd(client planv1connect.PlanServiceClient, day string, id int32)
 	}
 }
 
-func clearPlanCmd(client planv1connect.PlanServiceClient, day string, startMin int) tea.Cmd {
-	return func() tea.Msg {
-		_, err := client.ClearPlan(context.Background(), connect.NewRequest(&planv1.ClearPlanRequest{
-			Day:         day,
-			StartMinute: int32(startMin),
-		}))
-		if err != nil {
-			return planMutatedMsg{err: err}
-		}
-		return planMutatedMsg{highlightID: 0}
-	}
-}
-
 // listTasksForPickerCmd fetches incomplete tasks for the task picker.
 func listTasksForPickerCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
 	return func() tea.Msg {
@@ -220,55 +207,25 @@ func (m *Model) initTaskTimeForm(taskID int64) {
 	m.plan.mode = planTaskTime
 }
 
-// initRenameForm opens the rename form for the selected entry.
-func (m *Model) initRenameForm() {
+// initEditForm opens the unified edit form for the selected entry.
+// Name is prefilled; Start and Duration are blank (blank = keep existing).
+func (m *Model) initEditForm() {
 	if len(m.plan.entries) == 0 {
 		return
 	}
 	entry := m.plan.entries[m.plan.cursor]
-	name := newPlanInput("New name")
+	name := newPlanInput("Name")
 	name.SetValue(entry.Name)
 	name.Focus()
+	start := newPlanInput("New start time (e.g. 09:00, blank=keep)")
+	dur := newPlanInput("New duration (e.g. 30m, blank=keep)")
 
 	m.plan.form = planFormState{
-		fields:  []textinput.Model{name},
+		fields:  []textinput.Model{name, start, dur},
 		focus:   0,
 		entryID: entry.Id,
 	}
-	m.plan.mode = planRename
-}
-
-// initMoveForm opens the move form for the selected entry.
-func (m *Model) initMoveForm() {
-	if len(m.plan.entries) == 0 {
-		return
-	}
-	entry := m.plan.entries[m.plan.cursor]
-	start := newPlanInput("New start time (e.g. 09:00)")
-	start.Focus()
-	dur := newPlanInput("New duration (e.g. 30m, blank=keep existing)")
-
-	m.plan.form = planFormState{
-		fields:  []textinput.Model{start, dur},
-		focus:   0,
-		entryID: entry.Id,
-	}
-	m.plan.mode = planMove
-}
-
-// initClearForm opens the clear form prefilled with the current time.
-func (m *Model) initClearForm() {
-	now := time.Now()
-	nowStr := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute())
-	start := newPlanInput("Clear from (e.g. 09:00)")
-	start.SetValue(nowStr)
-	start.Focus()
-
-	m.plan.form = planFormState{
-		fields: []textinput.Model{start},
-		focus:  0,
-	}
-	m.plan.mode = planClear
+	m.plan.mode = planEdit
 }
 
 // cyclePlanFormFocus moves focus to the next/prev field in the current form.
@@ -290,12 +247,8 @@ func (m *Model) submitPlanForm() tea.Cmd {
 		return m.submitTaskTimeForm()
 	case planEventForm:
 		return m.submitEventForm()
-	case planRename:
-		return m.submitRenameForm()
-	case planMove:
-		return m.submitMoveForm()
-	case planClear:
-		return m.submitClearForm()
+	case planEdit:
+		return m.submitEditForm()
 	}
 	return nil
 }
@@ -349,49 +302,60 @@ func (m *Model) submitEventForm() tea.Cmd {
 	return addPlanEventCmd(m.planClient, m.plan.day, nameStr, start, dur)
 }
 
-func (m *Model) submitRenameForm() tea.Cmd {
-	name := strings.TrimSpace(m.plan.form.fields[0].Value())
-	if name == "" {
+// submitEditForm validates and submits the unified Edit form.
+// Issues RenamePlanEntry if the name changed, MovePlanEntry if a start time was given.
+// If neither changed, closes the form without an RPC (no-op).
+func (m *Model) submitEditForm() tea.Cmd {
+	nameStr := strings.TrimSpace(m.plan.form.fields[0].Value())
+	startStr := strings.TrimSpace(m.plan.form.fields[1].Value())
+	durStr := strings.TrimSpace(m.plan.form.fields[2].Value())
+
+	if nameStr == "" {
 		m.plan.err = fmt.Errorf("name cannot be empty")
 		return nil
 	}
-	m.plan.err = nil
-	m.plan.mode = planList
-	return renamePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, name)
-}
 
-func (m *Model) submitMoveForm() tea.Cmd {
-	startStr := strings.TrimSpace(m.plan.form.fields[0].Value())
-	durStr := strings.TrimSpace(m.plan.form.fields[1].Value())
-
-	start, err := timeparse.ParseStart(startStr)
-	if err != nil {
-		m.plan.err = fmt.Errorf("invalid start time: %w", err)
-		return nil
-	}
-	var dur int
-	if durStr != "" {
-		dur, err = timeparse.ParseDurationOrEnd(durStr, start)
-		if err != nil {
-			m.plan.err = fmt.Errorf("invalid duration: %w", err)
-			return nil
+	// Look up the original entry to detect whether the name changed.
+	var originalName string
+	for _, e := range m.plan.entries {
+		if e.Id == m.plan.form.entryID {
+			originalName = e.Name
+			break
 		}
 	}
+
+	var cmds []tea.Cmd
+
+	if nameStr != originalName {
+		cmds = append(cmds, renamePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, nameStr))
+	}
+
+	if startStr != "" {
+		start, err := timeparse.ParseStart(startStr)
+		if err != nil {
+			m.plan.err = fmt.Errorf("invalid start time: %w", err)
+			return nil
+		}
+		var dur int
+		if durStr != "" {
+			dur, err = timeparse.ParseDurationOrEnd(durStr, start)
+			if err != nil {
+				m.plan.err = fmt.Errorf("invalid duration: %w", err)
+				return nil
+			}
+		}
+		cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, start, dur))
+	}
+
 	m.plan.err = nil
 	m.plan.mode = planList
-	return movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, start, dur)
-}
-
-func (m *Model) submitClearForm() tea.Cmd {
-	startStr := strings.TrimSpace(m.plan.form.fields[0].Value())
-	start, err := timeparse.ParseStart(startStr)
-	if err != nil {
-		m.plan.err = fmt.Errorf("invalid start time: %w", err)
+	if len(cmds) == 0 {
 		return nil
 	}
-	m.plan.err = nil
-	m.plan.mode = planList
-	return clearPlanCmd(m.planClient, m.plan.day, start)
+	if len(cmds) == 1 {
+		return cmds[0]
+	}
+	return tea.Batch(cmds...)
 }
 
 // ── plan reducer ──────────────────────────────────────────────────────────

@@ -39,22 +39,13 @@ func (m Model) viewPlanning() string {
 	}
 	now := time.Now()
 
-	// Modals (picker, forms) take full width — use the existing single-pane renderer.
-	if m.plan.mode != planList {
-		contentH := m.height - tabBarHeight - m.statusHeight()
-		if contentH < 1 {
-			contentH = 1
-		}
-		return m.renderTabBar(m.width) + "\n" + m.renderPlanningView(m.width, contentH, now) + m.renderStatus()
-	}
-
-	if !m.plan.loaded {
+	if !m.plan.loaded && m.plan.mode == planList {
 		return m.renderTabBar(m.width) + "\nLoading...\n" + m.renderStatus()
 	}
 
-	// Two-pane layout (mirrors viewList): left = grid, right = entry details.
+	// Two-pane layout: left = grid, right = details or active picker/form.
 	gridWidth := m.width / 2
-	detailWidth := m.width - gridWidth
+	rightWidth := m.width - gridWidth
 
 	if m.styled {
 		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
@@ -65,43 +56,60 @@ func (m Model) viewPlanning() string {
 		if innerGridW < 0 {
 			innerGridW = 0
 		}
-		innerDetailW := detailWidth - 2
-		if innerDetailW < 0 {
-			innerDetailW = 0
+		innerRightW := rightWidth - 2
+		if innerRightW < 0 {
+			innerRightW = 0
 		}
 
 		gridContent := m.renderPlanGrid(innerGridW, innerH, now)
-		detailContent := renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), innerDetailW, m.styled)
 
-		// Date lives in the pane title; grid pane is focused (accent border).
-		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), true)
-		detailPane := paneBox(detailContent, detailWidth, innerH, "Details", false)
+		var rightContent string
+		var rightTitle string
+		var gridFocused bool
+		if m.plan.mode == planList {
+			rightContent = renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), innerRightW, m.styled)
+			rightTitle = "Details"
+			gridFocused = true
+		} else {
+			rightContent = m.renderPlanRightPane(innerRightW)
+			rightTitle = m.planFormPaneTitle()
+			gridFocused = false
+		}
 
-		joined := lipgloss.JoinHorizontal(lipgloss.Top, gridPane, detailPane)
+		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), gridFocused)
+		rightPane := paneBox(rightContent, rightWidth, innerH, rightTitle, !gridFocused)
+
+		joined := lipgloss.JoinHorizontal(lipgloss.Top, gridPane, rightPane)
 		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
 	}
 
 	// Non-styled fallback: row-join with padRightAnsi.
-	detailWidth = m.width - gridWidth - 1
+	rightWidth = m.width - gridWidth - 1
 	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
 	if maxLines < 1 {
 		maxLines = 1
 	}
 
 	gridContent := m.renderPlanGridContent(gridWidth, maxLines, now)
-	detailContent := renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), detailWidth, m.styled)
+
+	var rightContent string
+	if m.plan.mode == planList {
+		rightContent = renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), rightWidth, m.styled)
+	} else {
+		rightContent = m.renderPlanRightPane(rightWidth)
+	}
 
 	gridLines := splitLines(gridContent, maxLines)
-	detailLines := splitLines(detailContent, maxLines)
+	rightLines := splitLines(rightContent, maxLines)
 
 	var rows []string
 	for i := 0; i < maxLines; i++ {
 		l := padRightAnsi(gridLines[i], gridWidth)
-		d := ""
-		if i < len(detailLines) {
-			d = detailLines[i]
+		r := ""
+		if i < len(rightLines) {
+			r = rightLines[i]
 		}
-		rows = append(rows, fmt.Sprintf("%s %s", l, d))
+		rows = append(rows, fmt.Sprintf("%s %s", l, r))
 	}
 
 	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()

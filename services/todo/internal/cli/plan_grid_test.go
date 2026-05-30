@@ -618,3 +618,156 @@ func TestRenderGrid_StyledTrueAccentHighlight(t *testing.T) {
 		t.Errorf("Styled:true should produce different output from Styled:false when isTTY=true")
 	}
 }
+
+// ── US4: SelectionStyle cell-only highlight (T015) ─────────────────────────
+
+// styleMarker wraps content with sentinel markers so tests can identify styled content.
+func styleMarker(s string) string { return "<<" + s + ">>" }
+
+// TestSelectionStyle_SingleRowEntry checks that SelectionStyle is applied only to
+// the content cell of a single-row entry, not to the ┣/┫ rails or gutter (T015).
+func TestSelectionStyle_SingleRowEntry(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 15},
+	}
+	opts := cli.GridOptions{HideID: true, SelectedID: 1, Styled: true, SelectionStyle: styleMarker}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
+	lines := rowsOf(out)
+
+	// Find the single-row entry line (contains ┣ and ┫).
+	var entryLine string
+	for _, l := range lines {
+		if strings.Contains(l, "┣") && strings.Contains(l, "┫") {
+			entryLine = l
+			break
+		}
+	}
+	if entryLine == "" {
+		t.Fatalf("could not find single-row entry line in:\n%s", out)
+	}
+
+	// Content between ┣ and ┫ should be wrapped with markers.
+	if !strings.Contains(entryLine, "<<") || !strings.Contains(entryLine, ">>") {
+		t.Errorf("SelectionStyle: content cell not styled; line: %q", entryLine)
+	}
+	// The ┣ and ┫ themselves must NOT be inside the markers.
+	markerOpen := strings.Index(entryLine, "<<")
+	markerClose := strings.Index(entryLine, ">>")
+	leftRail := strings.Index(entryLine, "┣")
+	rightRail := strings.LastIndex(entryLine, "┫")
+	if leftRail >= markerOpen {
+		t.Errorf("┣ rail must not be inside selection marker; line: %q", entryLine)
+	}
+	if rightRail <= markerClose {
+		t.Errorf("┫ rail must not be inside selection marker; line: %q", entryLine)
+	}
+	// Gutter must not contain markers.
+	// Gutter is the first 7 chars (before first rail char).
+	gutter := entryLine[:7]
+	if strings.Contains(gutter, "<<") {
+		t.Errorf("gutter must not be styled; gutter: %q", gutter)
+	}
+}
+
+// TestSelectionStyle_MultiRowEntry checks that SelectionStyle is applied only to
+// interior content rows of a multi-row entry, not to the top/bottom border rows (T015).
+func TestSelectionStyle_MultiRowEntry(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+	}
+	opts := cli.GridOptions{HideID: true, SelectedID: 1, Styled: true, SelectionStyle: styleMarker}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
+	lines := rowsOf(out)
+
+	for _, l := range lines {
+		// Top border line (┏━┓) must NOT have selection markers.
+		if strings.Contains(l, "┏") && strings.Contains(l, "<<") {
+			t.Errorf("top border row must not be styled; line: %q", l)
+		}
+		// Bottom border line (┗━┛) must NOT have selection markers.
+		if strings.Contains(l, "┗") && strings.Contains(l, "<<") {
+			t.Errorf("bottom border row must not be styled; line: %q", l)
+		}
+		// Interior row (┃content┃) MUST have selection markers.
+		if strings.Contains(l, "┃") && !strings.Contains(l, "<<") {
+			t.Errorf("interior content row must be styled; line: %q", l)
+		}
+	}
+}
+
+// TestSelectionStyle_NoSelectionIDZeroUnchanged checks that SelectedID==0 output
+// is byte-for-byte identical with and without SelectionStyle set (T015 golden).
+func TestSelectionStyle_NoSelectionIDZeroUnchanged(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 15},
+	}
+	baseline := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 0})
+	withStyle := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 0, SelectionStyle: styleMarker})
+
+	if baseline != withStyle {
+		t.Errorf("SelectedID==0: output should be identical with/without SelectionStyle\nbaseline: %q\nwithStyle: %q", baseline, withStyle)
+	}
+}
+
+// TestSelectionStyle_RowWidthUnchanged checks that styled rows have the same
+// printed width as unstyled rows (T015 width invariant).
+func TestSelectionStyle_RowWidthUnchanged(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Stand", StartMinute: 540, DurationMinute: 15},
+	}
+	noSelect := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true})
+	withSelect := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{
+		HideID: true, SelectedID: 1, Styled: true,
+		SelectionStyle: func(s string) string { return "\x1b[1;44;37m" + s + "\x1b[0m" },
+	})
+
+	noLines := rowsOf(noSelect)
+	withLines := rowsOf(withSelect)
+	if len(noLines) != len(withLines) {
+		t.Fatalf("row count differs: %d vs %d", len(noLines), len(withLines))
+	}
+	for i := range noLines {
+		wNo := visWidth(noLines[i])
+		wWith := visWidth(withLines[i])
+		if wNo != wWith {
+			t.Errorf("row %d: width differs (no-select=%d, with-select=%d)\n  no:   %q\n  with: %q",
+				i, wNo, wWith, noLines[i], withLines[i])
+		}
+	}
+}
+
+// visWidth returns the visible (non-ANSI) width of a string.
+func visWidth(s string) int {
+	// Strip ANSI escape sequences by counting non-escape bytes.
+	var w int
+	inEsc := false
+	for i := 0; i < len(s); {
+		if s[i] == '\x1b' {
+			inEsc = true
+			i++
+			continue
+		}
+		if inEsc {
+			if (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') {
+				inEsc = false
+			}
+			i++
+			continue
+		}
+		// Count UTF-8 rune width.
+		r, size := rune(s[i]), 1
+		if s[i]&0x80 != 0 {
+			if s[i]&0xe0 == 0xc0 && i+1 < len(s) {
+				r, size = rune(s[i]&0x1f)<<6|rune(s[i+1]&0x3f), 2
+			} else if s[i]&0xf0 == 0xe0 && i+2 < len(s) {
+				r, size = rune(s[i]&0x0f)<<12|rune(s[i+1]&0x3f)<<6|rune(s[i+2]&0x3f), 3
+			} else if i+3 < len(s) {
+				r, size = 0, 4
+			}
+		}
+		_ = r
+		w++
+		i += size
+	}
+	return w
+}

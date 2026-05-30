@@ -55,7 +55,7 @@ func (m Model) renderPlanningView(width, height int, now time.Time) string {
 	switch m.plan.mode {
 	case planPickTask:
 		return m.renderPlanPickerView(width)
-	case planTaskTime, planEventForm, planRename, planMove, planClear:
+	case planTaskTime, planEventForm, planEdit:
 		header := m.planDayHeader(now)
 		return header + "\n" + m.renderPlanFormView(width)
 	}
@@ -140,16 +140,11 @@ func (m Model) renderPlanFormView(width int) string {
 	var title string
 	switch m.plan.mode {
 	case planTaskTime:
-		sb.WriteString("  Schedule task:\n")
 		title = "Schedule task"
 	case planEventForm:
 		title = "Add event"
-	case planRename:
-		title = "Rename entry"
-	case planMove:
-		title = "Move entry"
-	case planClear:
-		title = "Clear from time"
+	case planEdit:
+		title = "Edit entry"
 	}
 	_ = title
 	_ = width
@@ -164,6 +159,29 @@ func (m Model) renderPlanFormView(width int) string {
 	}
 	sb.WriteString("  [tab] next field  [ctrl+s/enter] save  [esc] cancel\n")
 	return sb.String()
+}
+
+// renderPlanRightPane renders the active picker or form content for the right pane.
+func (m Model) renderPlanRightPane(width int) string {
+	if m.plan.mode == planPickTask {
+		return m.renderPlanPickerView(width)
+	}
+	return m.renderPlanFormView(width)
+}
+
+// planFormPaneTitle returns the pane title for the active form mode.
+func (m Model) planFormPaneTitle() string {
+	switch m.plan.mode {
+	case planPickTask:
+		return "Add task"
+	case planTaskTime:
+		return "Schedule"
+	case planEventForm:
+		return "Add event"
+	case planEdit:
+		return "Edit entry"
+	}
+	return ""
 }
 
 // planDayTitle returns the plain-text day title for use in the pane border.
@@ -272,15 +290,11 @@ func planFieldLabel(mode planMode, idx int) string {
 		if idx < len(labels) {
 			return labels[idx]
 		}
-	case planRename:
-		return "Name"
-	case planMove:
-		labels := []string{"Start", "Duration (blank=keep)"}
+	case planEdit:
+		labels := []string{"Name", "Start", "Duration (optional)"}
 		if idx < len(labels) {
 			return labels[idx]
 		}
-	case planClear:
-		return "Clear from"
 	}
 	return fmt.Sprintf("Field %d", idx)
 }

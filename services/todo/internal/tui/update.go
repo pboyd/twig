@@ -468,21 +468,15 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, listTasksForPickerCmd(m.client)
 	case key.Matches(msg, m.keys.PlanAddEvent):
 		m.initAddEventForm()
-	case key.Matches(msg, m.keys.PlanRename):
+	case key.Matches(msg, m.keys.PlanEdit):
 		if len(m.plan.entries) > 0 {
-			m.initRenameForm()
-		}
-	case key.Matches(msg, m.keys.PlanMove):
-		if len(m.plan.entries) > 0 {
-			m.initMoveForm()
+			m.initEditForm()
 		}
 	case key.Matches(msg, m.keys.PlanRemove):
 		if len(m.plan.entries) > 0 {
 			entry := m.plan.entries[m.plan.cursor]
 			return m, removePlanCmd(m.planClient, m.plan.day, entry.Id)
 		}
-	case key.Matches(msg, m.keys.PlanClear):
-		m.initClearForm()
 
 	// Pomodoro cancel — mirrors the Tasks tab handler.
 	case key.Matches(msg, m.keys.PomCancel):
@@ -504,7 +498,7 @@ func (m Model) handlePlanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.plan.mode {
 	case planPickTask:
 		return m.handlePickerKey(msg)
-	case planTaskTime, planEventForm, planRename, planMove, planClear:
+	case planTaskTime, planEventForm, planEdit:
 		return m.handlePlanFormKey(msg)
 	}
 	return m, nil

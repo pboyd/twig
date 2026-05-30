@@ -317,20 +317,20 @@ func TestHandlePlanEntriesMsg_HighlightID(t *testing.T) {
 
 // ── US2: add task and event ─────────────────────────────────────────────────
 
-// TestAddTask_PickerOpensOnA checks that pressing 'a' in planList mode issues
-// a listTasksForPickerCmd and sets mode to planPickTask.
-func TestAddTask_PickerOpensOnA(t *testing.T) {
+// TestAddTask_PickerOpensOnT checks that pressing 't' in planList mode issues
+// a listTasksForPickerCmd and sets mode to planPickTask (T018/US5).
+func TestAddTask_PickerOpensOnT(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
 
-	m2, cmd := pressKeyStr(m, "a")
+	m2, cmd := pressKeyStr(m, "t")
 
 	if m2.plan.mode != planPickTask {
-		t.Errorf("after 'a': expected planPickTask, got %d", m2.plan.mode)
+		t.Errorf("after 't': expected planPickTask, got %d", m2.plan.mode)
 	}
 	if cmd == nil {
-		t.Error("after 'a': expected a list-tasks command, got nil")
+		t.Error("after 't': expected a list-tasks command, got nil")
 	}
 }
 
@@ -406,7 +406,7 @@ func TestAddEvent_InvalidTimeSetsError(t *testing.T) {
 func TestTabSwitch_BlockedWhilePlannerForm(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
-	m.plan.mode = planRename
+	m.plan.mode = planEdit
 
 	m2, _ := pressSpecialKey(m, tea.KeyTab)
 
@@ -415,40 +415,157 @@ func TestTabSwitch_BlockedWhilePlannerForm(t *testing.T) {
 	}
 }
 
-// ── US3: rename/move/remove/clear ──────────────────────────────────────────
+// ── US1: Enter-driven edit form ────────────────────────────────────────────
 
-// TestRename_FormOpensOnR checks that 'r' opens planRename mode.
-func TestRename_FormOpensOnR(t *testing.T) {
+// TestEdit_FormOpensOnEnter checks that Enter on Planning with an entry selected
+// enters planEdit with Name prefilled, and entryID set (T002).
+func TestEdit_FormOpensOnEnter(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Standup", StartMinute: 540}}
 	m.plan.cursor = 0
 
-	m2, _ := pressKeyStr(m, "r")
+	m2, _ := pressSpecialKey(m, tea.KeyEnter)
 
-	if m2.plan.mode != planRename {
-		t.Errorf("after 'r': expected planRename, got %d", m2.plan.mode)
+	if m2.plan.mode != planEdit {
+		t.Errorf("Enter with entry: expected planEdit, got %d", m2.plan.mode)
 	}
-	// Form should be prefilled with the entry name.
+	if len(m2.plan.form.fields) != 3 {
+		t.Errorf("edit form: expected 3 fields (Name/Start/Duration), got %d", len(m2.plan.form.fields))
+	}
 	if m2.plan.form.fields[0].Value() != "Standup" {
-		t.Errorf("rename form: expected prefilled name 'Standup', got %q", m2.plan.form.fields[0].Value())
+		t.Errorf("edit form: expected Name prefilled with 'Standup', got %q", m2.plan.form.fields[0].Value())
+	}
+	if m2.plan.form.entryID != 1 {
+		t.Errorf("edit form: expected entryID=1, got %d", m2.plan.form.entryID)
 	}
 }
 
-// TestRename_NoopOnEmpty checks that 'r' is a no-op with no entries.
-func TestRename_NoopOnEmpty(t *testing.T) {
+// TestEdit_InertOnEmptyGrid checks that Enter with no entries is inert (T002).
+func TestEdit_InertOnEmptyGrid(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
 	m.plan.entries = nil
 
-	m2, _ := pressKeyStr(m, "r")
+	m2, _ := pressSpecialKey(m, tea.KeyEnter)
 
 	if m2.plan.mode != planList {
-		t.Errorf("rename with no entries: mode should stay planList, got %d", m2.plan.mode)
+		t.Errorf("Enter with no entries: mode should stay planList, got %d", m2.plan.mode)
 	}
 }
+
+// TestEditForm_RenameOnNameChange checks that submitEditForm issues RenamePlanEntry
+// when the name changed (T003).
+func TestEditForm_RenameOnNameChange(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Old Name", StartMinute: 540}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	m.plan.form.fields[0].SetValue("New Name")
+	// Start and Duration blank (no move)
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("submitEditForm: expected mode planList, got %d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Error("submitEditForm: expected a rename command, got nil")
+	}
+	if cmd != nil {
+		cmd()
+		if fc.renameReq == nil {
+			t.Error("submitEditForm rename: RenamePlanEntry was not called")
+		} else if fc.renameReq.Name != "New Name" {
+			t.Errorf("submitEditForm rename: expected name 'New Name', got %q", fc.renameReq.Name)
+		}
+		if fc.moveReq != nil {
+			t.Error("submitEditForm rename-only: MovePlanEntry should NOT be called")
+		}
+	}
+}
+
+// TestEditForm_MoveOnStartProvided checks that submitEditForm issues MovePlanEntry
+// when a start time is provided (T003).
+func TestEditForm_MoveOnStartProvided(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	// Name unchanged, start provided
+	m.plan.form.fields[1].SetValue("10:00")
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("submitEditForm move: expected planList, got %d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Error("submitEditForm move: expected a command, got nil")
+	}
+	if cmd != nil {
+		cmd()
+		if fc.moveReq == nil {
+			t.Error("submitEditForm move: MovePlanEntry was not called")
+		}
+		if fc.renameReq != nil {
+			t.Error("submitEditForm move-only: RenamePlanEntry should NOT be called")
+		}
+	}
+}
+
+// TestEditForm_NoopWhenUnchanged checks that submitEditForm is a no-op when neither
+// name nor time changed (T003).
+func TestEditForm_NoopWhenUnchanged(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	// Name unchanged (same value), Start and Duration blank
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("submitEditForm no-op: expected planList, got %d", m.plan.mode)
+	}
+	if cmd != nil {
+		t.Error("submitEditForm no-op: expected nil cmd, got non-nil")
+	}
+}
+
+// TestEditForm_EmptyNameSetsError checks that an empty Name keeps the form open
+// and sets plan.err (T003).
+func TestEditForm_EmptyNameSetsError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	m.plan.form.fields[0].SetValue("") // empty name
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planEdit {
+		t.Errorf("empty name: form should stay planEdit, got %d", m.plan.mode)
+	}
+	if m.plan.err == nil {
+		t.Error("empty name: plan.err should be set")
+	}
+	if cmd != nil {
+		t.Error("empty name: expected nil cmd")
+	}
+}
+
+// ── US3: remove/clear tests updated ────────────────────────────────────────
 
 // TestRemove_IssuesRPCOnCtrlD checks that Ctrl+D issues a removePlanCmd.
 func TestRemove_IssuesRPCOnCtrlD(t *testing.T) {
@@ -534,7 +651,7 @@ func TestDayNav_PrevDay(t *testing.T) {
 	}
 }
 
-// TestDayNav_Today checks that 't' resets to today.
+// TestDayNav_Today checks that '.' resets to today (T018/US5).
 func TestDayNav_Today(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
@@ -542,10 +659,41 @@ func TestDayNav_Today(t *testing.T) {
 	m.plan.loaded = true
 
 	today := time.Now().Format("2006-01-02")
-	m2, _ := pressKeyStr(m, "t")
+	m2, _ := pressKeyStr(m, ".")
 
 	if m2.plan.day != today {
-		t.Errorf("today: expected %s, got %s", today, m2.plan.day)
+		t.Errorf("'.': expected %s, got %s", today, m2.plan.day)
+	}
+}
+
+// TestAddTask_TDoesNotJumpToToday checks that 't' does NOT change the day (T018/US5).
+func TestAddTask_TDoesNotJumpToToday(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.day = "2020-01-01"
+	m.plan.loaded = true
+
+	m2, _ := pressKeyStr(m, "t")
+
+	if m2.plan.day != "2020-01-01" {
+		t.Errorf("'t': should not change day, got %s", m2.plan.day)
+	}
+}
+
+// TestClear_InertOnC checks that 'c' does not enter a clear mode (T021/US6).
+func TestClear_InertOnC(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Focus", StartMinute: 540}}
+
+	m2, cmd := pressKeyStr(m, "c")
+
+	if m2.plan.mode != planList {
+		t.Errorf("'c': mode should stay planList, got %d", m2.plan.mode)
+	}
+	if cmd != nil {
+		t.Errorf("'c': expected nil cmd, got non-nil")
 	}
 }
 

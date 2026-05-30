@@ -25,7 +25,7 @@ description: "Task list for Planning Tab Refinements"
 
 **Purpose**: Establish a green baseline before changing behavior.
 
-- [ ] T001 Confirm the starting point is green: run `cd services/todo && go build ./... && go test ./...` and note the passing baseline (especially `internal/cli` grid tests and existing `internal/tui` tests).
+- [X] T001 Confirm the starting point is green: run `cd services/todo && go build ./... && go test ./...` and note the passing baseline (especially `internal/cli` grid tests and existing `internal/tui` tests).
 
 ---
 
@@ -49,16 +49,16 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T002 [P] [US1] Reducer test: `Enter` on Planning with an entry selected enters `planEdit` with fields `[Name(prefilled), Start, Duration]` and `entryID` set; `Enter` with no entries is inert — in `services/todo/internal/tui/plan_update_test.go`.
-- [ ] T003 [P] [US1] Reducer test: `submitEditForm` composes correctly — a changed Name issues `RenamePlanEntry`; a provided Start/Duration issues `MovePlanEntry`; both-unchanged is a no-op that closes the form and issues no RPC; empty Name sets `plan.err` and keeps the form open — in `services/todo/internal/tui/plan_update_test.go`.
+- [X] T002 [P] [US1] Reducer test: `Enter` on Planning with an entry selected enters `planEdit` with fields `[Name(prefilled), Start, Duration]` and `entryID` set; `Enter` with no entries is inert — in `services/todo/internal/tui/plan_update_test.go`.
+- [X] T003 [P] [US1] Reducer test: `submitEditForm` composes correctly — a changed Name issues `RenamePlanEntry`; a provided Start/Duration issues `MovePlanEntry`; both-unchanged is a no-op that closes the form and issues no RPC; empty Name sets `plan.err` and keeps the form open — in `services/todo/internal/tui/plan_update_test.go`.
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] In `services/todo/internal/tui/model.go`: replace the `planRename` and `planMove` `planMode` values with a single `planEdit` value (update the enum + comments).
-- [ ] T005 [US1] In `services/todo/internal/tui/keymap.go`: add a `PlanEdit` binding (`enter`, help "enter / edit entry"); remove the `PlanRename` and `PlanMove` bindings; update the Planning `ShortHelp()`/`FullHelp()` groups to drop rename/move and include `PlanEdit`. (Shared file — see coordination note; sequence with US2/US5/US6.)
-- [ ] T006 [US1] In `services/todo/internal/tui/plan_update.go`: add `initEditForm()` (prefill Name from the selected entry; Start/Duration blank with placeholders, blank = keep; set `entryID`); add `submitEditForm()` that runs a single command calling `renamePlanCmd` only when the Name changed and `movePlanCmd` only when a Start/Duration was entered, then reloads with the entry highlighted; delete `initRenameForm`/`initMoveForm` and `submitRenameForm`/`submitMoveForm`.
-- [ ] T007 [US1] In `services/todo/internal/tui/update.go`: in `handlePlanningKey` add an `Enter`→`initEditForm()` case guarded on a non-empty selection and remove the `PlanRename`/`PlanMove` cases; in `handlePlanModalKey` add `planEdit` to the form-mode routing (and drop `planRename`/`planMove`).
-- [ ] T008 [US1] In `services/todo/internal/tui/plan_view.go`: add the `planEdit` case to `planFieldLabel` (`[Name, Start, Duration]`) and to `renderPlanFormView` (title "Edit entry"); remove the `planRename`/`planMove` cases.
+- [X] T004 [US1] In `services/todo/internal/tui/model.go`: replace the `planRename` and `planMove` `planMode` values with a single `planEdit` value (update the enum + comments).
+- [X] T005 [US1] In `services/todo/internal/tui/keymap.go`: add a `PlanEdit` binding (`enter`, help "enter / edit entry"); remove the `PlanRename` and `PlanMove` bindings; update the Planning `ShortHelp()`/`FullHelp()` groups to drop rename/move and include `PlanEdit`. (Shared file — see coordination note; sequence with US2/US5/US6.)
+- [X] T006 [US1] In `services/todo/internal/tui/plan_update.go`: add `initEditForm()` (prefill Name from the selected entry; Start/Duration blank with placeholders, blank = keep; set `entryID`); add `submitEditForm()` that runs a single command calling `renamePlanCmd` only when the Name changed and `movePlanCmd` only when a Start/Duration was entered, then reloads with the entry highlighted; delete `initRenameForm`/`initMoveForm` and `submitRenameForm`/`submitMoveForm`.
+- [X] T007 [US1] In `services/todo/internal/tui/update.go`: in `handlePlanningKey` add an `Enter`→`initEditForm()` case guarded on a non-empty selection and remove the `PlanRename`/`PlanMove` cases; in `handlePlanModalKey` add `planEdit` to the form-mode routing (and drop `planRename`/`planMove`).
+- [X] T008 [US1] In `services/todo/internal/tui/plan_view.go`: add the `planEdit` case to `planFieldLabel` (`[Name, Start, Duration]`) and to `renderPlanFormView` (title "Edit entry"); remove the `planRename`/`planMove` cases.
 
 **Checkpoint**: `Enter` opens the merged Edit form; save composes rename+move; rename/move keys gone; `go test ./...` green.
 
@@ -72,12 +72,12 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T009 [P] [US2] Reducer test: on the Tasks list, `Enter` enters `modeEdit` with the edit form for the selected task; `e` does not enter `modeEdit`; `Enter` on an empty list is inert — in `services/todo/internal/tui/update_test.go`.
-- [ ] T010 [P] [US2] View/help test: the Tasks-tab help/short-help advertises `enter` (not `e`) for "edit task" — in `services/todo/internal/tui/view_test.go`.
+- [X] T009 [P] [US2] Reducer test: on the Tasks list, `Enter` enters `modeEdit` with the edit form for the selected task; `e` does not enter `modeEdit`; `Enter` on an empty list is inert — in `services/todo/internal/tui/update_test.go`.
+- [X] T010 [P] [US2] View/help test: the Tasks-tab help/short-help advertises `enter` (not `e`) for "edit task" — in `services/todo/internal/tui/view_test.go`.
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] In `services/todo/internal/tui/keymap.go`: change the `Edit` binding keys from `e` to `enter` and its help to `key.WithHelp("enter", "edit task")`. (Shared file — sequence after US1's keymap edit.) No `handleListKey` logic change is needed (it already matches `m.keys.Edit`).
+- [X] T011 [US2] In `services/todo/internal/tui/keymap.go`: change the `Edit` binding keys from `e` to `enter` and its help to `key.WithHelp("enter", "edit task")`. (Shared file — sequence after US1's keymap edit.) No `handleListKey` logic change is needed (it already matches `m.keys.Edit`).
 
 **Checkpoint**: `Enter` edits on Tasks; `e` is inert for edit; help updated; tests green.
 
@@ -91,12 +91,12 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T012 [P] [US3] View test: with `plan.mode` set to `planPickTask`, `planTaskTime`, `planEventForm`, and `planEdit`, `viewPlanning` renders a left grid pane + right picker/form pane (assert the grid lines are still present alongside the form), in both styled and `!styled` modes — in `services/todo/internal/tui/plan_view_test.go`.
+- [X] T012 [P] [US3] View test: with `plan.mode` set to `planPickTask`, `planTaskTime`, `planEventForm`, and `planEdit`, `viewPlanning` renders a left grid pane + right picker/form pane (assert the grid lines are still present alongside the form), in both styled and `!styled` modes — in `services/todo/internal/tui/plan_view_test.go`.
 
 ### Implementation for User Story 3
 
-- [ ] T013 [US3] In `services/todo/internal/tui/view.go` `viewPlanning`: replace the full-width modal branch (`m.plan.mode != planList`) with a two-pane layout — grid left (unfocused), active picker/form right (focused/accent border) — using `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join (non-styled), reusing `viewWithForm`'s height arithmetic so the status line stays bottom-pinned.
-- [ ] T014 [US3] In `services/todo/internal/tui/plan_view.go`: size `renderPlanFormView` and `renderPlanPickerView` to the passed right-pane width (wrap/trim long task names and field rows to fit), so the picker/forms render correctly in the narrower pane.
+- [X] T013 [US3] In `services/todo/internal/tui/view.go` `viewPlanning`: replace the full-width modal branch (`m.plan.mode != planList`) with a two-pane layout — grid left (unfocused), active picker/form right (focused/accent border) — using `paneBox` + `lipgloss.JoinHorizontal` (styled) and the `splitLines`/`padRightAnsi` row-join (non-styled), reusing `viewWithForm`'s height arithmetic so the status line stays bottom-pinned.
+- [X] T014 [US3] In `services/todo/internal/tui/plan_view.go`: size `renderPlanFormView` and `renderPlanPickerView` to the passed right-pane width (wrap/trim long task names and field rows to fit), so the picker/forms render correctly in the narrower pane.
 
 **Checkpoint**: Picker and all forms render in the right pane; grid stays visible; degrades on narrow terminals; tests green.
 
@@ -110,12 +110,12 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T015 [P] [US4] CLI test: with a `SelectionStyle` styler set and `SelectedID` matching, a selected single-row entry styles only the content cell (the `┣`/`┫` and the gutter are not wrapped); a selected multi-row entry styles only the interior content row(s), not the `┏━┓`/`┗━┛`/`┣━┫` border rows; `SelectedID==0` output is byte-for-byte unchanged (golden); row widths are identical with and without selection — in `services/todo/internal/cli/plan_grid_test.go`.
+- [X] T015 [P] [US4] CLI test: with a `SelectionStyle` styler set and `SelectedID` matching, a selected single-row entry styles only the content cell (the `┣`/`┫` and the gutter are not wrapped); a selected multi-row entry styles only the interior content row(s), not the `┏━┓`/`┗━┛`/`┣━┫` border rows; `SelectedID==0` output is byte-for-byte unchanged (golden); row widths are identical with and without selection — in `services/todo/internal/cli/plan_grid_test.go`.
 
 ### Implementation for User Story 4
 
-- [ ] T016 [US4] In `services/todo/internal/cli/plan_grid.go`: add the additive `SelectionStyle func(string) string` field to `GridOptions` and rework `applySelection`/`accentOpen` and the top/bottom/shared-border cases so the styler is applied to the entry's content cell only — never the gutter, rails, or box-drawing border — keeping `SelectionStyle==nil` and `SelectedID==0` behavior identical to today (per `contracts/grid-selection.md`).
-- [ ] T017 [US4] In `services/todo/internal/tui/plan_grid.go` `planGridOptions()`: set `SelectionStyle: highlightStyle.Render` so the TUI selection reuses the exact Tasks-tab highlight; leave it unset for the plain `todo plan` CLI.
+- [X] T016 [US4] In `services/todo/internal/cli/plan_grid.go`: add the additive `SelectionStyle func(string) string` field to `GridOptions` and rework `applySelection`/`accentOpen` and the top/bottom/shared-border cases so the styler is applied to the entry's content cell only — never the gutter, rails, or box-drawing border — keeping `SelectionStyle==nil` and `SelectedID==0` behavior identical to today (per `contracts/grid-selection.md`).
+- [X] T017 [US4] In `services/todo/internal/tui/plan_grid.go` `planGridOptions()`: set `SelectionStyle: highlightStyle.Render` so the TUI selection reuses the exact Tasks-tab highlight; leave it unset for the plain `todo plan` CLI.
 
 **Checkpoint**: Selected cell matches the Tasks highlight; gutter/border untouched; CLI output unchanged; tests green.
 
@@ -129,12 +129,12 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T018 [P] [US5] Reducer test: `t` on Planning opens the add-task picker (enters `planPickTask` / issues the task-list command); `.` sets the day to today and reloads; pressing `t` does not change the day — in `services/todo/internal/tui/plan_update_test.go`.
-- [ ] T019 [P] [US5] View/help test: the Planning help/short-help advertises `t` for "add task" and `.` for "today" — in `services/todo/internal/tui/view_test.go`.
+- [X] T018 [P] [US5] Reducer test: `t` on Planning opens the add-task picker (enters `planPickTask` / issues the task-list command); `.` sets the day to today and reloads; pressing `t` does not change the day — in `services/todo/internal/tui/plan_update_test.go`.
+- [X] T019 [P] [US5] View/help test: the Planning help/short-help advertises `t` for "add task" and `.` for "today" — in `services/todo/internal/tui/view_test.go`.
 
 ### Implementation for User Story 5
 
-- [ ] T020 [US5] In `services/todo/internal/tui/keymap.go`: change `PlanAddTask` keys `a`→`t` (help "t / add task") and `PlanToday` keys `t`→`.` (help ". / today"); update the Planning `ShortHelp()`/`FullHelp()` strings accordingly. No `handlePlanningKey` change needed (it matches via `m.keys.PlanAddTask`/`m.keys.PlanToday`). (Shared file — sequence after US1/US2.)
+- [X] T020 [US5] In `services/todo/internal/tui/keymap.go`: change `PlanAddTask` keys `a`→`t` (help "t / add task") and `PlanToday` keys `t`→`.` (help ". / today"); update the Planning `ShortHelp()`/`FullHelp()` strings accordingly. No `handlePlanningKey` change needed (it matches via `m.keys.PlanAddTask`/`m.keys.PlanToday`). (Shared file — sequence after US1/US2.)
 
 **Checkpoint**: `t` adds a task, `.` jumps to today, no key collisions; tests green.
 
@@ -148,15 +148,15 @@ description: "Task list for Planning Tab Refinements"
 
 ### Tests for User Story 6 ⚠️
 
-- [ ] T021 [P] [US6] Reducer/view test: `c` on Planning does not enter a clear mode (is inert), and the Planning help/`FullHelp` does not list a clear action — in `services/todo/internal/tui/plan_update_test.go` and `services/todo/internal/tui/view_test.go`.
+- [X] T021 [P] [US6] Reducer/view test: `c` on Planning does not enter a clear mode (is inert), and the Planning help/`FullHelp` does not list a clear action — in `services/todo/internal/tui/plan_update_test.go` and `services/todo/internal/tui/view_test.go`.
 
 ### Implementation for User Story 6
 
-- [ ] T022 [US6] In `services/todo/internal/tui/keymap.go`: remove the `PlanClear` binding and drop it from the Planning `FullHelp()` group. (Shared file — sequence after US1/US2/US5.)
-- [ ] T023 [US6] In `services/todo/internal/tui/model.go`: remove the `planClear` `planMode` value.
-- [ ] T024 [US6] In `services/todo/internal/tui/update.go`: remove the `PlanClear` case from `handlePlanningKey` and remove `planClear` from the `handlePlanModalKey` form-mode list.
-- [ ] T025 [US6] In `services/todo/internal/tui/plan_update.go`: delete `initClearForm`, `submitClearForm`, the `planClear` branch of `submitPlanForm`, and the now-unused `clearPlanCmd` (the `todo plan clear` CLI in `internal/cli/plan.go` is unaffected).
-- [ ] T026 [US6] In `services/todo/internal/tui/plan_view.go`: remove the `planClear` cases from `renderPlanFormView` and `planFieldLabel`.
+- [X] T022 [US6] In `services/todo/internal/tui/keymap.go`: remove the `PlanClear` binding and drop it from the Planning `FullHelp()` group. (Shared file — sequence after US1/US2/US5.)
+- [X] T023 [US6] In `services/todo/internal/tui/model.go`: remove the `planClear` `planMode` value.
+- [X] T024 [US6] In `services/todo/internal/tui/update.go`: remove the `PlanClear` case from `handlePlanningKey` and remove `planClear` from the `handlePlanModalKey` form-mode list.
+- [X] T025 [US6] In `services/todo/internal/tui/plan_update.go`: delete `initClearForm`, `submitClearForm`, the `planClear` branch of `submitPlanForm`, and the now-unused `clearPlanCmd` (the `todo plan clear` CLI in `internal/cli/plan.go` is unaffected).
+- [X] T026 [US6] In `services/todo/internal/tui/plan_view.go`: remove the `planClear` cases from `renderPlanFormView` and `planFieldLabel`.
 
 **Checkpoint**: Clear is absent from the TUI; per-entry delete intact; tests green.
 
@@ -164,9 +164,9 @@ description: "Task list for Planning Tab Refinements"
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T027 Run `cd services/todo && gofmt -l . && go vet ./... && go test ./...`; fix any formatting/vet/test issues.
+- [X] T027 Run `cd services/todo && gofmt -l . && go vet ./... && go test ./...`; fix any formatting/vet/test issues.
 - [ ] T028 [P] Execute the `quickstart.md` manual walkthrough end-to-end (all 7 sections) against `make dev` + a built `todo` binary; confirm the right-pane forms, cell-only highlight, key rebinds, and the non-ANSI fallback.
-- [ ] T029 [P] Verify FR-011 (no two advertised Planning/Tasks actions share a key after the rebinds) and SC-004 (every advertised key maps to a working action) by auditing the final `ShortHelp`/`FullHelp` groups against the handlers.
+- [X] T029 [P] Verify FR-011 (no two advertised Planning/Tasks actions share a key after the rebinds) and SC-004 (every advertised key maps to a working action) by auditing the final `ShortHelp`/`FullHelp` groups against the handlers.
 
 ---
 

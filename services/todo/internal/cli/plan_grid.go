@@ -11,9 +11,10 @@ import (
 
 // GridOptions controls optional rendering behaviour for RenderGrid.
 type GridOptions struct {
-	HideID     bool  // omit the "[id] " prefix from entry labels
-	SelectedID int32 // highlight this entry's rows (0 = none); applied only when isTTY
-	Styled     bool  // when true (and isTTY): use accent-color highlight instead of plain bold
+	HideID         bool                // omit the "[id] " prefix from entry labels
+	SelectedID     int32               // highlight this entry's rows (0 = none); applied only when isTTY
+	Styled         bool                // when true (and isTTY): use accent-color highlight instead of plain bold
+	SelectionStyle func(string) string // when non-nil, styles the selected entry's content cell only; nil = fallback plain behavior
 }
 
 // RenderGrid renders a day's plan entries as a calendar grid.
@@ -172,38 +173,76 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			}
 			content := padRight(label, contentWidth)
 			content = applyCompletion(content, interior.e, isTTY)
-			line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
-			line = applySelection(line, interior.e.Id, opts, isTTY)
+			if isTTY && opts.SelectedID != 0 && interior.e.Id == opts.SelectedID {
+				if opts.SelectionStyle != nil {
+					// Include border walls in the styled region.
+					line = gutter + leftRail + padChar + opts.SelectionStyle("┃"+content+"┃") + padChar + rightRail
+				} else {
+					line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
+					line = accentOpen(opts) + line + "\x1b[0m"
+				}
+			} else {
+				line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
+			}
 
 		case top != nil && bot != nil:
 			// Shared border: multi-row entry A ends here, entry B starts here.
-			line = gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail
-			if isTTY && opts.SelectedID != 0 && (top.e.Id == opts.SelectedID || bot.e.Id == opts.SelectedID) {
-				line = accentOpen(opts) + line + "\x1b[0m"
+			isSelected := isTTY && opts.SelectedID != 0 && (top.e.Id == opts.SelectedID || bot.e.Id == opts.SelectedID)
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+hHeavy+"┫") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail
+				if isSelected {
+					line = accentOpen(opts) + line + "\x1b[0m"
+				}
 			}
 
 		case bot != nil && single != nil:
 			// Shared: multi-row entry ends here AND single-row entry starts here.
 			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
-			if isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID) {
-				line = accentOpen(opts) + line + "\x1b[0m"
+			isSelected := isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID)
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+label+"┫") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+				if isSelected {
+					line = accentOpen(opts) + line + "\x1b[0m"
+				}
 			}
 
 		case top != nil:
-			line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
-			line = applySelection(line, top.e.Id, opts, isTTY)
+			isSelected := isTTY && opts.SelectedID != 0 && top.e.Id == opts.SelectedID
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┏"+hHeavy+"┓") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
+				if isSelected {
+					line = applySelection(line, top.e.Id, opts, isTTY)
+				}
+			}
 
 		case bot != nil:
-			line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
-			line = applySelection(line, bot.e.Id, opts, isTTY)
+			isSelected := isTTY && opts.SelectedID != 0 && bot.e.Id == opts.SelectedID
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┗"+hHeavy+"┛") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
+				if isSelected {
+					line = applySelection(line, bot.e.Id, opts, isTTY)
+				}
+			}
 
 		case single != nil:
 			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
-			line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
-			line = applySelection(line, single.e.Id, opts, isTTY)
+			if isTTY && opts.SelectedID != 0 && single.e.Id == opts.SelectedID && opts.SelectionStyle != nil {
+				// Include border rails in the styled region.
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+label+"┫") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+				line = applySelection(line, single.e.Id, opts, isTTY)
+			}
 
 		default:
 			if isHour {
