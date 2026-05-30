@@ -38,9 +38,7 @@ const (
 	planPickTask                  // task tree picker open (step 1 of add-task)
 	planTaskTime                  // start/duration form (step 2 of add-task)
 	planEventForm                 // name + start + duration form (add-event)
-	planRename                    // single-field name form (rename selected)
-	planMove                      // start + duration form (move selected)
-	planClear                     // single-field start-time form (clear; defaults to now)
+	planEdit                      // name + start + duration form (edit selected entry)
 )
 
 // activePom holds the TUI's in-memory view of the one running pomodoro.
@@ -100,21 +98,23 @@ type Model struct {
 	err             error
 	width           int
 	height          int
-	styled          bool
+	styled           bool
+	hasDarkBackground bool
 	pom             *activePom
 	confirmingQuit  bool
 }
 
-func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig) Model {
+func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool) Model {
 	return Model{
-		client:     client,
-		planClient: planClient,
-		addr:       addr,
-		pomConfig:  pomConfig,
-		expanded:   make(map[int64]bool),
-		keys:       DefaultKeyMap(),
-		help:       newHelpModel(),
-		styled:     cli.WantStyled(os.Stdout),
+		client:            client,
+		planClient:        planClient,
+		addr:              addr,
+		pomConfig:         pomConfig,
+		expanded:          make(map[int64]bool),
+		keys:              DefaultKeyMap(),
+		help:              newHelpModel(),
+		styled:            cli.WantStyled(os.Stdout),
+		hasDarkBackground: hasDarkBg,
 		plan: planState{
 			day: time.Now().Format("2006-01-02"),
 		},

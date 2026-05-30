@@ -1,16 +1,24 @@
 package tui
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 	"github.com/pboyd/todo/services/todo/internal/cli"
 )
 
 // planGridOptions returns the cli.GridOptions for the current plan state:
-// always HideID, SelectedID from the cursor, and Styled from m.styled.
+// always HideID, SelectedID from the cursor, Styled from m.styled, and
+// SelectionStyle set to the Tasks-tab highlight so selected cells match.
 func (m Model) planGridOptions() cli.GridOptions {
 	opts := cli.GridOptions{HideID: true, Styled: m.styled}
 	if len(m.plan.entries) > 0 && m.plan.cursor < len(m.plan.entries) {
 		opts.SelectedID = m.plan.entries[m.plan.cursor].Id
+		bgColor := cursorBg.Light
+		if m.hasDarkBackground {
+			bgColor = cursorBg.Dark
+		}
+		hs := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(bgColor))
+		opts.SelectionStyle = func(s string) string { return hs.Render(s) }
 	}
 	return opts
 }

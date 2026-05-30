@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	planv1 "github.com/pboyd/todo/services/todo/gen/plan/v1"
 	"github.com/pboyd/todo/services/todo/internal/cli"
 )
@@ -415,5 +417,196 @@ func TestRenderPlanDetail_Unstyled(t *testing.T) {
 	out := renderPlanDetail(entry, 40, false)
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("unstyled renderPlanDetail: must not emit ANSI codes; got %q", out)
+	}
+}
+
+// ── US2: Tasks-tab help (T010) ─────────────────────────────────────────────
+
+// TestTasksHelp_AdvertisesEnterForEdit checks that ShortHelp on the Tasks tab
+// advertises "enter" for "edit task" (T010).
+func TestTasksHelp_AdvertisesEnterForEdit(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 24
+	m.activeTab = tabTasks
+	m.keys.PlanningMode = false
+
+	short := m.keys.ShortHelp()
+	found := false
+	for _, b := range short {
+		if strings.Contains(b.Help().Key, "enter") && strings.Contains(b.Help().Desc, "edit") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Tasks ShortHelp: expected 'enter / edit task' binding; bindings: %v", short)
+	}
+}
+
+// ── US5: Planning help (T019) ──────────────────────────────────────────────
+
+// TestPlanningHelp_AdvertisesTForAddTask checks that Planning FullHelp contains
+// 't' for "add task" (T019).
+func TestPlanningHelp_AdvertisesTForAddTask(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.keys.PlanningMode = true
+
+	full := m.keys.FullHelp()
+	found := false
+	for _, group := range full {
+		for _, b := range group {
+			if strings.Contains(b.Help().Key, "t") && strings.Contains(b.Help().Desc, "add task") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("Planning FullHelp: expected 't / add task' binding")
+	}
+}
+
+// TestPlanningHelp_AdvertisesDotForToday checks that Planning FullHelp contains
+// '.' for "today" (T019).
+func TestPlanningHelp_AdvertisesDotForToday(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.keys.PlanningMode = true
+
+	full := m.keys.FullHelp()
+	found := false
+	for _, group := range full {
+		for _, b := range group {
+			if strings.Contains(b.Help().Key, ".") && strings.Contains(b.Help().Desc, "today") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("Planning FullHelp: expected '. / today' binding")
+	}
+}
+
+// ── US6: no clear in Planning help (T021) ──────────────────────────────────
+
+// TestPlanningHelp_NoClearAction checks that Planning FullHelp does NOT mention
+// "clear" (T021).
+func TestPlanningHelp_NoClearAction(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.keys.PlanningMode = true
+
+	full := m.keys.FullHelp()
+	for _, group := range full {
+		for _, b := range group {
+			if strings.Contains(strings.ToLower(b.Help().Desc), "clear") {
+				t.Errorf("Planning FullHelp: must not mention 'clear'; found: %q", b.Help().Desc)
+			}
+		}
+	}
+}
+
+// ── US3: right-pane forms (T012) ───────────────────────────────────────────
+
+// TestViewPlanning_FormInRightPane_Styled checks that in styled mode, when a form
+// is active (plan.mode != planList), viewPlanning still renders both the grid
+// (left pane) and the form (right pane) — grid lines present alongside form (T012).
+func TestViewPlanning_FormInRightPane_Styled(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 20
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm()
+
+	out := m.viewPlanning()
+
+	// Both panes should have borders.
+	if !strings.ContainsAny(out, "╭╰╮╯") {
+		t.Errorf("styled form pane: expected border runes alongside grid; got:\n%s", out)
+	}
+	// Grid should still be visible (day header or grid content).
+	if !strings.Contains(out, "Standup") {
+		t.Errorf("styled form pane: expected grid entry 'Standup' still visible; got:\n%s", out)
+	}
+}
+
+// TestViewPlanning_FormInRightPane_Unstyled checks that in unstyled mode, a form
+// renders in the right column while the grid is on the left (T012).
+func TestViewPlanning_FormInRightPane_Unstyled(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 20
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus", StartMinute: 540, DurationMinute: 60},
+	}
+	m.plan.cursor = 0
+	m.initAddEventForm()
+
+	out := m.viewPlanning()
+
+	// Grid should be visible alongside the form.
+	if !strings.Contains(out, "Focus") {
+		t.Errorf("unstyled form pane: expected 'Focus' from grid; got:\n%s", out)
+	}
+	// Form field labels should appear.
+	if !strings.Contains(out, "Name") && !strings.Contains(out, "Start") {
+		t.Errorf("unstyled form pane: expected form field labels; got:\n%s", out)
+	}
+}
+
+// TestPlanGridOptions_CursorBgOnLightBg verifies that with hasDarkBackground=false
+// the SelectionStyle uses the light cursorBg color (#DDEEFF = rgb(221,238,255)).
+func TestPlanGridOptions_CursorBgOnLightBg(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	today := "2026-05-29"
+	m := ExportNewPlanModel(nil, nil, today)
+	m.styled = true
+	m.hasDarkBackground = false
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Day: today, Id: 1, Name: "Task", StartMinute: 540, DurationMinute: 30},
+	}, 0)
+	opts := m.planGridOptions()
+	if opts.SelectionStyle == nil {
+		t.Fatal("SelectionStyle must not be nil when an entry is selected")
+	}
+	rendered := opts.SelectionStyle("X")
+	// Light cursorBg: #DDEEFF = rgb(221, 238, 255) → \x1b[48;2;221;238;255m in truecolor
+	if !strings.Contains(rendered, "221;238;255") {
+		t.Errorf("light background: expected cursorBg light RGB 221;238;255 in %q", rendered)
+	}
+}
+
+// TestPlanGridOptions_CursorBgOnDarkBg verifies that with hasDarkBackground=true
+// the SelectionStyle uses the dark cursorBg color (#1A2A3A = rgb(26,42,58)).
+func TestPlanGridOptions_CursorBgOnDarkBg(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	today := "2026-05-29"
+	m := ExportNewPlanModel(nil, nil, today)
+	m.styled = true
+	m.hasDarkBackground = true
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Day: today, Id: 1, Name: "Task", StartMinute: 540, DurationMinute: 30},
+	}, 0)
+	opts := m.planGridOptions()
+	if opts.SelectionStyle == nil {
+		t.Fatal("SelectionStyle must not be nil when an entry is selected")
+	}
+	rendered := opts.SelectionStyle("X")
+	// Dark cursorBg: #1A2A3A = rgb(26, 42, 58) → \x1b[48;2;26;42;58m in truecolor
+	if !strings.Contains(rendered, "26;42;58") {
+		t.Errorf("dark background: expected cursorBg dark RGB 26;42;58 in %q", rendered)
 	}
 }

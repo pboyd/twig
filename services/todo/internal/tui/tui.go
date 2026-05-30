@@ -6,6 +6,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/pboyd/todo/services/todo/internal/config"
 )
 
@@ -26,8 +27,12 @@ func Run(_ context.Context) error {
 		os.Exit(1)
 	}
 
+	// Detect terminal background before entering raw mode — OSC 11 queries
+	// don't work once bubbletea owns stdin.
+	hasDarkBg := lipgloss.NewRenderer(os.Stdout).HasDarkBackground()
+
 	taskClient, planClient, addr := NewClient(cfg)
-	m := newModel(taskClient, planClient, addr, cfg.Pomodoro)
+	m := newModel(taskClient, planClient, addr, cfg.Pomodoro, hasDarkBg)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err

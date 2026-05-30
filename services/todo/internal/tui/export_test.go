@@ -17,7 +17,7 @@ func ExportBuildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompl
 
 // ExportNewModel creates a Model with a fake tree for unit tests.
 func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode) Model {
-	m := newModel(client, nil, "", config.PomodoroConfig{})
+	m := newModel(client, nil, "", config.PomodoroConfig{}, false)
 	m.tree = tree
 	m.visible = buildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete)
 	return m
@@ -25,7 +25,7 @@ func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode
 
 // ExportNewPlanModel creates a Model wired for planning tab tests.
 func ExportNewPlanModel(taskClient taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, day string) Model {
-	m := newModel(taskClient, planClient, "", config.PomodoroConfig{})
+	m := newModel(taskClient, planClient, "", config.PomodoroConfig{}, false)
 	m.activeTab = tabPlanning
 	m.plan.day = day
 	return m
