@@ -104,6 +104,41 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 - Handler tests and CLI tests use `export_test.go` shims to access unexported helpers.
 - No integration test infrastructure — tests do not require a running database.
 
+## Frontend (services/todo-web/)
+
+A React 19 + TypeScript SPA at `services/todo-web/` — sibling to the Go module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
+
+All frontend commands run from `services/todo-web/`:
+
+```bash
+# Install dependencies
+npm install
+
+# Generate TypeScript from proto (re-run when services/todo/proto changes)
+npm run gen
+
+# Run the Vite dev server (proxies /auth, /task.v1, /health.v1 → :8080)
+npm run dev        # → http://localhost:5173
+
+# Run unit/interaction tests
+npm test
+
+# Production build (outputs to dist/)
+npm run build
+```
+
+The dev proxy (`vite.config.ts`) keeps the SPA and API on one origin so the `SameSite=Strict` session cookie works. Never call `:8080` cross-origin.
+
+Generated TS lives in `src/gen/` — do not edit by hand; regenerate with `npm run gen`.
+
+Key frontend source paths:
+- `src/lib/tree.ts` — flat `ListTasks` → nested tree builder (unit-tested)
+- `src/lib/updatePayload.ts` — `UpdateTask` full-replace payload builder (unit-tested)
+- `src/theme/messages.ts` — all user-facing copy (warm/playful tone)
+- `src/theme/tokens.ts` — color/spacing design tokens
+- `src/components/` — Button, Field, Spinner, ErrorBanner, AppHeader, TaskForm, TreeRow, EmptyState
+- `src/pages/` — LoginPage, TaskTreePage, TaskDetailPage
+
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at

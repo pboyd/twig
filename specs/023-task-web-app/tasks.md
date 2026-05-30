@@ -85,10 +85,10 @@ description: "Task list for Task Web App implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Add expand/collapse to the tree — manage an expanded-id `Set` in `services/todo-web/src/pages/TaskTreePage.tsx` and render chevrons + conditional children in `services/todo-web/src/components/TreeRow.tsx` (FR-006)
-- [ ] T023 [P] [US2] Implement `services/todo-web/src/components/EmptyState.tsx` and show it in `TaskTreePage` when the user has no tasks, using the whimsical empty-list copy (FR-016)
-- [ ] T024 [US2] Implement `services/todo-web/src/pages/TaskDetailPage.tsx` — call `GetTask`, display title/description/completion status and the task's sub-tasks; map `NotFound` to the "wandered off" message (FR-007; contracts/task-service.md)
-- [ ] T025 [US2] Wire navigation — tapping a `TreeRow` routes to `/tasks/:id`; back returns to `/tasks` with expand state preserved (lift expand state or persist in the URL/session as needed)
+- [X] T022 [US2] Add expand/collapse to the tree — manage an expanded-id `Set` in `services/todo-web/src/pages/TaskTreePage.tsx` and render chevrons + conditional children in `services/todo-web/src/components/TreeRow.tsx` (FR-006)
+- [X] T023 [P] [US2] Implement `services/todo-web/src/components/EmptyState.tsx` and show it in `TaskTreePage` when the user has no tasks, using the whimsical empty-list copy (FR-016)
+- [X] T024 [US2] Implement `services/todo-web/src/pages/TaskDetailPage.tsx` — call `GetTask`, display title/description/completion status and the task's sub-tasks; map `NotFound` to the "wandered off" message (FR-007; contracts/task-service.md)
+- [X] T025 [US2] Wire navigation — tapping a `TreeRow` routes to `/tasks/:id`; back returns to `/tasks` with expand state preserved (lift expand state or persist in the URL/session as needed)
 
 **Checkpoint**: Browsing and detail viewing work end-to-end alongside US1.
 
@@ -102,14 +102,14 @@ description: "Task list for Task Web App implementation"
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Unit test the `UpdateTask` payload builder in `services/todo-web/src/lib/updatePayload.test.ts` — verifies edited name/description plus **preserved** `due` and `parentId` (full-replace; research R6)
-- [ ] T027 [P] [US3] Interaction test in `services/todo-web/src/pages/TaskDetailPage.test.tsx` — empty-title save is blocked (FR-010) and a `FailedPrecondition` on complete renders the "finish its sub-tasks first" message (FR-017)
+- [X] T026 [P] [US3] Unit test the `UpdateTask` payload builder in `services/todo-web/src/lib/updatePayload.test.ts` — verifies edited name/description plus **preserved** `due` and `parentId` (full-replace; research R6)
+- [X] T027 [P] [US3] Interaction test in `services/todo-web/src/pages/TaskDetailPage.test.tsx` — empty-title save is blocked (FR-010) and a `FailedPrecondition` on complete renders the "finish its sub-tasks first" message (FR-017)
 
 ### Implementation for User Story 3
 
-- [ ] T028 [P] [US3] Implement the full-replace payload builder in `services/todo-web/src/lib/updatePayload.ts` — from the loaded task, build `UpdateTaskRequest` resending `due` and `parentId` unchanged (data-model.md, contracts/task-service.md)
-- [ ] T029 [US3] Add edit mode to `services/todo-web/src/pages/TaskDetailPage.tsx` — reuse `TaskForm` for editing, call `UpdateTask` via T028, invalidate `GetTask(id)` + `ListTasks` on save; discard restores original values (FR-011)
-- [ ] T030 [US3] Implement the completion toggle in `services/todo-web/src/components/TreeRow.tsx` and `TaskDetailPage.tsx` — call `CompleteTask`/`UncompleteTask`, reflect completed state in tree + detail, and map `FailedPrecondition` (complete → "finish its sub-tasks first"; uncomplete → "reopen its parent first") to playful messages (FR-012, FR-017; contracts/task-service.md)
+- [X] T028 [P] [US3] Implement the full-replace payload builder in `services/todo-web/src/lib/updatePayload.ts` — from the loaded task, build `UpdateTaskRequest` resending `due` and `parentId` unchanged (data-model.md, contracts/task-service.md)
+- [X] T029 [US3] Add edit mode to `services/todo-web/src/pages/TaskDetailPage.tsx` — reuse `TaskForm` for editing, call `UpdateTask` via T028, invalidate `GetTask(id)` + `ListTasks` on save; discard restores original values (FR-011)
+- [X] T030 [US3] Implement the completion toggle in `services/todo-web/src/components/TreeRow.tsx` and `TaskDetailPage.tsx` — call `CompleteTask`/`UncompleteTask`, reflect completed state in tree + detail, and map `FailedPrecondition` (complete → "finish its sub-tasks first"; uncomplete → "reopen its parent first") to playful messages (FR-012, FR-017; contracts/task-service.md)
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -119,14 +119,14 @@ description: "Task list for Task Web App implementation"
 
 **Purpose**: Production deployment, mobile/consistency/tone review, and validation.
 
-- [ ] T031 Verify the production build — `npm run build` in `services/todo-web/` emits static assets to `dist/`; confirm bundle is reasonable for mobile
-- [ ] T032 Update the Caddy config in `deploy/roles/app/templates/Caddyfile.j2` — serve the SPA (`root /srv/www`, `try_files {path} /index.html`, `file_server`) and reverse-proxy `/auth/*`, `/task.v1.*`, `/health.v1.*` to `todo_server:8080` on one origin (plan.md → Deployment)
-- [ ] T033 Update `deploy/roles/app/templates/compose.yaml.j2` and `deploy/roles/app/tasks/main.yml` — add the frontend build/ship step (`npm ci && npm run build`) and bind-mount `dist/` into Caddy at `/srv/www`
-- [ ] T034 [P] Mobile QA pass at 320–430px widths — no horizontal scroll or pinch-zoom, touch targets ≥44px across login, tree, detail, and forms (SC-004)
-- [ ] T035 [P] Tone review (Principle IV) — confirm every user-facing string flows through `src/theme/messages.ts` and reads warm + actionable; no stray dry/terse copy
-- [ ] T036 [P] UI consistency review (Principle III) — confirm pages compose shared components/tokens only; no per-page one-off colors or spacing (contracts/ui-contract.md)
+- [X] T031 Verify the production build — `npm run build` in `services/todo-web/` emits static assets to `dist/`; confirm bundle is reasonable for mobile
+- [X] T032 Update the Caddy config in `deploy/roles/app/templates/Caddyfile.j2` — serve the SPA (`root /srv/www`, `try_files {path} /index.html`, `file_server`) and reverse-proxy `/auth/*`, `/task.v1.*`, `/health.v1.*` to `todo_server:8080` on one origin (plan.md → Deployment)
+- [X] T033 Update `deploy/roles/app/templates/compose.yaml.j2` and `deploy/roles/app/tasks/main.yml` — add the frontend build/ship step (`npm ci && npm run build`) and bind-mount `dist/` into Caddy at `/srv/www`
+- [X] T034 [P] Mobile QA pass at 320–430px widths — no horizontal scroll or pinch-zoom, touch targets ≥44px across login, tree, detail, and forms (SC-004)
+- [X] T035 [P] Tone review (Principle IV) — confirm every user-facing string flows through `src/theme/messages.ts` and reads warm + actionable; no stray dry/terse copy
+- [X] T036 [P] UI consistency review (Principle III) — confirm pages compose shared components/tokens only; no per-page one-off colors or spacing (contracts/ui-contract.md)
 - [ ] T037 Run the `quickstart.md` end-to-end validation, including the cross-client check (create a task in the TUI, refresh the web app — it appears) (SC-005)
-- [ ] T038 [P] Update repo docs — note `services/todo-web/` and its `dev`/`gen`/`build`/`test` scripts in `CLAUDE.md` (and a `services/todo-web/README.md`)
+- [X] T038 [P] Update repo docs — note `services/todo-web/` and its `dev`/`gen`/`build`/`test` scripts in `CLAUDE.md` (and a `services/todo-web/README.md`)
 
 ---
 
