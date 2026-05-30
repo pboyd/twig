@@ -26,7 +26,7 @@ func runPlan(args []string) int {
 	}
 	if cfg.APIKey == "" {
 		path, _ := config.DefaultPath()
-		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
+		fmt.Fprintf(os.Stderr, "no API key found — set TWIG_API_KEY or add api_key to %s\n", path)
 		return 1
 	}
 
@@ -68,13 +68,13 @@ func runPlan(args []string) int {
 		return runPlanClear(client, day, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown plan subcommand: %s\n", args[0])
-		fmt.Fprintln(os.Stderr, "Run 'todo help plan' for usage.")
+		fmt.Fprintln(os.Stderr, "Run 'twig help plan' for usage.")
 		return 1
 	}
 }
 
 func printPlanUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: todo plan [--date YYYY-MM-DD] [subcommand]")
+	fmt.Fprintln(w, "Usage: twig plan [--date YYYY-MM-DD] [subcommand]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  (none)                      Show today's plan as a grid")
@@ -114,7 +114,7 @@ func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
 
 func runPlanTask(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan task <task_id> <start> [duration|end]")
+		fmt.Fprintln(os.Stderr, "Usage: twig plan task <task_id> <start> [duration|end]")
 		return 1
 	}
 	taskID, err := strconv.ParseInt(args[0], 10, 64)
@@ -150,7 +150,7 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 
 func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan event <name> <start> [duration|end]")
+		fmt.Fprintln(os.Stderr, "Usage: twig plan event <name> <start> [duration|end]")
 		return 1
 	}
 	name := args[0]
@@ -182,7 +182,7 @@ func runPlanEvent(client planv1connect.PlanServiceClient, day string, args []str
 
 func runPlanRm(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan rm <n>")
+		fmt.Fprintln(os.Stderr, "Usage: twig plan rm <n>")
 		return 1
 	}
 	n, err := strconv.Atoi(args[0])
@@ -206,7 +206,7 @@ func runPlanRm(client planv1connect.PlanServiceClient, day string, args []string
 
 func runPlanRename(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan rename <n> <name>")
+		fmt.Fprintln(os.Stderr, "Usage: twig plan rename <n> <name>")
 		return 1
 	}
 	n, err := strconv.Atoi(args[0])
@@ -230,7 +230,7 @@ func runPlanRename(client planv1connect.PlanServiceClient, day string, args []st
 
 func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: todo plan mv <n> <start> [duration|end]")
+		fmt.Fprintln(os.Stderr, "Usage: twig plan mv <n> <start> [duration|end]")
 		return 1
 	}
 	n, err := strconv.Atoi(args[0])

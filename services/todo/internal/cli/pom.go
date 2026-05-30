@@ -26,7 +26,7 @@ func runPomTop(args []string) int {
 	}
 	if cfg.APIKey == "" {
 		path, _ := config.DefaultPath()
-		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
+		fmt.Fprintf(os.Stderr, "no API key found — set TWIG_API_KEY or add api_key to %s\n", path)
 		return 1
 	}
 	client := newTaskClient(cfg.APIURL, cfg.APIKey)
@@ -64,14 +64,14 @@ func runPom(client taskv1connect.TaskServiceClient, hooks config.PomodoroConfig,
 		return runStatus(client, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown pom subcommand: %s\n", args[0])
-		fmt.Fprintln(os.Stderr, "Run 'todo help pom' for usage.")
+		fmt.Fprintln(os.Stderr, "Run 'twig help pom' for usage.")
 		return 1
 	}
 }
 
 func printPomUsage(w io.Writer) {
 	path, _ := config.DefaultPath()
-	fmt.Fprintln(w, "Usage: todo pom <subcommand> [arguments]")
+	fmt.Fprintln(w, "Usage: twig pom <subcommand> [arguments]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
 	fmt.Fprintln(w, "  estimate <task_id> <n>   Set estimated pomodoros (0–10)")

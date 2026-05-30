@@ -16,7 +16,7 @@ import { TaskForm } from "../components/TaskForm";
 import { Button } from "../components/Button";
 import { messages } from "../theme/messages";
 
-const EXPANDED_STORAGE_KEY = "todo-expanded-tasks";
+const EXPANDED_STORAGE_KEY = "twig-expanded-tasks";
 
 function readExpandedIds(): Set<bigint> | null {
   try {

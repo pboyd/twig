@@ -23,7 +23,7 @@ func Run(_ context.Context) error {
 	}
 	cfg = cfg.Resolve()
 	if cfg.APIKey == "" {
-		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
+		fmt.Fprintf(os.Stderr, "no API key found — set TWIG_API_KEY or add api_key to %s\n", path)
 		os.Exit(1)
 	}
 

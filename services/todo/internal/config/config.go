@@ -22,13 +22,13 @@ type PomodoroConfig struct {
 }
 
 // DefaultPath returns the platform-standard path for the config file:
-// $XDG_CONFIG_HOME/todo/config.toml (falls back to ~/.config/todo/config.toml).
+// $XDG_CONFIG_HOME/twig/config.toml (falls back to ~/.config/twig/config.toml).
 func DefaultPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("config: cannot determine user config dir: %w", err)
 	}
-	return dir + "/todo/config.toml", nil
+	return dir + "/twig/config.toml", nil
 }
 
 // Load reads and parses the TOML config file at path.
@@ -51,13 +51,13 @@ func Load(path string) (Config, error) {
 }
 
 // Resolve applies environment-variable overrides and built-in defaults.
-// TODO_ADDR overrides APIURL; TODO_API_KEY overrides APIKey.
+// TWIG_ADDR overrides APIURL; TWIG_API_KEY overrides APIKey.
 // APIURL defaults to "http://localhost:8080" when both env and config are empty.
 func (c Config) Resolve() Config {
-	if env := os.Getenv("TODO_ADDR"); env != "" {
+	if env := os.Getenv("TWIG_ADDR"); env != "" {
 		c.APIURL = env
 	}
-	if env := os.Getenv("TODO_API_KEY"); env != "" {
+	if env := os.Getenv("TWIG_API_KEY"); env != "" {
 		c.APIKey = env
 	}
 	if c.APIURL == "" {

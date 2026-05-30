@@ -29,8 +29,8 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("TODO_ADDR", srv.URL)
-	t.Setenv("TODO_API_KEY", wantKey)
+	t.Setenv("TWIG_ADDR", srv.URL)
+	t.Setenv("TWIG_API_KEY", wantKey)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	code := runTask([]string{})
@@ -47,8 +47,8 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 // TestMissingAPIKey verifies that a task command fails with a non-zero exit
 // code and a helpful message when TODO_API_KEY is not set.
 func TestMissingAPIKey(t *testing.T) {
-	t.Setenv("TODO_API_KEY", "")
-	t.Setenv("TODO_ADDR", "http://localhost:19999") // won't be reached
+	t.Setenv("TWIG_API_KEY", "")
+	t.Setenv("TWIG_ADDR", "http://localhost:19999") // won't be reached
 	// Point XDG_CONFIG_HOME at an empty temp dir so there's no config file.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
@@ -66,10 +66,10 @@ func TestMissingAPIKey(t *testing.T) {
 	output := string(buf[:n])
 
 	if code == 0 {
-		t.Error("expected non-zero exit code when TODO_API_KEY is unset")
+		t.Error("expected non-zero exit code when TWIG_API_KEY is unset")
 	}
-	if !strings.Contains(output, "TODO_API_KEY") {
-		t.Errorf("stderr should mention TODO_API_KEY, got: %q", output)
+	if !strings.Contains(output, "TWIG_API_KEY") {
+		t.Errorf("stderr should mention TWIG_API_KEY, got: %q", output)
 	}
 	if !strings.Contains(output, "api_key") {
 		t.Errorf("stderr should mention config file api_key, got: %q", output)
@@ -86,8 +86,8 @@ func TestRunTaskFlagArgsInvokesList(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("TODO_ADDR", srv.URL)
-	t.Setenv("TODO_API_KEY", "testkey")
+	t.Setenv("TWIG_ADDR", srv.URL)
+	t.Setenv("TWIG_API_KEY", "testkey")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
@@ -113,8 +113,8 @@ func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("TODO_ADDR", srv.URL)
-	t.Setenv("TODO_API_KEY", "testkey")
+	t.Setenv("TWIG_ADDR", srv.URL)
+	t.Setenv("TWIG_API_KEY", "testkey")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
@@ -137,8 +137,8 @@ func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
 }
 
 func TestRunTaskListSubcommandUnknown(t *testing.T) {
-	t.Setenv("TODO_API_KEY", "testkey")
-	t.Setenv("TODO_ADDR", "http://localhost:19999")
+	t.Setenv("TWIG_API_KEY", "testkey")
+	t.Setenv("TWIG_ADDR", "http://localhost:19999")
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	r, w, _ := os.Pipe()
@@ -232,7 +232,7 @@ func TestRunHelpUnknown(t *testing.T) {
 func writeConfigFile(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	cfgDir := filepath.Join(dir, "todo")
+	cfgDir := filepath.Join(dir, "twig")
 	if err := os.MkdirAll(cfgDir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -257,8 +257,8 @@ func TestConfigFileAPIKeyUsedWhenEnvUnset(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("TODO_API_KEY", "")
-	t.Setenv("TODO_ADDR", "")
+	t.Setenv("TWIG_API_KEY", "")
+	t.Setenv("TWIG_ADDR", "")
 	xdgHome := writeConfigFile(t, fmt.Sprintf(`api_url = %q
 api_key = "config-key-xyz"
 `, srv.URL))
@@ -288,8 +288,8 @@ func TestEnvKeyWinsOverConfigKey(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	t.Setenv("TODO_API_KEY", "env-key-wins")
-	t.Setenv("TODO_ADDR", srv.URL)
+	t.Setenv("TWIG_API_KEY", "env-key-wins")
+	t.Setenv("TWIG_ADDR", srv.URL)
 	xdgHome := writeConfigFile(t, `api_key = "config-key-should-lose"`)
 	t.Setenv("XDG_CONFIG_HOME", xdgHome)
 

@@ -56,7 +56,7 @@ func runList(client taskv1connect.TaskServiceClient, addr string, args []string)
 
 func runComplete(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: todo task complete <id>")
+		fmt.Fprintln(os.Stderr, "usage: twig task complete <id>")
 		return 1
 	}
 
@@ -94,7 +94,7 @@ func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	}
 
 	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: todo task add [--parent <id>] [--due <timestamp>] <name>")
+		fmt.Fprintln(os.Stderr, "usage: twig task add [--parent <id>] [--due <timestamp>] <name>")
 		return 1
 	}
 	name := fs.Arg(0)
@@ -130,7 +130,7 @@ func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) 
 
 func runRm(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: todo task rm <id>")
+		fmt.Fprintln(os.Stderr, "usage: twig task rm <id>")
 		return 1
 	}
 
@@ -151,7 +151,7 @@ func runRm(client taskv1connect.TaskServiceClient, addr string, args []string) i
 
 func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: todo task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
 		return 1
 	}
 
@@ -190,7 +190,7 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	}
 
 	if len(positionals) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: todo task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
 		return 1
 	}
 

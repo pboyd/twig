@@ -6,10 +6,10 @@ proto:
 	cd services/todo && buf generate
 
 build:
-	podman build -t todo-server services/todo
+	podman build -t twig-server services/todo
 
 cli:
-	cd services/todo && go build -o todo ./cmd/todo
+	cd services/todo && go build -o twig ./cmd/todo
 
 dev:
 	podman-compose up -d --build --force-recreate server

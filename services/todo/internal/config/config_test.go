@@ -131,14 +131,14 @@ func TestResolve(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.envAddr != "" {
-				t.Setenv("TODO_ADDR", tc.envAddr)
+				t.Setenv("TWIG_ADDR", tc.envAddr)
 			} else {
-				t.Setenv("TODO_ADDR", "")
+				t.Setenv("TWIG_ADDR", "")
 			}
 			if tc.envKey != "" {
-				t.Setenv("TODO_API_KEY", tc.envKey)
+				t.Setenv("TWIG_API_KEY", tc.envKey)
 			} else {
-				t.Setenv("TODO_API_KEY", "")
+				t.Setenv("TWIG_API_KEY", "")
 			}
 			got := tc.cfg.Resolve()
 			if got != tc.want {

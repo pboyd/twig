@@ -49,7 +49,7 @@ func Run(args []string) int {
 		return runHelp(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
-		fmt.Fprintln(os.Stderr, "Run 'todo help' for usage.")
+		fmt.Fprintln(os.Stderr, "Run 'twig help' for usage.")
 		return 1
 	}
 }
@@ -70,22 +70,22 @@ func runHelp(args []string) int {
 		printPlanUsage(os.Stdout)
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\nRun 'todo help' for usage.\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown command: %s\nRun 'twig help' for usage.\n", args[0])
 		return 1
 	}
 }
 
 func printRootUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: todo <command> [arguments]")
-	fmt.Fprintln(w, "       todo help [command]")
+	fmt.Fprintln(w, "Usage: twig <command> [arguments]")
+	fmt.Fprintln(w, "       twig help [command]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  task   Manage tasks (add, remove, modify, list)")
 	fmt.Fprintln(w, "  pom    Pomodoro timer (estimate, start, resume, cancel, status)")
 	fmt.Fprintln(w, "  plan   Daily planning (schedule tasks and events)")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Run 'todo help <command>' for command-specific help.")
-	fmt.Fprintln(w, "Config file: ~/.config/todo/config.toml (see specs/015-pomodoro-config-file/contracts/config-schema.md)")
+	fmt.Fprintln(w, "Run 'twig help <command>' for command-specific help.")
+	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml (see specs/015-pomodoro-config-file/contracts/config-schema.md)")
 }
 
 func runTask(args []string) int {
@@ -101,7 +101,7 @@ func runTask(args []string) int {
 	}
 	if cfg.APIKey == "" {
 		path, _ := config.DefaultPath()
-		fmt.Fprintf(os.Stderr, "error: API key not set; set TODO_API_KEY env var or api_key in %s\n", path)
+		fmt.Fprintf(os.Stderr, "no API key found — set TWIG_API_KEY or add api_key to %s\n", path)
 		return 1
 	}
 
@@ -128,13 +128,13 @@ func runTask(args []string) int {
 		return runComplete(client, addr, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
-		fmt.Fprintln(os.Stderr, "Run 'todo help task' for usage.")
+		fmt.Fprintln(os.Stderr, "Run 'twig help task' for usage.")
 		return 1
 	}
 }
 
 func printTaskUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: todo task [<subcommand>] [arguments]")
+	fmt.Fprintln(w, "Usage: twig task [<subcommand>] [arguments]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands (if omitted, lists tasks):")
 	fmt.Fprintln(w, "  add [--parent <id>] [--due <date>] <name>")
@@ -145,7 +145,7 @@ func printTaskUsage(w io.Writer) {
 	fmt.Fprintln(w, "  complete <id>    Mark a task complete")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Listing tasks:")
-	fmt.Fprintln(w, "  todo task [--completed | --all]")
+	fmt.Fprintln(w, "  twig task [--completed | --all]")
 	fmt.Fprintln(w, "  --completed      Show only completed tasks")
 	fmt.Fprintln(w, "  --all            Show all tasks (including completed)")
 }
