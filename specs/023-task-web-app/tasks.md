@@ -24,12 +24,12 @@ description: "Task list for Task Web App implementation"
 
 **Purpose**: Scaffold the new `services/todo-web/` SPA and its toolchain.
 
-- [ ] T001 Create the frontend project skeleton in `services/todo-web/`: `package.json`, `tsconfig.json`, `index.html`, `.gitignore` (ignore `node_modules/`, `dist/`), and stub `src/main.tsx` + `src/App.tsx`
-- [ ] T002 Declare and install dependencies in `services/todo-web/package.json` — runtime: `react@19`, `react-dom@19`, `react-router@7`, `@connectrpc/connect-web`, `@connectrpc/connect-query`, `@tanstack/react-query@5`; dev: `vite@6`, `typescript@5`, `tailwindcss@4`, `@tailwindcss/vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@bufbuild/protoc-gen-es`, `@connectrpc/protoc-gen-connect-query`
-- [ ] T003 [P] Configure Vite with the dev proxy in `services/todo-web/vite.config.ts` — proxy `/auth`, `/task.v1`, `/health.v1` to `http://localhost:8080` (single-origin dev so the `SameSite=Strict` cookie works)
-- [ ] T004 [P] Configure Tailwind v4 in `services/todo-web/tailwind.config.ts` and `services/todo-web/src/index.css` (`@import "tailwindcss";`), mobile-first defaults
-- [ ] T005 [P] Configure Vitest + React Testing Library in `services/todo-web/vitest.config.ts` and `services/todo-web/src/test/setup.ts` (jsdom env, jest-dom matchers)
-- [ ] T006 Add `services/todo-web/buf.gen.web.yaml` (plugins: `buf.build/bufbuild/es`, `buf.build/connectrpc/query-es`; out: `src/gen`) and a `"gen"` script in `package.json`; run it to generate TypeScript from `services/todo/proto` into `services/todo-web/src/gen/`
+- [X] T001 Create the frontend project skeleton in `services/todo-web/`: `package.json`, `tsconfig.json`, `index.html`, `.gitignore` (ignore `node_modules/`, `dist/`), and stub `src/main.tsx` + `src/App.tsx`
+- [X] T002 Declare and install dependencies in `services/todo-web/package.json` — runtime: `react@19`, `react-dom@19`, `react-router@7`, `@connectrpc/connect-web`, `@connectrpc/connect-query`, `@tanstack/react-query@5`; dev: `vite@6`, `typescript@5`, `tailwindcss@4`, `@tailwindcss/vite`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `@bufbuild/protoc-gen-es`, `@connectrpc/protoc-gen-connect-query`
+- [X] T003 [P] Configure Vite with the dev proxy in `services/todo-web/vite.config.ts` — proxy `/auth`, `/task.v1`, `/health.v1` to `http://localhost:8080` (single-origin dev so the `SameSite=Strict` cookie works)
+- [X] T004 [P] Configure Tailwind v4 in `services/todo-web/tailwind.config.ts` and `services/todo-web/src/index.css` (`@import "tailwindcss";`), mobile-first defaults
+- [X] T005 [P] Configure Vitest + React Testing Library in `services/todo-web/vitest.config.ts` and `services/todo-web/src/test/setup.ts` (jsdom env, jest-dom matchers)
+- [X] T006 Add `services/todo-web/buf.gen.web.yaml` (plugins: `buf.build/bufbuild/es`, `buf.build/connectrpc/query-es`; out: `src/gen`) and a `"gen"` script in `package.json`; run it to generate TypeScript from `services/todo/proto` into `services/todo-web/src/gen/`
 
 **Checkpoint**: `npm run dev` serves an empty app; `npm run gen` produces typed `task.v1` clients.
 
@@ -41,13 +41,13 @@ description: "Task list for Task Web App implementation"
 
 **⚠️ CRITICAL**: No user-story work can begin until this phase is complete.
 
-- [ ] T007 Implement the Connect transport in `services/todo-web/src/lib/transport.ts` — `createConnectTransport` at same-origin base URL, `fetch` with `credentials: "include"`, and an interceptor that detects `Code.Unauthenticated` and redirects to `/login?next=<current path>`
-- [ ] T008 Wire root providers in `services/todo-web/src/main.tsx` — `QueryClientProvider` (React Query), connect-query `TransportProvider` (using T007), and `BrowserRouter`
-- [ ] T009 Define the route table and auth handling in `services/todo-web/src/App.tsx` — routes `/login`, `/tasks`, `/tasks/:id`; default redirect `/` → `/tasks`; centralized handling of the `Unauthenticated` redirect from T007
-- [ ] T010 [P] Create shared theme tokens in `services/todo-web/src/theme/tokens.ts` and wire them into `tailwind.config.ts` — colors (`bg/surface/text/muted/accent/danger/success`), typography, spacing; light + dark via `prefers-color-scheme` (per contracts/ui-contract.md)
-- [ ] T011 [P] Create the centralized tone strings in `services/todo-web/src/theme/messages.ts` — all user-facing copy from contracts/ui-contract.md (Principle IV)
-- [ ] T012 [P] Build shared primitives in `services/todo-web/src/components/`: `Button.tsx` (variants + loading/disabled), `Field.tsx` (labeled input/textarea + inline validation), `Spinner.tsx` — touch targets ≥44px (per contracts/ui-contract.md)
-- [ ] T013 [P] Build `services/todo-web/src/components/ErrorBanner.tsx` — connectivity/expiry/precondition error display with a retry affordance, sourcing copy from `messages.ts` (FR-015)
+- [X] T007 Implement the Connect transport in `services/todo-web/src/lib/transport.ts` — `createConnectTransport` at same-origin base URL, `fetch` with `credentials: "include"`, and an interceptor that detects `Code.Unauthenticated` and redirects to `/login?next=<current path>`
+- [X] T008 Wire root providers in `services/todo-web/src/main.tsx` — `QueryClientProvider` (React Query), connect-query `TransportProvider` (using T007), and `BrowserRouter`
+- [X] T009 Define the route table and auth handling in `services/todo-web/src/App.tsx` — routes `/login`, `/tasks`, `/tasks/:id`; default redirect `/` → `/tasks`; centralized handling of the `Unauthenticated` redirect from T007
+- [X] T010 [P] Create shared theme tokens in `services/todo-web/src/theme/tokens.ts` and wire them into `tailwind.config.ts` — colors (`bg/surface/text/muted/accent/danger/success`), typography, spacing; light + dark via `prefers-color-scheme` (per contracts/ui-contract.md)
+- [X] T011 [P] Create the centralized tone strings in `services/todo-web/src/theme/messages.ts` — all user-facing copy from contracts/ui-contract.md (Principle IV)
+- [X] T012 [P] Build shared primitives in `services/todo-web/src/components/`: `Button.tsx` (variants + loading/disabled), `Field.tsx` (labeled input/textarea + inline validation), `Spinner.tsx` — touch targets ≥44px (per contracts/ui-contract.md)
+- [X] T013 [P] Build `services/todo-web/src/components/ErrorBanner.tsx` — connectivity/expiry/precondition error display with a retry affordance, sourcing copy from `messages.ts` (FR-015)
 
 **Checkpoint**: Providers, routing, auth redirect, theme, and primitives are ready — user stories can begin.
 
@@ -61,17 +61,17 @@ description: "Task list for Task Web App implementation"
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Unit test the tree builder in `services/todo-web/src/lib/tree.test.ts` — roots, nesting by `parent_id`, id-ascending sibling order, defensive orphan handling
+- [X] T014 [P] [US1] Unit test the tree builder in `services/todo-web/src/lib/tree.test.ts` — roots, nesting by `parent_id`, id-ascending sibling order, defensive orphan handling
 
 ### Implementation for User Story 1
 
-- [ ] T015 [P] [US1] Implement the flat→nested tree builder in `services/todo-web/src/lib/tree.ts` producing `TaskNode { task, children, depth }` (per data-model.md)
-- [ ] T016 [US1] Implement `services/todo-web/src/pages/LoginPage.tsx` — username/password form (uses `Field`/`Button`), `POST /auth/login` JSON, on `200` redirect to `?next` or `/tasks`, on `401` show the non-revealing login-failure message and keep the username (FR-001, FR-002; contracts/auth.md)
-- [ ] T017 [US1] Add an app header with a sign-out action in `services/todo-web/src/components/AppHeader.tsx` — `POST /auth/logout`, clear the React Query cache, redirect to `/login` (FR-003)
-- [ ] T018 [US1] Implement `services/todo-web/src/pages/TaskTreePage.tsx` — call `ListTasks` via connect-query, build the tree (T015), render rows with loading (`Spinner`) and error (`ErrorBanner`) states (FR-005)
-- [ ] T019 [US1] Implement `services/todo-web/src/components/TreeRow.tsx` (initial) — render task name, indent by `depth`, show completed-state indicator, and an "add sub-task" affordance
-- [ ] T020 [US1] Implement `services/todo-web/src/components/TaskForm.tsx` — reusable create form; name required + empty/whitespace-title validation with the playful message (FR-010), description optional
-- [ ] T021 [US1] Wire the create flow in `TaskTreePage`/`TreeRow` — "add task" (top-level) and "add sub-task" (sets `parent_id`) call `CreateTask`; invalidate the `ListTasks` query on success so the new task appears (FR-008, FR-009; contracts/task-service.md)
+- [X] T015 [P] [US1] Implement the flat→nested tree builder in `services/todo-web/src/lib/tree.ts` producing `TaskNode { task, children, depth }` (per data-model.md)
+- [X] T016 [US1] Implement `services/todo-web/src/pages/LoginPage.tsx` — username/password form (uses `Field`/`Button`), `POST /auth/login` JSON, on `200` redirect to `?next` or `/tasks`, on `401` show the non-revealing login-failure message and keep the username (FR-001, FR-002; contracts/auth.md)
+- [X] T017 [US1] Add an app header with a sign-out action in `services/todo-web/src/components/AppHeader.tsx` — `POST /auth/logout`, clear the React Query cache, redirect to `/login` (FR-003)
+- [X] T018 [US1] Implement `services/todo-web/src/pages/TaskTreePage.tsx` — call `ListTasks` via connect-query, build the tree (T015), render rows with loading (`Spinner`) and error (`ErrorBanner`) states (FR-005)
+- [X] T019 [US1] Implement `services/todo-web/src/components/TreeRow.tsx` (initial) — render task name, indent by `depth`, show completed-state indicator, and an "add sub-task" affordance
+- [X] T020 [US1] Implement `services/todo-web/src/components/TaskForm.tsx` — reusable create form; name required + empty/whitespace-title validation with the playful message (FR-010), description optional
+- [X] T021 [US1] Wire the create flow in `TaskTreePage`/`TreeRow` — "add task" (top-level) and "add sub-task" (sets `parent_id`) call `CreateTask`; invalidate the `ListTasks` query on success so the new task appears (FR-008, FR-009; contracts/task-service.md)
 
 **Checkpoint**: MVP — sign in, capture top-level tasks and sub-tasks, see them in the list. Deployable/demoable.
 
