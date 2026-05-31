@@ -21,4 +21,4 @@ migrate-down:
 	migrate -path services/twig/db/migrations -database "$(DATABASE_URL)" down 1
 
 deploy:
-	ansible-playbook -i $(INVENTORY) deploy/site.yml
+	ansible-playbook -J -i $(INVENTORY) deploy/site.yml
