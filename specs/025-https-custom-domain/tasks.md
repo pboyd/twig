@@ -1,14 +1,14 @@
 ---
-description: "Task list for HTTPS with Custom Domain"
+description: "Task list for HTTPS with Custom Domain (LAN / DNS-01)"
 ---
 
-# Tasks: HTTPS with Custom Domain
+# Tasks: HTTPS with Custom Domain (LAN / DNS-01)
 
 **Input**: Design documents from `/specs/025-https-custom-domain/`
 
-**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/deployment-config.md, contracts/tls-behavior.md, quickstart.md
+**Prerequisites**: plan.md, spec.md, research.md (revised), data-model.md, contracts/deployment-config.md, contracts/tls-behavior.md, quickstart.md
 
-**Tests**: This is a deployment/infrastructure feature with no application-code or unit-test surface. Per plan.md (Testing), verification is **Ansible idempotence** plus **external TLS checks** (`curl`/`openssl s_client`) against the live domain, mapped to `contracts/tls-behavior.md` (TB-1…TB-7). These appear as explicit verification tasks in the Polish phase, not as a TDD test-first phase.
+**Tests**: This is a deployment/infrastructure feature with no application-code or unit-test surface. Per plan.md (Testing), verification is **Ansible idempotence** plus **external TLS checks** (`curl --resolve`/`openssl s_client`) against the host's LAN address using the configured domain SNI, mapped to `contracts/tls-behavior.md` (TB-1…TB-8). These appear as explicit verification tasks in the Polish phase, not as a TDD test-first phase.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -18,23 +18,38 @@ description: "Task list for HTTPS with Custom Domain"
 - **[Story]**: Which user story this task belongs to (US1, US2, US3)
 - All paths are repo-relative; this feature touches **only** `deploy/` (no `services/` changes).
 
+## Revision context (DNS-01 pivot)
+
+This list **supersedes** the prior HTTP-01 task list. The operator clarified the host is on a **private LAN, not publicly reachable**, so issuance now uses the **DNS-01 challenge via the Cloudflare API** (research.md D1–D11). The tasks below are the delta from the **current repo state** to the DNS-01 design.
+
+### Already in place (retained from prior work — do NOT redo)
+
+These exist in `deploy/` and carry over unchanged:
+
+- `Caddyfile.j2`: named-host site `{{ twig_domain }}`, global `email`/`acme_ca` (staging) conditionals, `tls { protocols tls1.3 }` (FR-012/D5).
+- `compose.yaml.j2`: caddy publishes `80` + `443`, `/data` bind mount (D4), `depends_on`/`restart`.
+- `app/tasks/main.yml`: `twig_domain` fail-fast assert (FR-009/D7); twig-server build/push pipeline (the pattern T003 mirrors).
+- `base/tasks/main.yml`: creates `{{ twig_host_data_dir }}/caddy`; opens `http`/`https` in firewalld.
+- `group_vars/all.yml`: `twig_acme_environment`, `twig_acme_email`, `twig_http_port`, `twig_https_port`.
+
 ## ⚠️ Shared-file note (read before parallelizing)
 
-Several stories edit the **same two files**, so tasks in different stories are frequently **not** parallelizable:
+Several tasks edit the **same files**, so they are frequently **not** parallelizable:
 
-- `deploy/roles/app/templates/compose.yaml.j2` — edited by **US1** (publish 443, T007) and **US3** (`/data` mount, T011).
-- `deploy/roles/app/tasks/main.yml` — edited by **US1** (HTTPS smoke check, T008) and **US2** (fail-fast assert, T009).
-- `deploy/roles/app/templates/Caddyfile.j2` — edited only within **US1** (T004→T005→T006), sequentially.
+- `deploy/roles/app/tasks/main.yml` — edited by **Foundational** (build/push custom caddy image, T003), **US1** (smoke check, T008), **US2** (token assert T009, `caddy.env` render T010).
+- `deploy/roles/app/templates/Caddyfile.j2` — edited within **US1** (T005 → T006), sequentially.
+- `deploy/roles/app/templates/compose.yaml.j2` — edited only by **US1** (T007).
+- `deploy/README.md` — edited by **US2** (T012) and **US3** (T013) and Polish (T018).
 
-Treat `[P]` markers as "different file, no incomplete dependency" only; respect the shared-file constraints in Dependencies below.
+Treat `[P]` as "different file, no incomplete dependency" only; respect the shared-file constraints in Dependencies below.
 
 ---
 
 ## Phase 1: Setup (Shared Configuration)
 
-**Purpose**: Declare the new per-deployment configuration variables consumed by every story.
+**Purpose**: Declare the new per-deployment configuration consumed by the DNS-01 flow.
 
-- [X] T001 Add new deployment variables to `deploy/group_vars/all.yml`: `twig_acme_environment` (default `production`), `twig_acme_email` (default `""`), and `twig_https_port` (default `443`). **Do NOT** add `twig_domain` here — it intentionally has no default and must be set per host/group so an unset value fails the play (FR-009, data-model.md). `twig_http_port` already exists and is reused.
+- [X] T001 In `deploy/group_vars/all.yml`, add `twig_acme_dns_resolver` (default `"1.1.1.1"`, for DNS-01 propagation checks under split-horizon DNS, D11). **Do NOT** add `twig_cloudflare_api_token` here — it is a required secret with no default and must be set per host/group (via Ansible Vault) so an unset value fails the play (FR-017, data-model.md). Add a comment pointing operators to set the token in vaulted `host_vars`. Existing vars (`twig_acme_environment`, `twig_acme_email`, ports) are unchanged.
 
 **Checkpoint**: Config surface defined per `contracts/deployment-config.md` §1.
 
@@ -42,67 +57,69 @@ Treat `[P]` markers as "different file, no incomplete dependency" only; respect 
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Host-level prerequisites that must exist before the Caddy container starts issuing/serving — shared by all stories.
+**Purpose**: Produce the DNS-01-capable Caddy image and adjust host posture — shared by all stories. Stock `caddy:2-alpine` cannot do DNS-01, so nothing issues until this lands.
 
-**⚠️ CRITICAL**: No user story work is verifiable until this phase is complete.
+**⚠️ CRITICAL**: No user story is verifiable until this phase is complete.
 
-- [X] T002 In `deploy/roles/base/tasks/main.yml`, create the Caddy state directory `{{ twig_host_data_dir }}/caddy` (add `"{{ twig_host_data_dir }}/caddy"` to the existing `/var/lib/twig` directory loop) so certificate/ACME state (the `/data` mount target, D4) has a home before the stack starts (contracts/deployment-config.md §4).
-- [X] T003 [P] In `deploy/roles/base/tasks/main.yml`, open the host firewall for the `http` and `https` services (TCP 80/443), guarded to run only when `firewalld` is active (e.g. check the service is running first). Ports 80 (HTTP-01 + redirect) and 443 (TLS serving) must be publicly reachable (research.md D2, contracts/deployment-config.md §4).
+- [X] T002 Create `deploy/roles/app/files/Containerfile.caddy`: a two-stage build using `docker.io/library/caddy:2-builder` to `xcaddy build --with github.com/caddy-dns/cloudflare`, copying the resulting `/usr/bin/caddy` into a `docker.io/library/caddy:2-alpine` runtime stage (contracts/deployment-config.md §4; research.md D9).
+- [X] T003 In `deploy/roles/app/tasks/main.yml`, add a **registry-guarded** build & push of the custom Caddy image to the on-host registry as `localhost:5000/twig-caddy:2-cloudflare`, mirroring the existing twig-server build/push idempotence (check the registry `tags/list` first; build with `podman build -f deploy/roles/app/files/Containerfile.caddy`; push over the existing SSH tunnel; skip when the tag is already present so re-runs are `changed=0`) (research.md D9; plan.md Testing).
+- [X] T004 [P] In `deploy/roles/base/tasks/main.yml`, update the firewall task's comment to reflect that opening `http`/`https` now grants **LAN** access only — inbound public reachability is no longer required for issuance (DNS-01 needs only outbound to Let's Encrypt + Cloudflare) (research.md D2; contracts/deployment-config.md §6). The firewalld task itself is unchanged.
 
-**Checkpoint**: Host has the cert directory and open ports — Caddy can issue and serve.
+**Checkpoint**: A DNS-01-capable Caddy image is in the on-host registry; host posture documented as LAN-only.
 
 ---
 
 ## Phase 3: User Story 1 - End user reaches the app securely (Priority: P1) 🎯 MVP
 
-**Goal**: An end user visiting `https://{{ twig_domain }}` gets an encrypted, publicly-trusted (Let's Encrypt) connection over TLS 1.3, plain HTTP is redirected to HTTPS, and existing ConnectRPC/auth/SPA routing is preserved.
+**Goal**: An end user on the LAN visiting `https://{{ twig_domain }}` gets an encrypted, publicly-trusted (Let's Encrypt) connection over TLS 1.3 — even though the host has a private IP — with plain HTTP redirected to HTTPS and existing ConnectRPC/auth/SPA routing preserved. Trust is achieved by obtaining the cert via DNS-01.
 
-**Independent Test**: Deploy to a resolving domain; `curl -sSI https://$DOMAIN/` succeeds with no `-k` (trusted), `openssl x509` shows a Let's Encrypt issuer with `$DOMAIN` in the SAN, `curl -sSI http://$DOMAIN/` returns `308` to `https://`, and `openssl s_client -tls1_3` succeeds while `-tls1_2` fails (contracts/tls-behavior.md TB-1…TB-4).
+**Independent Test**: Deploy to a LAN host with the token configured; with `HOST` = the host's LAN IP, `curl -sSI --resolve "$DOMAIN:443:$HOST" https://$DOMAIN/` succeeds with no `-k` (trusted), `openssl x509` shows a Let's Encrypt issuer with `$DOMAIN` in the SAN, the HTTP form returns `308` to `https://`, and `openssl -tls1_3` succeeds while `-tls1_2` fails (contracts/tls-behavior.md TB-1…TB-4). **Note:** requires US2's token plumbing to actually issue (see Implementation Strategy).
 
-- [X] T004 [US1] In `deploy/roles/app/templates/Caddyfile.j2`, replace the bare `:{{ twig_http_port }}` site address with the named-host site address `{{ twig_domain }}` (this activates Caddy automatic HTTPS, ACME issuance, and the HTTP→HTTPS redirect). Preserve the `@backend path_regexp` block and the SPA `handle` block **verbatim** — no routing regression (contracts/deployment-config.md §2; FR-001, FR-006, FR-008).
-- [X] T005 [US1] In `deploy/roles/app/templates/Caddyfile.j2`, add the Caddy **global options block** at the top that conditionally emits `email {{ twig_acme_email }}` when `twig_acme_email` is non-empty and `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory` when `twig_acme_environment == 'staging'`; an empty `{ }` block is valid (production + no email). Matches the Jinja2 shape in contracts/deployment-config.md §2 (FR-013/D3, D6).
-- [X] T006 [US1] In `deploy/roles/app/templates/Caddyfile.j2`, add `tls { protocols tls1.3 }` inside the site block to set the TLS 1.3 floor (rejects TLS ≤1.2 without disabling automatic ACME), and delete the now-stale "To add TLS in the future…" comment block (FR-012/D5).
-- [X] T007 [P] [US1] In `deploy/roles/app/templates/compose.yaml.j2`, publish the HTTPS port on the `caddy` service: add `"{{ twig_https_port }}:443"` alongside the existing `"{{ twig_http_port }}:80"` (research.md D2; contracts/deployment-config.md §3).
-- [X] T008 [US1] In `deploy/roles/app/tasks/main.yml`, upgrade the post-deploy "Wait for server to respond" smoke check to probe `https://{{ twig_domain }}/health.v1.HealthService/Check` (accept `[200, 401]`, `validate_certs` per environment) with a retry/delay window that bounds first-issuance to ≤5 minutes, so a failed first issuance fails the play instead of passing silently (FR-010/D8, SC-003).
+- [X] T005 [US1] In `deploy/roles/app/templates/Caddyfile.j2`, add `acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}` to the **global options block** (always emitted, not conditional) so every certificate uses the DNS-01 challenge. Render the literal `{env.CLOUDFLARE_API_TOKEN}` placeholder verbatim — the token value MUST NOT appear in the file (contracts/deployment-config.md §2; FR-014, FR-015, FR-016/D1).
+- [X] T006 [US1] In `deploy/roles/app/templates/Caddyfile.j2`, add `resolvers {{ twig_acme_dns_resolver }}` inside the site `tls` block (alongside the existing `protocols tls1.3`) so DNS-01 propagation is checked against a public resolver rather than the LAN's split-horizon DNS (contracts/deployment-config.md §2; research.md D11).
+- [X] T007 [US1] In `deploy/roles/app/templates/compose.yaml.j2`, change the `caddy` service `image` from `docker.io/library/caddy:2-alpine` to `localhost:5000/twig-caddy:2-cloudflare` (the DNS-01-capable build, D9) **and** add `env_file: ["{{ twig_host_data_dir }}/app/caddy.env"]` so the Cloudflare token reaches the process as `CLOUDFLARE_API_TOKEN` without appearing in compose (D10). Keep ports `80`/`443`, the `/data` mount, `depends_on: twig_server`, and `restart: unless-stopped` (contracts/deployment-config.md §3; FR-016).
+- [X] T008 [US1] In `deploy/roles/app/tasks/main.yml`, replace the `uri`-based HTTPS smoke check with an `ansible.builtin.command` running `curl -fsS --resolve {{ twig_domain }}:{{ twig_https_port }}:{{ ansible_host }} https://{{ twig_domain }}/health.v1.HealthService/Check -X POST -d '{}'` (add `-k` when `twig_acme_environment == 'staging'`), so the check does not depend on the control node's DNS view. Widen the retry/delay window to bound first DNS-01 issuance to ~10 minutes; a failed first issuance must fail the play (FR-010/D8, SC-003; contracts/tls-behavior.md TB-5).
 
-**Checkpoint**: HTTPS serving, redirect, and TLS-1.3 floor work for a configured domain — the MVP is independently testable via TB-1…TB-4.
+**Checkpoint**: With the token in place (US2), HTTPS serving, redirect, and the TLS-1.3 floor work for a configured domain on a private IP — the MVP is testable via TB-1…TB-4.
 
 ---
 
-## Phase 4: User Story 2 - Operator configures the domain for a deployment (Priority: P1)
+## Phase 4: User Story 2 - Operator configures the domain and credentials for a deployment (Priority: P1)
 
-**Goal**: An operator sets a single value (`twig_domain`) to choose the deployment's domain; a missing/invalid value fails the play fast with an actionable message; two deployments differ only by that value.
+**Goal**: An operator sets `twig_domain` (existing) **and** supplies a `twig_cloudflare_api_token` secret to choose the deployment's domain and authorize DNS-01; a missing/invalid value for either fails the play fast (token handled with `no_log`); the credential never lands in cleartext files or logs.
 
-**Independent Test**: Run the play with `twig_domain` unset → it fails immediately naming the variable. Set two different domains on two deployments → each serves and obtains a cert for its own domain with no code changes (contracts/deployment-config.md C2/C4).
+**Independent Test**: Run the play with `twig_cloudflare_api_token` unset → it fails immediately naming the variable, without printing any token value. After a deploy, grep `compose.yaml`/`Caddyfile` for the token → absent; `caddy.env` is `0600` (contracts/deployment-config.md C4; contracts/tls-behavior.md TB-8).
 
-- [X] T009 [US2] At the **start** of `deploy/roles/app/tasks/main.yml` (before any template render or restart), add an `ansible.builtin.assert` that fails when `twig_domain` is undefined, empty after trim, or does not match the hostname regex from research.md D7 (`^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$`; no scheme/path/spaces). The `fail_msg` must name `twig_domain` and say where to set it (FR-009/D7, contracts/deployment-config.md C4).
-- [X] T010 [P] [US2] Document per-deployment domain configuration: add a commented `twig_domain` example (and the public-IP / DNS-only-Cloudflare precondition) to the inventory files `deploy/inventories/lan.ini` and `deploy/inventories/test.ini` (or accompanying `host_vars`), and update `deploy/README.md` to point operators at `specs/025-https-custom-domain/quickstart.md` (FR-004, FR-005, US2 acceptance).
+- [X] T009 [US2] At the **start** of `deploy/roles/app/tasks/main.yml` (near the existing `twig_domain` assert, before any template render or restart), add an `ansible.builtin.assert` that fails when `twig_cloudflare_api_token` is undefined or empty after trim, with `no_log: true` and a `fail_msg` naming the variable and recommending a vaulted `host_vars` entry (FR-017/D7; contracts/deployment-config.md C4).
+- [X] T010 [US2] In `deploy/roles/app/tasks/main.yml`, render `{{ twig_host_data_dir }}/app/caddy.env` containing exactly `CLOUDFLARE_API_TOKEN={{ twig_cloudflare_api_token }}` with `owner: root`, `mode: "0600"`, and `no_log: true`, **before** the stack (re)start; `register` it and include its change in the existing "(re)start when changed" condition so a rotated token redeploys Caddy (FR-016/D10; contracts/deployment-config.md §5). The token MUST NOT appear in any other rendered file.
+- [X] T011 [P] [US2] Rewrite the per-host comments in `deploy/inventories/lan.ini` and `deploy/inventories/test.ini`: remove the public-IP / DNS-only-grey-cloud / ports-80-443-public preconditions; state that a **private LAN IP is fine**, that `twig_domain` and a vaulted `twig_cloudflare_api_token` are required, and that LAN clients must resolve the domain to the host. Point to `specs/025-https-custom-domain/quickstart.md` (FR-004, FR-005, FR-014, FR-016).
+- [X] T012 [P] [US2] Update `deploy/README.md` "Domain configuration" / HTTPS prerequisites to the DNS-01 model: Cloudflare API token (scope Zone → DNS → Edit, via Ansible Vault), domain hosted in Cloudflare, LAN name resolution, **no public reachability required**; point operators at `quickstart.md` (FR-014, FR-015, FR-016).
 
-**Checkpoint**: Domain is a single, validated, per-deployment config point — US1 + US2 both hold.
+**Checkpoint**: Domain + credential are validated, per-deployment config points; the secret is never exposed — US1 + US2 together yield a trusted cert on a LAN host.
 
 ---
 
 ## Phase 5: User Story 3 - Certificate stays valid over time without manual work (Priority: P2)
 
-**Goal**: Issued certificates persist across container/host restarts and redeploys (no re-issuance, avoiding Let's Encrypt rate limits), and issuance/renewal failures are observable to the operator.
+**Goal**: Issued certificates persist across container/host restarts and redeploys (no re-issuance, avoiding Let's Encrypt rate limits — `/data` mount already in place), and DNS-01 issuance/renewal failures are observable to the operator.
 
-**Independent Test**: Deploy, confirm a cert is issued, then restart the stack / re-run the play and confirm the **same** cert is served (no new ACME request in `podman logs caddy`); confirm `{{ twig_host_data_dir }}/caddy` retains cert material across restart (research.md D4, FR-007).
+**Independent Test**: Deploy, confirm a cert is issued, then restart the stack / re-run the play and confirm the **same** cert is served (no new ACME request in `podman logs caddy`); `{{ twig_host_data_dir }}/caddy` retains cert material across restart (research.md D4, FR-007).
 
-- [X] T011 [US3] In `deploy/roles/app/templates/compose.yaml.j2`, add a **read-write** bind mount `"{{ twig_host_data_dir }}/caddy:/data:z"` to the `caddy` service so issued certs, keys, and ACME account state survive restarts/redeploys (research.md D4; contracts/deployment-config.md §3). Keep `depends_on: twig_server` and `restart: unless-stopped`.
-- [X] T012 [P] [US3] Document the renewal + failure-observability operator workflow (automatic renewal at ~2/3 lifetime; check `podman logs caddy` / `journalctl -u twig.service`; persisted certs under `/var/lib/twig/caddy`) in `deploy/README.md`, cross-referencing `quickstart.md` "Renewal" and "Troubleshooting" (FR-007, FR-010/D8).
+- [X] T013 [US3] Update the renewal + failure-observability operator workflow in `deploy/README.md` to reflect **DNS-01** renewal: Caddy renews automatically at ~2/3 lifetime via the Cloudflare API; check `podman logs caddy` / `journalctl -u twig.service`; certs persist under `/var/lib/twig/caddy`. Cross-reference `quickstart.md` "Renewal" and "Troubleshooting" (FR-007, FR-010/D8). (The `/data` mount itself is already implemented and is retained, not re-added.)
 
-**Checkpoint**: Certs persist and renewal/observability are documented — all three stories hold independently.
+**Checkpoint**: Certs persist and DNS-01 renewal/observability are documented — all three stories hold.
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns (Verification)
 
-**Purpose**: Prove idempotence and the externally-observable TLS contract; finish docs.
+**Purpose**: Prove idempotence and the externally-observable TLS + secret-handling contract; finish docs.
 
-- [ ] T013 Idempotence check: run `ansible-playbook -i inventories/<inv>.ini site.yml` a **second** time and confirm `changed=0` for the Caddyfile/compose render and cert steps, and that the postgres container is **not** recreated (existing guards in `deploy/roles/app/tasks/main.yml` still pass). (plan.md Testing; preserves prior idempotence guarantees.)
-- [ ] T014 [P] Production-mode external TLS verification against the live `$DOMAIN` per `contracts/tls-behavior.md`: TB-1 (trusted HTTPS + Let's Encrypt issuer + SAN), TB-2 (SAN matches domain), TB-3 (`308` HTTP→HTTPS), TB-4 (TLS 1.3 succeeds, TLS 1.2 refused), TB-6 (no HSTS header). Use the `curl`/`openssl` commands from `quickstart.md` "Verify".
-- [ ] T015 [P] Staging-mode dry-run verification (TB-7): set `twig_acme_environment: staging`, deploy, confirm issuance with `curl -kI` and a staging issuer marker, then flip back to `production` and redeploy for the trusted cert (FR-013; quickstart.md "Dry-run against Let's Encrypt staging").
-- [X] T016 [P] Final docs pass: ensure `deploy/README.md` (and any HTTP-only references in `CLAUDE.md` deploy notes) reflect the HTTPS/named-host model; confirm `quickstart.md` commands match the rendered templates.
+- [ ] T014 Idempotence check: run `ansible-playbook -i inventories/<inv>.ini site.yml` a **second** time and confirm `changed=0` for the custom-image build/push (tag already present, T003), the `caddy.env` render (T010), and the Caddyfile/compose render — and that the postgres container is **not** recreated (existing guards still pass) (plan.md Testing).
+- [ ] T015 [P] Production-mode external TLS verification against the live `$DOMAIN` via the host's LAN IP per `contracts/tls-behavior.md`: TB-1 (trusted HTTPS on a private IP + Let's Encrypt issuer + SAN), TB-2 (SAN matches), TB-3 (`308` HTTP→HTTPS), TB-4 (TLS 1.3 succeeds, TLS 1.2 refused), TB-6 (no HSTS). Use the `curl --resolve`/`openssl -connect $HOST` commands from `quickstart.md` "Verify".
+- [ ] T016 [P] Secret-handling verification (TB-8): confirm the token value is absent from `/var/lib/twig/app/compose.yaml` and `/var/lib/twig/app/Caddyfile` (only the `{env.CLOUDFLARE_API_TOKEN}` placeholder appears), `caddy.env` is `0600`, and the token-render/assert tasks ran with `no_log` (no token in Ansible output) (FR-016).
+- [ ] T017 [P] Staging-mode dry-run verification (TB-7): set `twig_acme_environment: staging`, deploy, confirm DNS-01 issuance with `curl -k --resolve ...` and a staging issuer marker, then flip back to `production` and redeploy for the trusted cert (FR-013; quickstart.md "Dry-run against Let's Encrypt staging").
+- [X] T018 [P] Final docs pass: ensure `deploy/README.md`, `quickstart.md`, and any deploy notes in `CLAUDE.md` reflect the DNS-01 / LAN / Cloudflare-token model (no stale public-reachability or HTTP-01 language), and confirm `quickstart.md` commands match the rendered templates.
 
 ---
 
@@ -111,62 +128,61 @@ Treat `[P]` markers as "different file, no incomplete dependency" only; respect 
 ### Phase Dependencies
 
 - **Setup (Phase 1)**: No dependencies — start immediately (T001).
-- **Foundational (Phase 2)**: Depends on Setup. Blocks all user stories (cert dir + open ports must exist before issuance/serving).
+- **Foundational (Phase 2)**: Depends on Setup. T002 (Containerfile) → T003 (build/push needs the file). T004 is independent `[P]`. Blocks all user stories (no DNS-01 image ⇒ no issuance).
 - **User Stories (Phase 3–5)**: All depend on Foundational completion.
-  - **US1 (P1)** is the MVP and should land first.
-  - **US2 (P1)** edits the **same file** as US1's T008 (`app/tasks/main.yml`), so sequence T008 → T009 (or coordinate a single edit session); otherwise US2 is logically independent.
-  - **US3 (P2)** edits the **same file** as US1's T007 (`compose.yaml.j2`), so sequence T007 → T011; otherwise US3 is independent.
-- **Polish (Phase 6)**: Depends on the user stories being deployed (T013–T016 verify a running deployment).
+  - **US1 (P1)** and **US2 (P1)** are mutually dependent for a *working* result: US1 wires the mechanism (`acme_dns`, custom image, `env_file`), US2 supplies/asserts the credential and renders `caddy.env`. Land them together for the MVP.
+  - **US3 (P2)** is mostly documentation (persistence already implemented); independent.
+- **Polish (Phase 6)**: Depends on the user stories being deployed (T014–T018 verify a running deployment).
 
-### Within Each User Story
+### Within / across stories (shared files)
 
-- **US1**: T004 → T005 → T006 are the **same file** (`Caddyfile.j2`) — sequential. T007 (`compose.yaml.j2`) and T008 (`app/tasks/main.yml`) are different files and may run alongside the Caddyfile edits.
-- **US2**: T009 (assert) and T010 (docs/inventory) are different files — T010 is `[P]`.
-- **US3**: T011 (compose) and T012 (docs) are different files — T012 is `[P]`.
+- `app/tasks/main.yml` is edited by T003, T008, T009, T010 — apply these in a coordinated pass; order: asserts (T009) and `caddy.env` (T010) must precede the stack (re)start, and the smoke check (T008) is the last step. T003's build/push sits with the other build steps.
+- `Caddyfile.j2`: T005 → T006 (same file, sequential).
+- `compose.yaml.j2`: T007 only.
+- `README.md`: T012 (US2), T013 (US3), T018 (Polish) — sequence or batch.
 
 ### Parallel Opportunities
 
-- T003 `[P]` within Foundational (base role firewall) is independent of T002's dir creation only if edited as separate tasks — both touch `base/tasks/main.yml`, so in practice apply them in one pass.
-- US1: T007 `[P]` (compose 443) runs parallel to the Caddyfile sequence T004–T006.
-- US2: T010 `[P]` (docs) parallel to T009 (assert).
-- US3: T012 `[P]` (docs) parallel to T011 (compose mount).
-- Polish: T014, T015, T016 `[P]` are independent verification/docs streams (run T015 staging **before** T014 production to avoid burning production rate limits during iteration).
+- T004 `[P]` (base firewall comment) is independent of the app-role work.
+- US2: T011 `[P]` (inventories) and T012 `[P]` (README) are docs, parallel to the `app/tasks` edits T009–T010.
+- Polish: T015, T016, T017, T018 `[P]` are independent verification/docs streams. **Run T017 (staging) before T015 (production)** to avoid burning production rate limits while iterating.
 
 ---
 
-## Parallel Example: User Story 1
+## Parallel Example: User Story 2
 
 ```bash
-# After Foundational (Phase 2), within US1 these can proceed concurrently
-# because they touch different files:
-Task: "T007 Publish 443 on the caddy service in deploy/roles/app/templates/compose.yaml.j2"
-Task: "T008 Upgrade HTTPS smoke check in deploy/roles/app/tasks/main.yml"
+# Within US2, docs can proceed concurrently with the app/tasks edits (different files):
+Task: "T011 Rewrite LAN/DNS-01/token comments in deploy/inventories/{lan,test}.ini"
+Task: "T012 Update DNS-01 prerequisites in deploy/README.md"
 
-# Meanwhile the Caddyfile edits run as a single sequential stream (same file):
-#   T004 → T005 → T006 in deploy/roles/app/templates/Caddyfile.j2
+# Meanwhile the app/tasks/main.yml edits run as a coordinated sequential stream:
+#   T009 (token assert, no_log) → T010 (render caddy.env, 0600, no_log)
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 only)
+### MVP (User Story 1 + User Story 2 together)
 
-1. Phase 1 Setup (T001) → Phase 2 Foundational (T002–T003).
-2. Phase 3 US1 (T004–T008): named-host Caddyfile, ACME options, TLS 1.3, publish 443, HTTPS smoke check.
-3. **STOP and VALIDATE**: deploy to a resolving test domain (use `staging` to iterate) and run TB-1…TB-4. This is a shippable secure deployment for one domain.
+For this feature the true MVP is **Foundational + US1 + US2**, because a publicly-trusted cert on a LAN host needs both the DNS-01 mechanism (US1) and the Cloudflare credential (US2):
+
+1. Phase 1 Setup (T001) → Phase 2 Foundational (T002–T004): DNS-01-capable image in the registry.
+2. US1 (T005–T008) + US2 (T009–T012): `acme_dns` directive, resolver, custom image + `env_file`, token assert + `caddy.env`, smoke check, docs.
+3. **STOP and VALIDATE**: deploy to a LAN test host (use `staging` to iterate, T017) and run TB-1…TB-4 + TB-8. This is a shippable, secure, private-IP deployment.
 
 ### Incremental Delivery
 
-1. Setup + Foundational → host ready.
-2. US1 → trusted HTTPS at the domain (MVP) → validate TB-1…TB-4.
-3. US2 → fail-fast domain config + per-deployment overridability → validate C2/C4.
-4. US3 → cert persistence + renewal/observability docs → validate restart keeps the cert.
-5. Polish → idempotence (T013) + full external TLS contract (T014), staging rehearsal (T015), docs (T016).
+1. Setup + Foundational → DNS-01 image ready.
+2. US1 + US2 → trusted HTTPS at the domain on a private IP (MVP) → validate TB-1…TB-4, TB-8.
+3. US3 → DNS-01 renewal/observability docs (persistence already in place) → validate restart keeps the cert.
+4. Polish → idempotence (T014), full external TLS contract (T015), secret handling (T016), staging rehearsal (T017), docs (T018).
 
 ### Notes
 
 - `[P]` = different files, no incomplete dependency; honor the shared-file constraints above.
 - Every task touches only `deploy/` — no `services/twig` or `services/twig-web` changes (plan.md Project Structure).
-- Iterate against `twig_acme_environment: staging` to avoid Let's Encrypt production rate limits; the persistent `/data` mount (T011) further protects against re-issuance across restarts.
+- Iterate against `twig_acme_environment: staging` to avoid Let's Encrypt production rate limits; the persistent `/data` mount (already present) further protects against re-issuance across restarts.
+- Never echo `twig_cloudflare_api_token`; keep `no_log: true` on the assert (T009) and render (T010), and verify TB-8 before claiming done.
 - Commit after each logical group; re-run `site.yml` to confirm `changed=0` before claiming done.

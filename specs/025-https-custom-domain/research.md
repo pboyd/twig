@@ -1,107 +1,134 @@
-# Phase 0 Research: HTTPS with Custom Domain
+# Phase 0 Research: HTTPS with Custom Domain (LAN / DNS-01)
 
-**Feature**: 025-https-custom-domain | **Date**: 2026-05-31
+**Feature**: 025-https-custom-domain | **Date**: 2026-05-31 (revised)
 
-This document resolves the open decisions implied by the spec and the user's planning input ("Let's Encrypt as the CA; domain hosted in Cloudflare"), plus the two items the spec deferred to planning (ACME challenge type, observability specifics).
+> **Revision note**: This document replaces the earlier public-reachability design. The operator clarified the deployment runs on a **LAN behind a private/internal IP and is not reachable from the public internet**, so the HTTP-01 / TLS-ALPN-01 challenges Caddy uses by default cannot work. Domain control is now proven with a **DNS-01 challenge via the Cloudflare API**, using an operator-supplied API token. Decisions D1 and D2 are reversed from the prior revision; D3–D6 carry over; D7–D8 are extended. New decisions D9–D11 cover the custom Caddy build, the API-token secret, and resolver handling.
 
 ---
 
-## D1. Cloudflare DNS posture: DNS-only vs. proxied
+## D1. ACME challenge method: DNS-01 via Cloudflare
 
-**Decision**: Use a **DNS-only ("grey-cloud") A/AAAA record** in Cloudflare pointing directly at the host's public IP. Cloudflare is the authoritative DNS host only; it does not proxy or terminate TLS.
+**Decision**: Use the **DNS-01 challenge through the Cloudflare API**. Caddy proves control of `twig_domain` by creating a `_acme-challenge` TXT record in the domain's Cloudflare zone; Let's Encrypt validates that record and never connects to the deployment. Configured via a Caddyfile **global** `acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}` directive so every certificate uses DNS-01.
 
 **Rationale**:
-- The spec requires the certificate **presented to end users** to be a Let's Encrypt cert (FR-002) and the **deployment** to negotiate TLS 1.3 / refuse TLS 1.2 (FR-012). With a DNS-only record, the browser's TLS session terminates at the origin's Caddy, which serves the Let's Encrypt cert and enforces the TLS 1.3 floor — both requirements are satisfied end-to-end and are directly verifiable from an external client.
-- If the record were proxied (orange-cloud), Cloudflare would terminate the browser's TLS at its edge and present *Cloudflare's* certificate (issued by Google Trust Services / Let's Encrypt at Cloudflare's discretion, not the deployment's). The deployment's own TLS version would be invisible to the end user, and FR-002/FR-012 would describe the Cloudflare↔origin hop rather than the user-facing one. This breaks the spec's intent.
-- DNS-only keeps Caddy's standard automatic HTTPS working with **no custom image and no API credentials** (Principle I).
+- The deployment is on a private LAN (e.g. `192.0.2.10`) with no inbound public connectivity, so HTTP-01 (port 80) and TLS-ALPN-01 (port 443) — which require the CA to reach the host — **cannot complete** (FR-014). DNS-01 is the only ACME challenge that does not require the host to be publicly reachable.
+- It still yields a **publicly-trusted Let's Encrypt certificate** (FR-002/FR-011): trust derives from proven DNS control, not from the host's reachability. LAN browsers therefore see no warning even though the host has a private IP (SC-008).
+- Cloudflare is the authoritative DNS for the domain and exposes a token-scoped API that the `caddy-dns/cloudflare` module drives automatically (FR-006, FR-015).
 
 **Alternatives considered**:
-- **Proxied + DNS-01 challenge via Cloudflare API** (`caddy-dns/cloudflare` plugin): would allow issuance behind the proxy and hide the origin IP, but requires a **custom Caddy build** (stock `caddy:2-alpine` has no DNS plugins), a Cloudflare API token mounted as a secret, and still leaves Cloudflare presenting its own edge cert to users. Rejected: more moving parts, an extra secret to manage, and it does not actually satisfy "Let's Encrypt cert presented to end users." Documented here so a future operator who *wants* edge proxying knows the path.
-- **Proxied + Cloudflare Origin CA cert**: not publicly trusted outside Cloudflare's edge; fails FR-002 for direct origin access. Rejected.
-
-**Consequences / prerequisites**:
-- The host needs a **public, internet-routable IP**, and the Cloudflare record must point at it. The existing `inventories/lan.ini` and `inventories/test.ini` use private RFC-1918 addresses (`192.168.x`, `192.168.122.x`); Let's Encrypt **production** cannot validate a domain that resolves to a private IP. Public HTTPS therefore requires a publicly-reachable host (new/updated inventory). This is called out in quickstart.md as a precondition, not a code change.
-- Origin IP is exposed (no Cloudflare proxy hiding it). Acceptable for this feature's scope; revisit if DDoS protection becomes a requirement.
+- **HTTP-01 / TLS-ALPN-01 (the prior design)**: requires the host to be publicly reachable on 80/443. Rejected — contradicts the LAN/private-IP reality (FR-014).
+- **A self-signed / internal CA cert**: would avoid external dependencies but is not publicly trusted, so LAN browsers would show warnings unless every client installs a custom root. Rejected per FR-002/FR-011.
+- **Cloudflare Tunnel / proxied edge**: would expose the app publicly and terminate TLS at Cloudflare's edge (Cloudflare's cert, not Let's Encrypt's, presented to users). Rejected — changes the security posture and does not satisfy "Let's Encrypt cert presented to end users".
 
 ---
 
-## D2. ACME challenge type
+## D2. Listener ports: 443 for serving, 80 for redirect only
 
-**Decision**: Rely on Caddy's **default automatic challenge selection over the public listeners** — i.e. HTTP-01 (port 80) and/or TLS-ALPN-01 (port 443). No DNS-01, no Cloudflare API token.
+**Decision**: Caddy continues to listen on **443** (HTTPS serving) and **80** (HTTP→HTTPS redirect) for **LAN** clients. Neither port needs to be reachable from the public internet. The compose service keeps publishing `{{ twig_http_port }}:80` and `{{ twig_https_port }}:443`; the base-role `firewalld` rule that opens `http`/`https` now governs **LAN** access, not public access.
 
 **Rationale**:
-- The spec assumes the host is reachable on standard ports 80 and 443; with a DNS-only record (D1) those challenges reach the origin directly. Caddy negotiates the challenge type itself; the operator does nothing.
-- DNS-01 is only needed for wildcard certs or when ports 80/443 are not publicly reachable — both out of scope (single domain; standard ports assumed). Avoiding DNS-01 keeps us on the stock image with no secret (Principle I).
+- With DNS-01 (D1), no ACME challenge arrives on 80/443, so the prior justification for *publicly* opening those ports is gone. Port 80 is retained solely to honor FR-008 (HTTP→HTTPS redirect) for LAN clients; port 443 serves the app.
+- Keeping the existing port publishing avoids a needless change and preserves the redirect behavior the spec still requires.
 
-**Implication for compose**: Caddy must publish **both 80 and 443**. Port 80 currently published; **443 must be added**. Port 80 must remain open because (a) Caddy serves the HTTP→HTTPS redirect there and (b) HTTP-01 validation uses it.
-
-**Alternatives considered**: DNS-01 via Cloudflare token — rejected per D1 (custom build + secret, unnecessary here).
+**Implication**: The earlier "host must be publicly reachable on 80/443" precondition is removed from inventory comments, README, and quickstart.
 
 ---
 
-## D3. CA selection and the production/staging toggle (FR-013)
+## D3. CA selection and the production/staging toggle (FR-013) — carried over
 
-**Decision**: Let's Encrypt is the CA, selected implicitly because it is Caddy's default issuer. Expose a single Ansible variable `twig_acme_environment` with values `production` (default) and `staging`. In `staging` mode the Caddyfile global options set `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory`; in `production` mode the directive is omitted so Caddy uses its default (Let's Encrypt production, with its usual ZeroSSL fallback).
+**Decision**: Let's Encrypt remains the CA (Caddy's default issuer). The existing `twig_acme_environment` variable (`production` default / `staging`) still selects the endpoint: `staging` sets `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory` in the global options; `production` omits it.
+
+**Rationale**: Unchanged from the prior design and orthogonal to the challenge type — DNS-01 works against both endpoints. Staging issues an untrusted cert with generous rate limits for pipeline validation (FR-013); production trust requirements (FR-002/FR-011) apply to production mode only.
+
+---
+
+## D4. Certificate persistence across restarts (D4) — carried over
+
+**Decision**: Keep the `{{ twig_host_data_dir }}/caddy` → `/data` bind mount so issued certs, keys, and ACME account state survive container/host restarts and redeploys.
+
+**Rationale**: Unchanged. Persisting `/data` prevents needless re-issuance (and Let's Encrypt rate-limit exposure) on every restart. DNS-01 does not change where Caddy stores material.
+
+---
+
+## D5. TLS 1.3 minimum (FR-012) — carried over
+
+**Decision**: `tls { protocols tls1.3 }` per site for the TLS 1.3 floor. The same `tls` block also carries the per-site DNS challenge config when not set globally; here the DNS provider is set **globally** via `acme_dns` (D1), so the site `tls` block needs only `protocols tls1.3` (plus a `resolvers` line per D11).
+
+**Rationale**: Unchanged — Caddy's default floor is TLS 1.2; FR-012 requires rejecting ≤1.2. Externally verifiable (SC-007).
+
+---
+
+## D6. ACME account email (optional) — carried over
+
+**Decision**: Keep optional `twig_acme_email` → global `email` directive when set.
+
+**Rationale**: Unchanged. Recommended for production expiry/problem notices; optional otherwise.
+
+---
+
+## D7. Fail-fast on missing/invalid configuration (FR-009, FR-017)
+
+**Decision**: Keep the existing `assert` that fails the play when `twig_domain` is undefined/empty/not a valid hostname. **Add** an `assert` that fails when `twig_cloudflare_api_token` is undefined or empty (FR-017). The token assertion uses `no_log: true` so the secret never appears in output.
+
+**Rationale**: FR-009 and FR-017 both require a clear, actionable failure before any container starts, rather than a broken/insecure start. Without the token, DNS-01 cannot proceed, so it is a hard precondition. `no_log` keeps the secret out of Ansible output (FR-016).
+
+---
+
+## D8. Observability + smoke check independent of split-horizon DNS (FR-010, SC-003)
+
+**Decision**: Caddy logs remain the observability surface (issuance/renewal logged to stdout, captured by podman/journald). The post-deploy smoke check is changed to **not depend on the control node's DNS view**: it runs `curl --resolve {{ twig_domain }}:{{ twig_https_port }}:{{ ansible_host }} https://{{ twig_domain }}/health.v1.HealthService/Check`, forcing the connection to the host's known LAN address while still presenting (and, in production, validating) the certificate for `twig_domain`. The retry window is widened to ~10 minutes to absorb DNS challenge-record propagation (SC-003).
 
 **Rationale**:
-- Let's Encrypt **production** enforces strict issuance rate limits (e.g. certificates-per-registered-domain per week). Operators iterating on bring-up can exhaust them and be locked out for days. The **staging** endpoint has far higher limits and issues certs from an **untrusted** root — perfect for validating the whole pipeline without burning production quota. This is exactly the spec's FR-013 toggle.
-- Staging certs are deliberately untrusted, so FR-002/FR-011 (publicly-trusted cert) apply to **production mode only**; the spec already scopes them that way.
-
-**Rationale for default = production**: matches FR-013's stated default and the principle of least surprise for a real deployment.
-
-**Alternatives considered**: a free-form `twig_acme_ca` URL — rejected as over-general (Principle I / YAGNI); the binary prod/staging toggle covers the actual need. Operator-configurable arbitrary CA was explicitly ruled out by the spec's Q1 clarification.
+- On a LAN with split-horizon DNS, the Ansible control node may not resolve `twig_domain` to the host's internal IP. `--resolve` pins the address deterministically and is the most representative check (a LAN client reaching the host and being served the domain's cert). The `ansible.builtin.uri` module cannot pin resolution, so the check uses `ansible.builtin.command` with `curl`.
+- DNS-01 issuance includes a propagation wait (the TXT record must be visible to Let's Encrypt's validators), which can take longer than an inbound HTTP-01 check; 10 minutes (per revised SC-003) gives comfortable headroom.
+- In `staging` mode the cert is untrusted, so the check adds `-k` (skip trust) and asserts only that HTTPS responds.
 
 ---
 
-## D4. Certificate persistence across restarts
+## D9. Custom Caddy image with the Cloudflare DNS module
 
-**Decision**: Bind-mount `{{ twig_host_data_dir }}/caddy` to `/data` in the Caddy container so issued certificates, keys, and ACME account state persist across container/host restarts and redeploys.
+**Decision**: Build a **custom Caddy image** that includes `github.com/caddy-dns/cloudflare`, using the official `caddy:<ver>-builder` (xcaddy) stage, and run **that** image instead of stock `caddy:2-alpine`. Build it on the workstation and push it to the existing on-host registry (reusing the SSH-tunnel build/push pattern already used for `twig-server`), tagged by Caddy version + plugin (e.g. `twig-caddy:2-cloudflare`). Build/push only when the tag is absent from the registry (idempotent re-runs).
+
+```dockerfile
+FROM docker.io/library/caddy:2-builder AS builder
+RUN xcaddy build --with github.com/caddy-dns/cloudflare
+
+FROM docker.io/library/caddy:2-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+```
 
 **Rationale**:
-- Caddy stores all certificate material under `/data/caddy`. The current compose mounts only the Caddyfile and the SPA dir — **no `/data`** — so every container recreation would discard certs and re-request them from Let's Encrypt, quickly hitting **production rate limits** (the same hazard D3 mitigates). Persisting `/data` makes restarts and same-commit redeploys free of issuance.
-- Uses the existing `{{ twig_host_data_dir }}` convention (alongside `postgres/` and `app/`), so it is captured by the same host backup story. SELinux relabel `:z` is applied as elsewhere in the compose template.
+- Stock `caddy:2-alpine` ships **no DNS provider modules**; DNS-01 with Cloudflare requires the `caddy-dns/cloudflare` module compiled in. The xcaddy builder image is the official, supported way to produce such a build (no third-party prebuilt image, avoiding supply-chain risk — Principle I trades a tiny bit of build complexity for a trusted, self-owned artifact).
+- Reusing the established build→registry→pull pipeline (already implemented for `twig-server`) keeps the host pulling from its own registry and fits the existing idempotence model (`app_need_build_push`-style guard), rather than introducing a new delivery mechanism.
 
-**Alternatives considered**: a podman named volume — rejected to stay consistent with the repo's deliberate choice of host bind mounts for backup visibility (documented in `compose.yaml.j2`).
+**Alternatives considered**:
+- **Unofficial prebuilt `caddy-cloudflare` Docker Hub images**: convenient but unvetted; rejected on supply-chain grounds.
+- **Building on the host directly**: the workstation-build + registry-push pattern already exists and is consistent; building on the host would diverge from how `twig-server` is delivered.
 
 ---
 
-## D5. TLS 1.3 minimum (FR-012)
+## D10. Cloudflare API token handling (secret) (FR-016)
 
-**Decision**: Set the minimum protocol per site via the Caddyfile `tls` directive: `tls { protocols tls1.3 }`. Caddy still manages the certificate automatically (the `tls` block with only `protocols` does not switch off automatic ACME).
+**Decision**: Introduce `twig_cloudflare_api_token` — a **required, secret** variable the operator supplies (recommended via Ansible Vault). The token is rendered into a host **env file** `{{ twig_host_data_dir }}/app/caddy.env` (mode `0600`, `no_log: true`) containing `CLOUDFLARE_API_TOKEN=...`; the `caddy` compose service references it with `env_file:` so the value is **not** written into `compose.yaml` and the Caddyfile only references `{env.CLOUDFLARE_API_TOKEN}`. Recommended Cloudflare token scope: **Zone → DNS → Edit** for the specific zone only.
 
 **Rationale**:
-- Caddy's default minimum is TLS 1.2; FR-012 requires rejecting 1.2 and below, so an explicit floor of `tls1.3` is needed. With port 80 open for HTTP-01, raising the HTTPS protocol floor does not impede issuance.
-- Verifiable externally: `openssl s_client -tls1_2` must fail the handshake; `-tls1_3` must succeed (SC-007).
+- FR-016 requires the credential to be a per-deployment secret never exposed in logs or operator output. An `0600` env file written with `no_log: true`, referenced via `env_file`, keeps the token out of the committed/rendered compose file and out of Ansible output, while making it available to the Caddy process as an environment variable (the form `{env.CLOUDFLARE_API_TOKEN}` in the Caddyfile expects).
+- A narrowly-scoped token (single zone, DNS edit) limits blast radius if leaked.
 
-**Alternatives considered**: global `servers { protocols }` block — also possible but the per-site `tls` directive is the more localized, conventional Caddyfile expression and keeps the change inside the one site block we are already editing.
-
----
-
-## D6. ACME account email (optional)
-
-**Decision**: Expose optional `twig_acme_email`. When set, render `email {{ twig_acme_email }}` in the Caddyfile global options block (Let's Encrypt expiry/notice contact); when empty, omit it (Caddy registers an ACME account without a contact address).
-
-**Rationale**: An email is recommended for production so the CA can send expiry/renewal-problem notices, but it is not strictly required for issuance. Optional keeps simple deployments frictionless while allowing production hardening.
+**Alternatives considered**:
+- **Token inline in `compose.yaml` `environment:`**: would persist the secret in a world-readable rendered file. Rejected (FR-016).
+- **Podman secret**: viable but adds a podman-secret lifecycle the rest of the stack does not use; the `0600` env file is simpler and consistent with the repo's plaintext-config-on-host convention. Revisit if a secrets manager is adopted.
 
 ---
 
-## D7. Fail-fast on missing/invalid domain (FR-009)
+## D11. DNS resolvers for the challenge (split-horizon safety)
 
-**Decision**: Add an Ansible `assert` at the start of the `app` role that fails the play when `twig_domain` is undefined, empty, or not a syntactically valid hostname (single label or dotted FQDN; no scheme, no path, no spaces). The failure message names the variable and where to set it.
+**Decision**: Set an explicit public resolver for ACME DNS propagation checks via the site `tls` block: `tls { resolvers 1.1.1.1 ... }` (exposed as `twig_acme_dns_resolver`, default `1.1.1.1`). 
 
-**Rationale**: FR-009 requires a clear, actionable failure rather than a broken/insecure start. Asserting before any template is rendered or container is (re)started prevents Caddy from coming up on a bad/empty host value. The pattern mirrors the existing inventory-target assertion in `site.yml`.
+**Rationale**:
+- On a LAN, the host's own resolver may be a split-horizon/internal DNS that does not serve (or lags) the public `_acme-challenge` TXT record. Pointing Caddy's propagation check at a public resolver (Cloudflare's `1.1.1.1`) ensures it verifies the same view Let's Encrypt will, avoiding spurious "record not propagated" stalls. Exposed as a variable so an operator on an unusual network can override it; default covers the common case.
 
-**Validation approach**: `twig_domain is defined and (twig_domain | trim) | length > 0` plus a hostname regex (`^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$`). Keep the regex pragmatic; the authoritative validity check is the live cert issuance.
-
----
-
-## D8. Observability of issuance/renewal failures (FR-010, spec-deferred)
-
-**Decision**: Treat Caddy's own logs as the observability surface (no new tooling). Caddy logs ACME issuance and renewal attempts/failures to stdout, captured by podman/journald via the `twig.service` unit. The Ansible **post-deploy smoke check** is upgraded to probe `https://{{ twig_domain }}` and fail the play if a valid HTTPS response is not obtained within the retry window — surfacing first-issuance failures at deploy time.
-
-**Rationale**: Satisfies FR-010 ("observable to the operator") without adding a metrics/alerting stack (Principle I / YAGNI). Renewal happens long after deploy; for that, the documented operator check is `podman logs caddy` / `journalctl -u twig.service`. Quickstart documents both.
-
-**Alternatives considered**: dedicated cert-expiry monitoring/alerting — out of scope for this feature; noted as a future enhancement.
+**Alternatives considered**: relying on the system resolver — rejected because split-horizon DNS is exactly the environment here and is the most likely cause of DNS-01 propagation-check failures.
 
 ---
 
@@ -109,13 +136,16 @@ This document resolves the open decisions implied by the spec and the user's pla
 
 | ID | Decision |
 |----|----------|
-| D1 | Cloudflare **DNS-only** record → origin terminates TLS with the Let's Encrypt cert |
-| D2 | Default HTTP-01/TLS-ALPN-01 challenges; publish ports **80 and 443**; no DNS-01/token |
-| D3 | `twig_acme_environment` prod/staging toggle (default production); staging sets `acme_ca` |
-| D4 | Persist Caddy `/data` via host bind mount to survive restarts (rate-limit safety) |
-| D5 | `tls { protocols tls1.3 }` per site for the TLS 1.3 floor |
-| D6 | Optional `twig_acme_email` → global `email` directive |
-| D7 | Ansible `assert` fails fast on missing/invalid `twig_domain` |
-| D8 | Caddy logs + HTTPS smoke check as the observability surface; no new stack |
+| D1 | **DNS-01 via Cloudflare API** (`acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}`); no inbound challenge; works behind a private IP |
+| D2 | Listen on 443 (serve) + 80 (redirect) for **LAN** clients; no public reachability required |
+| D3 | `twig_acme_environment` prod/staging toggle (default production) — carried over |
+| D4 | Persist Caddy `/data` via host bind mount — carried over |
+| D5 | `tls { protocols tls1.3 }` per site for the TLS 1.3 floor — carried over |
+| D6 | Optional `twig_acme_email` → global `email` directive — carried over |
+| D7 | Fail-fast `assert` on missing/invalid `twig_domain` **and** on missing `twig_cloudflare_api_token` (`no_log`) |
+| D8 | Caddy logs + smoke check via `curl --resolve` (split-horizon-independent), ~10-min retry window |
+| D9 | **Custom Caddy image** built with `caddy-dns/cloudflare` (xcaddy), pushed to on-host registry |
+| D10 | `twig_cloudflare_api_token` secret → `0600` `caddy.env` via `env_file:`; never in compose/logs |
+| D11 | Explicit public `resolvers` (`twig_acme_dns_resolver`, default `1.1.1.1`) for propagation checks |
 
 All NEEDS CLARIFICATION items are resolved. No open questions block Phase 1.
