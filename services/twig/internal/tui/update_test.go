@@ -3,12 +3,14 @@ package tui
 import (
 	"context"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	tea "github.com/charmbracelet/bubbletea"
 	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/services/twig/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/services/twig/internal/cli"
+	"github.com/pboyd/twig/services/twig/internal/config"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -1020,5 +1022,163 @@ func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {
 	}
 	if len(nm.visible) == 0 {
 		t.Error("visible list should be repopulated after move")
+	}
+}
+
+// ── T034: p / ctrl+p send-to-plan from Tasks tab ────────────────────────────
+
+// buildTasksModelWithPlan creates a Tasks-tab model with one task and a plan client.
+func buildTasksModelWithPlan(fc *fakePlanClient) Model {
+	tasks := []*taskv1.Task{{Id: 1, Name: "Write the tests"}}
+	tree := cli.BuildTree(tasks)
+	m := newModel(nil, fc, "", config.PomodoroConfig{}, false)
+	m.activeTab = tabTasks
+	m.tree = tree
+	m.visible = buildVisible(tree, m.expanded, false, nil)
+	return m
+}
+
+// TestPlanSendToday_P_AddsUntimedToday verifies that pressing 'p' on the Tasks
+// tab sends the highlighted task to today's plan as an untimed entry.
+func TestPlanSendToday_P_AddsUntimedToday(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0 // task id=1
+
+	_, cmd := pressKeyStr(m, "p")
+
+	if cmd == nil {
+		t.Fatal("p on Tasks tab: expected addPlanTaskCmd, got nil")
+	}
+	cmd()
+	if fc.addTaskReq == nil {
+		t.Fatal("p on Tasks tab: AddPlanTask was not called")
+	}
+	if fc.addTaskReq.TaskId != 1 {
+		t.Errorf("p: TaskId = %d, want 1", fc.addTaskReq.TaskId)
+	}
+	if fc.addTaskReq.StartMinute != nil {
+		t.Errorf("p: StartMinute = %v, want nil (untimed)", fc.addTaskReq.StartMinute)
+	}
+	today := time.Now().Format("2006-01-02")
+	if fc.addTaskReq.Day != today {
+		t.Errorf("p: Day = %q, want today %q", fc.addTaskReq.Day, today)
+	}
+}
+
+// TestPlanSendToday_P_EmptyListIsNoOp verifies that 'p' with no task selected is a no-op.
+func TestPlanSendToday_P_EmptyListIsNoOp(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.visible = nil
+
+	_, cmd := pressKeyStr(m, "p")
+
+	if cmd != nil {
+		t.Errorf("p with empty list: expected nil cmd, got %v", cmd)
+	}
+}
+
+// TestPlanSendPickDay_CtrlP_OpenPrompt verifies that ctrl+p on the Tasks tab
+// opens the date-prompt mode.
+func TestPlanSendPickDay_CtrlP_OpenPrompt(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	if m2.(Model).mode != modeDatePrompt {
+		t.Errorf("ctrl+p: expected modeDatePrompt, got %v", m2.(Model).mode)
+	}
+}
+
+// TestPlanSendPickDay_CtrlP_EmptyListIsNoOp verifies ctrl+p with no task is a no-op.
+func TestPlanSendPickDay_CtrlP_EmptyListIsNoOp(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.visible = nil
+
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+
+	if m2.(Model).mode != modeList {
+		t.Errorf("ctrl+p with empty list: expected modeList, got %v", m2.(Model).mode)
+	}
+}
+
+// TestDatePrompt_Accept_AddsToPlan verifies that submitting a valid date in the
+// date-prompt sends the task to that day as an untimed entry.
+func TestDatePrompt_Accept_AddsToPlan(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	// Open the prompt
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	nm := m2.(Model)
+	if nm.mode != modeDatePrompt {
+		t.Fatalf("setup: expected modeDatePrompt, got %v", nm.mode)
+	}
+	// Set the date input to a specific date
+	nm.datePromptInput.SetValue("2026-06-15")
+
+	_, cmd := nm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cmd == nil {
+		t.Fatal("date prompt submit: expected addPlanTaskCmd, got nil")
+	}
+	cmd()
+	if fc.addTaskReq == nil {
+		t.Fatal("date prompt submit: AddPlanTask was not called")
+	}
+	if fc.addTaskReq.Day != "2026-06-15" {
+		t.Errorf("date prompt submit: Day = %q, want 2026-06-15", fc.addTaskReq.Day)
+	}
+	if fc.addTaskReq.StartMinute != nil {
+		t.Errorf("date prompt submit: StartMinute = %v, want nil (untimed)", fc.addTaskReq.StartMinute)
+	}
+}
+
+// TestDatePrompt_InvalidDate_SetsError verifies that an invalid date keeps the
+// prompt open and sets m.err.
+func TestDatePrompt_InvalidDate_SetsError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	nm := m2.(Model)
+	nm.datePromptInput.SetValue("not-a-date")
+
+	nm2, cmd := nm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	result := nm2.(Model)
+
+	if result.mode != modeDatePrompt {
+		t.Errorf("invalid date: mode should stay modeDatePrompt, got %v", result.mode)
+	}
+	if result.err == nil {
+		t.Error("invalid date: err should be set")
+	}
+	if cmd != nil {
+		t.Errorf("invalid date: expected nil cmd (no RPC), got %v", cmd)
+	}
+}
+
+// TestDatePrompt_Esc_Cancels verifies that Esc from the date prompt returns to
+// modeList without calling AddPlanTask.
+func TestDatePrompt_Esc_Cancels(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	nm := m2.(Model)
+	nm.datePromptInput.SetValue("2026-06-15")
+
+	nm2, _ := nm.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	result := nm2.(Model)
+
+	if result.mode != modeList {
+		t.Errorf("Esc from date prompt: expected modeList, got %v", result.mode)
+	}
+	if fc.addTaskReq != nil {
+		t.Error("Esc from date prompt: AddPlanTask should not have been called")
 	}
 }

@@ -516,3 +516,72 @@ func TestRunPlanShow_UntimedSection(t *testing.T) {
 		t.Errorf("untimed section must appear before grid; untimedPos=%d gridPos=%d", untimedPos, gridPos)
 	}
 }
+
+// ---- T028: runPlanMv schedule + unschedule tests ----
+
+// TestRunPlanMv_BareIdUnschedules verifies that bare "mv <id>" (no start) unschedules an entry.
+func TestRunPlanMv_BareIdUnschedules(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	h.svc.mu.Lock()
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 60}}
+	h.svc.mu.Unlock()
+
+	_, stderr, code := runPlanCmd(runPlanMv, h.client, day, []string{"1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 for bare mv <id>, got %d; stderr: %s", code, stderr)
+	}
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	if h.svc.lastMvRequest == nil {
+		t.Fatal("no mv request captured")
+	}
+	if h.svc.lastMvRequest.StartMinute != nil {
+		t.Errorf("bare mv <id>: StartMinute = %v, want nil (unschedule)", h.svc.lastMvRequest.StartMinute)
+	}
+}
+
+// TestRunPlanMv_NullSentinelUnschedules verifies that "mv <id> null" unschedules.
+func TestRunPlanMv_NullSentinelUnschedules(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	h.svc.mu.Lock()
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 60}}
+	h.svc.mu.Unlock()
+
+	_, stderr, code := runPlanCmd(runPlanMv, h.client, day, []string{"1", "null"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 for mv <id> null, got %d; stderr: %s", code, stderr)
+	}
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	if h.svc.lastMvRequest == nil {
+		t.Fatal("no mv request captured")
+	}
+	if h.svc.lastMvRequest.StartMinute != nil {
+		t.Errorf("mv <id> null: StartMinute = %v, want nil", h.svc.lastMvRequest.StartMinute)
+	}
+}
+
+// TestRunPlanMv_UnschedulePreservesDuration verifies that unscheduling sends DurationMinute=0 (preserve).
+func TestRunPlanMv_UnschedulePreservesDuration(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	h.svc.mu.Lock()
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 60}}
+	h.svc.mu.Unlock()
+
+	runPlanCmd(runPlanMv, h.client, day, []string{"1", "null"})
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	if h.svc.lastMvRequest == nil {
+		t.Fatal("no mv request captured")
+	}
+	// DurationMinute=0 means "keep existing" in the handler.
+	if h.svc.lastMvRequest.DurationMinute != 0 {
+		t.Errorf("unschedule: DurationMinute = %d, want 0 (preserve)", h.svc.lastMvRequest.DurationMinute)
+	}
+}

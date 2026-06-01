@@ -92,11 +92,11 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **Independent Test**: `twig plan mv <id> 10:30` schedules; `twig plan mv <id> null` (and bare `twig plan mv <id>`) unschedules, duration intact. In the TUI edit form, typing a time schedules; typing `null` unschedules.
 
-- [ ] T024 [P] [US3] In `internal/cli/plan.go` `runPlanMv`: make the start arg optional and accept `null` via `ParseStartOrNull`; absent/`null` → send `MovePlanEntryRequest` with start absent (unschedule, preserve duration); allow the bare `mv <id>` form — depends on T012, Phase 2
-- [ ] T025 [US3] In `internal/cli/plan.go` `printPlanUsage`: update the `mv` line to `mv <n> [start|null] [dur|end]` with untimed note, playful tone (Principle IV)
-- [ ] T026 [US3] In `internal/tui/plan_update.go` `submitEditForm`: parse the Start field as blank=keep / time=schedule / `null`=unschedule, and call `movePlanCmd` with an optional start (extend `movePlanCmd` to carry `*int` / `timed bool`) — depends on Phase 2
-- [ ] T027 [US3] In `internal/tui/plan_view.go`: update the edit-form Start label/help to document blank=keep, time=schedule, `null`=unschedule
-- [ ] T028 [US3] Tests: CLI `mv` schedule + unschedule (preserves duration) in `internal/cli/plan_test.go`; TUI edit schedule↔unschedule round-trip in `internal/tui/plan_update_test.go` — depends on T024, T026
+- [X] T024 [P] [US3] In `internal/cli/plan.go` `runPlanMv`: make the start arg optional and accept `null` via `ParseStartOrNull`; absent/`null` → send `MovePlanEntryRequest` with start absent (unschedule, preserve duration); allow the bare `mv <id>` form — depends on T012, Phase 2
+- [X] T025 [US3] In `internal/cli/plan.go` `printPlanUsage`: update the `mv` line to `mv <n> [start|null] [dur|end]` with untimed note, playful tone (Principle IV)
+- [X] T026 [US3] In `internal/tui/plan_update.go` `submitEditForm`: parse the Start field as blank=keep / time=schedule / `null`=unschedule, and call `movePlanCmd` with an optional start (extend `movePlanCmd` to carry `*int` / `timed bool`) — depends on Phase 2
+- [X] T027 [US3] In `internal/tui/plan_view.go`: update the edit-form Start label/help to document blank=keep, time=schedule, `null`=unschedule
+- [X] T028 [US3] Tests: CLI `mv` schedule + unschedule (preserves duration) in `internal/cli/plan_test.go`; TUI edit schedule↔unschedule round-trip in `internal/tui/plan_update_test.go` — depends on T024, T026
 
 **Checkpoint**: Entries convert freely between timed and untimed from both surfaces.
 
@@ -108,12 +108,12 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **Independent Test**: Highlight a task, press `p` → untimed entry on today; press `ctrl+p`, accept the pre-filled tomorrow → untimed entry on tomorrow; invalid date or Esc → nothing added with a friendly message.
 
-- [ ] T029 [P] [US4] In `internal/tui/keymap.go`: add `PlanSendToday` (`p`) and `PlanSendPickDay` (`ctrl+p`) bindings with help text; surface them in the Tasks-tab ShortHelp/FullHelp
-- [ ] T030 [US4] In `internal/tui/model.go`: add a Tasks-tab date-prompt view mode and state (a `textinput` pre-filled with tomorrow's `YYYY-MM-DD`)
-- [ ] T031 [US4] In `internal/tui/update.go`: handle `p` on the Tasks tab → `addPlanTaskCmd` for **today** with an absent start (untimed) for the highlighted task, plus a playful confirmation — depends on T021 (optional-start `addPlanTaskCmd`), T029
-- [ ] T032 [US4] In `internal/tui/update.go`: handle `ctrl+p` → open the date prompt; on submit validate `YYYY-MM-DD` and `addPlanTaskCmd` untimed for that day; Esc or invalid date → no-op with a friendly message — depends on T029, T030
-- [ ] T033 [US4] In `internal/tui/view.go` (and `update.go`): render the date prompt and show `p`/`ctrl+p` in the Tasks-tab help — depends on T030
-- [ ] T034 [US4] TUI tests in `internal/tui/update_test.go`: `p` adds an untimed entry to today; `ctrl+p` accept-tomorrow adds to tomorrow; invalid date and Esc add nothing — depends on T031, T032
+- [X] T029 [P] [US4] In `internal/tui/keymap.go`: add `PlanSendToday` (`p`) and `PlanSendPickDay` (`ctrl+p`) bindings with help text; surface them in the Tasks-tab ShortHelp/FullHelp
+- [X] T030 [US4] In `internal/tui/model.go`: add a Tasks-tab date-prompt view mode and state (a `textinput` pre-filled with tomorrow's `YYYY-MM-DD`)
+- [X] T031 [US4] In `internal/tui/update.go`: handle `p` on the Tasks tab → `addPlanTaskCmd` for **today** with an absent start (untimed) for the highlighted task, plus a playful confirmation — depends on T021 (optional-start `addPlanTaskCmd`), T029
+- [X] T032 [US4] In `internal/tui/update.go`: handle `ctrl+p` → open the date prompt; on submit validate `YYYY-MM-DD` and `addPlanTaskCmd` untimed for that day; Esc or invalid date → no-op with a friendly message — depends on T029, T030
+- [X] T033 [US4] In `internal/tui/view.go` (and `update.go`): render the date prompt and show `p`/`ctrl+p` in the Tasks-tab help — depends on T030
+- [X] T034 [US4] TUI tests in `internal/tui/update_test.go`: `p` adds an untimed entry to today; `ctrl+p` accept-tomorrow adds to tomorrow; invalid date and Esc add nothing — depends on T031, T032
 
 **Checkpoint**: All four user stories independently functional.
 
@@ -121,10 +121,10 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T035 [P] Run the full suite: `cd services/twig && go test ./...`
-- [ ] T036 [P] Tone review (Principle IV) of all new user-facing copy: CLI help, send confirmations, invalid-date / empty-selection messages
-- [ ] T037 [P] Consistency review (Principle III): untimed pane styling matches grid boxes; `p`/`ctrl+p`/`null` follow existing conventions
-- [ ] T038 Verify the server builds and the migration applies cleanly (`make dev`; or `make migrate-up` with `DATABASE_URL`)
+- [X] T035 [P] Run the full suite: `cd services/twig && go test ./...`
+- [X] T036 [P] Tone review (Principle IV) of all new user-facing copy: CLI help, send confirmations, invalid-date / empty-selection messages
+- [X] T037 [P] Consistency review (Principle III): untimed pane styling matches grid boxes; `p`/`ctrl+p`/`null` follow existing conventions
+- [X] T038 Verify the server builds and the migration applies cleanly (`make dev`; or `make migrate-up` with `DATABASE_URL`)
 - [ ] T039 Execute `quickstart.md` end-to-end (CLI + TUI manual verification)
 
 ---

@@ -82,7 +82,7 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "  event <name> <start> [dur|end]      Block off time (start required)")
 	fmt.Fprintln(w, "  rm <n>                              Remove entry n")
 	fmt.Fprintln(w, "  rename <n> <name>                   Rename entry n")
-	fmt.Fprintln(w, "  mv <n> <start> [dur|end]            Move entry n")
+	fmt.Fprintln(w, "  mv <n> [start|null] [dur|end]        Move entry n (omit start or 'null' to unschedule)")
 	fmt.Fprintln(w, "  clear [start]                       Clear entries from start (default: now)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
@@ -262,8 +262,8 @@ func runPlanRename(client planv1connect.PlanServiceClient, day string, args []st
 }
 
 func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string) int {
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: twig plan mv <n> <start> [duration|end]")
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: twig plan mv <n> [start|null] [duration|end]")
 		return 1
 	}
 	n, err := strconv.Atoi(args[0])
@@ -271,27 +271,43 @@ func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string
 		fmt.Fprintln(os.Stderr, "error: entry id must be an integer")
 		return 1
 	}
-	start, err := timeparse.ParseStart(args[1])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		return 1
-	}
-	var dur int
-	if len(args) >= 3 {
-		dur, err = timeparse.ParseDurationOrEnd(args[2], start)
+
+	req := &planv1.MovePlanEntryRequest{Day: day, Id: int32(n)}
+
+	argIdx := 1
+	if argIdx < len(args) {
+		minute, isTimed, err := timeparse.ParseStartOrNull(args[argIdx])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1
 		}
+		argIdx++
+		if isTimed {
+			sm := int32(minute)
+			req.StartMinute = &sm
+			if argIdx < len(args) {
+				dur, err := timeparse.ParseDurationOrEnd(args[argIdx], minute)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "error:", err)
+					return 1
+				}
+				req.DurationMinute = int32(dur)
+			}
+		} else {
+			// null sentinel: unschedule; trailing arg is duration
+			if argIdx < len(args) {
+				dur, err := timeparse.ParseDuration(args[argIdx])
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "error:", err)
+					return 1
+				}
+				req.DurationMinute = int32(dur)
+			}
+		}
 	}
+	// If no start arg given: unschedule (StartMinute remains nil).
 
-	sm := int32(start)
-	_, err = client.MovePlanEntry(context.Background(), connect.NewRequest(&planv1.MovePlanEntryRequest{
-		Day:            day,
-		Id:             int32(n),
-		StartMinute:    &sm,
-		DurationMinute: int32(dur),
-	}))
+	_, err = client.MovePlanEntry(context.Background(), connect.NewRequest(req))
 	if err != nil {
 		return printPlanError(err)
 	}

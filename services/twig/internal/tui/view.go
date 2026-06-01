@@ -28,6 +28,8 @@ func (m Model) View() string {
 		return m.viewWithForm()
 	case modeMove:
 		return m.viewWithMove()
+	case modeDatePrompt:
+		return m.viewWithDatePrompt()
 	default:
 		return m.viewList()
 	}
@@ -289,6 +291,63 @@ func (m Model) viewWithForm() string {
 			f = formLines[i]
 		}
 		rows = append(rows, fmt.Sprintf("%s %s", l, f))
+	}
+
+	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
+}
+
+// viewWithDatePrompt renders the Tasks list with the date-picker prompt on the right.
+func (m Model) viewWithDatePrompt() string {
+	if m.width == 0 {
+		return "loading..."
+	}
+
+	listWidth := m.width / 2
+	promptWidth := m.width - listWidth
+
+	var promptContent string
+	promptContent = fmt.Sprintf("  Which day? (YYYY-MM-DD)\n\n  > Date: %s\n\n  [enter] confirm  [esc] cancel\n", m.datePromptInput.View())
+
+	if m.styled {
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
+		if innerH < 1 {
+			innerH = 1
+		}
+		innerListW := listWidth - 2
+		if innerListW < 0 {
+			innerListW = 0
+		}
+		innerPromptW := promptWidth - 2
+		if innerPromptW < 0 {
+			innerPromptW = 0
+		}
+
+		listContent := m.renderList(innerListW)
+		listPane := paneBox(listContent, listWidth, innerH, "", false)
+		promptPane := paneBox(promptContent, promptWidth, innerH, "Send to plan", true)
+
+		joined := lipgloss.JoinHorizontal(lipgloss.Top, listPane, promptPane)
+		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
+	}
+
+	promptWidth = m.width - listWidth - 1
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
+	if maxLines < 1 {
+		maxLines = 1
+	}
+
+	list := m.renderList(listWidth)
+	listLines := splitLines(list, maxLines)
+	promptLines := splitLines(promptContent, maxLines)
+
+	var rows []string
+	for i := 0; i < maxLines; i++ {
+		l := padRightAnsi(listLines[i], listWidth)
+		r := ""
+		if i < len(promptLines) {
+			r = promptLines[i]
+		}
+		rows = append(rows, fmt.Sprintf("%s %s", l, r))
 	}
 
 	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()

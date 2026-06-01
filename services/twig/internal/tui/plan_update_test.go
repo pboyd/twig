@@ -779,6 +779,66 @@ func TestPickerSubtasks_VisibleAfterPlanTasksMsg(t *testing.T) {
 	}
 }
 
+// ── US3 (T028): edit form schedule↔unschedule ──────────────────────────────
+
+// TestEditForm_NullUnschedules checks that typing "null" in the Start field
+// sends MovePlanEntry with StartMinute=nil (unschedule).
+func TestEditForm_NullUnschedules(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	// Name unchanged, Start = "null" → unschedule
+	m.plan.form.fields[1].SetValue("null")
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("submitEditForm null: expected planList, got %d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Error("submitEditForm null: expected a move command, got nil")
+	}
+	if cmd != nil {
+		cmd()
+		if fc.moveReq == nil {
+			t.Error("submitEditForm null: MovePlanEntry was not called")
+		} else if fc.moveReq.StartMinute != nil {
+			t.Errorf("submitEditForm null: StartMinute = %v, want nil (unschedule)", fc.moveReq.StartMinute)
+		}
+	}
+}
+
+// TestEditForm_TimeSchedules verifies that a concrete time in Start issues MovePlanEntry
+// with a non-nil StartMinute (existing behavior, regression guard).
+func TestEditForm_TimeSchedules(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup"}} // untimed
+	m.plan.cursor = 0
+	m.initEditForm()
+	m.plan.form.fields[1].SetValue("10:00")
+
+	cmd := m.submitEditForm()
+
+	if cmd == nil {
+		t.Fatal("submitEditForm time: expected move command, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("submitEditForm time: MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute == nil {
+		t.Error("submitEditForm time: StartMinute should be non-nil (schedule)")
+	}
+	if fc.moveReq.StartMinute != nil && *fc.moveReq.StartMinute != 600 {
+		t.Errorf("submitEditForm time: StartMinute = %d, want 600 (10:00)", *fc.moveReq.StartMinute)
+	}
+}
+
 // TestAllTaskIDs_CollectsAllIDs checks that allTaskIDs returns every id in the
 // tree, including nested descendants (T011).
 func TestAllTaskIDs_CollectsAllIDs(t *testing.T) {

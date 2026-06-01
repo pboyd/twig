@@ -320,7 +320,7 @@ func planFieldLabel(mode planMode, idx int) string {
 			return labels[idx]
 		}
 	case planEdit:
-		labels := []string{"Name", "Start", "Duration (optional)"}
+		labels := []string{"Name", "Start (blank=keep, null=unschedule)", "Duration (optional)"}
 		if idx < len(labels) {
 			return labels[idx]
 		}

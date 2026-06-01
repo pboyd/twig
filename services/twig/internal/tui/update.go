@@ -380,6 +380,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleHelpKey(msg)
 	case modeMove:
 		return m.handleMoveKey(msg)
+	case modeDatePrompt:
+		return m.handleDatePromptKey(msg)
 	}
 	return m, nil
 }
@@ -692,6 +694,26 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cancelPomCmd(m.client)
 		}
 
+	case key.Matches(msg, m.keys.PlanSendToday):
+		if len(m.visible) > 0 {
+			taskID := m.visible[m.cursor].node.Task.Id
+			today := time.Now().Format("2006-01-02")
+			m.err = nil
+			return m, addPlanTaskCmd(m.planClient, today, taskID, 0, 0, false)
+		}
+
+	case key.Matches(msg, m.keys.PlanSendPickDay):
+		if len(m.visible) > 0 {
+			m.datePromptTaskID = m.visible[m.cursor].node.Task.Id
+			tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+			ti := newPlanInput("YYYY-MM-DD")
+			ti.SetValue(tomorrow)
+			ti.Focus()
+			m.datePromptInput = ti
+			m.err = nil
+			m.mode = modeDatePrompt
+		}
+
 	case key.Matches(msg, m.keys.Delete):
 		if len(m.visible) > 0 {
 			id := m.visible[m.cursor].node.Task.Id
@@ -743,6 +765,28 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleDatePromptKey handles key events while the Tasks-tab date prompt is open.
+func (m Model) handleDatePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.mode = modeList
+		m.err = nil
+		return m, nil
+	case key.Matches(msg, m.keys.Save) || msg.Type == tea.KeyEnter:
+		dateStr := strings.TrimSpace(m.datePromptInput.Value())
+		if _, err := time.Parse("2006-01-02", dateStr); err != nil {
+			m.err = fmt.Errorf("hmm, that date didn't parse — try YYYY-MM-DD (e.g. 2026-06-15)")
+			return m, nil
+		}
+		m.mode = modeList
+		m.err = nil
+		return m, addPlanTaskCmd(m.planClient, dateStr, m.datePromptTaskID, 0, 0, false)
+	}
+	var cmd tea.Cmd
+	m.datePromptInput, cmd = m.datePromptInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

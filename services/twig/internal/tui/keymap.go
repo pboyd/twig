@@ -33,6 +33,9 @@ type KeyMap struct {
 	PlanPrevDay  key.Binding
 	PlanNextDay  key.Binding
 	PlanToday    key.Binding
+	// Send-to-plan shortcuts (Tasks tab)
+	PlanSendToday  key.Binding
+	PlanSendPickDay key.Binding
 	// Edit-form keys
 	Save     key.Binding
 	Cancel   key.Binding
@@ -143,6 +146,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("."),
 			key.WithHelp(".", "today"),
 		),
+		PlanSendToday: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "send to today's plan"),
+		),
+		PlanSendPickDay: key.NewBinding(
+			key.WithKeys("ctrl+p"),
+			key.WithHelp("ctrl+p", "send to a day"),
+		),
 		Save: key.NewBinding(
 			key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "save"),
@@ -184,6 +195,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Collapse, k.Expand},
 		{k.Edit, k.NewSub, k.NewRoot, k.Delete},
 		{k.Complete, k.PomStart, k.PomCancel, k.Move},
-		{k.Filter, k.Refresh, k.Help, k.Quit},
+		{k.PlanSendToday, k.PlanSendPickDay, k.Filter, k.Refresh},
+		{k.Help, k.Quit},
 	}
 }

@@ -22,6 +22,7 @@ const (
 	modeNewRoot
 	modeHelp
 	modeMove
+	modeDatePrompt // Tasks-tab date picker for ctrl+p send-to-plan
 )
 
 type tab int
@@ -102,6 +103,9 @@ type Model struct {
 	hasDarkBackground bool
 	pom             *activePom
 	confirmingQuit  bool
+	// date prompt state (modeDatePrompt): used when ctrl+p is pressed on Tasks tab
+	datePromptInput  textinput.Model
+	datePromptTaskID int64
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool) Model {

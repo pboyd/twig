@@ -106,13 +106,17 @@ func renamePlanCmd(client planv1connect.PlanServiceClient, day string, id int32,
 	}
 }
 
-func movePlanCmd(client planv1connect.PlanServiceClient, day string, id int32, start, dur int) tea.Cmd {
+func movePlanCmd(client planv1connect.PlanServiceClient, day string, id int32, start, dur int, timed bool) tea.Cmd {
 	return func() tea.Msg {
-		sm := int32(start)
+		var sm *int32
+		if timed {
+			v := int32(start)
+			sm = &v
+		}
 		_, err := client.MovePlanEntry(context.Background(), connect.NewRequest(&planv1.MovePlanEntryRequest{
 			Day:            day,
 			Id:             id,
-			StartMinute:    &sm,
+			StartMinute:    sm,
 			DurationMinute: int32(dur),
 		}))
 		if err != nil {
@@ -344,20 +348,34 @@ func (m *Model) submitEditForm() tea.Cmd {
 	}
 
 	if startStr != "" {
-		start, err := timeparse.ParseStart(startStr)
-		if err != nil {
-			m.plan.err = fmt.Errorf("invalid start time: %w", err)
-			return nil
-		}
-		var dur int
-		if durStr != "" {
-			dur, err = timeparse.ParseDurationOrEnd(durStr, start)
+		if strings.EqualFold(startStr, "null") {
+			// null = unschedule; duration field may override duration (0=keep)
+			var dur int
+			if durStr != "" {
+				var err error
+				dur, err = timeparse.ParseDuration(durStr)
+				if err != nil {
+					m.plan.err = fmt.Errorf("invalid duration: %w", err)
+					return nil
+				}
+			}
+			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, 0, dur, false))
+		} else {
+			start, err := timeparse.ParseStart(startStr)
 			if err != nil {
-				m.plan.err = fmt.Errorf("invalid duration: %w", err)
+				m.plan.err = fmt.Errorf("invalid start time: %w", err)
 				return nil
 			}
+			var dur int
+			if durStr != "" {
+				dur, err = timeparse.ParseDurationOrEnd(durStr, start)
+				if err != nil {
+					m.plan.err = fmt.Errorf("invalid duration: %w", err)
+					return nil
+				}
+			}
+			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, start, dur, true))
 		}
-		cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, start, dur))
 	}
 
 	m.plan.err = nil
