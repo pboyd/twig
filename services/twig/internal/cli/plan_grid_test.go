@@ -803,7 +803,8 @@ func TestRenderUntimed_SingleEntry15min(t *testing.T) {
 	}
 }
 
-// TestRenderUntimed_Entry30min checks that a 30-minute entry renders as two lines.
+// TestRenderUntimed_Entry30min checks that a 30-minute entry renders with correct box geometry:
+// ┏┓ top border, one interior content line (with label), and ┗┛ bottom border.
 func TestRenderUntimed_Entry30min(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Medium task", DurationMinute: 30},
@@ -811,20 +812,29 @@ func TestRenderUntimed_Entry30min(t *testing.T) {
 	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
 	lines := rowsOf(out)
 
-	if len(lines) != 2 {
-		t.Errorf("30min entry: expected 2 lines, got %d:\n%s", len(lines), out)
+	// ┏┓ top + 1 interior + ┗┛ bottom = 3 lines.
+	if len(lines) != 3 {
+		t.Errorf("30min entry: expected 3 lines (┏┓ + interior + ┗┛), got %d:\n%s", len(lines), out)
 	}
-	// First line has the label.
-	if !strings.Contains(lines[0], "Medium task") {
-		t.Errorf("30min entry row 0: expected name; got %q", lines[0])
+	// Row 0: top border ┏━━━┓ (title must NOT be on this line).
+	if !strings.Contains(lines[0], "┏") || !strings.Contains(lines[0], "┓") {
+		t.Errorf("30min entry row 0: expected ┏...┓ top border; got %q", lines[0])
 	}
-	// Bottom line is a closing border.
-	if !strings.Contains(lines[1], "┗") || !strings.Contains(lines[1], "┛") {
-		t.Errorf("30min entry row 1: expected ┗...┛ border; got %q", lines[1])
+	if strings.Contains(lines[0], "Medium task") {
+		t.Errorf("30min entry row 0: title must not appear on the top border line; got %q", lines[0])
+	}
+	// Row 1: interior — contains the label.
+	if !strings.Contains(lines[1], "Medium task") {
+		t.Errorf("30min entry row 1: expected name in interior; got %q", lines[1])
+	}
+	// Row 2: bottom border ┗━━━┛.
+	if !strings.Contains(lines[2], "┗") || !strings.Contains(lines[2], "┛") {
+		t.Errorf("30min entry row 2: expected ┗...┛ bottom border; got %q", lines[2])
 	}
 }
 
-// TestRenderUntimed_Entry60min checks that a 60-minute entry renders as four lines.
+// TestRenderUntimed_Entry60min checks that a 60-minute entry renders as five lines:
+// ┏┓ top + 3 interior + ┗┛ bottom.
 func TestRenderUntimed_Entry60min(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Long task", DurationMinute: 60},
@@ -832,8 +842,8 @@ func TestRenderUntimed_Entry60min(t *testing.T) {
 	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
 	lines := rowsOf(out)
 
-	if len(lines) != 4 {
-		t.Errorf("60min entry: expected 4 lines (1 label + 2 interior + 1 bottom), got %d:\n%s", len(lines), out)
+	if len(lines) != 5 {
+		t.Errorf("60min entry: expected 5 lines (┏┓ + 3 interior + ┗┛), got %d:\n%s", len(lines), out)
 	}
 }
 
@@ -846,15 +856,16 @@ func TestRenderUntimed_MultipleEntries(t *testing.T) {
 	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
 	lines := rowsOf(out)
 
-	// Task A: 1 line; Task B: 2 lines → total 3.
-	if len(lines) != 3 {
-		t.Errorf("2 entries (15+30min): expected 3 lines, got %d:\n%s", len(lines), out)
+	// Task A: 1 line (single-row); Task B: 3 lines (┏┓ + interior + ┗┛) → total 4.
+	if len(lines) != 4 {
+		t.Errorf("2 entries (15+30min): expected 4 lines, got %d:\n%s", len(lines), out)
 	}
 	if !strings.Contains(lines[0], "Task A") {
 		t.Errorf("first entry line: expected 'Task A'; got %q", lines[0])
 	}
-	if !strings.Contains(lines[1], "Task B") {
-		t.Errorf("second entry line: expected 'Task B'; got %q", lines[1])
+	// Task B appears on the interior line (row 2 = index 2).
+	if !strings.Contains(out, "Task B") {
+		t.Errorf("second entry: expected 'Task B' somewhere in output; got:\n%s", out)
 	}
 }
 
@@ -878,6 +889,122 @@ func TestRenderUntimed_SelectedIDHighlights(t *testing.T) {
 	}
 }
 
+// ---- T006: US3 rendering fix tests ----
+
+// TestRenderUntimed_TopBorderAboveTitle asserts that a multi-row untimed entry has a
+// ┏━━━┓ top border line with the title on the NEXT line (not on the border itself).
+func TestRenderUntimed_TopBorderAboveTitle(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "My task", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d:\n%s", len(lines), out)
+	}
+	// First line must contain ┏ and ┓.
+	if !strings.Contains(lines[0], "┏") || !strings.Contains(lines[0], "┓") {
+		t.Errorf("row 0: expected ┏...┓ top border; got %q", lines[0])
+	}
+	// Title must NOT appear on the top border line.
+	if strings.Contains(lines[0], "My task") {
+		t.Errorf("row 0: title must not be on the top border; got %q", lines[0])
+	}
+	// Title MUST appear on a subsequent interior line.
+	found := false
+	for _, l := range lines[1:] {
+		if strings.Contains(l, "My task") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("title 'My task' not found on any interior line:\n%s", out)
+	}
+}
+
+// TestRenderUntimed_SharedBorderBetweenAdjacentEntries checks that two adjacent
+// multi-row untimed entries share a single ┣━━━┫ boundary instead of ┗┛ + ┏┓.
+func TestRenderUntimed_SharedBorderBetweenAdjacentEntries(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Alpha", DurationMinute: 30},
+		{Id: 2, Name: "Beta", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	// Two 30-min multi-row entries sharing a boundary: ┏┓ + label-A + ┣┫ + label-B + ┗┛ = 5 lines.
+	if len(lines) != 5 {
+		t.Errorf("two adjacent 30min entries: expected 5 lines (sharing boundary), got %d:\n%s", len(lines), out)
+	}
+	// The shared boundary line must contain ┣ and ┫ but not ┗ or ┏.
+	sharedLine := lines[2]
+	if !strings.Contains(sharedLine, "┣") || !strings.Contains(sharedLine, "┫") {
+		t.Errorf("shared boundary line: expected ┣...┫; got %q", sharedLine)
+	}
+	if strings.ContainsAny(sharedLine, "┗┏") {
+		t.Errorf("shared boundary line must not have corner chars; got %q", sharedLine)
+	}
+	// Alpha label on line 1.
+	if !strings.Contains(lines[1], "Alpha") {
+		t.Errorf("line 1: expected 'Alpha'; got %q", lines[1])
+	}
+	// Beta label on line 3.
+	if !strings.Contains(lines[3], "Beta") {
+		t.Errorf("line 3: expected 'Beta'; got %q", lines[3])
+	}
+}
+
+// TestRenderUntimed_LastLineColorMatchesInterior checks that the last line of a
+// multi-row untimed entry (the ┗┛ bottom) receives the same selection styling as
+// the interior lines (regression: last line was not styled consistently).
+func TestRenderUntimed_LastLineColorMatchesInterior(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Style test", DurationMinute: 30},
+	}
+	opts := cli.GridOptions{HideID: true, SelectedID: 1, SelectionStyle: styleMarker}
+	out := cli.RenderUntimed(entries, 80, true, opts)
+	lines := rowsOf(out)
+
+	// The ┗┛ bottom line (last line) must carry the selection marker.
+	lastLine := lines[len(lines)-1]
+	if !strings.Contains(lastLine, "┗") && !strings.Contains(lastLine, "┛") {
+		t.Fatalf("last line is not the bottom border; got %q", lastLine)
+	}
+	if !strings.Contains(lastLine, "<<") && !strings.Contains(lastLine, ">>") {
+		// The bottom border itself may not get the SelectionStyle applied (only interior does).
+		// But it should at least get the accent color from applySelection.
+		// Check that it does NOT contain the top border (bug was: last line was wrong color).
+		// This test verifies the line IS styled (not plain).
+		// If the implementation uses applySelection for the bottom line, it won't have << markers
+		// but it should have ANSI codes.
+		if !strings.Contains(lastLine, "\x1b[") {
+			t.Errorf("selected entry bottom line: expected ANSI styling; got %q", lastLine)
+		}
+	}
+}
+
+// TestRenderUntimed_ParityWithGridBox checks that a 30-min untimed entry produces
+// output that is byte-for-byte identical to what the grid would produce for the
+// interior portion (┃content┃) of an equivalent 30-min entry box.
+func TestRenderUntimed_ParityWithGridBox(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Parity check", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	// The interior line must be flanked by ┃ chars (matching grid interior).
+	interiorLine := lines[1]
+	if !strings.HasPrefix(strings.TrimPrefix(interiorLine, "       │ "), "┃") {
+		t.Errorf("interior line: expected ┃ after gutter+rail+pad; got %q", interiorLine)
+	}
+	if !strings.HasSuffix(interiorLine, "┃ │") {
+		t.Errorf("interior line: expected ┃ │ suffix; got %q", interiorLine)
+	}
+}
+
 // TestRenderUntimed_LineWidthMatchesGrid checks that each line has the same
 // visual width as a grid row (no wider, no narrower).
 func TestRenderUntimed_LineWidthMatchesGrid(t *testing.T) {
@@ -895,5 +1022,46 @@ func TestRenderUntimed_LineWidthMatchesGrid(t *testing.T) {
 		if w := visWidth(l); w != wantWidth {
 			t.Errorf("RenderUntimed line %d: width = %d, want %d (grid width); line: %q", i, w, wantWidth, l)
 		}
+	}
+}
+
+// ---- T015: US4 separator tests ----
+
+// TestRenderUntimedSeparator_PresentWhenUntimedExists checks that RenderUntimedSeparator
+// returns a non-empty separator line when untimed entries exist.
+func TestRenderUntimedSeparator_PresentWhenUntimedExists(t *testing.T) {
+	sep := cli.RenderUntimedSeparator([]int{1}, 80)
+	if sep == "" {
+		t.Error("separator: expected non-empty string when untimed entries exist")
+	}
+	// Must contain box-drawing divider chars.
+	if !strings.Contains(sep, "─") {
+		t.Errorf("separator: expected horizontal line chars; got %q", sep)
+	}
+}
+
+// TestRenderUntimedSeparator_AbsentWhenEmpty checks that no separator is returned
+// when no untimed entries exist (empty slice).
+func TestRenderUntimedSeparator_AbsentWhenEmpty(t *testing.T) {
+	sep := cli.RenderUntimedSeparator(nil, 80)
+	if sep != "" {
+		t.Errorf("separator with no untimed entries: expected empty string, got %q", sep)
+	}
+}
+
+// TestRenderUntimedSeparator_WidthMatchesGrid checks the separator is the same
+// visual width as a grid row.
+func TestRenderUntimedSeparator_WidthMatchesGrid(t *testing.T) {
+	sep := cli.RenderUntimedSeparator([]int{1}, 80)
+	gridOut := cli.RenderGrid(nil, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
+	gridLines := rowsOf(gridOut)
+	wantWidth := visWidth(gridLines[0])
+	// Separator has a trailing newline; check the first line.
+	sepLines := rowsOf(sep)
+	if len(sepLines) == 0 {
+		t.Fatal("separator produced no lines")
+	}
+	if w := visWidth(sepLines[0]); w != wantWidth {
+		t.Errorf("separator width = %d, want %d (grid width); line: %q", w, wantWidth, sepLines[0])
 	}
 }

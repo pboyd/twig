@@ -350,8 +350,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case planMutatedMsg:
 		if msg.err != nil {
-			m.plan.err = msg.err
+			if msg.tabAgnosticErr {
+				m.err = msg.err
+			} else {
+				m.plan.err = msg.err
+			}
 			return m, nil
+		}
+		if msg.notice != "" {
+			m.notice = msg.notice
 		}
 		return m, listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID)
 
@@ -368,6 +375,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.notice = "" // clear transient notice on every user action
 	if m.activeTab == tabPlanning {
 		return m.handlePlanningKey(msg)
 	}
@@ -696,15 +704,18 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.PlanSendToday):
 		if len(m.visible) > 0 {
-			taskID := m.visible[m.cursor].node.Task.Id
+			task := m.visible[m.cursor].node.Task
 			today := time.Now().Format("2006-01-02")
+			notice := fmt.Sprintf("Tucked '%s' into today's plan.", task.Name)
 			m.err = nil
-			return m, addPlanTaskCmd(m.planClient, today, taskID, 0, 0, false)
+			return m, addPlanTaskCmd(m.planClient, today, task.Id, 0, 0, false, notice)
 		}
 
 	case key.Matches(msg, m.keys.PlanSendPickDay):
 		if len(m.visible) > 0 {
-			m.datePromptTaskID = m.visible[m.cursor].node.Task.Id
+			task := m.visible[m.cursor].node.Task
+			m.datePromptTaskID = task.Id
+			m.datePromptTaskName = task.Name
 			tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 			ti := newPlanInput("YYYY-MM-DD")
 			ti.SetValue(tomorrow)
@@ -782,7 +793,8 @@ func (m Model) handleDatePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = modeList
 		m.err = nil
-		return m, addPlanTaskCmd(m.planClient, dateStr, m.datePromptTaskID, 0, 0, false)
+		notice := fmt.Sprintf("Tucked '%s' into %s's plan.", m.datePromptTaskName, dateStr)
+		return m, addPlanTaskCmd(m.planClient, dateStr, m.datePromptTaskID, 0, 0, false, notice)
 	}
 	var cmd tea.Cmd
 	m.datePromptInput, cmd = m.datePromptInput.Update(msg)

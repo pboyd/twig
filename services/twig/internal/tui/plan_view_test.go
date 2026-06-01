@@ -563,6 +563,81 @@ func TestViewPlanning_FormInRightPane_Unstyled(t *testing.T) {
 	}
 }
 
+// ── T015: US4 — separator between untimed pane and grid ────────────────────
+
+// TestSeparator_PresentWhenUntimedEntriesExist checks that a horizontal separator
+// appears between the untimed pane and the grid when untimed entries are present.
+func TestSeparator_PresentWhenUntimedEntriesExist(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 40
+	m.plan.day = "2026-06-01"
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Untimed task", DurationMinute: 30}, // untimed
+		{Id: 2, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30}, // timed
+	}
+
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	out := m.renderPlanningView(80, 35, now)
+
+	// The separator is a line containing only box-drawing divider chars (─, ┤, ├, etc.)
+	// It must appear between the untimed pane and the grid.
+	untimedPos := strings.Index(out, "Untimed task")
+	gridPos := strings.Index(out, "Standup")
+	if untimedPos < 0 {
+		t.Fatal("separator test: 'Untimed task' not found in output")
+	}
+	if gridPos < 0 {
+		t.Fatal("separator test: 'Standup' not found in output")
+	}
+
+	// Extract the portion between untimed content and grid content.
+	between := out[untimedPos:gridPos]
+	// A separator line contains at least some ─ characters.
+	if !strings.Contains(between, "─") {
+		t.Errorf("no separator between untimed pane and grid; between content: %q", between)
+	}
+}
+
+// TestSeparator_AbsentWhenNoUntimedEntries checks that when all entries are timed,
+// the untimed pane and separator are both absent (no RenderUntimed output before the grid).
+func TestSeparator_AbsentWhenNoUntimedEntries(t *testing.T) {
+	// Model with only a timed entry.
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 40
+	m.plan.day = "2026-06-01"
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Timed event", StartMinute: pint32(540), DurationMinute: 30},
+	}
+
+	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	timedOnly := m.renderPlanningView(80, 35, now)
+
+	// Model with the same timed entry plus an untimed entry.
+	m2 := m
+	m2.plan.entries = []*planv1.PlanEntry{
+		{Id: 2, Name: "Untimed task", DurationMinute: 30}, // untimed
+		{Id: 1, Name: "Timed event", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	withUntimed := m2.renderPlanningView(80, 35, now)
+
+	// When untimed entries exist, the output must be different (untimed pane + separator added).
+	if timedOnly == withUntimed {
+		t.Error("output should differ when untimed entries are added (untimed pane + separator)")
+	}
+	// The timed-only output must not contain "Untimed task".
+	if strings.Contains(timedOnly, "Untimed task") {
+		t.Error("timed-only output must not contain the untimed entry name")
+	}
+	// The timed-only output must contain the timed entry.
+	if !strings.Contains(timedOnly, "Timed event") {
+		t.Error("timed-only output must contain the timed entry name")
+	}
+}
+
 // TestPlanGridOptions_CursorBgOnLightBg verifies that with hasDarkBackground=false
 // the SelectionStyle uses the light cursorBg color (#DDEEFF = rgb(221,238,255)).
 func TestPlanGridOptions_CursorBgOnLightBg(t *testing.T) {

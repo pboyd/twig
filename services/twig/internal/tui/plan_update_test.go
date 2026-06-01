@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -860,4 +861,160 @@ func TestAllTaskIDs_CollectsAllIDs(t *testing.T) {
 	if len(ids) != 3 {
 		t.Errorf("allTaskIDs: expected 3 ids, got %d", len(ids))
 	}
+}
+
+// ── T014: US1 — notice channel for send feedback ────────────────────────────
+
+// buildTasksTabModel creates a model on the Tasks tab with a single visible task.
+func buildTasksTabModel(fc *fakePlanClient, taskName string) Model {
+	tasks := []*taskv1.Task{{Id: 1, Name: taskName}}
+	m := ExportNewModel(nil, cli.BuildTree(tasks))
+	m.planClient = fc
+	m.activeTab = tabTasks
+	m.plan.day = "2026-06-01"
+	m.width = 80
+	m.height = 30
+	m.cursor = 0
+	return m
+}
+
+// TestPlanSendToday_SetsSuccessNotice checks that pressing 'p' on the Tasks tab
+// with a successful send sets m.notice naming the task and "today".
+func TestPlanSendToday_SetsSuccessNotice(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksTabModel(fc, "Write tests")
+
+	_, cmd := pressKeyStr(m, "p")
+	if cmd == nil {
+		t.Fatal("p key: expected addPlanTaskCmd, got nil")
+	}
+	// Execute the command (synchronously via the fake client).
+	msg := cmd()
+	mutated, ok := msg.(planMutatedMsg)
+	if !ok {
+		t.Fatalf("p key: expected planMutatedMsg, got %T: %v", msg, msg)
+	}
+	if mutated.err != nil {
+		t.Fatalf("p key: expected success, got error: %v", mutated.err)
+	}
+	if mutated.notice == "" {
+		t.Error("p key: expected non-empty success notice")
+	}
+	if !containsAll(mutated.notice, "Write tests", "today") {
+		t.Errorf("p key notice: expected task name 'Write tests' and 'today' in %q", mutated.notice)
+	}
+}
+
+// TestPlanSendPickDay_SetsSuccessNoticeWithDate checks that confirming ctrl+p with a date
+// sets m.notice naming the task and chosen date.
+func TestPlanSendPickDay_SetsSuccessNoticeWithDate(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksTabModel(fc, "Write docs")
+
+	// Open date prompt via ctrl+p.
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	// Manually simulate the state that ctrl+p creates.
+	m.datePromptTaskID = 1
+	m.datePromptTaskName = "Write docs"
+	m.mode = modeDatePrompt
+	m.datePromptInput = newPlanInput("YYYY-MM-DD")
+	m.datePromptInput.SetValue("2026-07-04")
+	m.datePromptInput.Focus()
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("ctrl+p confirm: expected addPlanTaskCmd, got nil")
+	}
+	msg := cmd()
+	mutated, ok := msg.(planMutatedMsg)
+	if !ok {
+		t.Fatalf("ctrl+p confirm: expected planMutatedMsg, got %T: %v", msg, msg)
+	}
+	if mutated.err != nil {
+		t.Fatalf("ctrl+p confirm: expected success, got error: %v", mutated.err)
+	}
+	if mutated.notice == "" {
+		t.Error("ctrl+p confirm: expected non-empty success notice")
+	}
+	if !containsAll(mutated.notice, "Write docs", "2026-07-04") {
+		t.Errorf("ctrl+p notice: expected task name and date in %q", mutated.notice)
+	}
+}
+
+// TestPlanSendToday_DuplicateErrorVisibleOnTasksTab checks that a duplicate-rejection
+// error from a Tasks-tab send is visible on the Tasks tab (routed to m.err, not m.plan.err).
+func TestPlanSendToday_DuplicateErrorVisibleOnTasksTab(t *testing.T) {
+	fc := &fakePlanClient{mutateErr: errForTest("That one's already parked here")}
+	m := buildTasksTabModel(fc, "Fix bug")
+
+	_, cmd := pressKeyStr(m, "p")
+	if cmd == nil {
+		t.Fatal("p key with duplicate error: expected cmd, got nil")
+	}
+	msg := cmd()
+	// Feed the message back into Update.
+	next, _ := m.Update(msg)
+	nm := next.(Model)
+
+	if nm.err == nil {
+		t.Error("duplicate rejection: expected m.err to be set (visible on Tasks tab)")
+	}
+	if nm.plan.err != nil {
+		t.Errorf("duplicate rejection: m.plan.err should be nil (not used for Tasks-tab sends); got %v", nm.plan.err)
+	}
+}
+
+// TestNoticeCleared_OnNextUserAction checks that m.notice is cleared when the
+// user presses any key.
+func TestNoticeCleared_OnNextUserAction(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksTabModel(fc, "Any task")
+	m.notice = "Tucked 'Any task' into today's plan."
+
+	// Press any key (e.g. j/down).
+	next, _ := pressKeyStr(m, "j")
+
+	if next.notice != "" {
+		t.Errorf("notice should be cleared on next key press; got %q", next.notice)
+	}
+}
+
+// TestRenderStatus_ShowsNoticeWhenNoError checks that renderStatus shows m.notice
+// when it is non-empty and no active error is present.
+func TestRenderStatus_ShowsNoticeWhenNoError(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.notice = "Tucked 'My task' into today's plan."
+
+	out := m.renderStatus()
+
+	if !containsAll(out, "My task", "today") {
+		t.Errorf("renderStatus with notice: expected notice text in status; got %q", out)
+	}
+}
+
+// TestRenderStatus_ErrorTakesPrecedenceOverNotice checks that renderStatus shows
+// the error instead of the notice when both are set.
+func TestRenderStatus_ErrorTakesPrecedenceOverNotice(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.notice = "Some notice"
+	m.err = errForTest("rpc error")
+
+	out := m.renderStatus()
+
+	if containsAll(out, "Some notice") && !containsAll(out, "rpc error") {
+		t.Errorf("renderStatus: error should take precedence over notice; got %q", out)
+	}
+	if !containsAll(out, "rpc error") {
+		t.Errorf("renderStatus: expected error text in status; got %q", out)
+	}
+}
+
+// containsAll reports whether s contains all the given substrings.
+func containsAll(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
 }

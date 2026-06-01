@@ -79,6 +79,12 @@ func (p *Plan) beginSerializableTx(ctx context.Context) (pgx.Tx, *db.Queries, er
 	return tx, p.Queries.WithTx(tx), nil
 }
 
+// errDuplicateUntimed is returned when a second untimed entry would be created for the same (day, task).
+func errDuplicateUntimed() error {
+	return connect.NewError(connect.CodeFailedPrecondition,
+		errors.New("That one's already parked here without a time — it can only wait in one spot."))
+}
+
 // checkOverlap returns (conflicting id, true) if any timed entry in rows overlaps [start, start+dur).
 // Untimed entries (null start_minute) are skipped — they occupy no grid slot.
 func checkOverlap(rows []db.PlanEntry, start, dur int32, excludeID int32) (int32, bool) {
@@ -285,14 +291,20 @@ func (p *Plan) AddPlanTask(
 	}
 	defer tx.Rollback(ctx)
 
+	locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	if isTimed {
-		locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
 		if conflictID, overlaps := checkOverlap(locked, req.Msg.GetStartMinute(), dur, 0); overlaps {
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
+		}
+	} else {
+		for _, r := range locked {
+			if r.TaskID.Valid && r.TaskID.Int64 == req.Msg.TaskId && !r.StartMinute.Valid {
+				return nil, errDuplicateUntimed()
+			}
 		}
 	}
 
@@ -440,6 +452,22 @@ func (p *Plan) MovePlanEntry(
 				fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
 		}
 		startParam = pgtype.Int2{Int16: int16(req.Msg.GetStartMinute()), Valid: true}
+	} else {
+		// Clear-start (unschedule): reject if a different untimed entry already exists for this task.
+		if existing.TaskID.Valid {
+			locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			for _, r := range locked {
+				if r.ID == req.Msg.Id {
+					continue
+				}
+				if r.TaskID.Valid && r.TaskID.Int64 == existing.TaskID.Int64 && !r.StartMinute.Valid {
+					return nil, errDuplicateUntimed()
+				}
+			}
+		}
 	}
 
 	row, err := txq.UpdatePlanEntryTime(ctx, db.UpdatePlanEntryTimeParams{

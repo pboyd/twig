@@ -28,8 +28,10 @@ type planEntriesMsg struct {
 
 // planMutatedMsg is returned after a plan mutation: carries the entry to highlight on reload.
 type planMutatedMsg struct {
-	highlightID int32
-	err         error
+	highlightID    int32
+	err            error
+	notice         string // success notice to show in the status bar (Tasks-tab sends)
+	tabAgnosticErr bool   // when true, route err to m.err instead of m.plan.err
 }
 
 // planTasksMsg carries the task tree for the task picker.
@@ -57,7 +59,13 @@ func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, hi
 	}
 }
 
-func addPlanTaskCmd(client planv1connect.PlanServiceClient, day string, taskID int64, start, dur int, timed bool) tea.Cmd {
+func addPlanTaskCmd(client planv1connect.PlanServiceClient, day string, taskID int64, start, dur int, timed bool, notice ...string) tea.Cmd {
+	successNotice := ""
+	tabAgnostic := false
+	if len(notice) > 0 {
+		successNotice = notice[0]
+		tabAgnostic = true
+	}
 	return func() tea.Msg {
 		var sm *int32
 		if timed {
@@ -71,9 +79,9 @@ func addPlanTaskCmd(client planv1connect.PlanServiceClient, day string, taskID i
 			DurationMinute: int32(dur),
 		}))
 		if err != nil {
-			return planMutatedMsg{err: err}
+			return planMutatedMsg{err: err, tabAgnosticErr: tabAgnostic}
 		}
-		return planMutatedMsg{highlightID: resp.Msg.Entry.GetId()}
+		return planMutatedMsg{highlightID: resp.Msg.Entry.GetId(), notice: successNotice}
 	}
 }
 

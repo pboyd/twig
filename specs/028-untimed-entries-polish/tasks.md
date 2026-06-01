@@ -28,7 +28,7 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 **Purpose**: Establish a known-green baseline before changes.
 
-- [ ] T001 Confirm baseline is green: from `services/twig/` run `go test ./...` and `go build ./cmd/twig ./cmd/server`; record any pre-existing failures before starting.
+- [X] T001 Confirm baseline is green: from `services/twig/` run `go test ./...` and `go build ./cmd/twig ./cmd/server`; record any pre-existing failures before starting.
 
 ---
 
@@ -50,13 +50,13 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they fail)
 
-- [ ] T002 [US2] Add handler tests in `services/twig/internal/handler/plan_test.go` covering: (a) `AddPlanTask` untimed rejects a 2nd untimed entry for the same (day, task_id) with `FailedPrecondition` and creates nothing; (b) `AddPlanTask` timed still succeeds alongside an existing untimed entry for the same task; (c) untimed add succeeds when only a *timed* entry exists for the task; (d) `MovePlanEntry` clearing start is rejected when a *different* untimed entry exists for the task and the entry keeps its time; (e) `MovePlanEntry` clearing start succeeds when no other untimed entry exists.
+- [X] T002 [US2] Add handler tests in `services/twig/internal/handler/plan_test.go` covering: (a) `AddPlanTask` untimed rejects a 2nd untimed entry for the same (day, task_id) with `FailedPrecondition` and creates nothing; (b) `AddPlanTask` timed still succeeds alongside an existing untimed entry for the same task; (c) untimed add succeeds when only a *timed* entry exists for the task; (d) `MovePlanEntry` clearing start is rejected when a *different* untimed entry exists for the task and the entry keeps its time; (e) `MovePlanEntry` clearing start succeeds when no other untimed entry exists.
 
 ### Implementation for User Story 2
 
-- [ ] T003 [US2] In `AddPlanTask` (untimed branch, `isTimed == false`) in `services/twig/internal/handler/plan.go`: lock the day via `LockPlanEntriesForDay` inside the existing serializable tx, scan for an entry with the same `task_id` and unset `start_minute`, and reject with `connect.CodeFailedPrecondition` if found (no insert).
-- [ ] T004 [US2] In `MovePlanEntry` (clear branch, `isTimed == false`) in `services/twig/internal/handler/plan.go`: lock the day, scan for a *different* entry (id ≠ request id) with the same `task_id` (from `existing.TaskID`) and unset `start_minute`, and reject with `FailedPrecondition` if found (entry unchanged).
-- [ ] T005 [US2] Author the shared playful duplicate-rejection message (Principle IV — accurate + actionable) used by T003 and T004 in `services/twig/internal/handler/plan.go`.
+- [X] T003 [US2] In `AddPlanTask` (untimed branch, `isTimed == false`) in `services/twig/internal/handler/plan.go`: lock the day via `LockPlanEntriesForDay` inside the existing serializable tx, scan for an entry with the same `task_id` and unset `start_minute`, and reject with `connect.CodeFailedPrecondition` if found (no insert).
+- [X] T004 [US2] In `MovePlanEntry` (clear branch, `isTimed == false`) in `services/twig/internal/handler/plan.go`: lock the day, scan for a *different* entry (id ≠ request id) with the same `task_id` (from `existing.TaskID`) and unset `start_minute`, and reject with `FailedPrecondition` if found (entry unchanged).
+- [X] T005 [US2] Author the shared playful duplicate-rejection message (Principle IV — accurate + actionable) used by T003 and T004 in `services/twig/internal/handler/plan.go`.
 
 **Checkpoint**: At most one untimed entry per (day, task) across CLI add, CLI mv-clear (and, transitively, TUI). Run `go test ./internal/handler/...`.
 
@@ -70,12 +70,12 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 ### Tests for User Story 3 ⚠️ (write first, ensure they fail)
 
-- [ ] T006 [US3] Add rendering tests in `services/twig/internal/cli/plan_grid_test.go` asserting that `RenderUntimed` output: has a `┏…┓` top border above each title (title not on the border line), shares a `┣…┫` boundary between two adjacent untimed entries, and applies consistent selection/completion styling across every line including the last; assert byte/style parity with the equivalent gridded entry box.
+- [X] T006 [US3] Add rendering tests in `services/twig/internal/cli/plan_grid_test.go` asserting that `RenderUntimed` output: has a `┏…┓` top border above each title (title not on the border line), shares a `┣…┫` boundary between two adjacent untimed entries, and applies consistent selection/completion styling across every line including the last; assert byte/style parity with the equivalent gridded entry box.
 
 ### Implementation for User Story 3
 
-- [ ] T007 [US3] Extract the per-entry box-line drawing (top `┏┓`, interior `┃content┃`, shared `┣┫`, bottom `┗┛`, with `applySelection`/`applyCompletion`) from `RenderGrid` into a shared helper in `services/twig/internal/cli/plan_grid.go`.
-- [ ] T008 [US3] Rewrite `RenderUntimed` in `services/twig/internal/cli/plan_grid.go` to stack entries back-to-back through the shared helper (shared boundaries between adjacent untimed entries), removing the bespoke `┣label┫`-as-first-row geometry; keep the existing gutter/`boxWidth`/`contentWidth` constants so output aligns with the grid.
+- [X] T007 [US3] Extract the per-entry box-line drawing (top `┏┓`, interior `┃content┃`, shared `┣┫`, bottom `┗┛`, with `applySelection`/`applyCompletion`) from `RenderGrid` into a shared helper in `services/twig/internal/cli/plan_grid.go`.
+- [X] T008 [US3] Rewrite `RenderUntimed` in `services/twig/internal/cli/plan_grid.go` to stack entries back-to-back through the shared helper (shared boundaries between adjacent untimed entries), removing the bespoke `┣label┫`-as-first-row geometry; keep the existing gutter/`boxWidth`/`contentWidth` constants so output aligns with the grid.
 
 **Checkpoint**: Untimed and gridded entries are visually indistinguishable. Run `go test ./internal/cli/...`.
 
@@ -89,15 +89,15 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Add a `notice string` field to `Model` in `services/twig/internal/tui/model.go` (transient info channel, distinct from `err`).
-- [ ] T010 [US1] In `renderStatus` in `services/twig/internal/tui/view.go`, render `m.notice` when it is non-empty and no active error is present (errors still take precedence); falls back to the help line when both are empty.
-- [ ] T011 [US1] In `services/twig/internal/tui/plan_update.go`, carry a success notice from the send (e.g. add a `notice` field to `planMutatedMsg` set by `addPlanTaskCmd`, or set it when handling the result) and set `m.notice` on success; clear the notice on the next user action.
-- [ ] T012 [US1] In the `PlanSendToday` (`p`) and date-prompt-confirm (`ctrl+p`) handlers in `services/twig/internal/tui/update.go`, supply the notice context (task name + target day) and route the send's *error* result to the tab-agnostic `m.err` (not the planning-only `m.plan.err`) so a duplicate rejection (US2) is visible on the Tasks tab.
-- [ ] T013 [US1] Author playful send-confirmation copy (Principle IV) for `p` (today) and `ctrl+p` (chosen date) wired into T011/T012.
+- [X] T009 [P] [US1] Add a `notice string` field to `Model` in `services/twig/internal/tui/model.go` (transient info channel, distinct from `err`).
+- [X] T010 [US1] In `renderStatus` in `services/twig/internal/tui/view.go`, render `m.notice` when it is non-empty and no active error is present (errors still take precedence); falls back to the help line when both are empty.
+- [X] T011 [US1] In `services/twig/internal/tui/plan_update.go`, carry a success notice from the send (e.g. add a `notice` field to `planMutatedMsg` set by `addPlanTaskCmd`, or set it when handling the result) and set `m.notice` on success; clear the notice on the next user action.
+- [X] T012 [US1] In the `PlanSendToday` (`p`) and date-prompt-confirm (`ctrl+p`) handlers in `services/twig/internal/tui/update.go`, supply the notice context (task name + target day) and route the send's *error* result to the tab-agnostic `m.err` (not the planning-only `m.plan.err`) so a duplicate rejection (US2) is visible on the Tasks tab.
+- [X] T013 [US1] Author playful send-confirmation copy (Principle IV) for `p` (today) and `ctrl+p` (chosen date) wired into T011/T012.
 
 ### Tests for User Story 1
 
-- [ ] T014 [US1] Add TUI tests: `p` sets a success notice naming the task/today; `ctrl+p` confirm sets a notice naming the chosen date; a duplicate send surfaces the rejection on the Tasks tab — in `services/twig/internal/tui/update_test.go` (and assert `renderStatus` shows the notice in `services/twig/internal/tui/view_test.go`).
+- [X] T014 [US1] Add TUI tests: `p` sets a success notice naming the task/today; `ctrl+p` confirm sets a notice naming the chosen date; a duplicate send surfaces the rejection on the Tasks tab — in `services/twig/internal/tui/update_test.go` (and assert `renderStatus` shows the notice in `services/twig/internal/tui/view_test.go`).
 
 **Checkpoint**: Sends give visible feedback; rejections are visible on the Tasks tab. Run `go test ./internal/tui/...`.
 
@@ -111,11 +111,11 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 ### Tests for User Story 4 ⚠️ (write first, ensure they fail)
 
-- [ ] T015 [US4] Add tests asserting a separator line is emitted between the untimed pane and grid when untimed entries exist, and absent (full-area grid, byte-identical to no-untimed baseline) when none exist — in `services/twig/internal/cli/plan_grid_test.go` and `services/twig/internal/tui/plan_view_test.go`.
+- [X] T015 [US4] Add tests asserting a separator line is emitted between the untimed pane and grid when untimed entries exist, and absent (full-area grid, byte-identical to no-untimed baseline) when none exist — in `services/twig/internal/cli/plan_grid_test.go` and `services/twig/internal/tui/plan_view_test.go`.
 
 ### Implementation for User Story 4
 
-- [ ] T016 [US4] Emit a theme-consistent separator between the untimed pane output and the grid only when untimed entries exist, wired where they are concatenated (`RenderUntimed`/grid join in `services/twig/internal/cli/plan_grid.go` and `services/twig/internal/tui/plan_view.go`); ensure the no-untimed path is unchanged.
+- [X] T016 [US4] Emit a theme-consistent separator between the untimed pane output and the grid only when untimed entries exist, wired where they are concatenated (`RenderUntimed`/grid join in `services/twig/internal/cli/plan_grid.go` and `services/twig/internal/tui/plan_view.go`); ensure the no-untimed path is unchanged.
 
 **Checkpoint**: Boundary is clear when present, invisible when absent. Run `go test ./internal/cli/... ./internal/tui/...`.
 
@@ -123,9 +123,9 @@ Single Go module at `services/twig/`. No proto/`gen/`/`internal/db/` changes thi
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T017 [P] Run the full suite: from `services/twig/` `go test ./...` (all green).
-- [ ] T018 [P] Build both binaries: from `services/twig/` `go build ./cmd/twig ./cmd/server`.
-- [ ] T019 Review all new user-facing copy (duplicate rejection, send confirmations) against Constitution Principle IV (warm, accurate, actionable).
+- [X] T017 [P] Run the full suite: from `services/twig/` `go test ./...` (all green).
+- [X] T018 [P] Build both binaries: from `services/twig/` `go build ./cmd/twig ./cmd/server`.
+- [X] T019 Review all new user-facing copy (duplicate rejection, send confirmations) against Constitution Principle IV (warm, accurate, actionable).
 - [ ] T020 Execute `specs/028-untimed-entries-polish/quickstart.md` manual verification (CLI + TUI) end to end.
 
 ---

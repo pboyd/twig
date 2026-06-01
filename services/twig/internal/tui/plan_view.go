@@ -76,10 +76,11 @@ func (m Model) renderPlanningView(width, height int, now time.Time) string {
 	untimed, timed := splitPlanEntries(m.plan.entries)
 	opts := m.planGridOptions()
 	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
+	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
 	grid := cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 
-	// Combine header + untimed pane + grid, trimmed to gridHeight.
-	combined := untimedStr + grid
+	// Combine header + untimed pane + separator + grid, trimmed to gridHeight.
+	combined := untimedStr + sep + grid
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridHeight {
 		lines = lines[:gridHeight]
@@ -208,12 +209,23 @@ func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	untimed, timed := splitPlanEntries(m.plan.entries)
 	opts := m.planGridOptions()
 	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
+		cli.RenderUntimedSeparator(untimedIDs(untimed), width) +
 		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > height {
 		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// untimedIDs returns a slice of int (len = len(entries)) used only to check
+// whether any untimed entries exist — passed to RenderUntimedSeparator.
+func untimedIDs(entries []*planv1.PlanEntry) []int {
+	ids := make([]int, len(entries))
+	for i, e := range entries {
+		ids[i] = int(e.Id)
+	}
+	return ids
 }
 
 // renderPlanGridContent renders the day header + untimed pane + calendar grid for
@@ -227,6 +239,7 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	untimed, timed := splitPlanEntries(m.plan.entries)
 	opts := m.planGridOptions()
 	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
+		cli.RenderUntimedSeparator(untimedIDs(untimed), width) +
 		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridH {

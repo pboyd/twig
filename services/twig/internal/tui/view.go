@@ -454,6 +454,8 @@ func (m Model) renderStatus() string {
 
 	if activeErr != nil {
 		lines = append(lines, errorStyle.Render("error: "+cli.UserMessage(activeErr)))
+	} else if m.notice != "" {
+		lines = append(lines, m.notice)
 	} else {
 		lines = append(lines, m.help.View(m.keys))
 	}

@@ -1087,3 +1087,163 @@ func TestAddPlanEvent_RejectsMissingStart(t *testing.T) {
 
 var _ = fmt.Sprintf
 var _ = pgxpool.Pool{}
+
+// ---- T002: US2 - Duplicate untimed entry rejection ----
+
+func TestAddPlanTask_UntimedDuplicateRejected(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-10-01"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Dup task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// First untimed add must succeed.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID,
+	}))
+	if err != nil {
+		t.Fatalf("first untimed add: %v", err)
+	}
+
+	// (a) Second untimed add for same (day, task) must be rejected.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID,
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("second untimed add: expected FailedPrecondition, got %v", err)
+	}
+
+	// Verify only one entry was created.
+	list, _ := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	untimedCount := 0
+	for _, e := range list.Msg.Entries {
+		if e.StartMinute == nil {
+			untimedCount++
+		}
+	}
+	if untimedCount != 1 {
+		t.Errorf("expected 1 untimed entry, got %d", untimedCount)
+	}
+}
+
+func TestAddPlanTask_TimedAllowedAlongsideUntimed(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-10-02"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Flexible task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Add untimed first.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID,
+	}))
+	if err != nil {
+		t.Fatalf("untimed add: %v", err)
+	}
+
+	// (b) Timed add for same task must succeed even though untimed exists.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID, StartMinute: pint32(540), DurationMinute: 60,
+	}))
+	if err != nil {
+		t.Errorf("timed add alongside untimed: expected success, got %v", err)
+	}
+}
+
+func TestAddPlanTask_UntimedAllowedWhenOnlyTimedExists(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-10-03"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Dual task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Add timed first.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID, StartMinute: pint32(480), DurationMinute: 60,
+	}))
+	if err != nil {
+		t.Fatalf("timed add: %v", err)
+	}
+
+	// (c) Untimed add must succeed when only a timed entry exists for this task.
+	_, err = planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID,
+	}))
+	if err != nil {
+		t.Errorf("untimed add when only timed exists: expected success, got %v", err)
+	}
+}
+
+func TestMovePlanEntry_ClearStartRejectedWhenOtherUntimedExists(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-10-04"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Clear test task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Insert an existing untimed entry for this task directly.
+	insertPlanEntryUntimed(t, planH.Queries, userID, day, taskID, "", 30)
+
+	// Insert a timed entry for the same task (this is the one we'll try to unschedule).
+	timedEntry := insertPlanEntry(t, planH.Queries, userID, day, taskID, "", 600, 60)
+
+	// (d) Clearing start of timed entry should be rejected because an untimed entry already exists.
+	_, err = planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: timedEntry.ID,
+		// No StartMinute = clear/unschedule
+	}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("clear-start with existing untimed: expected FailedPrecondition, got %v", err)
+	}
+
+	// Verify the timed entry still has its start time (unchanged).
+	list, _ := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	for _, e := range list.Msg.Entries {
+		if e.Id == timedEntry.ID {
+			if e.StartMinute == nil {
+				t.Errorf("clear-start rejected: entry should still have start time, got nil")
+			}
+			break
+		}
+	}
+}
+
+func TestMovePlanEntry_ClearStartAllowedWhenNoOtherUntimed(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-10-05"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Clear ok task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Add only a timed entry (no existing untimed).
+	timedEntry := insertPlanEntry(t, planH.Queries, userID, day, taskID, "", 600, 60)
+
+	// (e) Clearing start must succeed when no other untimed entry exists for this task.
+	_, err = planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: timedEntry.ID,
+		// No StartMinute = clear/unschedule
+	}))
+	if err != nil {
+		t.Errorf("clear-start with no other untimed: expected success, got %v", err)
+	}
+}

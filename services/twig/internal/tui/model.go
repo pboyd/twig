@@ -104,8 +104,12 @@ type Model struct {
 	pom             *activePom
 	confirmingQuit  bool
 	// date prompt state (modeDatePrompt): used when ctrl+p is pressed on Tasks tab
-	datePromptInput  textinput.Model
-	datePromptTaskID int64
+	datePromptInput    textinput.Model
+	datePromptTaskID   int64
+	datePromptTaskName string
+	// notice is a transient info message shown in the status bar (distinct from err).
+	// It is cleared on the next user action.
+	notice string
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool) Model {
