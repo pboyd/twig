@@ -147,6 +147,25 @@ func removePlanCmd(client planv1connect.PlanServiceClient, day string, id int32)
 	}
 }
 
+// completePlanTaskCmd completes or uncompletes the task behind a plan entry, then
+// reloads the day via the existing planMutatedMsg reload path.
+func completePlanTaskCmd(taskClient taskv1connect.TaskServiceClient, day string, taskID int64, complete bool, entryID int32, notice string) tea.Cmd {
+	return func() tea.Msg {
+		if complete {
+			_, err := taskClient.CompleteTask(context.Background(), connect.NewRequest(&taskv1.CompleteTaskRequest{Id: taskID}))
+			if err != nil {
+				return planMutatedMsg{err: err}
+			}
+		} else {
+			_, err := taskClient.UncompleteTask(context.Background(), connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: taskID}))
+			if err != nil {
+				return planMutatedMsg{err: err}
+			}
+		}
+		return planMutatedMsg{notice: notice, highlightID: entryID}
+	}
+}
+
 // listTasksForPickerCmd fetches incomplete tasks for the task picker.
 func listTasksForPickerCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
 	return func() tea.Msg {

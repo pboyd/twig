@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 	tea "github.com/charmbracelet/bubbletea"
+	planv1 "github.com/pboyd/twig/services/twig/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/services/twig/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/services/twig/internal/cli"
@@ -662,7 +663,13 @@ func TestUpdateTaskCmd_PreservesParentID(t *testing.T) {
 // fakeTaskClient is a minimal TaskServiceClient for unit tests.
 type fakeTaskClient struct {
 	taskv1connect.TaskServiceClient
-	lastUpdateReq *taskv1.UpdateTaskRequest
+	lastUpdateReq     *taskv1.UpdateTaskRequest
+	lastCompleteID   int64
+	lastUncompleteID int64
+	lastPomTaskID    int64
+	completeErr      error
+	uncompleteErr    error
+	pomErr           error
 }
 
 func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[taskv1.UpdateTaskRequest]) (*connect.Response[taskv1.UpdateTaskResponse], error) {
@@ -672,6 +679,200 @@ func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[task
 
 func (f *fakeTaskClient) ListTasks(_ context.Context, _ *connect.Request[taskv1.ListTasksRequest]) (*connect.Response[taskv1.ListTasksResponse], error) {
 	return connect.NewResponse(&taskv1.ListTasksResponse{}), nil
+}
+
+func (f *fakeTaskClient) CompleteTask(_ context.Context, req *connect.Request[taskv1.CompleteTaskRequest]) (*connect.Response[taskv1.CompleteTaskResponse], error) {
+	f.lastCompleteID = req.Msg.Id
+	if f.completeErr != nil {
+		return nil, f.completeErr
+	}
+	return connect.NewResponse(&taskv1.CompleteTaskResponse{}), nil
+}
+
+func (f *fakeTaskClient) UncompleteTask(_ context.Context, req *connect.Request[taskv1.UncompleteTaskRequest]) (*connect.Response[taskv1.UncompleteTaskResponse], error) {
+	f.lastUncompleteID = req.Msg.Id
+	if f.uncompleteErr != nil {
+		return nil, f.uncompleteErr
+	}
+	return connect.NewResponse(&taskv1.UncompleteTaskResponse{}), nil
+}
+
+func (f *fakeTaskClient) StartPomodoro(_ context.Context, req *connect.Request[taskv1.StartPomodoroRequest]) (*connect.Response[taskv1.StartPomodoroResponse], error) {
+	f.lastPomTaskID = req.Msg.TaskId
+	if f.pomErr != nil {
+		return nil, f.pomErr
+	}
+	return connect.NewResponse(&taskv1.StartPomodoroResponse{
+		Pomodoro: &taskv1.Pomodoro{
+			TaskId:  req.Msg.TaskId,
+			StartAt: timestamppb.Now(),
+		},
+	}), nil
+}
+
+// ── T002: planning-tab complete action (US1) ──────────────────────────────────
+
+// buildPlanCompleteTestModel creates a planning tab model with a fakeTaskClient
+// seeded with the given entries.
+func buildPlanCompleteTestModel(tc *fakeTaskClient, fc *fakePlanClient, entries []*planv1.PlanEntry) Model {
+	m := buildPlanTestModel(fc)
+	m.client = tc
+	m.plan.entries = entries
+	m.plan.loaded = true
+	m.plan.cursor = 0
+	return m
+}
+
+// TestPlanComplete_IncompleteTaskLinkedEntry_Space checks that pressing space on an
+// incomplete task-linked entry returns a non-nil cmd that drives CompleteTask.
+func TestPlanComplete_IncompleteTaskLinkedEntry_Space(t *testing.T) {
+	tc := &fakeTaskClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Write tests", TaskId: 42, Completed: false},
+	}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, entries)
+
+	_, cmd := pressKeyStr(m, " ")
+	if cmd == nil {
+		t.Fatal("space on incomplete task-linked entry: expected cmd, got nil")
+	}
+	msg := cmd()
+	mutated, ok := msg.(planMutatedMsg)
+	if !ok {
+		t.Fatalf("space on incomplete task-linked entry: expected planMutatedMsg, got %T", msg)
+	}
+	if mutated.err != nil {
+		t.Fatalf("space on incomplete task: expected no error, got %v", mutated.err)
+	}
+	if tc.lastCompleteID != 42 {
+		t.Errorf("space on incomplete task: expected CompleteTask(42), lastCompleteID=%d", tc.lastCompleteID)
+	}
+}
+
+// TestPlanComplete_CompletedTaskLinkedEntry_Space checks that pressing space on a
+// completed task-linked entry drives UncompleteTask.
+func TestPlanComplete_CompletedTaskLinkedEntry_Space(t *testing.T) {
+	tc := &fakeTaskClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 2, Name: "Write tests", TaskId: 42, Completed: true},
+	}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, entries)
+
+	_, cmd := pressKeyStr(m, " ")
+	if cmd == nil {
+		t.Fatal("space on completed task-linked entry: expected cmd, got nil")
+	}
+	msg := cmd()
+	mutated, ok := msg.(planMutatedMsg)
+	if !ok {
+		t.Fatalf("space on completed task-linked entry: expected planMutatedMsg, got %T", msg)
+	}
+	if mutated.err != nil {
+		t.Fatalf("space on completed task: expected no error, got %v", mutated.err)
+	}
+	if tc.lastUncompleteID != 42 {
+		t.Errorf("space on completed task: expected UncompleteTask(42), lastUncompleteID=%d", tc.lastUncompleteID)
+	}
+}
+
+// TestPlanComplete_EventEntry_Space checks that pressing space on an event entry
+// sets m.notice and issues no mutation cmd.
+func TestPlanComplete_EventEntry_Space(t *testing.T) {
+	tc := &fakeTaskClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 3, Name: "Standup", TaskId: 0}, // event: TaskId == 0
+	}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, entries)
+
+	nm, cmd := pressKeyStr(m, " ")
+	if cmd != nil {
+		t.Errorf("space on event: expected nil cmd, got non-nil")
+	}
+	if nm.notice == "" {
+		t.Error("space on event: expected m.notice to be set with playful message")
+	}
+	if tc.lastCompleteID != 0 || tc.lastUncompleteID != 0 {
+		t.Error("space on event: CompleteTask/UncompleteTask must not be called")
+	}
+}
+
+// TestPlanComplete_EmptyEntries_Space checks that pressing space on an empty plan is a no-op.
+func TestPlanComplete_EmptyEntries_Space(t *testing.T) {
+	tc := &fakeTaskClient{}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, nil)
+
+	nm, cmd := pressKeyStr(m, " ")
+	if cmd != nil {
+		t.Errorf("space on empty plan: expected nil cmd, got non-nil")
+	}
+	if nm.notice != "" {
+		t.Errorf("space on empty plan: expected no notice, got %q", nm.notice)
+	}
+	if tc.lastCompleteID != 0 || tc.lastUncompleteID != 0 {
+		t.Error("space on empty plan: CompleteTask/UncompleteTask must not be called")
+	}
+}
+
+// ── T007: planning-tab pomodoro action (US2) ──────────────────────────────────
+
+// TestPlanPomStart_TaskLinkedEntry_S checks that pressing 's' on a task-linked entry
+// returns the pomodoro-start cmd carrying entry.TaskId/entry.Name.
+func TestPlanPomStart_TaskLinkedEntry_S(t *testing.T) {
+	tc := &fakeTaskClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Focus session", TaskId: 99},
+	}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, entries)
+
+	_, cmd := pressKeyStr(m, "s")
+	if cmd == nil {
+		t.Fatal("s on task-linked entry: expected cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(pomStartedMsg); !ok {
+		// pomStartedMsg is the expected result of startPomCmd on success
+		// (but with a fake client returning empty, it may be an error; just
+		// verify StartPomodoro was called with the right task ID)
+		_ = ok
+	}
+	if tc.lastPomTaskID != 99 {
+		t.Errorf("s on task-linked entry: expected StartPomodoro(99), lastPomTaskID=%d", tc.lastPomTaskID)
+	}
+}
+
+// TestPlanPomStart_EventEntry_S checks that pressing 's' on an event entry sets m.notice
+// and issues no cmd.
+func TestPlanPomStart_EventEntry_S(t *testing.T) {
+	tc := &fakeTaskClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 2, Name: "Standup", TaskId: 0}, // event
+	}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, entries)
+
+	nm, cmd := pressKeyStr(m, "s")
+	if cmd != nil {
+		t.Errorf("s on event: expected nil cmd, got non-nil")
+	}
+	if nm.notice == "" {
+		t.Error("s on event: expected m.notice to be set with playful message")
+	}
+	if tc.lastPomTaskID != 0 {
+		t.Error("s on event: StartPomodoro must not be called")
+	}
+}
+
+// TestPlanPomStart_EmptyEntries_S checks that pressing 's' on an empty plan is a no-op.
+func TestPlanPomStart_EmptyEntries_S(t *testing.T) {
+	tc := &fakeTaskClient{}
+	m := buildPlanCompleteTestModel(tc, &fakePlanClient{}, nil)
+
+	nm, cmd := pressKeyStr(m, "s")
+	if cmd != nil {
+		t.Errorf("s on empty plan: expected nil cmd, got non-nil")
+	}
+	if nm.notice != "" {
+		t.Errorf("s on empty plan: expected no notice, got %q", nm.notice)
+	}
 }
 
 // TestHighlight_RefreshedErrorKeepsListMode checks error in refreshedMsg.

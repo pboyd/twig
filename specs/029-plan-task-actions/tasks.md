@@ -28,7 +28,7 @@ Single Go module at `services/twig/`. All paths below are relative to `services/
 
 **Purpose**: Confirm a clean baseline before changing the planning-tab key handler.
 
-- [ ] T001 Establish baseline: from `services/twig/`, run `go build ./cmd/twig` and `go test ./internal/tui/...` and confirm both are green before any change.
+- [X] T001 Establish baseline: from `services/twig/`, run `go build ./cmd/twig` and `go test ./internal/tui/...` and confirm both are green before any change.
 
 ---
 
@@ -50,14 +50,14 @@ No foundational/shared code is needed. Both stories independently add a `case` t
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T002 [US1] Add a table-driven test in `internal/tui/update_test.go` for the planning-tab complete action, building a model with `buildPlanTestModel(fc)` plus a `&fakeTaskClient{}` assigned to `m.client`, `m.activeTab = tabPlanning`, `m.plan.mode = planList`, and seeded `m.plan.entries`. Cover: (a) incomplete task-linked entry selected + `space` → returns a non-nil cmd and the cmd ultimately drives the `CompleteTask` path; (b) completed task-linked entry + `space` → drives the `UncompleteTask` path; (c) event entry (`TaskId == 0`) + `space` → no mutation, `m.notice` set, no cmd that mutates; (d) empty `m.plan.entries` + `space` → no-op. Confirm these FAIL before T003/T004. (If `fakeTaskClient` lacks `CompleteTask`/`UncompleteTask` methods, extend it in `internal/tui/update_test.go` to record the last call.)
+- [X] T002 [US1] Add a table-driven test in `internal/tui/update_test.go` for the planning-tab complete action, building a model with `buildPlanTestModel(fc)` plus a `&fakeTaskClient{}` assigned to `m.client`, `m.activeTab = tabPlanning`, `m.plan.mode = planList`, and seeded `m.plan.entries`. Cover: (a) incomplete task-linked entry selected + `space` → returns a non-nil cmd and the cmd ultimately drives the `CompleteTask` path; (b) completed task-linked entry + `space` → drives the `UncompleteTask` path; (c) event entry (`TaskId == 0`) + `space` → no mutation, `m.notice` set, no cmd that mutates; (d) empty `m.plan.entries` + `space` → no-op. Confirm these FAIL before T003/T004. (If `fakeTaskClient` lacks `CompleteTask`/`UncompleteTask` methods, extend it in `internal/tui/update_test.go` to record the last call.)
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Add `completePlanTaskCmd(taskClient taskv1connect.TaskServiceClient, day string, taskID int64, complete bool, entryID int32, notice string) tea.Cmd` in `internal/tui/update.go`: when `complete`, call `CompleteTask`; else `UncompleteTask`; on error return `planMutatedMsg{err: err}`; on success return `planMutatedMsg{notice: notice, highlightID: entryID}`. (Reuses the existing `planMutatedMsg` → `listPlanHighlightCmd` reload + notice + error-routing path.)
-- [ ] T004 [US1] In `handlePlanKey` (`planList` mode) in `internal/tui/update.go`, add `case key.Matches(msg, m.keys.Complete)`: guard `len(m.plan.entries) > 0`; let `entry := m.plan.entries[m.plan.cursor]`; if `entry.TaskId == 0` set the playful event notice (see `research.md`) and return; else clear `m.err`, compute the success notice and `return m, completePlanTaskCmd(m.client, m.plan.day, entry.TaskId, !entry.Completed, entry.Id, notice)`.
-- [ ] T005 [US1] Author/finalize the US1 user-facing copy (event-not-a-task notice + completion confirmation) in the warm/playful house tone per Principle IV and `research.md`, wired in T004.
-- [ ] T006 [US1] Run `go test ./internal/tui/...` and confirm the T002 tests now pass and no existing planning-tab tests regress.
+- [X] T003 [US1] Add `completePlanTaskCmd(taskClient taskv1connect.TaskServiceClient, day string, taskID int64, complete bool, entryID int32, notice string) tea.Cmd` in `internal/tui/update.go`: when `complete`, call `CompleteTask`; else `UncompleteTask`; on error return `planMutatedMsg{err: err}`; on success return `planMutatedMsg{notice: notice, highlightID: entryID}`. (Reuses the existing `planMutatedMsg` → `listPlanHighlightCmd` reload + notice + error-routing path.)
+- [X] T004 [US1] In `handlePlanKey` (`planList` mode) in `internal/tui/update.go`, add `case key.Matches(msg, m.keys.Complete)`: guard `len(m.plan.entries) > 0`; let `entry := m.plan.entries[m.plan.cursor]`; if `entry.TaskId == 0` set the playful event notice (see `research.md`) and return; else clear `m.err`, compute the success notice and `return m, completePlanTaskCmd(m.client, m.plan.day, entry.TaskId, !entry.Completed, entry.Id, notice)`.
+- [X] T005 [US1] Author/finalize the US1 user-facing copy (event-not-a-task notice + completion confirmation) in the warm/playful house tone per Principle IV and `research.md`, wired in T004.
+- [X] T006 [US1] Run `go test ./internal/tui/...` and confirm the T002 tests now pass and no existing planning-tab tests regress.
 
 **Checkpoint**: Completing/uncompleting a linked task from the plan works end-to-end and is independently testable — this is the MVP.
 
@@ -73,13 +73,13 @@ No foundational/shared code is needed. Both stories independently add a `case` t
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T007 [US2] Add a table-driven test in `internal/tui/update_test.go` for the planning-tab pomodoro action (model with `tabPlanning` + `planList` + seeded entries, task client capable of the pomodoro-start call — reuse `fakePomClient`/`fakeTaskClient` as the existing pomodoro tests do). Cover: (a) task-linked entry selected + `s` → returns the pomodoro-start cmd carrying `entry.TaskId`/`entry.Name`; (b) event entry (`TaskId == 0`) + `s` → no start, `m.notice` set; (c) empty `m.plan.entries` + `s` → no-op. Confirm these FAIL before T008.
+- [X] T007 [US2] Add a table-driven test in `internal/tui/update_test.go` for the planning-tab pomodoro action (model with `tabPlanning` + `planList` + seeded entries, task client capable of the pomodoro-start call — reuse `fakePomClient`/`fakeTaskClient` as the existing pomodoro tests do). Cover: (a) task-linked entry selected + `s` → returns the pomodoro-start cmd carrying `entry.TaskId`/`entry.Name`; (b) event entry (`TaskId == 0`) + `s` → no start, `m.notice` set; (c) empty `m.plan.entries` + `s` → no-op. Confirm these FAIL before T008.
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] In `handlePlanKey` (`planList` mode) in `internal/tui/update.go`, add `case key.Matches(msg, m.keys.PomStart)`: guard `len(m.plan.entries) > 0`; let `entry := m.plan.entries[m.plan.cursor]`; if `entry.TaskId == 0` set the playful event notice and return; else clear `m.err` and `return m, startPomCmd(m.client, entry.TaskId, entry.Name)`.
-- [ ] T009 [US2] Author/finalize the US2 event-not-actionable pomodoro notice in the house tone per Principle IV and `research.md`, wired in T008.
-- [ ] T010 [US2] Run `go test ./internal/tui/...` and confirm the T007 tests pass with no regression.
+- [X] T008 [US2] In `handlePlanKey` (`planList` mode) in `internal/tui/update.go`, add `case key.Matches(msg, m.keys.PomStart)`: guard `len(m.plan.entries) > 0`; let `entry := m.plan.entries[m.plan.cursor]`; if `entry.TaskId == 0` set the playful event notice and return; else clear `m.err` and `return m, startPomCmd(m.client, entry.TaskId, entry.Name)`.
+- [X] T009 [US2] Author/finalize the US2 event-not-actionable pomodoro notice in the house tone per Principle IV and `research.md`, wired in T008.
+- [X] T010 [US2] Run `go test ./internal/tui/...` and confirm the T007 tests pass with no regression.
 
 **Checkpoint**: Both complete and start-pomodoro work from the planning tab, independently testable.
 
@@ -89,9 +89,9 @@ No foundational/shared code is needed. Both stories independently add a `case` t
 
 **Purpose**: Help-text surfacing and final verification across both stories.
 
-- [ ] T011 In `internal/tui/keymap.go`, surface the new planning-tab actions in `PlanningMode` help: add `k.Complete` and `k.PomStart` to the `PlanningMode` branch of `ShortHelp` and/or `FullHelp` so `?` on the planning tab documents `space` (toggle complete) and `s` (start pomodoro).
-- [ ] T012 Update any `PlanningMode` help-rendering test in `internal/tui/help.go`/`*_test.go` if it asserts the exact set of planning-tab bindings, to include the two new actions.
-- [ ] T013 Run the full module test suite from `services/twig/`: `go test ./...` — confirm all green.
+- [X] T011 In `internal/tui/keymap.go`, surface the new planning-tab actions in `PlanningMode` help: add `k.Complete` and `k.PomStart` to the `PlanningMode` branch of `ShortHelp` and/or `FullHelp` so `?` on the planning tab documents `space` (toggle complete) and `s` (start pomodoro).
+- [X] T012 Update any `PlanningMode` help-rendering test in `internal/tui/help.go`/`*_test.go` if it asserts the exact set of planning-tab bindings, to include the two new actions.
+- [X] T013 Run the full module test suite from `services/twig/`: `go test ./...` — confirm all green.
 - [ ] T014 Execute `specs/029-plan-task-actions/quickstart.md` manually against `make dev` + a freshly built `./twig`: complete/uncomplete from plan, cross-tab consistency, FR-004 (same task on two entries), pomodoro from plan + cross-tab, and event/empty no-op cases.
 
 ---

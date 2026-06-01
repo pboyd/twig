@@ -488,6 +488,37 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, removePlanCmd(m.planClient, m.plan.day, entry.Id)
 		}
 
+	// Toggle complete on the linked task.
+	case key.Matches(msg, m.keys.Complete):
+		if len(m.plan.entries) > 0 {
+			entry := m.plan.entries[m.plan.cursor]
+			if entry.TaskId == 0 {
+				m.notice = "That's an event, not a task — nothing to check off here."
+				return m, nil
+			}
+			m.err = nil
+			complete := !entry.Completed
+			var notice string
+			if complete {
+				notice = "Nice — '" + entry.Name + "' is done and dusted."
+			} else {
+				notice = "Marked '" + entry.Name + "' as incomplete."
+			}
+			return m, completePlanTaskCmd(m.client, m.plan.day, entry.TaskId, complete, entry.Id, notice)
+		}
+
+	// Start a pomodoro for the linked task.
+	case key.Matches(msg, m.keys.PomStart):
+		if len(m.plan.entries) > 0 {
+			entry := m.plan.entries[m.plan.cursor]
+			if entry.TaskId == 0 {
+				m.notice = "Events don't run on tomatoes — pick a task to focus on."
+				return m, nil
+			}
+			m.err = nil
+			return m, startPomCmd(m.client, entry.TaskId, entry.Name)
+		}
+
 	// Pomodoro cancel — mirrors the Tasks tab handler.
 	case key.Matches(msg, m.keys.PomCancel):
 		if m.pom != nil && !m.pom.completed {
