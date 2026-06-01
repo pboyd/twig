@@ -142,5 +142,5 @@ Key frontend source paths:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/027-untimed-plan-entries/plan.md`.
+`specs/028-untimed-entries-polish/plan.md`.
 <!-- SPECKIT END -->
