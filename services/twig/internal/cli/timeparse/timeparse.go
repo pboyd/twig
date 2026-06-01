@@ -103,6 +103,20 @@ func ParseDuration(s string) (int, error) {
 	return 0, fmt.Errorf("unrecognized duration format %q; use Nh, Nm, or NhMm", s)
 }
 
+// ParseStartOrNull parses a start argument that may be a time or the sentinel
+// "null" (case-insensitive). Returns (minute, timed=true, nil) for a valid time,
+// (0, timed=false, nil) for "null", or an error for an unrecognized value.
+func ParseStartOrNull(s string) (minute int, timed bool, err error) {
+	if strings.EqualFold(strings.TrimSpace(s), "null") {
+		return 0, false, nil
+	}
+	m, err := ParseStart(s)
+	if err != nil {
+		return 0, false, err
+	}
+	return m, true, nil
+}
+
 // ParseDurationOrEnd parses either a duration ("90m", "1h30m") or an end
 // time-of-day ("15:00", "1500", "3:00pm"), returning the duration in minutes.
 // startMinute is required when an end time is given, to compute the difference.

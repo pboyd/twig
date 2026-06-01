@@ -17,6 +17,8 @@ import (
 	planv1connect "github.com/pboyd/twig/services/twig/gen/plan/v1/planv1connect"
 )
 
+func pint32(v int32) *int32 { return &v }
+
 // fakePlanService is an in-memory PlanServiceHandler for CLI tests.
 type fakePlanService struct {
 	planv1connect.UnimplementedPlanServiceHandler
@@ -72,11 +74,12 @@ func (s *fakePlanService) AddPlanTask(_ context.Context, req *connect.Request[pl
 func (s *fakePlanService) AddPlanEvent(_ context.Context, req *connect.Request[planv1.AddPlanEventRequest]) (*connect.Response[planv1.AddPlanEventResponse], error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	sm := req.Msg.StartMinute
 	e := &planv1.PlanEntry{
 		Day:            req.Msg.Day,
 		Id:             s.nextID(req.Msg.Day),
 		Name:           req.Msg.Name,
-		StartMinute:    req.Msg.StartMinute,
+		StartMinute:    &sm,
 		DurationMinute: req.Msg.DurationMinute,
 	}
 	s.entries[req.Msg.Day] = append(s.entries[req.Msg.Day], e)
@@ -265,8 +268,8 @@ func TestRunPlanShow_HappyPath(t *testing.T) {
 	day := "2026-05-21"
 	h.svc.mu.Lock()
 	h.svc.entries[day] = []*planv1.PlanEntry{
-		{Day: day, Id: 1, Name: "Work", StartMinute: 480, DurationMinute: 60},
-		{Day: day, Id: 2, Name: "Lunch", StartMinute: 720, DurationMinute: 60},
+		{Day: day, Id: 1, Name: "Work", StartMinute: pint32(480), DurationMinute: 60},
+		{Day: day, Id: 2, Name: "Lunch", StartMinute: pint32(720), DurationMinute: 60},
 	}
 	h.svc.mu.Unlock()
 
@@ -306,7 +309,7 @@ func TestRunPlanRm_HappyPath(t *testing.T) {
 	h := newPlanTestHarness(t)
 	day := "2026-05-21"
 	h.svc.mu.Lock()
-	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: 480, DurationMinute: 30}}
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 30}}
 	h.svc.mu.Unlock()
 
 	stdout, stderr, code := runPlanCmd(runPlanRm, h.client, day, []string{"1"})
@@ -333,7 +336,7 @@ func TestRunPlanRename_HappyPath(t *testing.T) {
 	h := newPlanTestHarness(t)
 	day := "2026-05-21"
 	h.svc.mu.Lock()
-	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "Old", StartMinute: 480, DurationMinute: 30}}
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "Old", StartMinute: pint32(480), DurationMinute: 30}}
 	h.svc.mu.Unlock()
 
 	stdout, stderr, code := runPlanCmd(runPlanRename, h.client, day, []string{"1", "New"})
@@ -349,7 +352,7 @@ func TestRunPlanMv_HappyPath(t *testing.T) {
 	h := newPlanTestHarness(t)
 	day := "2026-05-21"
 	h.svc.mu.Lock()
-	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: 480, DurationMinute: 60}}
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 60}}
 	h.svc.mu.Unlock()
 
 	stdout, stderr, code := runPlanCmd(runPlanMv, h.client, day, []string{"1", "10:00am", "45m"})
@@ -365,7 +368,7 @@ func TestRunPlanMv_DurationOmitted_Forwards_Zero(t *testing.T) {
 	h := newPlanTestHarness(t)
 	day := "2026-05-21"
 	h.svc.mu.Lock()
-	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: 480, DurationMinute: 60}}
+	h.svc.entries[day] = []*planv1.PlanEntry{{Day: day, Id: 1, Name: "X", StartMinute: pint32(480), DurationMinute: 60}}
 	h.svc.mu.Unlock()
 
 	runPlanCmd(runPlanMv, h.client, day, []string{"1", "10:00am"})
@@ -411,5 +414,105 @@ func TestRunPlanClear_NoArg_UsesCurrentTime(t *testing.T) {
 	m := h.svc.lastClearRequest.StartMinute
 	if m < 0 || m >= 1440 {
 		t.Errorf("start_minute %d out of valid range", m)
+	}
+}
+
+// ---- T017: Untimed CLI add/show tests ----
+
+// TestRunPlanTask_UntimedNoArgs verifies that omitting start creates an untimed entry
+// (StartMinute nil in the request sent to the server).
+func TestRunPlanTask_UntimedNoArgs(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+
+	stdout, stderr, code := runPlanCmd(runPlanTask, h.client, day, []string{"5"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	_ = stdout
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	entries := h.svc.entries[day]
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].StartMinute != nil {
+		t.Errorf("untimed add: StartMinute = %v, want nil", entries[0].StartMinute)
+	}
+}
+
+// TestRunPlanTask_UntimedNullSentinel verifies that "null" in the start slot creates an untimed entry.
+func TestRunPlanTask_UntimedNullSentinel(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+
+	_, _, code := runPlanCmd(runPlanTask, h.client, day, []string{"5", "null"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 with 'null' sentinel")
+	}
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	if entries := h.svc.entries[day]; len(entries) != 1 || entries[0].StartMinute != nil {
+		t.Errorf("null sentinel: expected untimed entry, got %v", entries)
+	}
+}
+
+// TestRunPlanTask_UntimedWithDuration verifies that "null <dur>" sets the duration on an untimed entry.
+func TestRunPlanTask_UntimedWithDuration(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+
+	_, _, code := runPlanCmd(runPlanTask, h.client, day, []string{"5", "null", "45m"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 with 'null 45m'")
+	}
+
+	h.svc.mu.Lock()
+	defer h.svc.mu.Unlock()
+	entries := h.svc.entries[day]
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].DurationMinute != 45 {
+		t.Errorf("null 45m: duration = %d, want 45", entries[0].DurationMinute)
+	}
+	if entries[0].StartMinute != nil {
+		t.Errorf("null 45m: StartMinute = %v, want nil", entries[0].StartMinute)
+	}
+}
+
+// TestRunPlanShow_UntimedSection verifies that untimed entries appear before the grid.
+func TestRunPlanShow_UntimedSection(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	h.svc.mu.Lock()
+	// One untimed entry, one timed entry.
+	h.svc.entries[day] = []*planv1.PlanEntry{
+		{Day: day, Id: 1, Name: "Untimed task", DurationMinute: 30},                      // nil StartMinute
+		{Day: day, Id: 2, Name: "Timed event", StartMinute: pint32(480), DurationMinute: 60}, // 08:00
+	}
+	h.svc.mu.Unlock()
+
+	stdout, stderr, code := runPlanShowCmd(runPlanShow, h.client, day)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+
+	// The untimed entry must appear somewhere in the output.
+	if !strings.Contains(stdout, "Untimed task") {
+		t.Errorf("untimed entry name not in output:\n%s", stdout)
+	}
+	// The grid must also appear (timed entries).
+	if !strings.Contains(stdout, "08:00") {
+		t.Errorf("grid not in output:\n%s", stdout)
+	}
+
+	// Untimed section must appear before the grid (earlier byte offset).
+	untimedPos := strings.Index(stdout, "Untimed task")
+	gridPos := strings.Index(stdout, "08:00")
+	if untimedPos >= gridPos {
+		t.Errorf("untimed section must appear before grid; untimedPos=%d gridPos=%d", untimedPos, gridPos)
 	}
 }

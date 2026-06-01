@@ -35,8 +35,8 @@ type PlanEntry struct {
 	// Display name override. Empty string when omitted; clients should fall back
 	// to the linked task's name in that case.
 	Name string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	// Minutes since local midnight on `day`. Range: 0..1439.
-	StartMinute int32 `protobuf:"varint,5,opt,name=start_minute,json=startMinute,proto3" json:"start_minute,omitempty"`
+	// Minutes since local midnight on `day`. Range: 0..1439. Absent means untimed (task entries only).
+	StartMinute *int32 `protobuf:"varint,5,opt,name=start_minute,json=startMinute,proto3,oneof" json:"start_minute,omitempty"`
 	// Length of the entry, in minutes. > 0, and start_minute + duration_minute <= 1440.
 	DurationMinute int32 `protobuf:"varint,6,opt,name=duration_minute,json=durationMinute,proto3" json:"duration_minute,omitempty"`
 	// True iff this entry references a completed task (task_id != 0 and tasks.completed_at IS NOT NULL).
@@ -105,8 +105,8 @@ func (x *PlanEntry) GetName() string {
 }
 
 func (x *PlanEntry) GetStartMinute() int32 {
-	if x != nil {
-		return x.StartMinute
+	if x != nil && x.StartMinute != nil {
+		return *x.StartMinute
 	}
 	return 0
 }
@@ -214,10 +214,11 @@ func (x *ListPlanEntriesResponse) GetEntries() []*PlanEntry {
 }
 
 type AddPlanTaskRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	Day         string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
-	TaskId      int64                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	StartMinute int32                  `protobuf:"varint,3,opt,name=start_minute,json=startMinute,proto3" json:"start_minute,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Day    string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
+	TaskId int64                  `protobuf:"varint,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	// Absent means create an untimed entry; present means schedule at this minute.
+	StartMinute *int32 `protobuf:"varint,3,opt,name=start_minute,json=startMinute,proto3,oneof" json:"start_minute,omitempty"`
 	// 0 means "let the server choose": (estimate - completed) * 30 if positive, else 30.
 	DurationMinute int32 `protobuf:"varint,4,opt,name=duration_minute,json=durationMinute,proto3" json:"duration_minute,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -269,8 +270,8 @@ func (x *AddPlanTaskRequest) GetTaskId() int64 {
 }
 
 func (x *AddPlanTaskRequest) GetStartMinute() int32 {
-	if x != nil {
-		return x.StartMinute
+	if x != nil && x.StartMinute != nil {
+		return *x.StartMinute
 	}
 	return 0
 }
@@ -632,10 +633,11 @@ func (x *RenamePlanEntryResponse) GetEntry() *PlanEntry {
 }
 
 type MovePlanEntryRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	Day         string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
-	Id          int32                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	StartMinute int32                  `protobuf:"varint,3,opt,name=start_minute,json=startMinute,proto3" json:"start_minute,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Day   string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
+	Id    int32                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	// Absent means unschedule (make untimed), preserving duration. Present means move/schedule.
+	StartMinute *int32 `protobuf:"varint,3,opt,name=start_minute,json=startMinute,proto3,oneof" json:"start_minute,omitempty"`
 	// 0 means "keep the existing duration unchanged".
 	DurationMinute int32 `protobuf:"varint,4,opt,name=duration_minute,json=durationMinute,proto3" json:"duration_minute,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -687,8 +689,8 @@ func (x *MovePlanEntryRequest) GetId() int32 {
 }
 
 func (x *MovePlanEntryRequest) GetStartMinute() int32 {
-	if x != nil {
-		return x.StartMinute
+	if x != nil && x.StartMinute != nil {
+		return *x.StartMinute
 	}
 	return 0
 }
@@ -854,24 +856,26 @@ var File_plan_v1_plan_proto protoreflect.FileDescriptor
 
 const file_plan_v1_plan_proto_rawDesc = "" +
 	"\n" +
-	"\x12plan/v1/plan.proto\x12\aplan.v1\"\xc4\x01\n" +
+	"\x12plan/v1/plan.proto\x12\aplan.v1\"\xda\x01\n" +
 	"\tPlanEntry\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x05R\x02id\x12\x17\n" +
 	"\atask_id\x18\x03 \x01(\x03R\x06taskId\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\x12!\n" +
-	"\fstart_minute\x18\x05 \x01(\x05R\vstartMinute\x12'\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12&\n" +
+	"\fstart_minute\x18\x05 \x01(\x05H\x00R\vstartMinute\x88\x01\x01\x12'\n" +
 	"\x0fduration_minute\x18\x06 \x01(\x05R\x0edurationMinute\x12\x1c\n" +
-	"\tcompleted\x18\a \x01(\bR\tcompleted\"*\n" +
+	"\tcompleted\x18\a \x01(\bR\tcompletedB\x0f\n" +
+	"\r_start_minute\"*\n" +
 	"\x16ListPlanEntriesRequest\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\"G\n" +
 	"\x17ListPlanEntriesResponse\x12,\n" +
-	"\aentries\x18\x01 \x03(\v2\x12.plan.v1.PlanEntryR\aentries\"\x8b\x01\n" +
+	"\aentries\x18\x01 \x03(\v2\x12.plan.v1.PlanEntryR\aentries\"\xa1\x01\n" +
 	"\x12AddPlanTaskRequest\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x17\n" +
-	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12!\n" +
-	"\fstart_minute\x18\x03 \x01(\x05R\vstartMinute\x12'\n" +
-	"\x0fduration_minute\x18\x04 \x01(\x05R\x0edurationMinute\"?\n" +
+	"\atask_id\x18\x02 \x01(\x03R\x06taskId\x12&\n" +
+	"\fstart_minute\x18\x03 \x01(\x05H\x00R\vstartMinute\x88\x01\x01\x12'\n" +
+	"\x0fduration_minute\x18\x04 \x01(\x05R\x0edurationMinuteB\x0f\n" +
+	"\r_start_minute\"?\n" +
 	"\x13AddPlanTaskResponse\x12(\n" +
 	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"\x87\x01\n" +
 	"\x13AddPlanEventRequest\x12\x10\n" +
@@ -890,12 +894,13 @@ const file_plan_v1_plan_proto_rawDesc = "" +
 	"\x02id\x18\x02 \x01(\x05R\x02id\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"C\n" +
 	"\x17RenamePlanEntryResponse\x12(\n" +
-	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"\x84\x01\n" +
+	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"\x9a\x01\n" +
 	"\x14MovePlanEntryRequest\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\x05R\x02id\x12!\n" +
-	"\fstart_minute\x18\x03 \x01(\x05R\vstartMinute\x12'\n" +
-	"\x0fduration_minute\x18\x04 \x01(\x05R\x0edurationMinute\"A\n" +
+	"\x02id\x18\x02 \x01(\x05R\x02id\x12&\n" +
+	"\fstart_minute\x18\x03 \x01(\x05H\x00R\vstartMinute\x88\x01\x01\x12'\n" +
+	"\x0fduration_minute\x18\x04 \x01(\x05R\x0edurationMinuteB\x0f\n" +
+	"\r_start_minute\"A\n" +
 	"\x15MovePlanEntryResponse\x12(\n" +
 	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"G\n" +
 	"\x10ClearPlanRequest\x12\x10\n" +
@@ -975,6 +980,9 @@ func file_plan_v1_plan_proto_init() {
 	if File_plan_v1_plan_proto != nil {
 		return
 	}
+	file_plan_v1_plan_proto_msgTypes[0].OneofWrappers = []any{}
+	file_plan_v1_plan_proto_msgTypes[3].OneofWrappers = []any{}
+	file_plan_v1_plan_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

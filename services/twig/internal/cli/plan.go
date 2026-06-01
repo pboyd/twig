@@ -77,13 +77,13 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: twig plan [--date YYYY-MM-DD] [subcommand]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands:")
-	fmt.Fprintln(w, "  (none)                      Show today's plan as a grid")
-	fmt.Fprintln(w, "  task <id> <start> [dur|end]     Schedule a task")
-	fmt.Fprintln(w, "  event <name> <start> [dur|end]  Block off time")
-	fmt.Fprintln(w, "  rm <n>                          Remove entry n")
-	fmt.Fprintln(w, "  rename <n> <name>               Rename entry n")
-	fmt.Fprintln(w, "  mv <n> <start> [dur|end]        Move entry n")
-	fmt.Fprintln(w, "  clear [start]                   Clear entries from start (default: now)")
+	fmt.Fprintln(w, "  (none)                              Show today's plan")
+	fmt.Fprintln(w, "  task <id> [start|null] [dur|end]    Schedule a task (omit start or use 'null' to add untimed)")
+	fmt.Fprintln(w, "  event <name> <start> [dur|end]      Block off time (start required)")
+	fmt.Fprintln(w, "  rm <n>                              Remove entry n")
+	fmt.Fprintln(w, "  rename <n> <name>                   Rename entry n")
+	fmt.Fprintln(w, "  mv <n> <start> [dur|end]            Move entry n")
+	fmt.Fprintln(w, "  clear [start]                       Clear entries from start (default: now)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
@@ -91,6 +91,7 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "Time formats:     13:15  1315  1:15pm  01:15 PM")
 	fmt.Fprintln(w, "Duration formats: 90m  1h  2h  1h30m")
 	fmt.Fprintln(w, "End time:         use any time format in place of a duration")
+	fmt.Fprintln(w, "Untimed sentinel: null (case-insensitive) in the start slot")
 }
 
 func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
@@ -108,13 +109,23 @@ func runPlanShow(client planv1connect.PlanServiceClient, day string) int {
 		}
 	}
 
-	fmt.Print(RenderGrid(resp.Msg.Entries, day, time.Now(), width, isTTY, GridOptions{}))
+	var untimed, timed []*planv1.PlanEntry
+	for _, e := range resp.Msg.Entries {
+		if e.StartMinute == nil {
+			untimed = append(untimed, e)
+		} else {
+			timed = append(timed, e)
+		}
+	}
+
+	fmt.Print(RenderUntimed(untimed, width, isTTY, GridOptions{}))
+	fmt.Print(RenderGrid(timed, day, time.Now(), width, isTTY, GridOptions{}))
 	return 0
 }
 
 func runPlanTask(client planv1connect.PlanServiceClient, day string, args []string) int {
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: twig plan task <task_id> <start> [duration|end]")
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage: twig plan task <task_id> [start|null] [dur|end]")
 		return 1
 	}
 	taskID, err := strconv.ParseInt(args[0], 10, 64)
@@ -122,26 +133,48 @@ func runPlanTask(client planv1connect.PlanServiceClient, day string, args []stri
 		fmt.Fprintln(os.Stderr, "error: task_id must be an integer")
 		return 1
 	}
-	start, err := timeparse.ParseStart(args[1])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		return 1
+
+	req := &planv1.AddPlanTaskRequest{
+		Day:    day,
+		TaskId: taskID,
 	}
-	var dur int
-	if len(args) >= 3 {
-		dur, err = timeparse.ParseDurationOrEnd(args[2], start)
+
+	// Parse optional start argument.
+	argIdx := 1
+	if argIdx < len(args) {
+		minute, isTimed, err := timeparse.ParseStartOrNull(args[argIdx])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 1
 		}
+		if isTimed {
+			sm := int32(minute)
+			req.StartMinute = &sm
+			argIdx++
+			// Parse optional duration/end.
+			if argIdx < len(args) {
+				dur, err := timeparse.ParseDurationOrEnd(args[argIdx], minute)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "error:", err)
+					return 1
+				}
+				req.DurationMinute = int32(dur)
+			}
+		} else {
+			// null sentinel: start is absent; trailing arg is duration.
+			argIdx++
+			if argIdx < len(args) {
+				dur, err := timeparse.ParseDuration(args[argIdx])
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "error:", err)
+					return 1
+				}
+				req.DurationMinute = int32(dur)
+			}
+		}
 	}
 
-	_, err = client.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
-		Day:            day,
-		TaskId:         taskID,
-		StartMinute:    int32(start),
-		DurationMinute: int32(dur),
-	}))
+	_, err = client.AddPlanTask(context.Background(), connect.NewRequest(req))
 	if err != nil {
 		return printPlanError(err)
 	}
@@ -252,10 +285,11 @@ func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string
 		}
 	}
 
+	sm := int32(start)
 	_, err = client.MovePlanEntry(context.Background(), connect.NewRequest(&planv1.MovePlanEntryRequest{
 		Day:            day,
 		Id:             int32(n),
-		StartMinute:    int32(start),
+		StartMinute:    &sm,
 		DurationMinute: int32(dur),
 	}))
 	if err != nil {

@@ -42,8 +42,8 @@ message PlanEntry {
   // Display name override. Empty string when omitted; clients should fall back
   // to the linked task's name in that case.
   string name = 4;
-  // Minutes since local midnight on `day`. Range: 0..1439.
-  int32 start_minute = 5;
+  // Minutes since local midnight on `day`. Range: 0..1439. Absent means untimed (task entries only).
+  optional int32 start_minute = 5;
   // Length of the entry, in minutes. > 0, and start_minute + duration_minute <= 1440.
   int32 duration_minute = 6;
   // True iff this entry references a completed task (task_id != 0 and tasks.completed_at IS NOT NULL).
@@ -57,7 +57,8 @@ message ListPlanEntriesResponse { repeated PlanEntry entries = 1; }
 message AddPlanTaskRequest {
   string day = 1;
   int64 task_id = 2;
-  int32 start_minute = 3;
+  // Absent means create an untimed entry; present means schedule at this minute.
+  optional int32 start_minute = 3;
   // 0 means "let the server choose": (estimate - completed) * 30 if positive, else 30.
   int32 duration_minute = 4;
 }
@@ -81,7 +82,8 @@ message RenamePlanEntryResponse { PlanEntry entry = 1; }
 message MovePlanEntryRequest {
   string day = 1;
   int32 id = 2;
-  int32 start_minute = 3;
+  // Absent means unschedule (make untimed), preserving duration. Present means move/schedule.
+  optional int32 start_minute = 3;
   // 0 means "keep the existing duration unchanged".
   int32 duration_minute = 4;
 }

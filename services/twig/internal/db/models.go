@@ -22,7 +22,7 @@ type PlanEntry struct {
 	ID             int32
 	TaskID         pgtype.Int8
 	Name           pgtype.Text
-	StartMinute    int16
+	StartMinute    pgtype.Int2
 	DurationMinute int16
 }
 

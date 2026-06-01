@@ -61,7 +61,7 @@ func TestPlanningView_RendersGrid(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 30},
+		{Day: today, Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 
 	now := time.Now()
@@ -151,7 +151,7 @@ func TestPlanningView_CompletedStrikethrough(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Done", StartMinute: 540, DurationMinute: 120, Completed: true},
+		{Day: today, Id: 1, Name: "Done", StartMinute: pint32(540), DurationMinute: 120, Completed: true},
 	}
 
 	now := time.Now()
@@ -172,8 +172,8 @@ func TestPlanGrid_SelectedID(t *testing.T) {
 	m := ExportNewModel(nil, nil)
 	m.plan.day = today
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "First", StartMinute: 540},
-		{Id: 2, Name: "Second", StartMinute: 600},
+		{Id: 1, Name: "First", StartMinute: pint32(540)},
+		{Id: 2, Name: "Second", StartMinute: pint32(600)},
 	}
 	m.plan.cursor = 1
 
@@ -270,7 +270,7 @@ func TestViewPlanning_TwoPaneLayout_Unstyled(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 30},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 	m.plan.cursor = 0
 
@@ -301,7 +301,7 @@ func TestViewPlanning_TwoPaneLayout_Styled(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 30},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 	m.plan.cursor = 0
 
@@ -350,7 +350,7 @@ func TestRenderPlanDetail_NilEntry(t *testing.T) {
 func TestRenderPlanDetail_EventEntry(t *testing.T) {
 	entry := &planv1.PlanEntry{
 		Name:           "Team sync",
-		StartMinute:    540, // 09:00
+		StartMinute:    pint32(540), // 09:00
 		DurationMinute: 30,
 		TaskId:         0, // event, not a task
 	}
@@ -372,7 +372,7 @@ func TestRenderPlanDetail_EventEntry(t *testing.T) {
 func TestRenderPlanDetail_TaskEntry(t *testing.T) {
 	entry := &planv1.PlanEntry{
 		Name:           "Write tests",
-		StartMinute:    600, // 10:00
+		StartMinute:    pint32(600), // 10:00
 		DurationMinute: 60,
 		TaskId:         42,
 		Completed:      false,
@@ -395,7 +395,7 @@ func TestRenderPlanDetail_TaskEntry(t *testing.T) {
 func TestRenderPlanDetail_CompletedTask(t *testing.T) {
 	entry := &planv1.PlanEntry{
 		Name:           "Done",
-		StartMinute:    600,
+		StartMinute:    pint32(600),
 		DurationMinute: 60,
 		TaskId:         5,
 		Completed:      true,
@@ -410,7 +410,7 @@ func TestRenderPlanDetail_CompletedTask(t *testing.T) {
 func TestRenderPlanDetail_Unstyled(t *testing.T) {
 	entry := &planv1.PlanEntry{
 		Name:           "Focus",
-		StartMinute:    480,
+		StartMinute:    pint32(480),
 		DurationMinute: 120,
 		TaskId:         0,
 	}
@@ -518,7 +518,7 @@ func TestViewPlanning_FormInRightPane_Styled(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 30},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 	m.plan.cursor = 0
 	m.initEditForm()
@@ -546,7 +546,7 @@ func TestViewPlanning_FormInRightPane_Unstyled(t *testing.T) {
 	m.plan.day = today
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 540, DurationMinute: 60},
+		{Id: 1, Name: "Focus", StartMinute: pint32(540), DurationMinute: 60},
 	}
 	m.plan.cursor = 0
 	m.initAddEventForm()
@@ -574,7 +574,7 @@ func TestPlanGridOptions_CursorBgOnLightBg(t *testing.T) {
 	m.styled = true
 	m.hasDarkBackground = false
 	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Task", StartMinute: 540, DurationMinute: 30},
+		{Day: today, Id: 1, Name: "Task", StartMinute: pint32(540), DurationMinute: 30},
 	}, 0)
 	opts := m.planGridOptions()
 	if opts.SelectionStyle == nil {
@@ -598,7 +598,7 @@ func TestPlanGridOptions_CursorBgOnDarkBg(t *testing.T) {
 	m.styled = true
 	m.hasDarkBackground = true
 	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Task", StartMinute: 540, DurationMinute: 30},
+		{Day: today, Id: 1, Name: "Task", StartMinute: pint32(540), DurationMinute: 30},
 	}, 0)
 	opts := m.planGridOptions()
 	if opts.SelectionStyle == nil {

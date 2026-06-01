@@ -26,8 +26,8 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 	winEnd := 17 * 60
 
 	for _, e := range entries {
-		sn := snapDown15(int(e.StartMinute))
-		se := snapUp15(int(e.StartMinute) + int(e.DurationMinute))
+		sn := snapDown15(int(e.GetStartMinute()))
+		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
 		if h := (sn / 60) * 60; h < winStart {
 			winStart = h
 		}
@@ -59,8 +59,8 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 	layouts := make([]entryLayout, 0, len(entries))
 	for _, e := range entries {
-		sn := snapDown15(int(e.StartMinute))
-		se := snapUp15(int(e.StartMinute) + int(e.DurationMinute))
+		sn := snapDown15(int(e.GetStartMinute()))
+		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
 		if se < sn+15 {
 			se = sn + 15
 		}
@@ -203,7 +203,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			label = applyCompletion(label, single.e, isTTY)
 			isSelected := isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID)
 			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+label+"┫") + padChar + rightRail
+				line = gutter + leftRail + padChar + "┣" + opts.SelectionStyle(label) + "┫" + padChar + rightRail
 			} else {
 				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
 				if isSelected {
@@ -213,32 +213,24 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 		case top != nil:
 			isSelected := isTTY && opts.SelectedID != 0 && top.e.Id == opts.SelectedID
-			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┏"+hHeavy+"┓") + padChar + rightRail
-			} else {
-				line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
-				if isSelected {
-					line = applySelection(line, top.e.Id, opts, isTTY)
-				}
+			line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
+			if isSelected {
+				line = applySelection(line, top.e.Id, opts, isTTY)
 			}
 
 		case bot != nil:
 			isSelected := isTTY && opts.SelectedID != 0 && bot.e.Id == opts.SelectedID
-			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┗"+hHeavy+"┛") + padChar + rightRail
-			} else {
-				line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
-				if isSelected {
-					line = applySelection(line, bot.e.Id, opts, isTTY)
-				}
+			line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
+			if isSelected {
+				line = applySelection(line, bot.e.Id, opts, isTTY)
 			}
 
 		case single != nil:
 			label := singleLabelContent(single.labelRows, contentWidth)
 			label = applyCompletion(label, single.e, isTTY)
 			if isTTY && opts.SelectedID != 0 && single.e.Id == opts.SelectedID && opts.SelectionStyle != nil {
-				// Include border rails in the styled region.
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+label+"┫") + padChar + rightRail
+				// Style only the content cell, not the border rails.
+				line = gutter + leftRail + padChar + "┣" + opts.SelectionStyle(label) + "┫" + padChar + rightRail
 			} else {
 				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
 				line = applySelection(line, single.e.Id, opts, isTTY)
@@ -252,6 +244,74 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			}
 		}
 		sb.WriteString(line + "\n")
+	}
+	return sb.String()
+}
+
+// RenderUntimed renders untimed plan entries as stacked dark boxes above the day
+// grid. Each entry occupies one display line per 15 minutes of duration. Returns
+// an empty string when entries is empty. Uses the same geometry as RenderGrid so
+// the two outputs align when printed consecutively.
+func RenderUntimed(entries []*planv1.PlanEntry, width int, isTTY bool, opts GridOptions) string {
+	if len(entries) == 0 {
+		return ""
+	}
+
+	// Same geometry as RenderGrid.
+	boxWidth := width - 11 // gutter(7)+leftRail(1)+leftPad(1)+rightPad(1)+rightRail(1)
+	if boxWidth < 1 {
+		boxWidth = 1
+	}
+	contentWidth := boxWidth - 2
+	if contentWidth < 0 {
+		contentWidth = 0
+	}
+	hHeavy := strings.Repeat("━", contentWidth)
+
+	var sb strings.Builder
+	for _, e := range entries {
+		rows := int(e.DurationMinute) / 15
+		if rows < 1 {
+			rows = 1
+		}
+
+		var labelText string
+		if opts.HideID {
+			labelText = fmt.Sprintf("%s (%dmin)", e.Name, e.DurationMinute)
+		} else {
+			labelText = fmt.Sprintf("[%d] %s (%dmin)", e.Id, e.Name, e.DurationMinute)
+		}
+
+		isSelected := isTTY && opts.SelectedID != 0 && e.Id == opts.SelectedID
+
+		for r := 0; r < rows; r++ {
+			var line string
+			gutter := "       "
+			if r == 0 {
+				label := singleLabelContent([]string{labelText}, contentWidth)
+				label = applyCompletion(label, e, isTTY)
+				if isSelected && opts.SelectionStyle != nil {
+					line = gutter + "│ " + "┣" + opts.SelectionStyle(label) + "┫" + " │"
+				} else {
+					line = gutter + "│ ┣" + label + "┫ │"
+					if isSelected {
+						line = applySelection(line, e.Id, opts, isTTY)
+					}
+				}
+			} else if r == rows-1 {
+				line = gutter + "│ ┗" + hHeavy + "┛ │"
+				if isSelected {
+					line = applySelection(line, e.Id, opts, isTTY)
+				}
+			} else {
+				content := padRight("", contentWidth)
+				line = gutter + "│ ┃" + content + "┃ │"
+				if isSelected {
+					line = applySelection(line, e.Id, opts, isTTY)
+				}
+			}
+			sb.WriteString(line + "\n")
+		}
 	}
 	return sb.String()
 }

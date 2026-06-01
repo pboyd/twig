@@ -4,7 +4,7 @@ SELECT plan_entries.*,
 FROM plan_entries
 LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
 WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
-ORDER BY plan_entries.start_minute;
+ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC;
 
 -- name: GetPlanEntry :one
 SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3;

@@ -27,7 +27,7 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **Purpose**: Confirm the toolchain needed for code generation and a green baseline.
 
-- [ ] T001 Confirm `buf` and `sqlc` CLIs are available and capture a green baseline: `cd services/twig && go test ./...`
+- [X] T001 Confirm `buf` and `sqlc` CLIs are available and capture a green baseline: `cd services/twig && go test ./...`
 
 ---
 
@@ -37,16 +37,16 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **⚠️ CRITICAL**: This is the shared contract + backend. It touches `proto/`, `db/`, and `internal/handler/plan.go` — files every story builds on.
 
-- [ ] T002 Update `proto/plan/v1/plan.proto`: change `start_minute` to `optional int32` on `PlanEntry` (field 5), `AddPlanTaskRequest` (field 3), and `MovePlanEntryRequest` (field 3); leave `AddPlanEventRequest.start_minute` required — per `contracts/plan-service.md`
-- [ ] T003 Regenerate ConnectRPC stubs: `cd services/twig && make proto` (updates `gen/plan/v1/`) — depends on T002
-- [ ] T004 [P] Add migration `db/migrations/000007_plan_untimed.up.sql` (`ALTER COLUMN start_minute DROP NOT NULL`; add `CHECK (task_id IS NOT NULL OR start_minute IS NOT NULL)`) and `000007_plan_untimed.down.sql` (drop constraint; `SET NOT NULL`) — per `data-model.md`
-- [ ] T005 [P] Edit `db/queries/plan.sql`: make `start_minute` nullable in `InsertPlanEntry` and `UpdatePlanEntryTime`; change `ListPlanEntriesForDay` to `ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC`
-- [ ] T006 Regenerate DB layer: `cd services/twig && sqlc generate` (updates `internal/db/`) — depends on T005
-- [ ] T007 In `internal/handler/plan.go` `AddPlanTask`: when `start_minute` is absent, create an untimed entry — skip start-range, midnight, and overlap checks; insert `start_minute` as NULL (`pgtype.Int2{Valid:false}`); keep the existing default-duration logic — depends on T003, T006
-- [ ] T008 In `internal/handler/plan.go` `MovePlanEntry`: when `start_minute` is absent, unschedule — set stored `start_minute` to NULL via `UpdatePlanEntryTime`, preserve duration (`duration_minute==0` keeps it), skip the overlap check; present-start path unchanged — depends on T003, T006
-- [ ] T009 In `internal/handler/plan.go` `ListPlanEntries` and `dbPlanEntryToProto`: map a NULL stored `start_minute` to an absent proto `start_minute` (set the optional field only when valid); duration/name/completed unchanged — depends on T003, T006
-- [ ] T010 In `internal/handler/plan.go` `AddPlanEvent`: keep events always-timed — confirm a missing/invalid start is rejected with a friendly `InvalidArgument` (DB `event_timed` CHECK is the backstop) — depends on T003, T006
-- [ ] T011 [P] Handler tests in `internal/handler/plan_test.go`: untimed `AddPlanTask` (NULL start, default duration), `MovePlanEntry` schedule then unschedule round-trip (duration preserved), `ListPlanEntries` returns untimed with absent start ordered first, and `AddPlanEvent` still rejects a missing start — depends on T007–T010
+- [X] T002 Update `proto/plan/v1/plan.proto`: change `start_minute` to `optional int32` on `PlanEntry` (field 5), `AddPlanTaskRequest` (field 3), and `MovePlanEntryRequest` (field 3); leave `AddPlanEventRequest.start_minute` required — per `contracts/plan-service.md`
+- [X] T003 Regenerate ConnectRPC stubs: `cd services/twig && make proto` (updates `gen/plan/v1/`) — depends on T002
+- [X] T004 [P] Add migration `db/migrations/000007_plan_untimed.up.sql` (`ALTER COLUMN start_minute DROP NOT NULL`; add `CHECK (task_id IS NOT NULL OR start_minute IS NOT NULL)`) and `000007_plan_untimed.down.sql` (drop constraint; `SET NOT NULL`) — per `data-model.md`
+- [X] T005 [P] Edit `db/queries/plan.sql`: make `start_minute` nullable in `InsertPlanEntry` and `UpdatePlanEntryTime`; change `ListPlanEntriesForDay` to `ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC`
+- [X] T006 Regenerate DB layer: `cd services/twig && sqlc generate` (updates `internal/db/`) — depends on T005
+- [X] T007 In `internal/handler/plan.go` `AddPlanTask`: when `start_minute` is absent, create an untimed entry — skip start-range, midnight, and overlap checks; insert `start_minute` as NULL (`pgtype.Int2{Valid:false}`); keep the existing default-duration logic — depends on T003, T006
+- [X] T008 In `internal/handler/plan.go` `MovePlanEntry`: when `start_minute` is absent, unschedule — set stored `start_minute` to NULL via `UpdatePlanEntryTime`, preserve duration (`duration_minute==0` keeps it), skip the overlap check; present-start path unchanged — depends on T003, T006
+- [X] T009 In `internal/handler/plan.go` `ListPlanEntries` and `dbPlanEntryToProto`: map a NULL stored `start_minute` to an absent proto `start_minute` (set the optional field only when valid); duration/name/completed unchanged — depends on T003, T006
+- [X] T010 In `internal/handler/plan.go` `AddPlanEvent`: keep events always-timed — confirm a missing/invalid start is rejected with a friendly `InvalidArgument` (DB `event_timed` CHECK is the backstop) — depends on T003, T006
+- [X] T011 [P] Handler tests in `internal/handler/plan_test.go`: untimed `AddPlanTask` (NULL start, default duration), `MovePlanEntry` schedule then unschedule round-trip (duration preserved), `ListPlanEntries` returns untimed with absent start ordered first, and `AddPlanEvent` still rejects a missing start — depends on T007–T010
 
 **Checkpoint**: `cd services/twig && go test ./internal/handler/... && go build ./cmd/server` green — the API supports untimed entries end-to-end.
 
@@ -58,12 +58,12 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **Independent Test**: `twig plan task <id>` then `twig plan` — the untimed entry appears in an untimed section above the grid, with a duration and no time; `twig plan task <id> null 45m` honors the duration.
 
-- [ ] T012 [P] [US1] Add `ParseStartOrNull(s) (minute int, timed bool, err error)` (case-insensitive `null`) in `internal/cli/timeparse/` with table tests
-- [ ] T013 [P] [US1] Add shared `RenderUntimed(entries, width, isTTY, opts)` in `internal/cli/plan_grid.go` — dark box per entry, one line per 15 minutes of duration, reusing the grid's style constants and `SelectedID` highlight; with tests in `internal/cli/plan_grid_test.go`
-- [ ] T014 [US1] In `internal/cli/plan.go` `runPlanTask`: make the start arg optional and accept `null` via `ParseStartOrNull`; when untimed, send `AddPlanTaskRequest` with start absent and the trailing arg parsed as a duration — depends on T012
-- [ ] T015 [US1] In `internal/cli/plan.go` `runPlanShow`: render untimed entries (via `RenderUntimed`) in a section above the grid and pass only timed entries to `RenderGrid` — depends on T013
-- [ ] T016 [US1] In `internal/cli/plan.go` `printPlanUsage`: update the `task` line to `task <id> [start|null] [dur|end]` and note untimed behavior, in the warm house tone (Principle IV)
-- [ ] T017 [US1] CLI tests in `internal/cli/plan_test.go`: untimed add path and `runPlanShow` untimed-section output (timed vs untimed placement)
+- [X] T012 [P] [US1] Add `ParseStartOrNull(s) (minute int, timed bool, err error)` (case-insensitive `null`) in `internal/cli/timeparse/` with table tests
+- [X] T013 [P] [US1] Add shared `RenderUntimed(entries, width, isTTY, opts)` in `internal/cli/plan_grid.go` — dark box per entry, one line per 15 minutes of duration, reusing the grid's style constants and `SelectedID` highlight; with tests in `internal/cli/plan_grid_test.go`
+- [X] T014 [US1] In `internal/cli/plan.go` `runPlanTask`: make the start arg optional and accept `null` via `ParseStartOrNull`; when untimed, send `AddPlanTaskRequest` with start absent and the trailing arg parsed as a duration — depends on T012
+- [X] T015 [US1] In `internal/cli/plan.go` `runPlanShow`: render untimed entries (via `RenderUntimed`) in a section above the grid and pass only timed entries to `RenderGrid` — depends on T013
+- [X] T016 [US1] In `internal/cli/plan.go` `printPlanUsage`: update the `task` line to `task <id> [start|null] [dur|end]` and note untimed behavior, in the warm house tone (Principle IV)
+- [X] T017 [US1] CLI tests in `internal/cli/plan_test.go`: untimed add path and `runPlanShow` untimed-section output (timed vs untimed placement)
 
 **Checkpoint**: MVP — untimed capture and listing work entirely from the CLI.
 
@@ -75,12 +75,12 @@ Single Go module at `services/twig/`. Generated code (`gen/`, `internal/db/`) is
 
 **Independent Test**: With an untimed entry on the day, open Planning — the pane shows it (one line per 15 min); ↑/↓ flows pane→grid in one cycle; editing name/duration affects only it; adding a task with a blank Start creates an untimed entry; an empty day hides the pane.
 
-- [ ] T018 [P] [US2] Add a helper to split `m.plan.entries` into untimed (absent start) and timed slices, preserving order, in `internal/tui/plan_view.go` (exported for test via `export_test.go`)
-- [ ] T019 [US2] In `internal/tui/plan_view.go`: render the untimed pane above the grid via `cli.RenderUntimed`, hide it entirely when there are no untimed entries, and pass only timed entries to the grid renderer — depends on T013, T018
-- [ ] T020 [US2] In `internal/tui/plan_view.go` / `plan_update.go`: pass `SelectedID = m.plan.entries[cursor].Id` to both the untimed pane and the grid so the owning pane highlights, keeping the single Up/Down cycle over `m.plan.entries` (untimed-first) — depends on T019
-- [ ] T021 [US2] In `internal/tui/plan_update.go`: make the add-task form's Start optional — `initTaskTimeForm` placeholder/label "Start (optional)", `submitTaskTimeForm` treats a blank Start as untimed, and extend `addPlanTaskCmd` to carry an optional start (`*int` / `timed bool`) — depends on Phase 2
-- [ ] T022 [US2] In `internal/tui/plan_view.go` `planFieldLabel`: reflect the optional Start label for the task-time and edit forms
-- [ ] T023 [US2] TUI tests in `internal/tui/plan_view_test.go` / `plan_update_test.go`: untimed pane renders boxes, pane hidden when empty, unified ↑/↓ crosses pane↔grid, blank-Start form add creates an untimed entry — depends on T018–T022
+- [X] T018 [P] [US2] Add a helper to split `m.plan.entries` into untimed (absent start) and timed slices, preserving order, in `internal/tui/plan_view.go` (exported for test via `export_test.go`)
+- [X] T019 [US2] In `internal/tui/plan_view.go`: render the untimed pane above the grid via `cli.RenderUntimed`, hide it entirely when there are no untimed entries, and pass only timed entries to the grid renderer — depends on T013, T018
+- [X] T020 [US2] In `internal/tui/plan_view.go` / `plan_update.go`: pass `SelectedID = m.plan.entries[cursor].Id` to both the untimed pane and the grid so the owning pane highlights, keeping the single Up/Down cycle over `m.plan.entries` (untimed-first) — depends on T019
+- [X] T021 [US2] In `internal/tui/plan_update.go`: make the add-task form's Start optional — `initTaskTimeForm` placeholder/label "Start (optional)", `submitTaskTimeForm` treats a blank Start as untimed, and extend `addPlanTaskCmd` to carry an optional start (`*int` / `timed bool`) — depends on Phase 2
+- [X] T022 [US2] In `internal/tui/plan_view.go` `planFieldLabel`: reflect the optional Start label for the task-time and edit forms
+- [X] T023 [US2] TUI tests in `internal/tui/plan_view_test.go` / `plan_update_test.go`: untimed pane renders boxes, pane hidden when empty, unified ↑/↓ crosses pane↔grid, blank-Start form add creates an untimed entry — depends on T018–T022
 
 **Checkpoint**: Untimed entries are fully visible and manageable in the TUI.
 

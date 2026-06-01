@@ -145,3 +145,43 @@ func TestParseDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseStartOrNull(t *testing.T) {
+	cases := []struct {
+		input     string
+		wantMin   int
+		wantTimed bool
+		wantErr   bool
+	}{
+		{"null", 0, false, false},
+		{"NULL", 0, false, false},
+		{"Null", 0, false, false},
+		{"  null  ", 0, false, false},
+		{"9:00am", 540, true, false},
+		{"13:15", 795, true, false},
+		{"0900", 540, true, false},
+		{"not-a-time", 0, false, true},
+		{"", 0, false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			min, timed, err := timeparse.ParseStartOrNull(c.input)
+			if c.wantErr {
+				if err == nil {
+					t.Errorf("ParseStartOrNull(%q) expected error, got nil", c.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ParseStartOrNull(%q) unexpected error: %v", c.input, err)
+				return
+			}
+			if timed != c.wantTimed {
+				t.Errorf("ParseStartOrNull(%q) timed = %v, want %v", c.input, timed, c.wantTimed)
+			}
+			if min != c.wantMin {
+				t.Errorf("ParseStartOrNull(%q) minute = %d, want %d", c.input, min, c.wantMin)
+			}
+		})
+	}
+}

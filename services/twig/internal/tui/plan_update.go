@@ -57,12 +57,17 @@ func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, hi
 	}
 }
 
-func addPlanTaskCmd(client planv1connect.PlanServiceClient, day string, taskID int64, start, dur int) tea.Cmd {
+func addPlanTaskCmd(client planv1connect.PlanServiceClient, day string, taskID int64, start, dur int, timed bool) tea.Cmd {
 	return func() tea.Msg {
+		var sm *int32
+		if timed {
+			v := int32(start)
+			sm = &v
+		}
 		resp, err := client.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:            day,
 			TaskId:         taskID,
-			StartMinute:    int32(start),
+			StartMinute:    sm,
 			DurationMinute: int32(dur),
 		}))
 		if err != nil {
@@ -103,10 +108,11 @@ func renamePlanCmd(client planv1connect.PlanServiceClient, day string, id int32,
 
 func movePlanCmd(client planv1connect.PlanServiceClient, day string, id int32, start, dur int) tea.Cmd {
 	return func() tea.Msg {
+		sm := int32(start)
 		_, err := client.MovePlanEntry(context.Background(), connect.NewRequest(&planv1.MovePlanEntryRequest{
 			Day:            day,
 			Id:             id,
-			StartMinute:    int32(start),
+			StartMinute:    &sm,
 			DurationMinute: int32(dur),
 		}))
 		if err != nil {
@@ -195,7 +201,7 @@ func (m *Model) initAddEventForm() {
 
 // initTaskTimeForm opens the start/duration form for adding a task entry.
 func (m *Model) initTaskTimeForm(taskID int64) {
-	start := newPlanInput("Start time (e.g. 09:00)")
+	start := newPlanInput("Start time (optional, e.g. 09:00)")
 	start.Focus()
 	dur := newPlanInput("Duration (e.g. 30m, optional)")
 
@@ -257,13 +263,20 @@ func (m *Model) submitTaskTimeForm() tea.Cmd {
 	startStr := strings.TrimSpace(m.plan.form.fields[0].Value())
 	durStr := strings.TrimSpace(m.plan.form.fields[1].Value())
 
-	start, err := timeparse.ParseStart(startStr)
-	if err != nil {
-		m.plan.err = fmt.Errorf("invalid start time: %w", err)
-		return nil
+	var start int
+	var timed bool
+	if startStr != "" {
+		var err error
+		start, err = timeparse.ParseStart(startStr)
+		if err != nil {
+			m.plan.err = fmt.Errorf("invalid start time: %w", err)
+			return nil
+		}
+		timed = true
 	}
 	var dur int
 	if durStr != "" {
+		var err error
 		dur, err = timeparse.ParseDurationOrEnd(durStr, start)
 		if err != nil {
 			m.plan.err = fmt.Errorf("invalid duration: %w", err)
@@ -272,7 +285,7 @@ func (m *Model) submitTaskTimeForm() tea.Cmd {
 	}
 	m.plan.err = nil
 	m.plan.mode = planList
-	return addPlanTaskCmd(m.planClient, m.plan.day, m.plan.form.taskID, start, dur)
+	return addPlanTaskCmd(m.planClient, m.plan.day, m.plan.form.taskID, start, dur, timed)
 }
 
 func (m *Model) submitEventForm() tea.Cmd {

@@ -28,8 +28,11 @@ func dbPlanEntryToProto(e db.PlanEntry) *planv1.PlanEntry {
 	pe := &planv1.PlanEntry{
 		Day:            e.Day.Time.Format("2006-01-02"),
 		Id:             e.ID,
-		StartMinute:    int32(e.StartMinute),
 		DurationMinute: int32(e.DurationMinute),
+	}
+	if e.StartMinute.Valid {
+		v := int32(e.StartMinute.Int16)
+		pe.StartMinute = &v
 	}
 	if e.TaskID.Valid {
 		pe.TaskId = e.TaskID.Int64
@@ -76,12 +79,17 @@ func (p *Plan) beginSerializableTx(ctx context.Context) (pgx.Tx, *db.Queries, er
 	return tx, p.Queries.WithTx(tx), nil
 }
 
+// checkOverlap returns (conflicting id, true) if any timed entry in rows overlaps [start, start+dur).
+// Untimed entries (null start_minute) are skipped — they occupy no grid slot.
 func checkOverlap(rows []db.PlanEntry, start, dur int32, excludeID int32) (int32, bool) {
 	for _, r := range rows {
 		if excludeID != 0 && r.ID == excludeID {
 			continue
 		}
-		if plan.Overlap(int(start), int(dur), int(r.StartMinute), int(r.DurationMinute)) {
+		if !r.StartMinute.Valid {
+			continue
+		}
+		if plan.Overlap(int(start), int(dur), int(r.StartMinute.Int16), int(r.DurationMinute)) {
 			return r.ID, true
 		}
 	}
@@ -126,9 +134,12 @@ func (p *Plan) ListPlanEntries(
 		pe := &planv1.PlanEntry{
 			Day:            r.Day.Time.Format("2006-01-02"),
 			Id:             r.ID,
-			StartMinute:    int32(r.StartMinute),
 			DurationMinute: int32(r.DurationMinute),
 			Completed:      r.Completed.Bool,
+		}
+		if r.StartMinute.Valid {
+			v := int32(r.StartMinute.Int16)
+			pe.StartMinute = &v
 		}
 		if r.TaskID.Valid {
 			pe.TaskId = r.TaskID.Int64
@@ -198,7 +209,7 @@ func (p *Plan) AddPlanEvent(
 		Day:            day,
 		ID:             nextID,
 		Name:           pgtype.Text{String: name, Valid: true},
-		StartMinute:    int16(req.Msg.StartMinute),
+		StartMinute:    pgtype.Int2{Int16: int16(req.Msg.StartMinute), Valid: true},
 		DurationMinute: int16(dur),
 	})
 	if err != nil {
@@ -221,8 +232,13 @@ func (p *Plan) AddPlanTask(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateStartMinute(req.Msg.StartMinute); err != nil {
-		return nil, err
+
+	isTimed := req.Msg.StartMinute != nil
+
+	if isTimed {
+		if err := validateStartMinute(req.Msg.GetStartMinute()); err != nil {
+			return nil, err
+		}
 	}
 	if req.Msg.DurationMinute < 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("duration_minute must be >= 0"))
@@ -257,7 +273,8 @@ func (p *Plan) AddPlanTask(
 			dur = 30
 		}
 	}
-	if int32(req.Msg.StartMinute)+dur > 1440 {
+
+	if isTimed && req.Msg.GetStartMinute()+dur > 1440 {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("start_minute + duration_minute exceeds 1440 (midnight crossing not allowed)"))
 	}
@@ -268,13 +285,15 @@ func (p *Plan) AddPlanTask(
 	}
 	defer tx.Rollback(ctx)
 
-	locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if conflictID, overlaps := checkOverlap(locked, req.Msg.StartMinute, dur, 0); overlaps {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
+	if isTimed {
+		locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if conflictID, overlaps := checkOverlap(locked, req.Msg.GetStartMinute(), dur, 0); overlaps {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
+		}
 	}
 
 	nextID, err := txq.NextPlanEntryId(ctx, db.NextPlanEntryIdParams{UserID: userID, Day: day})
@@ -282,12 +301,17 @@ func (p *Plan) AddPlanTask(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
+	startParam := pgtype.Int2{Valid: false}
+	if isTimed {
+		startParam = pgtype.Int2{Int16: int16(req.Msg.GetStartMinute()), Valid: true}
+	}
+
 	row, err := txq.InsertPlanEntry(ctx, db.InsertPlanEntryParams{
 		UserID:         userID,
 		Day:            day,
 		ID:             nextID,
 		TaskID:         pgtype.Int8{Int64: req.Msg.TaskId, Valid: true},
-		StartMinute:    int16(req.Msg.StartMinute),
+		StartMinute:    startParam,
 		DurationMinute: int16(dur),
 	})
 	if err != nil {
@@ -365,11 +389,16 @@ func (p *Plan) MovePlanEntry(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateStartMinute(req.Msg.StartMinute); err != nil {
-		return nil, err
-	}
 	if req.Msg.DurationMinute < 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("duration_minute must be >= 0"))
+	}
+
+	isTimed := req.Msg.StartMinute != nil
+
+	if isTimed {
+		if err := validateStartMinute(req.Msg.GetStartMinute()); err != nil {
+			return nil, err
+		}
 	}
 
 	tx, txq, err := p.beginSerializableTx(ctx)
@@ -394,25 +423,30 @@ func (p *Plan) MovePlanEntry(
 	if dur == 0 {
 		dur = int32(existing.DurationMinute)
 	}
-	if int32(req.Msg.StartMinute)+dur > 1440 {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("start_minute + duration_minute exceeds 1440 (midnight crossing not allowed)"))
-	}
 
-	locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if conflictID, overlaps := checkOverlap(locked, req.Msg.StartMinute, dur, req.Msg.Id); overlaps {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
+	startParam := pgtype.Int2{Valid: false}
+	if isTimed {
+		if req.Msg.GetStartMinute()+dur > 1440 {
+			return nil, connect.NewError(connect.CodeInvalidArgument,
+				errors.New("start_minute + duration_minute exceeds 1440 (midnight crossing not allowed)"))
+		}
+
+		locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if conflictID, overlaps := checkOverlap(locked, req.Msg.GetStartMinute(), dur, req.Msg.Id); overlaps {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("No room there — that bumps into entry %d.", conflictID))
+		}
+		startParam = pgtype.Int2{Int16: int16(req.Msg.GetStartMinute()), Valid: true}
 	}
 
 	row, err := txq.UpdatePlanEntryTime(ctx, db.UpdatePlanEntryTimeParams{
 		UserID:         userID,
 		Day:            day,
 		ID:             req.Msg.Id,
-		StartMinute:    int16(req.Msg.StartMinute),
+		StartMinute:    startParam,
 		DurationMinute: int16(dur),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -459,7 +493,10 @@ func (p *Plan) ClearPlan(
 		if !r.TaskID.Valid {
 			continue
 		}
-		start := int32(r.StartMinute)
+		if !r.StartMinute.Valid {
+			continue // untimed entries are never cleared
+		}
+		start := int32(r.StartMinute.Int16)
 		end := start + int32(r.DurationMinute)
 		if start < cutoff && cutoff < end {
 			// Straddles: shorten duration so it ends at cutoff.
@@ -480,7 +517,7 @@ func (p *Plan) ClearPlan(
 	deleted, err := txq.DeletePlanEntriesFromMinute(ctx, db.DeletePlanEntriesFromMinuteParams{
 		UserID:      userID,
 		Day:         day,
-		StartMinute: int16(cutoff),
+		StartMinute: pgtype.Int2{Int16: int16(cutoff), Valid: true},
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

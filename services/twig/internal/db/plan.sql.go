@@ -18,7 +18,7 @@ DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 
 type DeletePlanEntriesFromMinuteParams struct {
 	UserID      int64
 	Day         pgtype.Date
-	StartMinute int16
+	StartMinute pgtype.Int2
 }
 
 func (q *Queries) DeletePlanEntriesFromMinute(ctx context.Context, arg DeletePlanEntriesFromMinuteParams) (int64, error) {
@@ -83,7 +83,7 @@ type InsertPlanEntryParams struct {
 	ID             int32
 	TaskID         pgtype.Int8
 	Name           pgtype.Text
-	StartMinute    int16
+	StartMinute    pgtype.Int2
 	DurationMinute int16
 }
 
@@ -116,7 +116,7 @@ SELECT plan_entries.user_id, plan_entries.day, plan_entries.id, plan_entries.tas
 FROM plan_entries
 LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
 WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
-ORDER BY plan_entries.start_minute
+ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC
 `
 
 type ListPlanEntriesForDayParams struct {
@@ -130,7 +130,7 @@ type ListPlanEntriesForDayRow struct {
 	ID             int32
 	TaskID         pgtype.Int8
 	Name           pgtype.Text
-	StartMinute    int16
+	StartMinute    pgtype.Int2
 	DurationMinute int16
 	Completed      pgtype.Bool
 }
@@ -287,7 +287,7 @@ type UpdatePlanEntryTimeParams struct {
 	UserID         int64
 	Day            pgtype.Date
 	ID             int32
-	StartMinute    int16
+	StartMinute    pgtype.Int2
 	DurationMinute int16
 }
 

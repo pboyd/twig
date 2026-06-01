@@ -194,8 +194,8 @@ func TestPlanEntriesMsg_PopulatesEntries(t *testing.T) {
 	m.plan.loaded = false
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540},
-		{Id: 2, Name: "Focus", StartMinute: 600},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540)},
+		{Id: 2, Name: "Focus", StartMinute: pint32(600)},
 	}
 	next, _ := m.Update(planEntriesMsg{entries: entries})
 	nm := next.(Model)
@@ -214,7 +214,7 @@ func TestPlanEntriesMsg_ClampsCursor(t *testing.T) {
 	m.plan.cursor = 5
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "One", StartMinute: 540},
+		{Id: 1, Name: "One", StartMinute: pint32(540)},
 	}
 	next, _ := m.Update(planEntriesMsg{entries: entries})
 	nm := next.(Model)
@@ -423,7 +423,7 @@ func TestEdit_FormOpensOnEnter(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Standup", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 
 	m2, _ := pressSpecialKey(m, tea.KeyEnter)
@@ -462,7 +462,7 @@ func TestEditForm_RenameOnNameChange(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Old Name", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Old Name", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 	m.initEditForm()
 	m.plan.form.fields[0].SetValue("New Name")
@@ -495,7 +495,7 @@ func TestEditForm_MoveOnStartProvided(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 	m.initEditForm()
 	// Name unchanged, start provided
@@ -526,7 +526,7 @@ func TestEditForm_NoopWhenUnchanged(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 	m.initEditForm()
 	// Name unchanged (same value), Start and Duration blank
@@ -547,7 +547,7 @@ func TestEditForm_EmptyNameSetsError(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 	m.initEditForm()
 	m.plan.form.fields[0].SetValue("") // empty name
@@ -572,7 +572,7 @@ func TestRemove_IssuesRPCOnCtrlD(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 3, Name: "Review", StartMinute: 600}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 3, Name: "Review", StartMinute: pint32(600)}}
 	m.plan.cursor = 0
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
@@ -597,9 +597,9 @@ func TestNavigation_UpDownMovesCursor(t *testing.T) {
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, StartMinute: 540},
-		{Id: 2, StartMinute: 600},
-		{Id: 3, StartMinute: 660},
+		{Id: 1, StartMinute: pint32(540)},
+		{Id: 2, StartMinute: pint32(600)},
+		{Id: 3, StartMinute: pint32(660)},
 	}
 	m.plan.cursor = 0
 
@@ -685,7 +685,7 @@ func TestClear_InertOnC(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
-	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Focus", StartMinute: 540}}
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Focus", StartMinute: pint32(540)}}
 
 	m2, cmd := pressKeyStr(m, "c")
 

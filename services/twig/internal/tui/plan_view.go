@@ -73,10 +73,14 @@ func (m Model) renderPlanningView(width, height int, now time.Time) string {
 		gridHeight = 1
 	}
 
-	grid := cli.RenderGrid(m.plan.entries, m.plan.day, now, width, m.styled, m.planGridOptions())
+	untimed, timed := splitPlanEntries(m.plan.entries)
+	opts := m.planGridOptions()
+	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
+	grid := cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 
-	// Combine header + grid, trimmed to gridHeight.
-	lines := strings.Split(strings.TrimRight(grid, "\n"), "\n")
+	// Combine header + untimed pane + grid, trimmed to gridHeight.
+	combined := untimedStr + grid
+	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridHeight {
 		lines = lines[:gridHeight]
 	}
@@ -198,27 +202,33 @@ func (m Model) planDayTitle(now time.Time) string {
 	return label
 }
 
-// renderPlanGrid renders only the calendar grid rows (no day header) trimmed to
-// height lines. Used for the styled two-pane path where the date lives in the pane title.
+// renderPlanGrid renders the untimed pane (when non-empty) followed by the
+// calendar grid rows, trimmed to height lines. Used in the styled two-pane path.
 func (m Model) renderPlanGrid(width, height int, now time.Time) string {
-	grid := cli.RenderGrid(m.plan.entries, m.plan.day, now, width, m.styled, m.planGridOptions())
-	lines := strings.Split(strings.TrimRight(grid, "\n"), "\n")
+	untimed, timed := splitPlanEntries(m.plan.entries)
+	opts := m.planGridOptions()
+	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
+		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > height {
 		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
 }
 
-// renderPlanGridContent renders the day header + calendar grid for the non-styled
-// fallback path where the header appears inline as the first row.
+// renderPlanGridContent renders the day header + untimed pane + calendar grid for
+// the non-styled fallback path where the header appears inline as the first row.
 func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	header := m.planDayHeader(now)
 	gridH := height - 1
 	if gridH < 1 {
 		gridH = 1
 	}
-	grid := cli.RenderGrid(m.plan.entries, m.plan.day, now, width, m.styled, m.planGridOptions())
-	lines := strings.Split(strings.TrimRight(grid, "\n"), "\n")
+	untimed, timed := splitPlanEntries(m.plan.entries)
+	opts := m.planGridOptions()
+	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
+		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridH {
 		lines = lines[:gridH]
 	}
@@ -236,11 +246,17 @@ func renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string {
 		return "(no entry selected)\n"
 	}
 
-	start := int(entry.StartMinute)
 	dur := int(entry.DurationMinute)
-	end := start + dur
-	window := fmt.Sprintf("%02d:%02d–%02d:%02d", start/60, start%60, end/60, end%60)
 	_ = width
+
+	var window string
+	if entry.StartMinute != nil {
+		start := int(entry.GetStartMinute())
+		end := start + dur
+		window = fmt.Sprintf("%02d:%02d–%02d:%02d", start/60, start%60, end/60, end%60)
+	} else {
+		window = "untimed"
+	}
 
 	if !styled {
 		var sb strings.Builder
@@ -277,11 +293,24 @@ func renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string {
 	return sb.String()
 }
 
+// splitPlanEntries partitions entries into untimed (nil StartMinute) and timed slices,
+// preserving the original order within each group.
+func splitPlanEntries(entries []*planv1.PlanEntry) (untimed, timed []*planv1.PlanEntry) {
+	for _, e := range entries {
+		if e.StartMinute == nil {
+			untimed = append(untimed, e)
+		} else {
+			timed = append(timed, e)
+		}
+	}
+	return
+}
+
 // planFieldLabel returns a human-readable label for a planning form field.
 func planFieldLabel(mode planMode, idx int) string {
 	switch mode {
 	case planTaskTime:
-		labels := []string{"Start", "Duration (optional)"}
+		labels := []string{"Start (optional)", "Duration (optional)"}
 		if idx < len(labels) {
 			return labels[idx]
 		}

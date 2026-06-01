@@ -10,6 +10,8 @@ import (
 	"github.com/pboyd/twig/services/twig/internal/config"
 )
 
+func pint32(v int32) *int32 { return &v }
+
 // ExportBuildVisible exposes buildVisible for tests.
 func ExportBuildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64) []*visibleRow {
 	return buildVisible(tree, expanded, showCompleted, pendingComplete)
@@ -108,4 +110,9 @@ func ExportRenderList(m Model, width int) string {
 // ExportRenderDetails exposes renderDetails for unit tests.
 func ExportRenderDetails(task *taskv1.Task, width int, styled bool) string {
 	return renderDetails(task, width, styled)
+}
+
+// ExportSplitPlanEntries exposes splitPlanEntries for tests.
+func ExportSplitPlanEntries(entries []*planv1.PlanEntry) (untimed, timed []*planv1.PlanEntry) {
+	return splitPlanEntries(entries)
 }

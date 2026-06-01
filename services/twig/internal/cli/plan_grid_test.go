@@ -9,6 +9,8 @@ import (
 	"github.com/pboyd/twig/services/twig/internal/cli"
 )
 
+func pint32(v int32) *int32 { return &v }
+
 // rowsOf splits a RenderGrid output into lines, trimming the trailing newline.
 func rowsOf(out string) []string {
 	return strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -55,7 +57,7 @@ func TestRenderGrid_EmptyDay(t *testing.T) {
 func TestRenderGrid_WindowExtensionEarly(t *testing.T) {
 	// Entry at 07:30 (450 min) — snap start = 450, floor to hour = 07:00.
 	entries := []*planv1.PlanEntry{
-		{Day: "2026-05-27", Id: 1, Name: "Early start", StartMinute: 450, DurationMinute: 60},
+		{Day: "2026-05-27", Id: 1, Name: "Early start", StartMinute: pint32(450), DurationMinute: 60},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -77,7 +79,7 @@ func TestRenderGrid_WindowExtensionEarly(t *testing.T) {
 func TestRenderGrid_WindowExtensionLate(t *testing.T) {
 	// Entry at 17:15 (1035 min) for 30 min → end = 1065, snap up = 1065, ceil hour = 18:00.
 	entries := []*planv1.PlanEntry{
-		{Day: "2026-05-27", Id: 1, Name: "Late end", StartMinute: 1035, DurationMinute: 30},
+		{Day: "2026-05-27", Id: 1, Name: "Late end", StartMinute: pint32(1035), DurationMinute: 30},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -100,7 +102,7 @@ func TestRenderGrid_WindowExtensionLate(t *testing.T) {
 // the correct top/bottom heavy borders and its label on the first interior row.
 func TestRenderGrid_EntryBox_TwoHour(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -135,7 +137,7 @@ func TestRenderGrid_EntryBox_TwoHour(t *testing.T) {
 func TestRenderGrid_EntryBox_Truncation(t *testing.T) {
 	longName := strings.Repeat("A", 80) // exceeds any reasonable field width
 	entries := []*planv1.PlanEntry{
-		{Id: 2, Name: longName, StartMinute: 600, DurationMinute: 30},
+		{Id: 2, Name: longName, StartMinute: pint32(600), DurationMinute: 30},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -154,7 +156,7 @@ func TestRenderGrid_EntryBox_Wrapping(t *testing.T) {
 	// fieldWidth=72; prefix="[1] 11:15-12:00 "=16 chars; need name > 56 chars to wrap.
 	name := strings.Repeat("X", 60)
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: name, StartMinute: 675, DurationMinute: 45},
+		{Id: 1, Name: name, StartMinute: pint32(675), DurationMinute: 45},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -177,7 +179,7 @@ func TestRenderGrid_EntryBox_Wrapping(t *testing.T) {
 // using junction characters.
 func TestRenderGrid_EntryBox_SingleRow(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+		{Id: 1, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -208,8 +210,8 @@ func TestRenderGrid_EntryBox_SingleRow(t *testing.T) {
 // and a second entry starting at 10:00 share a single ┣━━━┫ line at that row.
 func TestRenderGrid_AdjacentSharedBorder(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Morning", StartMinute: 480, DurationMinute: 120}, // 08:00-10:00
-		{Id: 2, Name: "Review", StartMinute: 600, DurationMinute: 30},   // 10:00-10:30
+		{Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120}, // 08:00-10:00
+		{Id: 2, Name: "Review", StartMinute: pint32(600), DurationMinute: 30},   // 10:00-10:30
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -232,8 +234,8 @@ func TestRenderGrid_AdjacentSharedBorder(t *testing.T) {
 // render as their own ┣━━━┫ row on consecutive lines.
 func TestRenderGrid_AdjacentSingleRows(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15}, // 13:00-13:15
-		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},   // 13:15-13:30
+		{Id: 1, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15}, // 13:00-13:15
+		{Id: 2, Name: "Retro", StartMinute: pint32(795), DurationMinute: 15},   // 13:15-13:30
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -298,7 +300,7 @@ func TestRenderGrid_NowMarker_NotToday(t *testing.T) {
 // ANSI escape codes when isTTY=false.
 func TestRenderGrid_CompletedTask_NoTTY(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Done task", StartMinute: 480, DurationMinute: 120, Completed: true},
+		{Id: 1, Name: "Done task", StartMinute: pint32(480), DurationMinute: 120, Completed: true},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	if strings.Contains(out, "\x1b[") {
@@ -314,7 +316,7 @@ func TestRenderGrid_CompletedTask_NoTTY(t *testing.T) {
 // in dim+strikethrough ANSI codes when isTTY=true.
 func TestRenderGrid_CompletedTask_TTY(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Done task", StartMinute: 480, DurationMinute: 120, Completed: true},
+		{Id: 1, Name: "Done task", StartMinute: pint32(480), DurationMinute: 120, Completed: true},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{})
 	if !strings.Contains(out, "\x1b[2;9m") {
@@ -337,7 +339,7 @@ func TestRenderGrid_CompletedTask_TTY(t *testing.T) {
 // multi-hour entry still show light hour lines flanking the heavy box (US1, T005).
 func TestPlanGrid_MultiHourEntry_HourLinesFlankBox(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120}, // 08:00-10:00
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120}, // 08:00-10:00
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -372,7 +374,7 @@ func TestPlanGrid_MultiHourEntry_HourLinesFlankBox(t *testing.T) {
 func TestPlanGrid_OffHourEntry_PaddingPreserved(t *testing.T) {
 	// 09:15–09:45: top at row 5 (09:15, non-hour), bottom at row 7 (09:45, non-hour).
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Quick sync", StartMinute: 555, DurationMinute: 30},
+		{Id: 1, Name: "Quick sync", StartMinute: pint32(555), DurationMinute: 30},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -398,8 +400,8 @@ func TestPlanGrid_OffHourEntry_PaddingPreserved(t *testing.T) {
 // entries produce a single ┣━…━┫ at the :15 row with space padding (non-hour, US1, T010).
 func TestPlanGrid_SharedBorder_PaddingPreserved(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 780, DurationMinute: 15}, // 13:00-13:15
-		{Id: 2, Name: "Retro", StartMinute: 795, DurationMinute: 15},   // 13:15-13:30
+		{Id: 1, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15}, // 13:00-13:15
+		{Id: 2, Name: "Retro", StartMinute: pint32(795), DurationMinute: 15},   // 13:15-13:30
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -420,7 +422,7 @@ func TestPlanGrid_SharedBorder_PaddingPreserved(t *testing.T) {
 func TestPlanGrid_EmptyHours_FullGrid(t *testing.T) {
 	// One entry at 09:00–10:00; rows 0–3 (08:xx) and 9+ (10:15+) are empty.
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Deep work", StartMinute: 540, DurationMinute: 60},
+		{Id: 1, Name: "Deep work", StartMinute: pint32(540), DurationMinute: 60},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
@@ -521,7 +523,7 @@ func TestPlanGrid_NonTodayRender_MarkerColumnBlank(t *testing.T) {
 // the same output as the prior no-options call (id shown, no selection highlight).
 func TestRenderGrid_GridOptions_Default(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 3, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+		{Id: 3, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{})
 	if !strings.Contains(out, "[3]") {
@@ -535,7 +537,7 @@ func TestRenderGrid_GridOptions_Default(t *testing.T) {
 // TestRenderGrid_GridOptions_HideID verifies that HideID:true removes the "[id] " prefix.
 func TestRenderGrid_GridOptions_HideID(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 7, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+		{Id: 7, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true})
 	if strings.Contains(out, "[7]") {
@@ -553,8 +555,8 @@ func TestRenderGrid_GridOptions_HideID(t *testing.T) {
 // only the target entry's rows with bold ANSI codes when isTTY=true.
 func TestRenderGrid_GridOptions_SelectedID_Styled(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
-		{Id: 2, Name: "Review", StartMinute: 600, DurationMinute: 60},
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
+		{Id: 2, Name: "Review", StartMinute: pint32(600), DurationMinute: 60},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{SelectedID: 1})
 	lines := rowsOf(out)
@@ -575,7 +577,7 @@ func TestRenderGrid_GridOptions_SelectedID_Styled(t *testing.T) {
 // no ANSI codes when isTTY=false.
 func TestRenderGrid_GridOptions_SelectedID_NoStyle(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 5, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+		{Id: 5, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15},
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{SelectedID: 5})
 	if strings.Contains(out, "\x1b[") {
@@ -589,8 +591,8 @@ func TestRenderGrid_GridOptions_SelectedID_NoStyle(t *testing.T) {
 // byte-for-byte identical output to the zero-value GridOptions (T014).
 func TestRenderGrid_StyledFalseIsUnchanged(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
-		{Id: 2, Name: "Standup", StartMinute: 780, DurationMinute: 15},
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
+		{Id: 2, Name: "Standup", StartMinute: pint32(780), DurationMinute: 15},
 	}
 	baseline := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true, SelectedID: 1})
 	withStyled := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true, SelectedID: 1, Styled: false})
@@ -604,7 +606,7 @@ func TestRenderGrid_StyledFalseIsUnchanged(t *testing.T) {
 // highlights the selected entry with a different style than plain bold (T014).
 func TestRenderGrid_StyledTrueAccentHighlight(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
 	}
 	boldOnly := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 1, Styled: false})
 	accented := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 1, Styled: true})
@@ -628,7 +630,7 @@ func styleMarker(s string) string { return "<<" + s + ">>" }
 // the content cell of a single-row entry, not to the ┣/┫ rails or gutter (T015).
 func TestSelectionStyle_SingleRowEntry(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 15},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 15},
 	}
 	opts := cli.GridOptions{HideID: true, SelectedID: 1, Styled: true, SelectionStyle: styleMarker}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
@@ -673,7 +675,7 @@ func TestSelectionStyle_SingleRowEntry(t *testing.T) {
 // interior content rows of a multi-row entry, not to the top/bottom border rows (T015).
 func TestSelectionStyle_MultiRowEntry(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Focus", StartMinute: 480, DurationMinute: 120},
+		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
 	}
 	opts := cli.GridOptions{HideID: true, SelectedID: 1, Styled: true, SelectionStyle: styleMarker}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
@@ -699,7 +701,7 @@ func TestSelectionStyle_MultiRowEntry(t *testing.T) {
 // is byte-for-byte identical with and without SelectionStyle set (T015 golden).
 func TestSelectionStyle_NoSelectionIDZeroUnchanged(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Standup", StartMinute: 540, DurationMinute: 15},
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 15},
 	}
 	baseline := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 0})
 	withStyle := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{HideID: true, SelectedID: 0, SelectionStyle: styleMarker})
@@ -713,7 +715,7 @@ func TestSelectionStyle_NoSelectionIDZeroUnchanged(t *testing.T) {
 // printed width as unstyled rows (T015 width invariant).
 func TestSelectionStyle_RowWidthUnchanged(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Stand", StartMinute: 540, DurationMinute: 15},
+		{Id: 1, Name: "Stand", StartMinute: pint32(540), DurationMinute: 15},
 	}
 	noSelect := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{HideID: true})
 	withSelect := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, cli.GridOptions{
@@ -770,4 +772,128 @@ func visWidth(s string) int {
 		i += size
 	}
 	return w
+}
+
+// ---- T013: RenderUntimed tests ----
+
+// TestRenderUntimed_EmptyReturnsEmpty checks that an empty entry list produces no output.
+func TestRenderUntimed_EmptyReturnsEmpty(t *testing.T) {
+	out := cli.RenderUntimed(nil, 80, false, cli.GridOptions{})
+	if out != "" {
+		t.Errorf("empty entries: expected empty string, got %q", out)
+	}
+}
+
+// TestRenderUntimed_SingleEntry15min checks that a 15-minute entry renders as one line.
+func TestRenderUntimed_SingleEntry15min(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Quick task", DurationMinute: 15},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	if len(lines) != 1 {
+		t.Errorf("15min entry: expected 1 line, got %d:\n%s", len(lines), out)
+	}
+	if !strings.Contains(lines[0], "Quick task") {
+		t.Errorf("15min entry: expected name in output; got %q", lines[0])
+	}
+	if !strings.Contains(lines[0], "15min") {
+		t.Errorf("15min entry: expected duration in output; got %q", lines[0])
+	}
+}
+
+// TestRenderUntimed_Entry30min checks that a 30-minute entry renders as two lines.
+func TestRenderUntimed_Entry30min(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Medium task", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	if len(lines) != 2 {
+		t.Errorf("30min entry: expected 2 lines, got %d:\n%s", len(lines), out)
+	}
+	// First line has the label.
+	if !strings.Contains(lines[0], "Medium task") {
+		t.Errorf("30min entry row 0: expected name; got %q", lines[0])
+	}
+	// Bottom line is a closing border.
+	if !strings.Contains(lines[1], "┗") || !strings.Contains(lines[1], "┛") {
+		t.Errorf("30min entry row 1: expected ┗...┛ border; got %q", lines[1])
+	}
+}
+
+// TestRenderUntimed_Entry60min checks that a 60-minute entry renders as four lines.
+func TestRenderUntimed_Entry60min(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Long task", DurationMinute: 60},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	if len(lines) != 4 {
+		t.Errorf("60min entry: expected 4 lines (1 label + 2 interior + 1 bottom), got %d:\n%s", len(lines), out)
+	}
+}
+
+// TestRenderUntimed_MultipleEntries checks that multiple entries stack vertically.
+func TestRenderUntimed_MultipleEntries(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Task A", DurationMinute: 15},
+		{Id: 2, Name: "Task B", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	// Task A: 1 line; Task B: 2 lines → total 3.
+	if len(lines) != 3 {
+		t.Errorf("2 entries (15+30min): expected 3 lines, got %d:\n%s", len(lines), out)
+	}
+	if !strings.Contains(lines[0], "Task A") {
+		t.Errorf("first entry line: expected 'Task A'; got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "Task B") {
+		t.Errorf("second entry line: expected 'Task B'; got %q", lines[1])
+	}
+}
+
+// TestRenderUntimed_SelectedIDHighlights checks that the selected entry is styled.
+func TestRenderUntimed_SelectedIDHighlights(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Unselected", DurationMinute: 15},
+		{Id: 2, Name: "Selected", DurationMinute: 15},
+	}
+	opts := cli.GridOptions{HideID: true, SelectedID: 2, SelectionStyle: styleMarker}
+	out := cli.RenderUntimed(entries, 80, true, opts)
+	lines := rowsOf(out)
+
+	// Line 0 (Unselected) must NOT have markers.
+	if strings.Contains(lines[0], "<<") {
+		t.Errorf("unselected entry must not have selection markers; got %q", lines[0])
+	}
+	// Line 1 (Selected) must have markers.
+	if !strings.Contains(lines[1], "<<") {
+		t.Errorf("selected entry must have selection markers; got %q", lines[1])
+	}
+}
+
+// TestRenderUntimed_LineWidthMatchesGrid checks that each line has the same
+// visual width as a grid row (no wider, no narrower).
+func TestRenderUntimed_LineWidthMatchesGrid(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Task", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	gridOut := cli.RenderGrid(nil, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
+
+	untimedLines := rowsOf(out)
+	gridLines := rowsOf(gridOut)
+
+	wantWidth := visWidth(gridLines[0])
+	for i, l := range untimedLines {
+		if w := visWidth(l); w != wantWidth {
+			t.Errorf("RenderUntimed line %d: width = %d, want %d (grid width); line: %q", i, w, wantWidth, l)
+		}
+	}
 }

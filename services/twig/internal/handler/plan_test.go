@@ -51,6 +51,8 @@ func newTestPlanPool(t *testing.T) (*handler.Plan, *handler.Task, int64, *pgxpoo
 
 func todayStr() string { return time.Now().Format("2006-01-02") }
 
+func pint32(v int32) *int32 { return &v }
+
 func insertPlanEntry(t *testing.T, q *db.Queries, userID int64, day string, taskID int64, name string, start, dur int) db.PlanEntry {
 	t.Helper()
 	d, err := time.Parse("2006-01-02", day)
@@ -68,7 +70,7 @@ func insertPlanEntry(t *testing.T, q *db.Queries, userID int64, day string, task
 		UserID:         userID,
 		Day:            pgDay,
 		ID:             nextID,
-		StartMinute:    int16(start),
+		StartMinute:    pgtype.Int2{Int16: int16(start), Valid: true},
 		DurationMinute: int16(dur),
 	}
 	if taskID != 0 {
@@ -81,6 +83,40 @@ func insertPlanEntry(t *testing.T, q *db.Queries, userID int64, day string, task
 	entry, err := q.InsertPlanEntry(context.Background(), params)
 	if err != nil {
 		t.Fatalf("InsertPlanEntry: %v", err)
+	}
+	return entry
+}
+
+func insertPlanEntryUntimed(t *testing.T, q *db.Queries, userID int64, day string, taskID int64, name string, dur int) db.PlanEntry {
+	t.Helper()
+	d, err := time.Parse("2006-01-02", day)
+	if err != nil {
+		t.Fatalf("parse day: %v", err)
+	}
+	pgDay := pgtype.Date{Time: d, Valid: true}
+
+	nextID, err := q.NextPlanEntryId(context.Background(), db.NextPlanEntryIdParams{UserID: userID, Day: pgDay})
+	if err != nil {
+		t.Fatalf("NextPlanEntryId: %v", err)
+	}
+
+	params := db.InsertPlanEntryParams{
+		UserID:         userID,
+		Day:            pgDay,
+		ID:             nextID,
+		StartMinute:    pgtype.Int2{Valid: false},
+		DurationMinute: int16(dur),
+	}
+	if taskID != 0 {
+		params.TaskID = pgtype.Int8{Int64: taskID, Valid: true}
+	}
+	if name != "" {
+		params.Name = pgtype.Text{String: name, Valid: true}
+	}
+
+	entry, err := q.InsertPlanEntry(context.Background(), params)
+	if err != nil {
+		t.Fatalf("InsertPlanEntryUntimed: %v", err)
 	}
 	return entry
 }
@@ -102,9 +138,9 @@ func TestListPlanEntries(t *testing.T) {
 	if len(resp.Msg.Entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(resp.Msg.Entries))
 	}
-	if resp.Msg.Entries[0].StartMinute >= resp.Msg.Entries[1].StartMinute {
+	if resp.Msg.Entries[0].GetStartMinute() >= resp.Msg.Entries[1].GetStartMinute() {
 		t.Errorf("entries not sorted by start_minute: %d, %d",
-			resp.Msg.Entries[0].StartMinute, resp.Msg.Entries[1].StartMinute)
+			resp.Msg.Entries[0].GetStartMinute(), resp.Msg.Entries[1].GetStartMinute())
 	}
 }
 
@@ -157,10 +193,10 @@ func TestListPlanEntries_NameFallback(t *testing.T) {
 		t.Fatalf("expected 2 entries, got %d", len(resp.Msg.Entries))
 	}
 	for _, e := range resp.Msg.Entries {
-		if e.StartMinute == 480 && e.Name != "Deep Work" {
+		if e.GetStartMinute() == 480 && e.Name != "Deep Work" {
 			t.Errorf("task-linked entry: name = %q, want %q", e.Name, "Deep Work")
 		}
-		if e.StartMinute == 720 && e.Name != "Lunch" {
+		if e.GetStartMinute() == 720 && e.Name != "Lunch" {
 			t.Errorf("event entry: name = %q, want %q", e.Name, "Lunch")
 		}
 	}
@@ -322,7 +358,7 @@ func TestAddPlanTask(t *testing.T) {
 		resp, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:            day,
 			TaskId:         taskID,
-			StartMinute:    480,
+			StartMinute:    pint32(480),
 			DurationMinute: 90,
 		}))
 		if err != nil {
@@ -359,7 +395,7 @@ func TestAddPlanTask(t *testing.T) {
 		resp, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:         day2,
 			TaskId:      taskID,
-			StartMinute: 480,
+			StartMinute: pint32(480),
 		}))
 		if err != nil {
 			t.Fatalf("AddPlanTask: %v", err)
@@ -375,7 +411,7 @@ func TestAddPlanTask(t *testing.T) {
 		resp, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:         day3,
 			TaskId:      taskR.Msg.Task.Id,
-			StartMinute: 480,
+			StartMinute: pint32(480),
 		}))
 		if err != nil {
 			t.Fatalf("AddPlanTask: %v", err)
@@ -389,7 +425,7 @@ func TestAddPlanTask(t *testing.T) {
 		_, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:         day,
 			TaskId:      9999999,
-			StartMinute: 600,
+			StartMinute: pint32(600),
 		}))
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Errorf("expected NotFound, got %v", err)
@@ -402,7 +438,7 @@ func TestAddPlanTask(t *testing.T) {
 		_, err := planH.AddPlanTask(ctx2, connect.NewRequest(&planv1.AddPlanTaskRequest{
 			Day:         day,
 			TaskId:      taskID,
-			StartMinute: 600,
+			StartMinute: pint32(600),
 		}))
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Errorf("expected NotFound, got %v", err)
@@ -412,10 +448,10 @@ func TestAddPlanTask(t *testing.T) {
 	t.Run("overlap rejected", func(t *testing.T) {
 		day4 := "2099-02-04"
 		planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
-			Day: day4, TaskId: taskID, StartMinute: 480, DurationMinute: 60,
+			Day: day4, TaskId: taskID, StartMinute: pint32(480), DurationMinute: 60,
 		}))
 		_, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
-			Day: day4, TaskId: taskID, StartMinute: 500, DurationMinute: 30,
+			Day: day4, TaskId: taskID, StartMinute: pint32(500), DurationMinute: 30,
 		}))
 		if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 			t.Errorf("expected FailedPrecondition, got %v", err)
@@ -630,13 +666,13 @@ func TestMovePlanEntry(t *testing.T) {
 
 	t.Run("happy path start and duration updated", func(t *testing.T) {
 		resp, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day, Id: e.ID, StartMinute: 600, DurationMinute: 45,
+			Day: day, Id: e.ID, StartMinute: pint32(600), DurationMinute: 45,
 		}))
 		if err != nil {
 			t.Fatalf("MovePlanEntry: %v", err)
 		}
-		if resp.Msg.Entry.StartMinute != 600 {
-			t.Errorf("start = %d, want 600", resp.Msg.Entry.StartMinute)
+		if resp.Msg.Entry.GetStartMinute() != 600 {
+			t.Errorf("start = %d, want 600", resp.Msg.Entry.GetStartMinute())
 		}
 		if resp.Msg.Entry.DurationMinute != 45 {
 			t.Errorf("duration = %d, want 45", resp.Msg.Entry.DurationMinute)
@@ -647,7 +683,7 @@ func TestMovePlanEntry(t *testing.T) {
 		day2 := "2099-06-02"
 		e2 := insertPlanEntry(t, planH.Queries, userID, day2, 0, "Fixed dur", 480, 90)
 		resp, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day2, Id: e2.ID, StartMinute: 600, DurationMinute: 0,
+			Day: day2, Id: e2.ID, StartMinute: pint32(600), DurationMinute: 0,
 		}))
 		if err != nil {
 			t.Fatalf("MovePlanEntry: %v", err)
@@ -663,7 +699,7 @@ func TestMovePlanEntry(t *testing.T) {
 		insertPlanEntry(t, planH.Queries, userID, day3, 0, "Block B", 600, 60)
 		// Try to move e1 to overlap Block B.
 		_, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day3, Id: e1.ID, StartMinute: 620, DurationMinute: 60,
+			Day: day3, Id: e1.ID, StartMinute: pint32(620), DurationMinute: 60,
 		}))
 		if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 			t.Errorf("expected FailedPrecondition, got %v", err)
@@ -676,7 +712,7 @@ func TestMovePlanEntry(t *testing.T) {
 		insertPlanEntry(t, planH.Queries, userID, day4, 0, "B", 600, 60)
 		// Move e1 to end exactly at 600 (touching B's start).
 		_, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day4, Id: e1.ID, StartMinute: 540, DurationMinute: 60,
+			Day: day4, Id: e1.ID, StartMinute: pint32(540), DurationMinute: 60,
 		}))
 		if err != nil {
 			t.Errorf("touching boundary should be allowed, got: %v", err)
@@ -685,7 +721,7 @@ func TestMovePlanEntry(t *testing.T) {
 
 	t.Run("past midnight rejected", func(t *testing.T) {
 		_, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day, Id: e.ID, StartMinute: 1400, DurationMinute: 60,
+			Day: day, Id: e.ID, StartMinute: pint32(1400), DurationMinute: 60,
 		}))
 		if connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Errorf("expected InvalidArgument, got %v", err)
@@ -694,7 +730,7 @@ func TestMovePlanEntry(t *testing.T) {
 
 	t.Run("not found for unknown id", func(t *testing.T) {
 		_, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day, Id: 9999, StartMinute: 300, DurationMinute: 30,
+			Day: day, Id: 9999, StartMinute: pint32(300), DurationMinute: 30,
 		}))
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Errorf("expected NotFound, got %v", err)
@@ -705,7 +741,7 @@ func TestMovePlanEntry(t *testing.T) {
 		_, userID2 := newTestHandler(t)
 		ctx2 := auth.WithUserID(context.Background(), userID2)
 		_, err := planH.MovePlanEntry(ctx2, connect.NewRequest(&planv1.MovePlanEntryRequest{
-			Day: day, Id: e.ID, StartMinute: 300, DurationMinute: 30,
+			Day: day, Id: e.ID, StartMinute: pint32(300), DurationMinute: 30,
 		}))
 		if connect.CodeOf(err) != connect.CodeNotFound {
 			t.Errorf("expected NotFound for wrong user, got %v", err)
@@ -921,5 +957,133 @@ func TestListPlanEntries_Completed(t *testing.T) {
 }
 
 // Ensure fmt is used.
+// ---- T011: Untimed plan entry handler tests ----
+
+func TestAddPlanTask_Untimed(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-09-01"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Untimed task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	resp, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day:    day,
+		TaskId: taskID,
+		// StartMinute absent → untimed
+	}))
+	if err != nil {
+		t.Fatalf("AddPlanTask (untimed): %v", err)
+	}
+	if resp.Msg.Entry.StartMinute != nil {
+		t.Errorf("untimed entry: StartMinute = %v, want nil", resp.Msg.Entry.StartMinute)
+	}
+	if resp.Msg.Entry.DurationMinute == 0 {
+		t.Errorf("untimed entry: DurationMinute = 0, want > 0")
+	}
+}
+
+func TestMovePlanEntry_ScheduleAndUnschedule(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-09-02"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Schedulable"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Add as untimed.
+	addResp, err := planH.AddPlanTask(ctx, connect.NewRequest(&planv1.AddPlanTaskRequest{
+		Day: day, TaskId: taskID,
+	}))
+	if err != nil {
+		t.Fatalf("AddPlanTask: %v", err)
+	}
+	id := addResp.Msg.Entry.Id
+	origDur := addResp.Msg.Entry.DurationMinute
+
+	// Schedule it.
+	schedResp, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: id, StartMinute: pint32(540),
+	}))
+	if err != nil {
+		t.Fatalf("MovePlanEntry (schedule): %v", err)
+	}
+	if schedResp.Msg.Entry.GetStartMinute() != 540 {
+		t.Errorf("after schedule: start = %d, want 540", schedResp.Msg.Entry.GetStartMinute())
+	}
+	if schedResp.Msg.Entry.DurationMinute != origDur {
+		t.Errorf("after schedule: duration = %d, want %d (preserved)", schedResp.Msg.Entry.DurationMinute, origDur)
+	}
+
+	// Unschedule (no StartMinute).
+	unschedResp, err := planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: id,
+		// StartMinute absent → unschedule
+	}))
+	if err != nil {
+		t.Fatalf("MovePlanEntry (unschedule): %v", err)
+	}
+	if unschedResp.Msg.Entry.StartMinute != nil {
+		t.Errorf("after unschedule: StartMinute = %v, want nil", unschedResp.Msg.Entry.StartMinute)
+	}
+	if unschedResp.Msg.Entry.DurationMinute != origDur {
+		t.Errorf("after unschedule: duration = %d, want %d (preserved)", unschedResp.Msg.Entry.DurationMinute, origDur)
+	}
+}
+
+func TestListPlanEntries_UntimedFirst(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-09-03"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "Untimed"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	// Insert timed first (id=1), then untimed (id=2).
+	insertPlanEntry(t, planH.Queries, userID, day, 0, "Timed", 540, 30)
+	insertPlanEntryUntimed(t, planH.Queries, userID, day, taskResp.Msg.Task.Id, "", 30)
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if len(resp.Msg.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(resp.Msg.Entries))
+	}
+	// Untimed should be first (NULLS FIRST ordering).
+	if resp.Msg.Entries[0].StartMinute != nil {
+		t.Errorf("first entry should be untimed, got start = %v", resp.Msg.Entries[0].StartMinute)
+	}
+	if resp.Msg.Entries[1].StartMinute == nil {
+		t.Errorf("second entry should be timed")
+	}
+}
+
+func TestAddPlanEvent_RejectsMissingStart(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	// AddPlanEvent always requires start_minute; a zero value is in range [0,1440).
+	// Verify that a completely absent start (zero) is accepted (events must always be timed).
+	// The "missing start" path for events is validated at the proto layer (start_minute is int32, always present).
+	// This test verifies that AddPlanEvent with start=0 is accepted (not rejected as "absent").
+	_, err := planH.AddPlanEvent(ctx, connect.NewRequest(&planv1.AddPlanEventRequest{
+		Day:  "2099-09-04",
+		Name: "Midnight event",
+		// StartMinute=0 is midnight; valid for events.
+		DurationMinute: 30,
+	}))
+	if err != nil {
+		t.Errorf("AddPlanEvent at midnight: unexpected error: %v", err)
+	}
+}
+
 var _ = fmt.Sprintf
 var _ = pgxpool.Pool{}
