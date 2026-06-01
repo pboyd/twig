@@ -8,4 +8,5 @@ export const messages = {
   taskNotFound: "That task seems to have wandered off.",
   connectivityError: "Couldn't reach the server. Want to try again?",
   saveSuccess: "Saved. ✨",
+  allCompletedHidden: "All done! Your completed tasks are hiding — reveal them below.",
 } as const;

@@ -7,6 +7,8 @@ import {
 } from "../gen/task/v1/task-TaskService_connectquery";
 import { buildTree } from "../lib/tree";
 import type { TaskNode } from "../lib/tree";
+import { filterTree } from "../lib/filterTree";
+import { readShowCompleted, writeShowCompleted } from "../lib/showCompletedPref";
 import { AppHeader } from "../components/AppHeader";
 import { Spinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -58,8 +60,11 @@ export default function TaskTreePage() {
   const { data, isLoading, isError, error, refetch } = useQuery(listTasks, {});
   const { mutateAsync: doCreateTask, isPending } = useMutation(createTask);
 
+  const [showCompleted, setShowCompleted] = useState(readShowCompleted);
+
   const tasks = data?.tasks ?? [];
   const tree = buildTree(tasks);
+  const filteredTree = filterTree(tree, showCompleted);
 
   // Initialize expand state once when tree data arrives
   useEffect(() => {
@@ -102,9 +107,18 @@ export default function TaskTreePage() {
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Tasks
           </h1>
-          <Button onClick={() => setShowAddForm((v) => !v)} className="text-sm px-3">
-            + Add task
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setShowCompleted((v) => { const next = !v; writeShowCompleted(next); return next; })}
+              className="text-sm px-3"
+            >
+              {showCompleted ? "Hide completed" : "Show completed"}
+            </Button>
+            <Button onClick={() => setShowAddForm((v) => !v)} className="text-sm px-3">
+              + Add task
+            </Button>
+          </div>
         </div>
 
         {showAddForm && (
@@ -136,9 +150,22 @@ export default function TaskTreePage() {
           <EmptyState onAddTask={() => setShowAddForm(true)} />
         )}
 
-        {!isLoading && !isError && tree.length > 0 && (
+        {!isLoading && !isError && tasks.length > 0 && filteredTree.length === 0 && (
+          <div className="mx-4 mt-8 text-center text-gray-500 dark:text-gray-400">
+            <p>{messages.allCompletedHidden}</p>
+            <Button
+              variant="secondary"
+              onClick={() => { writeShowCompleted(true); setShowCompleted(true); }}
+              className="mt-3 text-sm px-3"
+            >
+              Show completed
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !isError && filteredTree.length > 0 && (
           <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
-            {tree.map((node) => (
+            {filteredTree.map((node) => (
               <TreeRow
                 key={String(node.task.id)}
                 node={node}
