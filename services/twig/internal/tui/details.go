@@ -26,8 +26,8 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 			fmt.Fprintf(&sb, "Due:  %s\n", due)
 		}
 
-		if task.GetEstimate() > 0 {
-			fmt.Fprintf(&sb, "Est:  %d pomodoros\n", task.GetEstimate())
+		if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), false); row != "" {
+			fmt.Fprintln(&sb, row)
 		}
 
 		if task.GetDescription() != "" {
@@ -60,8 +60,8 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Due: "), due)
 	}
 
-	if task.GetEstimate() > 0 {
-		fmt.Fprintf(&sb, "%s %d pomodoros\n", labelStyle.Render("Est: "), task.GetEstimate())
+	if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), true); row != "" {
+		fmt.Fprintln(&sb, row)
 	}
 
 	if task.GetDescription() != "" {

@@ -202,3 +202,16 @@ func findTaskName(tree []*cli.TreeNode, taskID int64) string {
 	}
 	return ""
 }
+
+// findTask looks up a task by ID in the in-memory tree. Returns nil when absent.
+func findTask(tree []*cli.TreeNode, taskID int64) *taskv1.Task {
+	for _, n := range tree {
+		if n.Task.Id == taskID {
+			return n.Task
+		}
+		if t := findTask(n.Children, taskID); t != nil {
+			return t
+		}
+	}
+	return nil
+}

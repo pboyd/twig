@@ -12,6 +12,8 @@ var (
 	errorColor   = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF5555"}
 	cursorBar    = lipgloss.AdaptiveColor{Light: "#005FD7", Dark: "#5F9FFF"} // = accent
 	cursorBg     = lipgloss.AdaptiveColor{Light: "#DDEEFF", Dark: "#1A2A3A"}
+	pomodoroDone = lipgloss.AdaptiveColor{Light: "#CC0000", Dark: "#FF5555"}
+	pomodoroOver = lipgloss.AdaptiveColor{Light: "#B58900", Dark: "#FFD75F"}
 )
 
 var (

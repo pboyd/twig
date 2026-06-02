@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	planv1 "github.com/pboyd/twig/services/twig/gen/plan/v1"
+	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/cli"
 )
 
@@ -338,7 +339,7 @@ func TestViewPlanning_EmptyDay_Placeholder(t *testing.T) {
 
 // TestRenderPlanDetail_NilEntry checks that nil entry returns a placeholder (T023).
 func TestRenderPlanDetail_NilEntry(t *testing.T) {
-	out := renderPlanDetail(nil, 40, false)
+	out := renderPlanDetail(nil, nil, 40, false)
 	if !strings.Contains(out, "no entry") && !strings.Contains(out, "nothing") && !strings.Contains(out, "(empty)") && out == "" {
 		// Any non-empty placeholder is fine.
 	}
@@ -354,7 +355,7 @@ func TestRenderPlanDetail_EventEntry(t *testing.T) {
 		DurationMinute: 30,
 		TaskId:         0, // event, not a task
 	}
-	out := renderPlanDetail(entry, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false)
 
 	if !strings.Contains(out, "Team sync") {
 		t.Errorf("event: expected entry name 'Team sync'; got %q", out)
@@ -377,7 +378,7 @@ func TestRenderPlanDetail_TaskEntry(t *testing.T) {
 		TaskId:         42,
 		Completed:      false,
 	}
-	out := renderPlanDetail(entry, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false)
 
 	if !strings.Contains(out, "Write tests") {
 		t.Errorf("task entry: expected name; got %q", out)
@@ -400,7 +401,7 @@ func TestRenderPlanDetail_CompletedTask(t *testing.T) {
 		TaskId:         5,
 		Completed:      true,
 	}
-	out := renderPlanDetail(entry, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false)
 	if !strings.Contains(out, "complet") { // "completed" or "complete"
 		t.Errorf("completed task: expected 'completed' status; got %q", out)
 	}
@@ -414,7 +415,7 @@ func TestRenderPlanDetail_Unstyled(t *testing.T) {
 		DurationMinute: 120,
 		TaskId:         0,
 	}
-	out := renderPlanDetail(entry, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false)
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("unstyled renderPlanDetail: must not emit ANSI codes; got %q", out)
 	}
@@ -683,5 +684,72 @@ func TestPlanGridOptions_CursorBgOnDarkBg(t *testing.T) {
 	// Dark cursorBg: #1A2A3A = rgb(26, 42, 58) → \x1b[48;2;26;42;58m in truecolor
 	if !strings.Contains(rendered, "26;42;58") {
 		t.Errorf("dark background: expected cursorBg dark RGB 26;42;58 in %q", rendered)
+	}
+}
+
+// ── T014: US2 — glyph row in planning detail ───────────────────────────────
+
+// TestRenderPlanDetail_GlyphRowLinkedTask asserts glyph row appears for linked task with estimate.
+func TestRenderPlanDetail_GlyphRowLinkedTask(t *testing.T) {
+	entry := &planv1.PlanEntry{
+		Name:           "Focus session",
+		StartMinute:    pint32(540),
+		DurationMinute: 50,
+		TaskId:         7,
+	}
+	task := &taskv1.Task{
+		Id:                     7,
+		Estimate:               3,
+		CompletedPomodoroCount: 1,
+	}
+
+	// Plain mode.
+	plain := renderPlanDetail(entry, task, 60, false)
+	n := strings.Count(plain, "🍅")
+	if n != 3 {
+		t.Errorf("plain: want 3 glyphs for estimate=3; got %d; %q", n, plain)
+	}
+	if strings.Contains(plain, "\x1b[") {
+		t.Errorf("plain mode must not emit ANSI; got %q", plain)
+	}
+
+	// Styled mode.
+	styled := renderPlanDetail(entry, task, 60, true)
+	ns := strings.Count(styled, "🍅")
+	if ns != 3 {
+		t.Errorf("styled: want 3 glyphs for estimate=3; got %d; %q", ns, styled)
+	}
+}
+
+// TestRenderPlanDetail_GlyphRowEventEntry asserts no glyph row for event entry (task nil).
+func TestRenderPlanDetail_GlyphRowEventEntry(t *testing.T) {
+	entry := &planv1.PlanEntry{
+		Name:           "Meeting",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         0,
+	}
+	out := renderPlanDetail(entry, nil, 60, false)
+	if strings.Contains(out, "🍅") {
+		t.Errorf("event entry must not show glyph row; got %q", out)
+	}
+}
+
+// TestRenderPlanDetail_GlyphRowNoPomodoros asserts no glyph row when task has 0 estimate and 0 completed.
+func TestRenderPlanDetail_GlyphRowNoPomodoros(t *testing.T) {
+	entry := &planv1.PlanEntry{
+		Name:           "No estimate task",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         3,
+	}
+	task := &taskv1.Task{
+		Id:                     3,
+		Estimate:               0,
+		CompletedPomodoroCount: 0,
+	}
+	out := renderPlanDetail(entry, task, 60, false)
+	if strings.Contains(out, "🍅") {
+		t.Errorf("task with 0 estimate and 0 completed must not show glyph row; got %q", out)
 	}
 }

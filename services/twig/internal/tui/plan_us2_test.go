@@ -150,7 +150,7 @@ func TestRenderPlanDetail_UntimedEntry(t *testing.T) {
 		DurationMinute: 60,
 		TaskId:         7,
 	}
-	out := renderPlanDetail(entry, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false)
 
 	if !strings.Contains(out, "Write spec") {
 		t.Errorf("untimed detail: expected entry name; got %q", out)

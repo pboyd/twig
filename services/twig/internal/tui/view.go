@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/cli"
 	"github.com/pboyd/twig/services/twig/internal/pomodoro"
 )
@@ -69,7 +70,12 @@ func (m Model) viewPlanning() string {
 		var rightTitle string
 		var gridFocused bool
 		if m.plan.mode == planList {
-			rightContent = renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), innerRightW, m.styled)
+			sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
+			var linkedTask *taskv1.Task
+			if sel != nil && sel.TaskId != 0 {
+				linkedTask = findTask(m.tree, sel.TaskId)
+			}
+			rightContent = renderPlanDetail(sel, linkedTask, innerRightW, m.styled)
 			rightTitle = "Details"
 			gridFocused = true
 		} else {
@@ -96,7 +102,12 @@ func (m Model) viewPlanning() string {
 
 	var rightContent string
 	if m.plan.mode == planList {
-		rightContent = renderPlanDetail(selectedPlanEntry(m.plan.entries, m.plan.cursor), rightWidth, m.styled)
+		sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
+		var linkedTask *taskv1.Task
+		if sel != nil && sel.TaskId != 0 {
+			linkedTask = findTask(m.tree, sel.TaskId)
+		}
+		rightContent = renderPlanDetail(sel, linkedTask, rightWidth, m.styled)
 	} else {
 		rightContent = m.renderPlanRightPane(rightWidth)
 	}
@@ -429,7 +440,8 @@ func (m Model) renderStatus() string {
 			mm := int(remaining.Minutes())
 			ss := int(remaining.Seconds()) % 60
 			if m.styled {
-				lines = append(lines, fmt.Sprintf("🍅 %02d:%02d still running. Quit anyway? [y]es [n]o", mm, ss))
+				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroDone)
+				lines = append(lines, fmt.Sprintf("%s %02d:%02d still running. Quit anyway? [y]es [n]o", glyphStyle.Render("🍅"), mm, ss))
 			} else {
 				lines = append(lines, fmt.Sprintf("Pom %02d:%02d still running. Quit anyway? [y]es [n]o", mm, ss))
 			}
@@ -440,7 +452,8 @@ func (m Model) renderStatus() string {
 			mm := int(remaining.Minutes())
 			ss := int(remaining.Seconds()) % 60
 			if m.styled {
-				lines = append(lines, fmt.Sprintf("🍅 %02d:%02d · %s  [x] cancel", mm, ss, m.pom.taskName))
+				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroDone)
+				lines = append(lines, fmt.Sprintf("%s %02d:%02d · %s  [x] cancel", glyphStyle.Render("🍅"), mm, ss, m.pom.taskName))
 			} else {
 				lines = append(lines, fmt.Sprintf("Pom %02d:%02d %s  [x] cancel", mm, ss, m.pom.taskName))
 			}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	planv1 "github.com/pboyd/twig/services/twig/gen/plan/v1"
+	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/cli"
 )
 
@@ -251,7 +252,8 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 // renderPlanDetail renders a read-only details pane for the given PlanEntry.
 // When entry is nil (empty day or no selection), a placeholder is returned.
 // For event entries (TaskId == 0), task-specific fields are omitted.
-func renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string {
+// task is the linked Task looked up from the in-memory tree (nil when absent or TaskId==0).
+func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, styled bool) string {
 	if entry == nil {
 		if styled {
 			return lipgloss.NewStyle().Foreground(dim).Render("(no entry selected)") + "\n"
@@ -283,6 +285,11 @@ func renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string {
 			}
 			fmt.Fprintf(&sb, "Task:     #%d  %s\n", entry.TaskId, status)
 		}
+		if task != nil {
+			if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), false); row != "" {
+				fmt.Fprintln(&sb, row)
+			}
+		}
 		return sb.String()
 	}
 
@@ -302,6 +309,11 @@ func renderPlanDetail(entry *planv1.PlanEntry, width int, styled bool) string {
 			taskStr += "  in progress"
 		}
 		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Task:    "), taskStr)
+	}
+	if task != nil {
+		if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), true); row != "" {
+			fmt.Fprintln(&sb, row)
+		}
 	}
 	return sb.String()
 }

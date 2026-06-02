@@ -1066,3 +1066,53 @@ func TestCrossUserIsolation(t *testing.T) {
 		}
 	})
 }
+
+// ---- Integration tests: ListTasks completed_pomodoro_count (T007) ----
+
+func TestListTasks_CompletedPomodoroCount(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	queries := h.Queries
+
+	// Create two tasks.
+	r1, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task with poms"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := r1.Msg.Task.Id
+
+	r2, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task no poms"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	noPomTaskID := r2.Msg.Task.Id
+
+	// Complete 2 pomodoros for taskID.
+	for i := 0; i < 2; i++ {
+		_, err = queries.StartPomodoro(ctx, db.StartPomodoroParams{UserID: userID, TaskID: taskID})
+		if err != nil {
+			t.Fatalf("StartPomodoro %d: %v", i, err)
+		}
+		_, err = queries.CompleteActivePomodoro(ctx, userID)
+		if err != nil {
+			t.Fatalf("CompleteActivePomodoro %d: %v", i, err)
+		}
+	}
+
+	listResp, err := h.ListTasks(ctx, connect.NewRequest(&taskv1.ListTasksRequest{}))
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+
+	counts := make(map[int64]int32)
+	for _, task := range listResp.Msg.Tasks {
+		counts[task.Id] = task.CompletedPomodoroCount
+	}
+
+	if got := counts[taskID]; got != 2 {
+		t.Errorf("task with 2 completed pomodoros: got completed_pomodoro_count=%d, want 2", got)
+	}
+	if got := counts[noPomTaskID]; got != 0 {
+		t.Errorf("task with no pomodoros: got completed_pomodoro_count=%d, want 0", got)
+	}
+}

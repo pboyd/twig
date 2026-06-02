@@ -142,5 +142,5 @@ Key frontend source paths:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/030-task-description-editing/plan.md`.
+`specs/031-pomodoro-progress-display/plan.md`.
 <!-- SPECKIT END -->

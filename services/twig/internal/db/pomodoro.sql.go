@@ -49,6 +49,38 @@ func (q *Queries) CompleteActivePomodoro(ctx context.Context, userID int64) (Pom
 	return i, err
 }
 
+const countCompletedPomodorosByTask = `-- name: CountCompletedPomodorosByTask :many
+SELECT task_id, count(*)::bigint AS count
+FROM pomodoros
+WHERE user_id = $1 AND complete
+GROUP BY task_id
+`
+
+type CountCompletedPomodorosByTaskRow struct {
+	TaskID int64
+	Count  int64
+}
+
+func (q *Queries) CountCompletedPomodorosByTask(ctx context.Context, userID int64) ([]CountCompletedPomodorosByTaskRow, error) {
+	rows, err := q.db.Query(ctx, countCompletedPomodorosByTask, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountCompletedPomodorosByTaskRow
+	for rows.Next() {
+		var i CountCompletedPomodorosByTaskRow
+		if err := rows.Scan(&i.TaskID, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCompletedPomodorosForTask = `-- name: CountCompletedPomodorosForTask :one
 SELECT count(*)::bigint AS count FROM pomodoros WHERE task_id = $1 AND user_id = $2 AND complete
 `

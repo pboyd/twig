@@ -21,3 +21,9 @@ SELECT * FROM pomodoros WHERE task_id = $1 AND user_id = $2 ORDER BY start_at;
 
 -- name: CountCompletedPomodorosForTask :one
 SELECT count(*)::bigint AS count FROM pomodoros WHERE task_id = $1 AND user_id = $2 AND complete;
+
+-- name: CountCompletedPomodorosByTask :many
+SELECT task_id, count(*)::bigint AS count
+FROM pomodoros
+WHERE user_id = $1 AND complete
+GROUP BY task_id;

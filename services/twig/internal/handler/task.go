@@ -193,9 +193,19 @@ func (t *Task) ListTasks(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	counts, err := t.Queries.CountCompletedPomodorosByTask(ctx, userID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	countMap := make(map[int64]int64, len(counts))
+	for _, c := range counts {
+		countMap[c.TaskID] = c.Count
+	}
 	tasks := make([]*taskv1.Task, len(rows))
 	for i, r := range rows {
-		tasks[i] = dbTaskToProto(r)
+		pt := dbTaskToProto(r)
+		pt.CompletedPomodoroCount = int32(countMap[r.ID])
+		tasks[i] = pt
 	}
 	return connect.NewResponse(&taskv1.ListTasksResponse{Tasks: tasks}), nil
 }

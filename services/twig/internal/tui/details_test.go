@@ -122,15 +122,69 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 	if !strings.Contains(out, "my task") {
 		t.Errorf("renderDetails styled: task name missing; got:\n%q", out)
 	}
-	// Labels must appear (dim column-aligned).
-	for _, label := range []string{"ID", "Est", "Completed"} {
+	// Labels must appear (dim column-aligned): no longer an "Est" label (replaced by glyph row).
+	for _, label := range []string{"ID", "Completed"} {
 		if !strings.Contains(out, label) {
 			t.Errorf("renderDetails styled: label %q missing; got:\n%q", label, out)
 		}
+	}
+	// Glyph row must appear for estimate=3, completed=0.
+	if strings.Count(out, "🍅") != 3 {
+		t.Errorf("renderDetails styled: want 3 glyphs for estimate=3; got:\n%q", out)
 	}
 	// Unstyled path: no ANSI codes on name (this checks styled=false, not styled=true).
 	plain := renderDetails(task, 60, false)
 	if strings.Contains(plain, "\x1b[") {
 		t.Errorf("renderDetails unstyled: must not emit ANSI codes; got:\n%q", plain)
+	}
+}
+
+// TestRenderDetails_GlyphRow (T011) asserts the glyph row replaces the numeric Est line.
+func TestRenderDetails_GlyphRow(t *testing.T) {
+	tests := []struct {
+		name      string
+		estimate  int32
+		completed int32
+		wantN     int
+		wantRow   bool
+	}{
+		{"estimate only", 5, 0, 5, true},
+		{"partial", 5, 2, 5, true},
+		{"over", 5, 6, 6, true},
+		{"no estimate no completions", 0, 0, 0, false},
+		{"only completions", 0, 2, 2, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			task := &taskv1.Task{
+				Id:                     1,
+				Name:                   "t",
+				Estimate:               tc.estimate,
+				CompletedPomodoroCount: tc.completed,
+			}
+			// Styled path.
+			out := renderDetails(task, 60, true)
+			n := strings.Count(out, "🍅")
+			if n != tc.wantN {
+				t.Errorf("styled: glyph count=%d, want %d; %q", n, tc.wantN, out)
+			}
+			// Must not have numeric Est: line.
+			if strings.Contains(out, "Est:") {
+				t.Errorf("styled: must not contain 'Est:' label; got %q", out)
+			}
+			// Plain path.
+			plain := renderDetails(task, 60, false)
+			np := strings.Count(plain, "🍅")
+			if np != tc.wantN {
+				t.Errorf("plain: glyph count=%d, want %d; %q", np, tc.wantN, plain)
+			}
+			if tc.wantRow && strings.Contains(plain, "\x1b[") {
+				t.Errorf("plain mode must not emit ANSI; got %q", plain)
+			}
+			// Must not have numeric Est: line in plain mode either.
+			if strings.Contains(plain, "Est:") {
+				t.Errorf("plain: must not contain 'Est:' label; got %q", plain)
+			}
+		})
 	}
 }

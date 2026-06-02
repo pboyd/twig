@@ -83,6 +83,9 @@ message Task {
   // User's estimated number of pomodoros to complete this task.
   // 0 means "no estimate" (default). Server enforces 0 <= estimate <= 10.
   int32 estimate = 7;
+  // Number of completed pomodoros for this task by the calling user.
+  // Read-only; computed server-side. 0 when none. Ignored on writes.
+  int32 completed_pomodoro_count = 8;
 }
 
 message Pomodoro {

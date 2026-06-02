@@ -294,7 +294,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		}
 		hookCmd := runPomHook(m.pomConfig.OnComplete, "on_complete")
-		return m, tea.Batch(hookCmd, pomBannerExpireCmd())
+		return m, tea.Batch(hookCmd, pomBannerExpireCmd(), listTasksCmd(m.client))
 
 	case pomBannerExpireMsg:
 		m.pom = nil

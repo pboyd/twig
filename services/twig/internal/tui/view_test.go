@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/cli"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -331,5 +332,42 @@ func TestRenderStatus_FooterAndError(t *testing.T) {
 	errStatus := m.renderStatus()
 	if !strings.Contains(errStatus, "something broke") {
 		t.Errorf("renderStatus with error: expected error text; got: %q", errStatus)
+	}
+}
+
+// TestRenderStatus_ActivePomodoroGlyph (T017) asserts the leading 🍅 on the active-pomodoro
+// status line carries pomodoroDone bold styling when styled==true, and the plain fallback
+// is unchanged (no ANSI codes).
+func TestRenderStatus_ActivePomodoroGlyph(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
+
+	m := ExportNewStyledModel(nil, nil, true)
+	m.pom = &activePom{
+		taskName: "my task",
+		startAt:  time.Now().Add(-5 * time.Minute),
+	}
+
+	status := m.renderStatus()
+
+	// Styled mode: 🍅 must appear with ANSI codes (the pomodoroDone+bold style).
+	if !strings.Contains(status, "🍅") {
+		t.Errorf("styled active-pom status: expected 🍅; got %q", status)
+	}
+	if !strings.Contains(status, "\x1b[") {
+		t.Errorf("styled active-pom status: expected ANSI codes for styled glyph; got %q", status)
+	}
+
+	// Plain mode: should use "Pom" fallback, no ANSI on the timer line.
+	mp := ExportNewStyledModel(nil, nil, false)
+	mp.pom = m.pom
+	plainStatus := mp.renderStatus()
+	if !strings.Contains(plainStatus, "Pom") {
+		t.Errorf("plain active-pom status: expected 'Pom' fallback; got %q", plainStatus)
+	}
+	// Only check the first line (the timer line); the help line uses lipgloss styles.
+	timerLine := strings.SplitN(plainStatus, "\n", 2)[0]
+	if strings.Contains(timerLine, "\x1b[") {
+		t.Errorf("plain active-pom timer line must not emit ANSI codes; got %q", timerLine)
 	}
 }

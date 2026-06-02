@@ -47,9 +47,12 @@ type Task struct {
 	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	// User's estimated number of pomodoros to complete this task.
 	// 0 means "no estimate" (default). Server enforces 0 <= estimate <= 10.
-	Estimate      int32 `protobuf:"varint,7,opt,name=estimate,proto3" json:"estimate,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Estimate int32 `protobuf:"varint,7,opt,name=estimate,proto3" json:"estimate,omitempty"`
+	// Number of completed pomodoros for this task by the calling user.
+	// Read-only; computed server-side. 0 when none. Ignored on writes.
+	CompletedPomodoroCount int32 `protobuf:"varint,8,opt,name=completed_pomodoro_count,json=completedPomodoroCount,proto3" json:"completed_pomodoro_count,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Task) Reset() {
@@ -127,6 +130,13 @@ func (x *Task) GetCompletedAt() *timestamppb.Timestamp {
 func (x *Task) GetEstimate() int32 {
 	if x != nil {
 		return x.Estimate
+	}
+	return 0
+}
+
+func (x *Task) GetCompletedPomodoroCount() int32 {
+	if x != nil {
+		return x.CompletedPomodoroCount
 	}
 	return 0
 }
@@ -1313,7 +1323,7 @@ var File_task_v1_task_proto protoreflect.FileDescriptor
 
 const file_task_v1_task_proto_rawDesc = "" +
 	"\n" +
-	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x85\x02\n" +
+	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1321,7 +1331,8 @@ const file_task_v1_task_proto_rawDesc = "" +
 	"\x03due\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x03due\x12 \n" +
 	"\tparent_id\x18\x05 \x01(\x03H\x00R\bparentId\x88\x01\x01\x12=\n" +
 	"\fcompleted_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12\x1a\n" +
-	"\bestimate\x18\a \x01(\x05R\bestimateB\f\n" +
+	"\bestimate\x18\a \x01(\x05R\bestimate\x128\n" +
+	"\x18completed_pomodoro_count\x18\b \x01(\x05R\x16completedPomodoroCountB\f\n" +
 	"\n" +
 	"_parent_id\"\xb9\x01\n" +
 	"\bPomodoro\x12\x0e\n" +
