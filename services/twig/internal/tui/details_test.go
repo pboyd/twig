@@ -39,6 +39,72 @@ func TestRenderDetails_CompletedTaskNoStrikethrough(t *testing.T) {
 	}
 }
 
+// ── T002: wrapDescription (US1) ──────────────────────────────────────────────
+
+func TestWrapDescription_TwoLines(t *testing.T) {
+	out := wrapDescription("Line one\nLine two", 80)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want 2 lines, got %d: %q", len(lines), out)
+	}
+	if lines[0] != "Line one" {
+		t.Errorf("line[0]: want %q, got %q", "Line one", lines[0])
+	}
+	if lines[1] != "Line two" {
+		t.Errorf("line[1]: want %q, got %q", "Line two", lines[1])
+	}
+}
+
+func TestWrapDescription_BlankLinePreserved(t *testing.T) {
+	out := wrapDescription("para1\n\npara2", 80)
+	lines := strings.Split(out, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want 3 lines (para1, blank, para2), got %d: %q", len(lines), out)
+	}
+	if lines[1] != "" {
+		t.Errorf("blank line[1]: want empty string, got %q", lines[1])
+	}
+}
+
+func TestWrapDescription_LeadingIndentPreserved(t *testing.T) {
+	out := wrapDescription("  - milk", 80)
+	if !strings.HasPrefix(out, "  ") {
+		t.Errorf("leading indentation not preserved: got %q", out)
+	}
+	if !strings.Contains(out, "- milk") {
+		t.Errorf("content missing from output: %q", out)
+	}
+}
+
+func TestWrapDescription_LongLineWraps(t *testing.T) {
+	out := wrapDescription("Line one\nthe quick brown fox jumps over", 20)
+	lines := strings.Split(out, "\n")
+	// "Line one" fits in 20 chars, then "the quick brown fox" (19 chars) and "jumps over" (10 chars)
+	if len(lines) < 3 {
+		t.Fatalf("long line should wrap to at least 3 lines; got %d: %q", len(lines), out)
+	}
+	if lines[0] != "Line one" {
+		t.Errorf("line[0] (short line) must be unchanged: got %q", lines[0])
+	}
+}
+
+func TestWrapDescription_MidLineSpacesCollapse(t *testing.T) {
+	out := wrapDescription("a     b", 80)
+	if out != "a b" {
+		t.Errorf("mid-line spaces: want %q, got %q", "a b", out)
+	}
+}
+
+func TestWrapDescription_ZeroWidthPassthrough(t *testing.T) {
+	text := "some\nmultiline\ntext"
+	if got := wrapDescription(text, 0); got != text {
+		t.Errorf("width=0: want unchanged text, got %q", got)
+	}
+	if got := wrapDescription(text, -5); got != text {
+		t.Errorf("width=-5: want unchanged text, got %q", got)
+	}
+}
+
 // TestRenderDetails_StyledHeader (T017) asserts the styled path renders name as bold header
 // and labels as dim column-aligned text (C5.1/C5.2).
 func TestRenderDetails_StyledHeader(t *testing.T) {

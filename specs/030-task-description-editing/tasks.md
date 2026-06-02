@@ -28,7 +28,7 @@ All source for this feature lives in `services/twig/internal/tui/`. Tests are in
 
 **Purpose**: Establish a known-green baseline before changing rendering or input handling.
 
-- [ ] T001 Confirm baseline is green: from `services/twig/` run `go build ./...` and `go test ./internal/tui/...`; record that the suite passes before changes.
+- [X] T001 Confirm baseline is green: from `services/twig/` run `go build ./...` and `go test ./internal/tui/...`; record that the suite passes before changes.
 
 ---
 
@@ -50,12 +50,12 @@ All source for this feature lives in `services/twig/internal/tui/`. Tests are in
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T002 [US1] Add failing table-driven tests in `internal/tui/details_test.go` for the new `wrapDescription(text, width)` and for `renderDetails` description output, covering: (a) `"Line one\nLine two"` → two lines; (b) blank line between paragraphs preserved; (c) leading indentation preserved on a line; (d) a line longer than `width` wraps while other line breaks remain; (e) mid-line multi-space run may collapse (`"a     b"` → `"a b"`); (f) `width <= 0` returns text unchanged. Assert exact line structure per `contracts/tui-description-editing.md` §C1.
+- [X] T002 [US1] Add failing table-driven tests in `internal/tui/details_test.go` for the new `wrapDescription(text, width)` and for `renderDetails` description output, covering: (a) `"Line one\nLine two"` → two lines; (b) blank line between paragraphs preserved; (c) leading indentation preserved on a line; (d) a line longer than `width` wraps while other line breaks remain; (e) mid-line multi-space run may collapse (`"a     b"` → `"a b"`); (f) `width <= 0` returns text unchanged. Assert exact line structure per `contracts/tui-description-editing.md` §C1.
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] In `internal/tui/details.go`, replace `wordWrap` with `wrapDescription(text string, width int) string` implementing the line-aware algorithm from `research.md` R2 (split on `\n`; preserve empty/blank lines; preserve each line's leading indentation; wrap each line's words to `width`; `width<=0` passthrough). Update both `renderDetails` call sites (styled + unstyled) to call `wrapDescription`. Grep the package for any other `wordWrap` references and update them.
-- [ ] T004 [US1] From `services/twig/` run `go test ./internal/tui/...` and confirm T002 tests pass; do a quick manual check per `quickstart.md` (multiline + blank line + indented description renders correctly).
+- [X] T003 [US1] In `internal/tui/details.go`, replace `wordWrap` with `wrapDescription(text string, width int) string` implementing the line-aware algorithm from `research.md` R2 (split on `\n`; preserve empty/blank lines; preserve each line's leading indentation; wrap each line's words to `width`; `width<=0` passthrough). Update both `renderDetails` call sites (styled + unstyled) to call `wrapDescription`. Grep the package for any other `wordWrap` references and update them.
+- [X] T004 [US1] From `services/twig/` run `go test ./internal/tui/...` and confirm T002 tests pass; do a quick manual check per `quickstart.md` (multiline + blank line + indented description renders correctly).
 
 **Checkpoint**: User Story 1 is fully functional — multiline descriptions display correctly, including pre-existing data. MVP shippable.
 
@@ -71,17 +71,17 @@ All source for this feature lives in `services/twig/internal/tui/`. Tests are in
 
 > Note (Go): these in-package tests reference symbols added in T008–T009; until those exist the `tui` package won't compile (a red state). Add the tests, then implement, within this phase. Do not start this phase until US1 (Phase 3) is green.
 
-- [ ] T005 [P] [US2] Add `internal/tui/editor_test.go` with table tests for `resolveEditor(editorEnv, path)` (cases: `""`→`vim [path]`; `"vim"`→`vim [path]`; `"code --wait"`→`code [--wait path]`; `"  emacsclient  -nw "`→`emacsclient [-nw path]`; path always last) and for the trailing-newline normalization (`"hello\n"`→`"hello"`, `"hello"`→`"hello"`, `"a\n\nb\n"`→`"a\n\nb"`, `""`→`""`) per `contracts/tui-description-editing.md` §C3/§C4.
-- [ ] T006 [P] [US2] Add tests in `internal/tui/edit_test.go`: pressing `ctrl+g` while `focusIndex == focusDescription` returns a non-nil `tea.Cmd` from `editFormModel.Update`; pressing `ctrl+g` while another field (Name/Due/Estimate) is focused does NOT trigger the editor (key forwarded/ignored).
-- [ ] T007 [P] [US2] Add tests in `internal/tui/update_test.go`: an `editorFinishedMsg{content}` (no error) while in `modeEdit` updates `m.edit.description` value and clears `m.err`; an `editorFinishedMsg{err}` leaves the description unchanged and sets a non-nil `m.err`.
+- [X] T005 [P] [US2] Add `internal/tui/editor_test.go` with table tests for `resolveEditor(editorEnv, path)` (cases: `""`→`vim [path]`; `"vim"`→`vim [path]`; `"code --wait"`→`code [--wait path]`; `"  emacsclient  -nw "`→`emacsclient [-nw path]`; path always last) and for the trailing-newline normalization (`"hello\n"`→`"hello"`, `"hello"`→`"hello"`, `"a\n\nb\n"`→`"a\n\nb"`, `""`→`""`) per `contracts/tui-description-editing.md` §C3/§C4.
+- [X] T006 [P] [US2] Add tests in `internal/tui/edit_test.go`: pressing `ctrl+g` while `focusIndex == focusDescription` returns a non-nil `tea.Cmd` from `editFormModel.Update`; pressing `ctrl+g` while another field (Name/Due/Estimate) is focused does NOT trigger the editor (key forwarded/ignored).
+- [X] T007 [P] [US2] Add tests in `internal/tui/update_test.go`: an `editorFinishedMsg{content}` (no error) while in `modeEdit` updates `m.edit.description` value and clears `m.err`; an `editorFinishedMsg{err}` leaves the description unchanged and sets a non-nil `m.err`.
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] In `internal/tui/keymap.go`, add `Editor key.Binding` to `KeyMap`, bound to `ctrl+g` with help `"ctrl+g", "edit in $EDITOR"`, initialized in `DefaultKeyMap()`.
-- [ ] T009 [US2] Create `internal/tui/editor.go` with: `editorFinishedMsg{content string; err error}`; `resolveEditor(editorEnv, path string) (name string, args []string)` (R4); a trailing-newline normalizer (strip exactly one `\n`); and `openEditorCmd(text string) tea.Cmd` that writes `text` to an `os.CreateTemp("", "twig-desc-*.md")`, builds the `exec.Cmd` via `resolveEditor(os.Getenv("EDITOR"), path)`, and returns `tea.ExecProcess(cmd, cb)` where `cb` reads+normalizes the file on success / passes the error through, and removes the temp file in both paths (per `research.md` R3/R5).
-- [ ] T010 [US2] In `internal/tui/edit.go`, in `editFormModel.Update`, before field-forwarding, handle `key.Matches(keyMsg, keys.Editor)` and `f.focusIndex == focusDescription` by returning `f, openEditorCmd(f.description.Value())`. Update `View` so the Description hint line advertises `ctrl+g: open editor` when Description is focused.
-- [ ] T011 [US2] In `internal/tui/update.go` `Model.Update`, add `case editorFinishedMsg`: when `m.mode` is one of `modeEdit`/`modeNewSubtask`/`modeNewRoot` — on `err == nil` call `m.edit.description.SetValue(msg.content)` and clear `m.err`; on error set a playful `m.err` (warm tone, matching existing notices) and leave the field unchanged; otherwise ignore. Return `m, nil`.
-- [ ] T012 [US2] From `services/twig/` run `go test ./internal/tui/...` (confirm T005–T007 pass), then `go build -o twig ./cmd/twig` and do the manual editor round-trip from `quickstart.md` (success, no-op idempotency, `code --wait` args, bogus-editor error).
+- [X] T008 [US2] In `internal/tui/keymap.go`, add `Editor key.Binding` to `KeyMap`, bound to `ctrl+g` with help `"ctrl+g", "edit in $EDITOR"`, initialized in `DefaultKeyMap()`.
+- [X] T009 [US2] Create `internal/tui/editor.go` with: `editorFinishedMsg{content string; err error}`; `resolveEditor(editorEnv, path string) (name string, args []string)` (R4); a trailing-newline normalizer (strip exactly one `\n`); and `openEditorCmd(text string) tea.Cmd` that writes `text` to an `os.CreateTemp("", "twig-desc-*.md")`, builds the `exec.Cmd` via `resolveEditor(os.Getenv("EDITOR"), path)`, and returns `tea.ExecProcess(cmd, cb)` where `cb` reads+normalizes the file on success / passes the error through, and removes the temp file in both paths (per `research.md` R3/R5).
+- [X] T010 [US2] In `internal/tui/edit.go`, in `editFormModel.Update`, before field-forwarding, handle `key.Matches(keyMsg, keys.Editor)` and `f.focusIndex == focusDescription` by returning `f, openEditorCmd(f.description.Value())`. Update `View` so the Description hint line advertises `ctrl+g: open editor` when Description is focused.
+- [X] T011 [US2] In `internal/tui/update.go` `Model.Update`, add `case editorFinishedMsg`: when `m.mode` is one of `modeEdit`/`modeNewSubtask`/`modeNewRoot` — on `err == nil` call `m.edit.description.SetValue(msg.content)` and clear `m.err`; on error set a playful `m.err` (warm tone, matching existing notices) and leave the field unchanged; otherwise ignore. Return `m, nil`.
+- [X] T012 [US2] From `services/twig/` run `go test ./internal/tui/...` (confirm T005–T007 pass), then `go build -o twig ./cmd/twig` and do the manual editor round-trip from `quickstart.md` (success, no-op idempotency, `code --wait` args, bogus-editor error).
 
 **Checkpoint**: Both user stories work independently — multiline display (US1) and external-editor authoring (US2).
 
@@ -91,8 +91,8 @@ All source for this feature lives in `services/twig/internal/tui/`. Tests are in
 
 **Purpose**: Final verification and consistency.
 
-- [ ] T013 [P] Review all new user-facing strings (the `ctrl+g` hint and the editor-failure error) for the warm/playful tone used elsewhere in the TUI (e.g. plan notices in `update.go`); adjust wording if flat.
-- [ ] T014 Run the full suite and build from `services/twig/`: `go test ./...` and `go build ./...`; complete the `quickstart.md` manual verification checklist end-to-end (including the existing-data regression in US1).
+- [X] T013 [P] Review all new user-facing strings (the `ctrl+g` hint and the editor-failure error) for the warm/playful tone used elsewhere in the TUI (e.g. plan notices in `update.go`); adjust wording if flat.
+- [X] T014 Run the full suite and build from `services/twig/`: `go test ./...` and `go build ./...`; complete the `quickstart.md` manual verification checklist end-to-end (including the existing-data regression in US1).
 
 ---
 

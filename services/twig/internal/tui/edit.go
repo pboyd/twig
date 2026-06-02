@@ -116,6 +116,9 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 
 	// Global shortcuts take priority over field forwarding.
 	switch {
+	case key.Matches(keyMsg, keys.Editor) && f.focusIndex == focusDescription:
+		return f, openEditorCmd(f.description.Value())
+
 	case key.Matches(keyMsg, keys.Save):
 		return f, func() tea.Msg {
 			return editSavedMsg{
@@ -221,7 +224,11 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString(f.name.View() + "\n\n")
 
 	sb.WriteString(fieldLabel("Description", f.focusIndex == focusDescription))
-	sb.WriteString(f.description.View() + "\n\n")
+	sb.WriteString(f.description.View() + "\n")
+	if f.focusIndex == focusDescription {
+		sb.WriteString("  ctrl+g: open editor\n")
+	}
+	sb.WriteString("\n")
 
 	sb.WriteString(fieldLabel("Due", f.focusIndex == focusDue))
 	sb.WriteString(f.due.View() + "\n\n")

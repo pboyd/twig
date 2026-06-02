@@ -1196,6 +1196,70 @@ func TestHelp_DismissOnPlanning(t *testing.T) {
 	}
 }
 
+// ── T007: editorFinishedMsg routing tests (US2) ──────────────────────────────
+
+// TestEditorFinished_SuccessUpdatesDescription verifies that a successful
+// editorFinishedMsg updates the description field and clears m.err.
+func TestEditorFinished_SuccessUpdatesDescription(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0)
+	m.err = errForTest("old error")
+
+	next, cmd := m.Update(editorFinishedMsg{content: "new content"})
+	nm := next.(Model)
+
+	if cmd != nil {
+		t.Errorf("expected nil cmd, got %v", cmd)
+	}
+	if nm.edit.description.Value() != "new content" {
+		t.Errorf("description: want %q, got %q", "new content", nm.edit.description.Value())
+	}
+	if nm.err != nil {
+		t.Errorf("err should be cleared after success, got %v", nm.err)
+	}
+}
+
+// TestEditorFinished_ErrorPreservesDescription verifies that an error in
+// editorFinishedMsg leaves the description unchanged and sets m.err.
+func TestEditorFinished_ErrorPreservesDescription(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0)
+	m.err = nil
+
+	next, cmd := m.Update(editorFinishedMsg{err: errForTest("editor failed")})
+	nm := next.(Model)
+
+	if cmd != nil {
+		t.Errorf("expected nil cmd, got %v", cmd)
+	}
+	if nm.edit.description.Value() != "original" {
+		t.Errorf("description should be unchanged: want %q, got %q", "original", nm.edit.description.Value())
+	}
+	if nm.err == nil {
+		t.Error("err should be set after editor error")
+	}
+}
+
+// TestEditorFinished_IgnoredInListMode verifies that editorFinishedMsg while in
+// modeList (not an edit mode) is ignored.
+func TestEditorFinished_IgnoredInListMode(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeList
+	m.err = nil
+
+	next, _ := m.Update(editorFinishedMsg{content: "something"})
+	nm := next.(Model)
+
+	if nm.mode != modeList {
+		t.Errorf("mode should remain modeList, got %v", nm.mode)
+	}
+	if nm.err != nil {
+		t.Errorf("err should remain nil in list mode, got %v", nm.err)
+	}
+}
+
 // TestMove_SuccessfulResultReturnsModeList checks that a successful moveTaskResultMsg
 // resets the dialog and refreshes the list.
 func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {

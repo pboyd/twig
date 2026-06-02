@@ -32,7 +32,7 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 
 		if task.GetDescription() != "" {
 			fmt.Fprintln(&sb)
-			desc := wordWrap(task.GetDescription(), width)
+			desc := wrapDescription(task.GetDescription(), width)
 			fmt.Fprintln(&sb, desc)
 		}
 
@@ -66,7 +66,7 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 
 	if task.GetDescription() != "" {
 		fmt.Fprintln(&sb)
-		desc := wordWrap(task.GetDescription(), width)
+		desc := wrapDescription(task.GetDescription(), width)
 		fmt.Fprintln(&sb, desc)
 	}
 
@@ -77,29 +77,52 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 	return sb.String()
 }
 
-// wordWrap wraps text at width characters on word boundaries.
-func wordWrap(text string, width int) string {
+// wrapDescription wraps text preserving the user's newlines, blank lines, and
+// per-line leading indentation. Each logical line's words are word-wrapped to
+// width; mid-line multi-space runs may collapse. width<=0 returns text unchanged.
+func wrapDescription(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return text
-	}
+	logicalLines := strings.Split(text, "\n")
+	out := make([]string, 0, len(logicalLines))
+	for _, line := range logicalLines {
+		trimmed := strings.TrimLeft(line, " \t")
+		indent := line[:len(line)-len(trimmed)]
 
-	var sb strings.Builder
-	lineLen := 0
-	for i, w := range words {
-		wlen := len(w)
-		if lineLen > 0 && lineLen+1+wlen > width {
-			sb.WriteByte('\n')
-			lineLen = 0
-		} else if i > 0 {
-			sb.WriteByte(' ')
-			lineLen++
+		if trimmed == "" {
+			out = append(out, indent)
+			continue
 		}
-		sb.WriteString(w)
-		lineLen += wlen
+
+		words := strings.Fields(trimmed)
+		avail := width - len(indent)
+		if avail <= 0 {
+			out = append(out, line)
+			continue
+		}
+
+		var sb strings.Builder
+		lineLen := 0
+		prefix := indent
+		for i, w := range words {
+			wlen := len(w)
+			if i > 0 && lineLen+1+wlen > avail {
+				out = append(out, prefix+sb.String())
+				sb.Reset()
+				lineLen = 0
+				prefix = ""
+				avail = width
+			} else if i > 0 {
+				sb.WriteByte(' ')
+				lineLen++
+			}
+			sb.WriteString(w)
+			lineLen += wlen
+		}
+		if sb.Len() > 0 {
+			out = append(out, prefix+sb.String())
+		}
 	}
-	return sb.String()
+	return strings.Join(out, "\n")
 }

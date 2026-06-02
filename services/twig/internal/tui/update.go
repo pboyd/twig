@@ -321,6 +321,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editSavedMsg:
 		return m.handleEditSaved(msg)
 
+	case editorFinishedMsg:
+		if m.mode == modeEdit || m.mode == modeNewSubtask || m.mode == modeNewRoot {
+			if msg.err != nil {
+				m.err = fmt.Errorf("couldn't open the editor — your description is safe, though! (%w)", msg.err)
+			} else {
+				m.edit.description.SetValue(msg.content)
+				m.err = nil
+			}
+		}
+		return m, nil
+
 	case editCancelledMsg:
 		m.mode = modeList
 		m.cursor = msg.originalCursor

@@ -41,6 +41,7 @@ type KeyMap struct {
 	Cancel   key.Binding
 	Tab      key.Binding
 	ShiftTab key.Binding
+	Editor   key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -169,6 +170,10 @@ func DefaultKeyMap() KeyMap {
 		ShiftTab: key.NewBinding(
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "prev field"),
+		),
+		Editor: key.NewBinding(
+			key.WithKeys("ctrl+g"),
+			key.WithHelp("ctrl+g", "edit in $EDITOR"),
 		),
 	}
 }
