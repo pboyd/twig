@@ -227,8 +227,8 @@ func TestTaskTimeForm_BlankStartCreatesUntimedEntry(t *testing.T) {
 
 	cmd := m.submitTaskTimeForm()
 
-	if m.plan.mode != planList {
-		t.Errorf("blank start: form should close (planList), got mode=%d", m.plan.mode)
+	if m.plan.mode != planTaskTime {
+		t.Errorf("blank start dispatch: form should stay open (planTaskTime), got mode=%d", m.plan.mode)
 	}
 	if m.plan.err != nil {
 		t.Errorf("blank start: expected no error, got %v", m.plan.err)
@@ -346,8 +346,8 @@ func TestPickerToTaskForm_BlankStartFlow(t *testing.T) {
 	// Submit with blank start → untimed entry.
 	cmd := m.submitTaskTimeForm()
 
-	if m.plan.mode != planList {
-		t.Errorf("after blank submit: expected planList, got %d", m.plan.mode)
+	if m.plan.mode != planTaskTime {
+		t.Errorf("after blank submit dispatch: form should stay open (planTaskTime), got %d", m.plan.mode)
 	}
 	if cmd == nil {
 		t.Fatal("after blank submit: expected a command")

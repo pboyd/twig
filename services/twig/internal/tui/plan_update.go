@@ -315,7 +315,6 @@ func (m *Model) submitTaskTimeForm() tea.Cmd {
 		}
 	}
 	m.plan.err = nil
-	m.plan.mode = planList
 	return addPlanTaskCmd(m.planClient, m.plan.day, m.plan.form.taskID, start, dur, timed)
 }
 
@@ -342,7 +341,6 @@ func (m *Model) submitEventForm() tea.Cmd {
 		}
 	}
 	m.plan.err = nil
-	m.plan.mode = planList
 	return addPlanEventCmd(m.planClient, m.plan.day, nameStr, start, dur)
 }
 
@@ -406,8 +404,9 @@ func (m *Model) submitEditForm() tea.Cmd {
 	}
 
 	m.plan.err = nil
-	m.plan.mode = planList
 	if len(cmds) == 0 {
+		// No change — close the form immediately (no planMutatedMsg will arrive).
+		m.plan.mode = planList
 		return nil
 	}
 	if len(cmds) == 1 {

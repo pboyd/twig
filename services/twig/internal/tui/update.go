@@ -357,6 +357,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Success: close any open form and reload the day.
+		m.plan.mode = planList
 		if msg.notice != "" {
 			m.notice = msg.notice
 		}

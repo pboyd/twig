@@ -471,8 +471,8 @@ func TestEditForm_RenameOnNameChange(t *testing.T) {
 
 	cmd := m.submitEditForm()
 
-	if m.plan.mode != planList {
-		t.Errorf("submitEditForm: expected mode planList, got %d", m.plan.mode)
+	if m.plan.mode != planEdit {
+		t.Errorf("submitEditForm dispatch: form should stay open (planEdit), got %d", m.plan.mode)
 	}
 	if cmd == nil {
 		t.Error("submitEditForm: expected a rename command, got nil")
@@ -504,8 +504,8 @@ func TestEditForm_MoveOnStartProvided(t *testing.T) {
 
 	cmd := m.submitEditForm()
 
-	if m.plan.mode != planList {
-		t.Errorf("submitEditForm move: expected planList, got %d", m.plan.mode)
+	if m.plan.mode != planEdit {
+		t.Errorf("submitEditForm move dispatch: form should stay open (planEdit), got %d", m.plan.mode)
 	}
 	if cmd == nil {
 		t.Error("submitEditForm move: expected a command, got nil")
@@ -796,8 +796,8 @@ func TestEditForm_NullUnschedules(t *testing.T) {
 
 	cmd := m.submitEditForm()
 
-	if m.plan.mode != planList {
-		t.Errorf("submitEditForm null: expected planList, got %d", m.plan.mode)
+	if m.plan.mode != planEdit {
+		t.Errorf("submitEditForm null dispatch: form should stay open (planEdit), got %d", m.plan.mode)
 	}
 	if cmd == nil {
 		t.Error("submitEditForm null: expected a move command, got nil")
@@ -839,6 +839,143 @@ func TestEditForm_TimeSchedules(t *testing.T) {
 		t.Errorf("submitEditForm time: StartMinute = %d, want 600 (10:00)", *fc.moveReq.StartMinute)
 	}
 }
+
+// ── form-stays-open-on-server-error ──────────────────────────────────────────
+
+// TestEditForm_StaysOpenOnServerError checks that when submitEditForm dispatches
+// an RPC but the server returns an error, the form remains open (planEdit) and
+// plan.err is set with the user's input preserved.
+func TestEditForm_StaysOpenOnServerError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Old Name", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	m.plan.form.fields[0].SetValue("New Name")
+
+	// Submit dispatches an RPC — form should stay open until server responds.
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planEdit {
+		t.Errorf("after dispatch: form should stay open (planEdit), got mode=%d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Fatal("submitEditForm: expected a command, got nil")
+	}
+
+	// Simulate a server error (e.g. time overlap).
+	next, _ := m.Update(planMutatedMsg{err: errForTest("time overlap")})
+	nm := next.(Model)
+
+	if nm.plan.mode != planEdit {
+		t.Errorf("server error: form should stay open (planEdit), got mode=%d", nm.plan.mode)
+	}
+	if nm.plan.err == nil {
+		t.Error("server error: plan.err should be set")
+	}
+	// User's typed input must be preserved so they can correct and resubmit.
+	if nm.plan.form.fields[0].Value() != "New Name" {
+		t.Errorf("server error: expected field value 'New Name', got %q", nm.plan.form.fields[0].Value())
+	}
+}
+
+// TestPlanMutatedMsg_Success_ClosesForm checks that planMutatedMsg success closes
+// any open form (sets planList) and issues a reload command.
+// The success handler, not the submit handler, is responsible for closing the form.
+func TestPlanMutatedMsg_Success_ClosesForm(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Old Name", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	// Open the edit form; mode is now planEdit — simulating the "waiting for
+	// server response" state after the fix (form open, RPC in flight).
+	m.initEditForm()
+
+	// Feed a success message while the form is still open.
+	next, cmd := m.Update(planMutatedMsg{highlightID: 5})
+	nm := next.(Model)
+
+	if nm.plan.mode != planList {
+		t.Errorf("success while form open: expected planList, got mode=%d", nm.plan.mode)
+	}
+	if cmd == nil {
+		t.Error("success: expected reload command, got nil")
+	}
+}
+
+// TestEventForm_StaysOpenOnServerError checks that when submitEventForm dispatches
+// an RPC but the server returns an error, the form remains open (planEventForm).
+func TestEventForm_StaysOpenOnServerError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.initAddEventForm()
+	m.plan.form.fields[0].SetValue("Meeting")
+	m.plan.form.fields[1].SetValue("09:00")
+	m.plan.form.fields[2].SetValue("30m")
+
+	cmd := m.submitEventForm()
+
+	if m.plan.mode != planEventForm {
+		t.Errorf("after dispatch: form should stay open (planEventForm), got mode=%d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Fatal("submitEventForm: expected a command, got nil")
+	}
+
+	// Simulate server error.
+	next, _ := m.Update(planMutatedMsg{err: errForTest("time overlap")})
+	nm := next.(Model)
+
+	if nm.plan.mode != planEventForm {
+		t.Errorf("server error: form should stay open (planEventForm), got mode=%d", nm.plan.mode)
+	}
+	if nm.plan.err == nil {
+		t.Error("server error: plan.err should be set")
+	}
+	if nm.plan.form.fields[0].Value() != "Meeting" {
+		t.Errorf("server error: expected event name 'Meeting' preserved, got %q", nm.plan.form.fields[0].Value())
+	}
+}
+
+// TestTaskTimeForm_StaysOpenOnServerError checks that when submitTaskTimeForm
+// dispatches an RPC but the server returns an error, the form remains open
+// (planTaskTime) with the user's input preserved.
+func TestTaskTimeForm_StaysOpenOnServerError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.initTaskTimeForm(42)
+	m.plan.form.fields[0].SetValue("09:00")
+	m.plan.form.fields[1].SetValue("30m")
+
+	cmd := m.submitTaskTimeForm()
+
+	if m.plan.mode != planTaskTime {
+		t.Errorf("after dispatch: form should stay open (planTaskTime), got mode=%d", m.plan.mode)
+	}
+	if cmd == nil {
+		t.Fatal("submitTaskTimeForm: expected a command, got nil")
+	}
+
+	// Simulate server error.
+	next, _ := m.Update(planMutatedMsg{err: errForTest("time overlap")})
+	nm := next.(Model)
+
+	if nm.plan.mode != planTaskTime {
+		t.Errorf("server error: form should stay open (planTaskTime), got mode=%d", nm.plan.mode)
+	}
+	if nm.plan.err == nil {
+		t.Error("server error: plan.err should be set")
+	}
+	if nm.plan.form.fields[0].Value() != "09:00" {
+		t.Errorf("server error: expected start time '09:00' preserved, got %q", nm.plan.form.fields[0].Value())
+	}
+}
+
+// ── TestAllTaskIDs_CollectsAllIDs ─────────────────────────────────────────────
 
 // TestAllTaskIDs_CollectsAllIDs checks that allTaskIDs returns every id in the
 // tree, including nested descendants (T011).
