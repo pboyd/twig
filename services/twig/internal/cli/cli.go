@@ -126,6 +126,8 @@ func runTask(args []string) int {
 		return runMod(client, addr, args[1:])
 	case "complete":
 		return runComplete(client, addr, args[1:])
+	case "uncomplete":
+		return runUncomplete(client, addr, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'twig help task' for usage.")
@@ -143,6 +145,7 @@ func printTaskUsage(w io.Writer) {
 	fmt.Fprintln(w, "  mod <id> [<name>] [--parent <id>] [--due <date>]")
 	fmt.Fprintln(w, "                   Modify a task")
 	fmt.Fprintln(w, "  complete <id>    Mark a task complete")
+	fmt.Fprintln(w, "  uncomplete <id>  Mark a completed task incomplete again")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Listing tasks:")
 	fmt.Fprintln(w, "  twig task [--completed | --all]")

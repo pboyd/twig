@@ -162,6 +162,18 @@ func (s *fakeTaskService) CompleteTask(_ context.Context, req *connect.Request[t
 	return connect.NewResponse(&taskv1.CompleteTaskResponse{Task: task}), nil
 }
 
+func (s *fakeTaskService) UncompleteTask(_ context.Context, req *connect.Request[taskv1.UncompleteTaskRequest]) (*connect.Response[taskv1.UncompleteTaskResponse], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[req.Msg.Id]
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task not found"))
+	}
+	task.CompletedAt = nil
+	return connect.NewResponse(&taskv1.UncompleteTaskResponse{Task: task}), nil
+}
+
 // isDescendant returns true if candidateID is a descendant of ancestorID. Caller must hold mu.
 func (s *fakeTaskService) isDescendant(ancestorID, candidateID int64) bool {
 	current := candidateID
@@ -787,5 +799,54 @@ func TestModArgParsing(t *testing.T) {
 				tc.checkUpdate(t, h)
 			}
 		})
+	}
+}
+
+// --- Tests for uncomplete ---
+
+func TestUncompleteLeaf(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"leaf task"}) // id=1
+	runCmd(runComplete, h, []string{"1"})
+	stdout, stderr, code := runCmd(runUncomplete, h, []string{"1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "back on your list") {
+		t.Errorf("expected 'back on your list', got: %s", stdout)
+	}
+}
+
+func TestUncompleteIdempotent(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"leaf task"}) // id=1
+	stdout, stderr, code := runCmd(runUncomplete, h, []string{"1"})
+	if code != 0 {
+		t.Fatalf("expected exit 0 on already-incomplete, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "already incomplete") {
+		t.Errorf("expected 'already incomplete', got: %s", stdout)
+	}
+}
+
+func TestUncompleteMalformedID(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runUncomplete, h, []string{"abc"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "integer") {
+		t.Errorf("expected integer error, got: %s", stderr)
+	}
+}
+
+func TestUncompleteNotFound(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runUncomplete, h, []string{"999"})
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if stderr == "" {
+		t.Error("expected error message on stderr")
 	}
 }

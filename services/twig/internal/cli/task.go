@@ -82,6 +82,39 @@ func runComplete(client taskv1connect.TaskServiceClient, addr string, args []str
 	return 0
 }
 
+func runUncomplete(client taskv1connect.TaskServiceClient, addr string, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: twig task uncomplete <id>")
+		return 1
+	}
+
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "<id> must be an integer, got %q\n", args[0])
+		return 1
+	}
+
+	getResp, err := client.GetTask(context.Background(), connect.NewRequest(&taskv1.GetTaskRequest{Id: id}))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, mapError(err, addr))
+		return 1
+	}
+
+	if getResp.Msg.Task.CompletedAt == nil {
+		fmt.Printf("task %d was already incomplete\n", id)
+		return 0
+	}
+
+	_, err = client.UncompleteTask(context.Background(), connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: id}))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, mapError(err, addr))
+		return 1
+	}
+
+	fmt.Printf("task %d is back on your list\n", id)
+	return 0
+}
+
 func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
