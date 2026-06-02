@@ -10,9 +10,15 @@ import (
 )
 
 type Config struct {
-	APIURL   string         `toml:"api_url"`
-	APIKey   string         `toml:"api_key"`
-	Pomodoro PomodoroConfig `toml:"pomodoro"`
+	APIURL    string             `toml:"api_url"`
+	APIKey    string             `toml:"api_key"`
+	Pomodoro  PomodoroConfig     `toml:"pomodoro"`
+	Profiles  map[string]Profile `toml:"profile"`
+}
+
+type Profile struct {
+	APIURL string `toml:"api_url"`
+	APIKey string `toml:"api_key"`
 }
 
 type PomodoroConfig struct {
@@ -48,6 +54,25 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("config: failed to parse %s: %w", path, err)
 	}
 	return cfg, nil
+}
+
+// Profile returns the effective Config for the named profile.
+// For "" or "default", it returns c unchanged with ok=true (root credentials).
+// For a named profile, it returns a copy of c with APIURL and APIKey replaced
+// by the profile's values (no fallback to root credentials); Pomodoro is always
+// from the root. Returns Config{}, false when the name is not found.
+func (c Config) Profile(name string) (Config, bool) {
+	if name == "" || name == "default" {
+		return c, true
+	}
+	p, ok := c.Profiles[name]
+	if !ok {
+		return Config{}, false
+	}
+	out := c
+	out.APIURL = p.APIURL
+	out.APIKey = p.APIKey
+	return out, true
 }
 
 // Resolve applies environment-variable overrides and built-in defaults.

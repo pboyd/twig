@@ -63,6 +63,8 @@ The CLI requires:
 
 Both can also be set in the optional config file at `~/.config/twig/config.toml`; env vars take precedence. See `specs/015-pomodoro-config-file/contracts/config-schema.md` for the full schema including pomodoro lifecycle hooks (`on_start`, `on_cancel`, `on_complete`).
 
+**Alternate profiles**: The CLI supports multiple accounts in one config file via `[profile.<name>]` TOML tables. Select a profile at launch with `--profile <name>` (flag wins) or `TWIG_PROFILE=<name>` (env var). Omitting the flag/env uses the root/default account. See `specs/033-alternate-profiles/contracts/config-schema.md` for the full profile schema and precedence rules.
+
 ## Architecture
 
 Single Go module at `services/twig/` with two binaries:

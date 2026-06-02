@@ -18,8 +18,8 @@ import (
 	"github.com/pboyd/twig/services/twig/internal/config"
 )
 
-func runPlan(args []string) int {
-	cfg, err := loadConfig()
+func runPlan(profile string, args []string) int {
+	cfg, err := loadConfig(profile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

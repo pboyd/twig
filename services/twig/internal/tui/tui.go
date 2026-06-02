@@ -12,7 +12,7 @@ import (
 
 // Run launches the interactive TUI. Returns an error if the program exits
 // abnormally.
-func Run(_ context.Context) error {
+func Run(_ context.Context, profile string) error {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return err
@@ -21,7 +21,11 @@ func Run(_ context.Context) error {
 	if err != nil {
 		return err
 	}
-	cfg = cfg.Resolve()
+	selected, ok := cfg.Profile(profile)
+	if !ok {
+		return fmt.Errorf("twig: hmm, I couldn't find a profile named %q — check the spelling, or add a [profile.%s] section to %s", profile, profile, path)
+	}
+	cfg = selected.Resolve()
 	if cfg.APIKey == "" {
 		fmt.Fprintf(os.Stderr, "no API key found — set TWIG_API_KEY or add api_key to %s\n", path)
 		os.Exit(1)

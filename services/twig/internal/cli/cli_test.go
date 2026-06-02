@@ -6,11 +6,170 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	taskv1connect "github.com/pboyd/twig/services/twig/gen/task/v1/taskv1connect"
 )
+
+// --- T018: unknown profile error (US4) ---
+
+func TestLoadConfigUnknownProfile(t *testing.T) {
+	xdgHome := writeConfigFile(t, `
+api_url = "http://root.example.com"
+api_key = "root-token"
+
+[profile.home]
+api_url = "http://home.example.com"
+api_key = "home-token"
+`)
+	t.Setenv("XDG_CONFIG_HOME", xdgHome)
+	t.Setenv("TWIG_ADDR", "")
+	t.Setenv("TWIG_API_KEY", "")
+
+	// Capture stderr to ensure no client is constructed / no request is made.
+	r, w, _ := os.Pipe()
+	oldErr := os.Stderr
+	os.Stderr = w
+
+	code := runTask("bogus", []string{})
+
+	w.Close()
+	os.Stderr = oldErr
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	errOut := string(buf[:n])
+
+	if code == 0 {
+		t.Error("expected non-zero exit code for unknown profile")
+	}
+	if !strings.Contains(errOut, "bogus") {
+		t.Errorf("error should mention the profile name 'bogus', got: %q", errOut)
+	}
+	if !strings.Contains(errOut, "config.toml") {
+		t.Errorf("error should mention the config path, got: %q", errOut)
+	}
+}
+
+// --- T016: profile-name resolution precedence tests ---
+
+func TestResolveProfileName(t *testing.T) {
+	tests := []struct {
+		name      string
+		flagValue string
+		flagSet   bool
+		envValue  string
+		want      string
+	}{
+		{
+			name:      "flag value wins when set",
+			flagValue: "work",
+			flagSet:   true,
+			envValue:  "home",
+			want:      "work",
+		},
+		{
+			name:      "TWIG_PROFILE used when flag absent",
+			flagValue: "",
+			flagSet:   false,
+			envValue:  "home",
+			want:      "home",
+		},
+		{
+			name:      "empty TWIG_PROFILE treated as unset (default)",
+			flagValue: "",
+			flagSet:   false,
+			envValue:  "",
+			want:      "",
+		},
+		{
+			name:      "flag default overrides TWIG_PROFILE=home",
+			flagValue: "default",
+			flagSet:   true,
+			envValue:  "home",
+			want:      "default",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("TWIG_PROFILE", tc.envValue)
+			got := ResolveProfileName(tc.flagValue, tc.flagSet)
+			if got != tc.want {
+				t.Errorf("ResolveProfileName(%q, %v) = %q, want %q", tc.flagValue, tc.flagSet, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- T005: global --profile flag extractor tests ---
+
+func TestExtractProfileFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantName string
+		wantRest []string
+		wantErr  bool
+	}{
+		{
+			name:     "no flag returns empty name and unchanged args",
+			args:     []string{"task"},
+			wantName: "",
+			wantRest: []string{"task"},
+		},
+		{
+			name:     "two-arg form --profile home",
+			args:     []string{"--profile", "home", "task"},
+			wantName: "home",
+			wantRest: []string{"task"},
+		},
+		{
+			name:     "equals form --profile=home",
+			args:     []string{"--profile=home", "task"},
+			wantName: "home",
+			wantRest: []string{"task"},
+		},
+		{
+			name:     "no subcommand after --profile (TUI launch)",
+			args:     []string{"--profile", "home"},
+			wantName: "home",
+			wantRest: []string{},
+		},
+		{
+			name:    "--profile with no value is a usage error",
+			args:    []string{"--profile"},
+			wantErr: true,
+		},
+		{
+			name:    "--profile= with empty value is a usage error",
+			args:    []string{"--profile="},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			name, _, rest, err := ExtractProfileFlag(tc.args)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if name != tc.wantName {
+				t.Errorf("name = %q, want %q", name, tc.wantName)
+			}
+			if !reflect.DeepEqual(rest, tc.wantRest) {
+				t.Errorf("rest = %v, want %v", rest, tc.wantRest)
+			}
+		})
+	}
+}
 
 // TestAPIKeyAttachedToRequests verifies that task commands send the
 // Authorization: Bearer header when TODO_API_KEY is set.
@@ -33,7 +192,7 @@ func TestAPIKeyAttachedToRequests(t *testing.T) {
 	t.Setenv("TWIG_API_KEY", wantKey)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	code := runTask([]string{})
+	code := runTask("", []string{})
 	if code != 0 {
 		t.Fatalf("runTask (default list): exit code %d", code)
 	}
@@ -57,7 +216,7 @@ func TestMissingAPIKey(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
-	code := runTask([]string{"list"})
+	code := runTask("", []string{"list"})
 
 	w.Close()
 	os.Stderr = origStderr
@@ -93,7 +252,7 @@ func TestRunTaskFlagArgsInvokesList(t *testing.T) {
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
 	os.Stdout = w
-	code := runTask([]string{"--all"})
+	code := runTask("", []string{"--all"})
 	w.Close()
 	os.Stdout = oldOut
 	buf := make([]byte, 4096)
@@ -120,7 +279,7 @@ func TestRunTaskEmptyArgsInvokesList(t *testing.T) {
 	r, w, _ := os.Pipe()
 	oldOut := os.Stdout
 	os.Stdout = w
-	code := runTask([]string{})
+	code := runTask("", []string{})
 	w.Close()
 	os.Stdout = oldOut
 	buf := make([]byte, 4096)
@@ -144,7 +303,7 @@ func TestRunTaskListSubcommandUnknown(t *testing.T) {
 	r, w, _ := os.Pipe()
 	oldErr := os.Stderr
 	os.Stderr = w
-	code := runTask([]string{"list"})
+	code := runTask("", []string{"list"})
 	w.Close()
 	os.Stderr = oldErr
 	buf := make([]byte, 4096)
@@ -175,7 +334,7 @@ func captureStdout(fn func()) string {
 
 func TestRunHelpNoArgs(t *testing.T) {
 	out := captureStdout(func() {
-		code := Run([]string{"help"})
+		code := Run("", []string{"help"})
 		if code != 0 {
 			t.Errorf("Run(help): expected exit 0, got %d", code)
 		}
@@ -187,7 +346,7 @@ func TestRunHelpNoArgs(t *testing.T) {
 
 func TestRunHelpFlag(t *testing.T) {
 	out := captureStdout(func() {
-		code := Run([]string{"--help"})
+		code := Run("", []string{"--help"})
 		if code != 0 {
 			t.Errorf("Run(--help): expected exit 0, got %d", code)
 		}
@@ -199,7 +358,7 @@ func TestRunHelpFlag(t *testing.T) {
 
 func TestRunHelpTask(t *testing.T) {
 	out := captureStdout(func() {
-		code := Run([]string{"help", "task"})
+		code := Run("", []string{"help", "task"})
 		if code != 0 {
 			t.Errorf("Run(help task): expected exit 0, got %d", code)
 		}
@@ -213,7 +372,7 @@ func TestRunHelpUnknown(t *testing.T) {
 	r, w, _ := os.Pipe()
 	oldErr := os.Stderr
 	os.Stderr = w
-	code := Run([]string{"help", "unknown"})
+	code := Run("", []string{"help", "unknown"})
 	w.Close()
 	os.Stderr = oldErr
 	buf := make([]byte, 4096)
@@ -264,7 +423,7 @@ api_key = "config-key-xyz"
 `, srv.URL))
 	t.Setenv("XDG_CONFIG_HOME", xdgHome)
 
-	code := runTask([]string{})
+	code := runTask("", []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
@@ -293,7 +452,7 @@ func TestEnvKeyWinsOverConfigKey(t *testing.T) {
 	xdgHome := writeConfigFile(t, `api_key = "config-key-should-lose"`)
 	t.Setenv("XDG_CONFIG_HOME", xdgHome)
 
-	code := runTask([]string{})
+	code := runTask("", []string{})
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}

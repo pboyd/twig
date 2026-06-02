@@ -15,7 +15,44 @@ import (
 
 const defaultAddr = "http://localhost:8080"
 
-func loadConfig() (config.Config, error) {
+// ResolveProfileName determines the effective profile name.
+// flagValue is the value from --profile (if present); flagSet indicates
+// whether the flag was provided. When the flag is absent, TWIG_PROFILE is
+// consulted. An empty value from either source means the default/root profile.
+// Note: env vars TWIG_ADDR/TWIG_API_KEY override credentials after profile
+// selection via Resolve(), guaranteeing env wins for credentials.
+func ResolveProfileName(flagValue string, flagSet bool) string {
+	if flagSet {
+		return flagValue
+	}
+	return os.Getenv("TWIG_PROFILE")
+}
+
+// ExtractProfileFlag scans the leading args for --profile <name> or
+// --profile=<name>, strips it, and returns the name, whether the flag was
+// present, and the remaining args.
+// Returns an error if --profile is present but has no value.
+func ExtractProfileFlag(args []string) (name string, set bool, rest []string, err error) {
+	if len(args) == 0 {
+		return "", false, args, nil
+	}
+	if strings.HasPrefix(args[0], "--profile=") {
+		val := strings.TrimPrefix(args[0], "--profile=")
+		if val == "" {
+			return "", false, nil, fmt.Errorf("twig: --profile needs a profile name (try: twig --profile home …)")
+		}
+		return val, true, args[1:], nil
+	}
+	if args[0] == "--profile" {
+		if len(args) < 2 {
+			return "", false, nil, fmt.Errorf("twig: --profile needs a profile name (try: twig --profile home …)")
+		}
+		return args[1], true, args[2:], nil
+	}
+	return "", false, args, nil
+}
+
+func loadConfig(profile string) (config.Config, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
 		return config.Config{}, err
@@ -24,11 +61,15 @@ func loadConfig() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-	return cfg.Resolve(), nil
+	selected, ok := cfg.Profile(profile)
+	if !ok {
+		return config.Config{}, fmt.Errorf("twig: hmm, I couldn't find a profile named %q — check the spelling, or add a [profile.%s] section to %s", profile, profile, path)
+	}
+	return selected.Resolve(), nil
 }
 
 // Run is the entrypoint for the CLI. It returns the process exit code.
-func Run(args []string) int {
+func Run(profile string, args []string) int {
 	if len(args) == 0 {
 		printRootUsage(os.Stderr)
 		return 1
@@ -40,11 +81,11 @@ func Run(args []string) int {
 
 	switch args[0] {
 	case "task":
-		return runTask(args[1:])
+		return runTask(profile, args[1:])
 	case "pom":
-		return runPomTop(args[1:])
+		return runPomTop(profile, args[1:])
 	case "plan":
-		return runPlan(args[1:])
+		return runPlan(profile, args[1:])
 	case "help":
 		return runHelp(args[1:])
 	default:
@@ -76,8 +117,12 @@ func runHelp(args []string) int {
 }
 
 func printRootUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: twig <command> [arguments]")
+	fmt.Fprintln(w, "Usage: twig [--profile <name>] <command> [arguments]")
+	fmt.Fprintln(w, "       twig [--profile <name>]")
 	fmt.Fprintln(w, "       twig help [command]")
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Global options:")
+	fmt.Fprintln(w, "  --profile <name>   Use a named account profile (or set TWIG_PROFILE)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  task   Manage tasks (add, remove, modify, list)")
@@ -85,16 +130,16 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plan   Daily planning (schedule tasks and events)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'twig help <command>' for command-specific help.")
-	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml (see specs/015-pomodoro-config-file/contracts/config-schema.md)")
+	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml (see specs/033-alternate-profiles/contracts/config-schema.md)")
 }
 
-func runTask(args []string) int {
+func runTask(profile string, args []string) int {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		printTaskUsage(os.Stdout)
 		return 0
 	}
 
-	cfg, err := loadConfig()
+	cfg, err := loadConfig(profile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
