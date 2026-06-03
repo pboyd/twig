@@ -6,17 +6,15 @@ Running `twig` with no arguments launches the interactive TUI on a TTY.
 
 ## Commands
 
-All Go commands run from `services/twig/`:
-
 ```bash
-# Run all tests
+# Run CLI tests (from repo root)
+go test ./...
+
+# Run server tests
 cd services/twig && go test ./...
 
-# Run tests for a specific package
-cd services/twig && go test ./internal/cli/...
-
-# Build the CLI binary
-cd services/twig && go build -o twig ./cmd/twig
+# Build the CLI binary (from repo root)
+go build -o twig ./cmd/twig
 
 # Build and run the server (via podman-compose)
 make dev
@@ -67,23 +65,33 @@ Both can also be set in the optional config file at `~/.config/twig/config.toml`
 
 ## Architecture
 
-Single Go module at `services/twig/` with two binaries:
+Three Go modules:
+
+| Module | Path | Purpose |
+|---|---|---|
+| `github.com/pboyd/twig` | repo root | CLI/TUI (`cmd/twig`, `internal/{cli,tui,config,pomodoro}`) |
+| `github.com/pboyd/twig/api` | `api/` | Shared protobuf types + ConnectRPC stubs (`api/gen/`) |
+| `github.com/pboyd/twig/services/twig` | `services/twig/` | HTTP server (`cmd/server`, `internal/{handler,db,auth,plan}`) |
+
+Both the root CLI module and the server module depend on `api/` via local `replace` directives. This lets them share generated code without the CLI pulling in server-only deps (pgx, golang-migrate) or vice-versa.
+
+### Binaries
 
 - **`cmd/server`** — HTTP/2 server (port 8080) with ConnectRPC (gRPC-compatible) handlers and a plain HTTP auth layer (`/auth/login`, `/auth/logout`). Runs migrations on startup.
 - **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning).
 
 ### Key internal packages
 
-| Package | Role |
-|---|---|
-| `internal/db` | sqlc-generated query layer (PostgreSQL via pgx/v5). **Do not edit by hand** — regenerate with `sqlc generate`. |
-| `internal/handler` | ConnectRPC service implementations (`Task`, `Plan`, `Health`, `Pomodoro`). Each handler holds a `*db.Queries`. |
-| `internal/auth` | Session/API-key management and HTTP middleware. |
-| `internal/cli` | All CLI rendering and command dispatch. TTY detection gates ANSI styling. |
-| `internal/config` | Config file loading (`~/.config/twig/config.toml`), env-var precedence resolution. |
-| `internal/plan` | Daily plan business logic (separate from CLI rendering). |
-| `internal/pomodoro` | Pomodoro timer logic. |
-| `gen/` | Protobuf + ConnectRPC generated code. **Do not edit by hand** — regenerate with `make proto`. |
+| Package | Module | Role |
+|---|---|---|
+| `internal/db` | `services/twig` | sqlc-generated query layer (PostgreSQL via pgx/v5). **Do not edit by hand** — regenerate with `sqlc generate`. |
+| `internal/handler` | `services/twig` | ConnectRPC service implementations (`Task`, `Plan`, `Health`, `Pomodoro`). Each handler holds a `*db.Queries`. |
+| `internal/auth` | `services/twig` | Session/API-key management and HTTP middleware. |
+| `internal/cli` | root | All CLI rendering and command dispatch. TTY detection gates ANSI styling. |
+| `internal/config` | root | Config file loading (`~/.config/twig/config.toml`), env-var precedence resolution. |
+| `internal/plan` | `services/twig` | Daily plan business logic (separate from CLI rendering). |
+| `internal/pomodoro` | root | Pomodoro timer logic. |
+| `api/gen/` | `api` | Protobuf + ConnectRPC generated code. **Do not edit by hand** — regenerate with `make proto`. |
 
 ### Data flow
 
@@ -95,11 +103,11 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 
 ### Adding a new API endpoint
 
-1. Define the message/service in `proto/<domain>/v1/`.
-2. `make proto` to regenerate `gen/`.
-3. Implement the service interface in `internal/handler/`.
-4. Register the handler in `cmd/server/main.go`.
-5. Add SQL queries in `db/queries/`, run `sqlc generate` to update `internal/db/`.
+1. Define the message/service in `api/proto/<domain>/v1/`.
+2. `make proto` to regenerate `api/gen/`.
+3. Implement the service interface in `services/twig/internal/handler/`.
+4. Register the handler in `services/twig/cmd/server/main.go`.
+5. Add SQL queries in `services/twig/db/queries/`, run `sqlc generate` to update `internal/db/`.
 
 ### Testing conventions
 
@@ -108,7 +116,7 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 
 ## Frontend (services/twig-web/)
 
-A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the Go module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
+A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
 
 All frontend commands run from `services/twig-web/`:
 
@@ -116,7 +124,7 @@ All frontend commands run from `services/twig-web/`:
 # Install dependencies
 npm install
 
-# Generate TypeScript from proto (re-run when services/twig/proto changes)
+# Generate TypeScript from proto (re-run when api/proto changes)
 npm run gen
 
 # Run the Vite dev server (proxies /auth, /task.v1, /health.v1 → :8080)

@@ -17,9 +17,9 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/pboyd/twig/services/twig/gen/health/v1/healthv1connect"
-	"github.com/pboyd/twig/services/twig/gen/plan/v1/planv1connect"
-	"github.com/pboyd/twig/services/twig/gen/task/v1/taskv1connect"
+	"github.com/pboyd/twig/api/gen/health/v1/healthv1connect"
+	"github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
+	"github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
 	"github.com/pboyd/twig/services/twig/internal/handler"

@@ -5,7 +5,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	healthv1 "github.com/pboyd/twig/services/twig/gen/health/v1"
+	healthv1 "github.com/pboyd/twig/api/gen/health/v1"
 	"github.com/pboyd/twig/services/twig/internal/db"
 )
 

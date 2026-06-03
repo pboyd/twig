@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
 	"github.com/pboyd/twig/services/twig/internal/handler"

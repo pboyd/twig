@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
 // testPool returns a pgxpool.Pool connected to DATABASE_URL for use in

@@ -3,16 +3,16 @@
 INVENTORY ?= deploy/inventories/test.ini
 
 proto:
-	cd services/twig && buf generate
+	cd api && buf generate
 
 build:
-	podman build -t twig-server services/twig
+	podman build -t twig-server -f services/twig/Dockerfile .
 
 cli:
-	cd services/twig && go build -o twig ./cmd/twig
+	go build -o twig ./cmd/twig
 
 cli-install:
-	cd services/twig && go install ./cmd/twig
+	go install ./cmd/twig
 
 dev:
 	podman-compose up -d --build --force-recreate server

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
 )

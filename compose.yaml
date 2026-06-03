@@ -16,7 +16,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   server:
-    build: services/twig
+    build:
+      context: .
+      dockerfile: services/twig/Dockerfile
     environment:
       DATABASE_URL: postgres://twig:twig@postgres:5432/twig?sslmode=disable
     ports:

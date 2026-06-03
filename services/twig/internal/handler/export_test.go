@@ -1,7 +1,7 @@
 package handler
 
 import (
-	taskv1 "github.com/pboyd/twig/services/twig/gen/task/v1"
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/db"
 )
 

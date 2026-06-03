@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package health.v1;
+
+option go_package = "github.com/pboyd/twig/api/gen/health/v1;healthv1";
+
+service HealthService {
+  rpc Check(CheckRequest) returns (CheckResponse);
+}
+
+message CheckRequest {}
+
+message CheckResponse {
+  string status = 1;
+}
