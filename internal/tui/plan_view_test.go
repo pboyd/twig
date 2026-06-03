@@ -56,17 +56,19 @@ func TestTabBar_StyledActiveHighlighted(t *testing.T) {
 // TestPlanningView_RendersGrid checks that renderPlanningView calls RenderGrid
 // and produces output containing the grid (now-marker on today).
 func TestPlanningView_RendersGrid(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
+	// Fixed day + pre-window now → TOP-TRUNCATE keeps the 09:00 entry visible
+	// regardless of when the test runs.
+	day := "2026-05-27"
 	m := ExportNewModel(nil, nil)
 	m.width = 80
 	m.height = 40
-	m.plan.day = today
+	m.plan.day = day
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+		{Day: day, Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 
-	now := time.Now()
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before 08:00 → TOP-TRUNCATE
 	out := m.renderPlanningView(80, 35, now)
 
 	if !strings.Contains(out, "Standup") {
@@ -147,16 +149,17 @@ func TestPlanningView_NowMarker_NotToday(t *testing.T) {
 // TestPlanningView_CompletedStrikethrough checks that a completed entry renders
 // with strikethrough in styled mode.
 func TestPlanningView_CompletedStrikethrough(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
+	// Fixed day + pre-window now → TOP-TRUNCATE keeps the 09:00 entry visible.
+	day := "2026-05-27"
 	m := ExportNewStyledModel(nil, nil, true)
 	m.width = 80
-	m.plan.day = today
+	m.plan.day = day
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Day: today, Id: 1, Name: "Done", StartMinute: pint32(540), DurationMinute: 120, Completed: true},
+		{Day: day, Id: 1, Name: "Done", StartMinute: pint32(540), DurationMinute: 120, Completed: true},
 	}
 
-	now := time.Now()
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before 08:00 → TOP-TRUNCATE
 	out := m.renderPlanningView(80, 35, now)
 
 	if !strings.Contains(out, cli.DimStrike("Done")) {
@@ -543,7 +546,9 @@ func TestViewPlanning_FormInRightPane_Unstyled(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	m := ExportNewModel(nil, nil)
 	m.width = 80
-	m.height = 20
+	// Height 45 gives gridHeight≈43 ≥ baseRows(37), so GridWindow uses FILL mode
+	// and the 09:00 entry is visible regardless of the wall-clock time.
+	m.height = 45
 	m.activeTab = tabPlanning
 	m.plan.day = today
 	m.plan.loaded = true

@@ -72,18 +72,20 @@ func TestSplitPlanEntries_AllUntimed(t *testing.T) {
 // TestUntimedPane_RendersBoxesAboveGrid checks that renderPlanningView includes
 // untimed entry names above the timed grid content.
 func TestUntimedPane_RendersBoxesAboveGrid(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
+	// Use a fixed day + pre-window now so GridWindow uses TOP-TRUNCATE,
+	// keeping the 09:00 timed entry visible regardless of when the test runs.
+	day := "2026-05-27"
 	m := ExportNewModel(nil, nil)
 	m.width = 80
 	m.height = 40
-	m.plan.day = today
+	m.plan.day = day
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
 		{Id: 1, Name: "Must-do task"},
 		{Id: 2, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 
-	now := time.Now()
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before 08:00 → TOP-TRUNCATE
 	out := m.renderPlanningView(80, 35, now)
 
 	if !strings.Contains(out, "Must-do task") {
@@ -102,17 +104,18 @@ func TestUntimedPane_RendersBoxesAboveGrid(t *testing.T) {
 // TestUntimedPane_HiddenWhenEmpty checks that renderPlanningView omits the
 // untimed pane section when all entries are timed.
 func TestUntimedPane_HiddenWhenEmpty(t *testing.T) {
-	today := time.Now().Format("2006-01-02")
+	// Fixed day + pre-window now → TOP-TRUNCATE keeps the 09:00 entry visible.
+	day := "2026-05-27"
 	m := ExportNewModel(nil, nil)
 	m.width = 80
 	m.height = 40
-	m.plan.day = today
+	m.plan.day = day
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
 		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
 	}
 
-	now := time.Now()
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before 08:00 → TOP-TRUNCATE
 	out := m.renderPlanningView(80, 35, now)
 	if !strings.Contains(out, "Standup") {
 		t.Errorf("no untimed entries: expected 'Standup' still in output:\n%s", out)
