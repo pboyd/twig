@@ -8,6 +8,8 @@ type KeyMap struct {
 	PlanningMode bool
 	Up           key.Binding
 	Down         key.Binding
+	First        key.Binding
+	Last         key.Binding
 	Collapse     key.Binding
 	Expand       key.Binding
 	Edit         key.Binding
@@ -54,6 +56,14 @@ func DefaultKeyMap() KeyMap {
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
 			key.WithHelp("↓/j", "down"),
+		),
+		First: key.NewBinding(
+			key.WithKeys("home"),
+			key.WithHelp("home", "first"),
+		),
+		Last: key.NewBinding(
+			key.WithKeys("end"),
+			key.WithHelp("end", "last"),
 		),
 		Collapse: key.NewBinding(
 			key.WithKeys("left", "h"),

@@ -680,6 +680,16 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = clampCursor(m.cursor, len(m.visible))
 		}
 
+	case key.Matches(msg, m.keys.First):
+		m.pendingComplete = nil
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.cursor = clampCursor(0, len(m.visible))
+
+	case key.Matches(msg, m.keys.Last):
+		m.pendingComplete = nil
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.cursor = clampCursor(len(m.visible)-1, len(m.visible))
+
 	case key.Matches(msg, m.keys.Collapse):
 		if len(m.visible) > 0 {
 			row := m.visible[m.cursor]

@@ -37,6 +37,10 @@ func pressKey(m Model, k string) Model {
 		msg = tea.KeyMsg{Type: tea.KeyLeft}
 	} else if k == "right" {
 		msg = tea.KeyMsg{Type: tea.KeyRight}
+	} else if k == "home" {
+		msg = tea.KeyMsg{Type: tea.KeyHome}
+	} else if k == "end" {
+		msg = tea.KeyMsg{Type: tea.KeyEnd}
 	}
 	next, _ := m.Update(msg)
 	return next.(Model)
@@ -89,6 +93,39 @@ func TestNavigation_ArrowKeysAlsoWork(t *testing.T) {
 	m = pressKey(m, "up")
 	if m.cursor != 0 {
 		t.Errorf("arrow up: want 0, got %d", m.cursor)
+	}
+}
+
+func TestNavigation_HomeJumpsToFirst(t *testing.T) {
+	m := buildTestModel()
+	m.cursor = 2
+	m = pressKey(m, "home")
+	if m.cursor != 0 {
+		t.Errorf("after home: want cursor=0, got %d", m.cursor)
+	}
+}
+
+func TestNavigation_EndJumpsToLast(t *testing.T) {
+	m := buildTestModel()
+	m = pressKey(m, "end")
+	if m.cursor != len(m.visible)-1 {
+		t.Errorf("after end: want cursor=%d, got %d", len(m.visible)-1, m.cursor)
+	}
+}
+
+func TestNavigation_HomeOnEmptyList(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m = pressKey(m, "home")
+	if m.cursor != 0 {
+		t.Errorf("home on empty list: want cursor=0, got %d", m.cursor)
+	}
+}
+
+func TestNavigation_EndOnEmptyList(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m = pressKey(m, "end")
+	if m.cursor != 0 {
+		t.Errorf("end on empty list: want cursor=0, got %d", m.cursor)
 	}
 }
 
