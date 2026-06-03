@@ -5,3 +5,6 @@ Dockerfile*
 *.log
 .env*
 specs/
+services/twig-web/node_modules/
+services/twig-web/dist/
+/twig
