@@ -144,5 +144,5 @@ Key frontend source paths:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/033-alternate-profiles/plan.md`.
+`specs/034-plan-form-parity/plan.md`.
 <!-- SPECKIT END -->
