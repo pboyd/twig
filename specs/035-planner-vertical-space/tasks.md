@@ -27,7 +27,7 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 **Purpose**: Confirm a green baseline before touching the shared rendering code.
 
-- [ ] T001 Confirm baseline green: run `go test ./...` from `services/twig/` and note current pass state of `internal/cli` and `internal/tui` (establishes the CLI-parity reference for later diffs).
+- [x] T001 Confirm baseline green: run `go test ./...` from `services/twig/` and note current pass state of `internal/cli` and `internal/tui` (establishes the CLI-parity reference for later diffs).
 
 ---
 
@@ -37,9 +37,9 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Add `WindowStartMin *int` and `WindowEndMin *int` optional fields to `GridOptions` in `services/twig/internal/cli/plan_grid.go`, with doc comments per `specs/035-planner-vertical-space/contracts/grid-window.md`.
-- [ ] T003 Modify `RenderGrid` window initialization in `services/twig/internal/cli/plan_grid.go` to honor the overrides: when `WindowStartMin`/`WindowEndMin` are non-nil use them as `winStart`/`winEnd`, and skip the auto-expansion of any overridden side inside the entry loop (nil side still expands as today). (depends on T002)
-- [ ] T004 [P] Add CLI-parity + override tests in `services/twig/internal/cli/plan_grid_test.go`: assert `GridOptions{}` output is unchanged, plus start-only / end-only / both-set overrides verifying no auto-expansion occurs on the fixed side. Keep `TestRenderGrid_EmptyDay`, `TestRenderGrid_WindowExtensionEarly/Late` green and unchanged. (depends on T003)
+- [x] T002 Add `WindowStartMin *int` and `WindowEndMin *int` optional fields to `GridOptions` in `services/twig/internal/cli/plan_grid.go`, with doc comments per `specs/035-planner-vertical-space/contracts/grid-window.md`.
+- [x] T003 Modify `RenderGrid` window initialization in `services/twig/internal/cli/plan_grid.go` to honor the overrides: when `WindowStartMin`/`WindowEndMin` are non-nil use them as `winStart`/`winEnd`, and skip the auto-expansion of any overridden side inside the entry loop (nil side still expands as today). (depends on T002)
+- [x] T004 [P] Add CLI-parity + override tests in `services/twig/internal/cli/plan_grid_test.go`: assert `GridOptions{}` output is unchanged, plus start-only / end-only / both-set overrides verifying no auto-expansion occurs on the fixed side. Keep `TestRenderGrid_EmptyDay`, `TestRenderGrid_WindowExtensionEarly/Late` green and unchanged. (depends on T003)
 
 **Checkpoint**: `RenderGrid` can draw any explicit window; CLI default path proven identical.
 
@@ -53,11 +53,11 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Implement `GridWindow(entries, now, day, availableRows) (startMin, endMin int)` in `services/twig/internal/cli/plan_grid.go`: extract the entry-extended default window (`baseStart`/`baseEnd`) into a small helper shared with `RenderGrid` (no duplication), then implement **FILL** mode (`start=baseStart`, `end=min(start+(availableRows-1)*15, 1440)`); for the constrained case fall back to top-truncate (`start=baseStart`) as a placeholder until US2. (depends on T003)
-- [ ] T006 [US1] Wire the styled live path `renderPlanGrid` in `services/twig/internal/tui/plan_view.go`: render untimed + separator, count their lines, compute `availableRows = max(1, height - untimedLines - sepLines)`, call `cli.GridWindow`, and pass `WindowStartMin: &start, WindowEndMin: &end` in `GridOptions`; keep the existing `lines[:height]` trim as a backstop. (depends on T005)
-- [ ] T007 [US1] Apply the same wiring to the unstyled live path `renderPlanGridContent` and the test-only helper `renderPlanningView` in `services/twig/internal/tui/plan_view.go`, accounting for their inline header line in `availableRows`. (depends on T005, T006)
-- [ ] T008 [P] [US1] FILL unit tests in `services/twig/internal/cli/plan_grid_test.go`: `availableRows > baseRows` extends the end to later hours; end clamped at 24:00; `availableRows == baseRows` returns the default window; 08:00 start preserved. (depends on T005)
-- [ ] T009 [US1] TUI test in `services/twig/internal/tui/plan_view_test.go`: a tall height renders hour rows past 17:00 and leaves no large blank gap below the grid. (depends on T006)
+- [x] T005 [US1] Implement `GridWindow(entries, now, day, availableRows) (startMin, endMin int)` in `services/twig/internal/cli/plan_grid.go`: extract the entry-extended default window (`baseStart`/`baseEnd`) into a small helper shared with `RenderGrid` (no duplication), then implement **FILL** mode (`start=baseStart`, `end=min(start+(availableRows-1)*15, 1440)`); for the constrained case fall back to top-truncate (`start=baseStart`) as a placeholder until US2. (depends on T003)
+- [x] T006 [US1] Wire the styled live path `renderPlanGrid` in `services/twig/internal/tui/plan_view.go`: render untimed + separator, count their lines, compute `availableRows = max(1, height - untimedLines - sepLines)`, call `cli.GridWindow`, and pass `WindowStartMin: &start, WindowEndMin: &end` in `GridOptions`; keep the existing `lines[:height]` trim as a backstop. (depends on T005)
+- [x] T007 [US1] Apply the same wiring to the unstyled live path `renderPlanGridContent` and the test-only helper `renderPlanningView` in `services/twig/internal/tui/plan_view.go`, accounting for their inline header line in `availableRows`. (depends on T005, T006)
+- [x] T008 [P] [US1] FILL unit tests in `services/twig/internal/cli/plan_grid_test.go`: `availableRows > baseRows` extends the end to later hours; end clamped at 24:00; `availableRows == baseRows` returns the default window; 08:00 start preserved. (depends on T005)
+- [x] T009 [US1] TUI test in `services/twig/internal/tui/plan_view_test.go`: a tall height renders hour rows past 17:00 and leaves no large blank gap below the grid. (depends on T006)
 
 **Checkpoint**: Tall terminals fill space — MVP demoable.
 
@@ -71,10 +71,10 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Add **ANCHOR** and **TOP-TRUNCATE** branches to `GridWindow` in `services/twig/internal/cli/plan_grid.go`: when `availableRows < baseRows` AND `day` is today (`now.Format("2006-01-02")==day`) AND `nowBlock >= baseStart` → `start = snapDown15(nowBlock)`; otherwise `start = baseStart`; `end = min(start+(availableRows-1)*15, 1440)`. Replaces the US1 placeholder fallback. (depends on T005)
-- [ ] T011 [P] [US2] Unit tests in `services/twig/internal/cli/plan_grid_test.go`: constrained + today anchors to the now-block; constrained + non-today starts at `baseStart`; now before window → `baseStart`; late now anchors late; end clamped at 24:00. (depends on T010)
-- [ ] T012 [US2] TUI test in `services/twig/internal/tui/plan_view_test.go`: short height on today starts the grid at the current-time block, omits earlier hours, and keeps a later entry visible. (depends on T010, T007)
-- [ ] T013 [US2] TUI test in `services/twig/internal/tui/plan_view_test.go`: short height on a non-today day starts at the default top (no anchoring). (depends on T010, T007)
+- [x] T010 [US2] Add **ANCHOR** and **TOP-TRUNCATE** branches to `GridWindow` in `services/twig/internal/cli/plan_grid.go`: when `availableRows < baseRows` AND `day` is today (`now.Format("2006-01-02")==day`) AND `nowBlock >= baseStart` → `start = snapDown15(nowBlock)`; otherwise `start = baseStart`; `end = min(start+(availableRows-1)*15, 1440)`. Replaces the US1 placeholder fallback. (depends on T005)
+- [x] T011 [P] [US2] Unit tests in `services/twig/internal/cli/plan_grid_test.go`: constrained + today anchors to the now-block; constrained + non-today starts at `baseStart`; now before window → `baseStart`; late now anchors late; end clamped at 24:00. (depends on T010)
+- [x] T012 [US2] TUI test in `services/twig/internal/tui/plan_view_test.go`: short height on today starts the grid at the current-time block, omits earlier hours, and keeps a later entry visible. (depends on T010, T007)
+- [x] T013 [US2] TUI test in `services/twig/internal/tui/plan_view_test.go`: short height on a non-today day starts at the default top (no anchoring). (depends on T010, T007)
 
 **Checkpoint**: Short terminals surface upcoming events; today vs. non-today behave per FR-005.
 
@@ -88,8 +88,8 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Verify/harden `availableRows` accounting in all three paths in `services/twig/internal/tui/plan_view.go` so untimed pane + separator lines are always subtracted before computing the timed window, and the underflow case (untimed alone ≥ inner height) clamps to ≥1 row (or zero timed rows) without overflow. (depends on T006, T007)
-- [ ] T015 [P] [US3] TUI tests in `services/twig/internal/tui/plan_view_test.go`: a constrained view renders all untimed entries + separator before any timed row; an over-tall untimed set degrades gracefully (no panic, no overflow past the pane). (depends on T014)
+- [x] T014 [US3] Verify/harden `availableRows` accounting in all three paths in `services/twig/internal/tui/plan_view.go` so untimed pane + separator lines are always subtracted before computing the timed window, and the underflow case (untimed alone ≥ inner height) clamps to ≥1 row (or zero timed rows) without overflow. (depends on T006, T007)
+- [x] T015 [P] [US3] TUI tests in `services/twig/internal/tui/plan_view_test.go`: a constrained view renders all untimed entries + separator before any timed row; an over-tall untimed set degrades gracefully (no panic, no overflow past the pane). (depends on T014)
 
 **Checkpoint**: All three user stories independently functional.
 
@@ -97,9 +97,9 @@ Single Go module at `services/twig/`. All paths below are relative to repo root.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T016 [P] Execute `specs/035-planner-vertical-space/quickstart.md` scenarios A–E against a freshly built `./twig` binary and confirm each expectation.
-- [ ] T017 Run `go test ./...` from `services/twig/` and confirm all suites green, with the CLI-parity assertions (`TestRenderGrid_EmptyDay`, `*_WindowExtension*`) unchanged.
-- [ ] T018 [P] Self-review against Constitution Principles I (no new abstraction beyond the one shared baseline helper) and III (reuses existing grid geometry/theme); confirm no new user-facing copy was introduced (Principle IV n/a).
+- [x] T016 [P] Execute `specs/035-planner-vertical-space/quickstart.md` scenarios A–E against a freshly built `./twig` binary and confirm each expectation.
+- [x] T017 Run `go test ./...` from `services/twig/` and confirm all suites green, with the CLI-parity assertions (`TestRenderGrid_EmptyDay`, `*_WindowExtension*`) unchanged.
+- [x] T018 [P] Self-review against Constitution Principles I (no new abstraction beyond the one shared baseline helper) and III (reuses existing grid geometry/theme); confirm no new user-facing copy was introduced (Principle IV n/a).
 
 ---
 

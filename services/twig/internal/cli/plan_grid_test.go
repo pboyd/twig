@@ -777,6 +777,211 @@ func visWidth(s string) int {
 
 // ---- T013: RenderUntimed tests ----
 
+// ── Feature 035: WindowStartMin / WindowEndMin override tests (T004) ──────────
+
+// TestRenderGrid_Override_StartOnly verifies that setting WindowStartMin fixes the
+// start and disables backward expansion, while the end still expands to contain entries.
+func TestRenderGrid_Override_StartOnly(t *testing.T) {
+	// Entry entirely at 06:00–07:00 would normally push winStart to 06:00.
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Early", StartMinute: pint32(360), DurationMinute: 60},
+	}
+	startMin := 8 * 60 // fix start at 08:00
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{WindowStartMin: &startMin})
+	lines := rowsOf(out)
+
+	// Start must be 08:00 (not expanded backward to 06:00).
+	wantFirst := "08:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[0] != wantFirst {
+		t.Errorf("start-only override: expected 08:00 first row, got %q", lines[0])
+	}
+	// End stays at 17:00 (entry ends before 17:00).
+	wantLast := "17:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[len(lines)-1] != wantLast {
+		t.Errorf("start-only override: expected 17:00 last row, got %q", lines[len(lines)-1])
+	}
+}
+
+// TestRenderGrid_Override_EndOnly verifies that setting WindowEndMin fixes the end
+// and disables forward expansion, while the start still expands to contain entries.
+func TestRenderGrid_Override_EndOnly(t *testing.T) {
+	// Entry at 17:30 would normally push winEnd to 18:00.
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Late", StartMinute: pint32(1050), DurationMinute: 30},
+	}
+	end := 17 * 60 // fix end at 17:00
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{WindowEndMin: &end})
+	lines := rowsOf(out)
+
+	// End must be 17:00 (not expanded forward to 18:00).
+	wantLast := "17:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[len(lines)-1] != wantLast {
+		t.Errorf("end-only override: expected 17:00 last row, got %q", lines[len(lines)-1])
+	}
+	// Start stays at 08:00 (entry at 17:30 doesn't trigger start expansion).
+	wantFirst := "08:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[0] != wantFirst {
+		t.Errorf("end-only override: expected 08:00 first row, got %q", lines[0])
+	}
+}
+
+// TestRenderGrid_Override_BothSet verifies that when both overrides are set, the
+// window is exactly as specified — no auto-expansion occurs on either side.
+func TestRenderGrid_Override_BothSet(t *testing.T) {
+	// Entries that would normally trigger both expansions.
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Early", StartMinute: pint32(360), DurationMinute: 60},
+		{Day: "2026-05-27", Id: 2, Name: "Late", StartMinute: pint32(1050), DurationMinute: 30},
+	}
+	// Use fixedTime(6,0) so the now-marker is outside the 09:00–15:00 window.
+	s, e := 9*60, 15*60 // fix window 09:00–15:00
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, false, cli.GridOptions{
+		WindowStartMin: &s, WindowEndMin: &e,
+	})
+	lines := rowsOf(out)
+
+	wantFirst := "09:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[0] != wantFirst {
+		t.Errorf("both-set override: expected 09:00 first row, got %q", lines[0])
+	}
+	wantLast := "15:00  ├" + strings.Repeat("─", 71) + "┤"
+	if lines[len(lines)-1] != wantLast {
+		t.Errorf("both-set override: expected 15:00 last row, got %q", lines[len(lines)-1])
+	}
+	// Window is 09:00–15:00 = 6 hours × 4 rows + 1 = 25 rows.
+	if len(lines) != 25 {
+		t.Errorf("both-set override: expected 25 rows for 09:00–15:00, got %d", len(lines))
+	}
+}
+
+// TestRenderGrid_Override_NilPreservesDefault verifies that GridOptions{} (nil overrides)
+// leaves output byte-for-byte identical to the pre-feature baseline (CLI parity).
+func TestRenderGrid_Override_NilPreservesDefault(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	baseline := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
+	withNilOverrides := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{
+		WindowStartMin: nil, WindowEndMin: nil,
+	})
+	if baseline != withNilOverrides {
+		t.Error("nil overrides must produce identical output to zero-value GridOptions")
+	}
+}
+
+// ── Feature 035: GridWindow FILL mode unit tests (T008) ───────────────────────
+
+// TestGridWindow_Fill_ExtendsEnd checks that when availableRows > baseRows the
+// end is extended to later hours and the start stays at 08:00.
+func TestGridWindow_Fill_ExtendsEnd(t *testing.T) {
+	// Empty day: baseStart=480, baseEnd=1020, baseRows=37.
+	start, end := cli.GridWindow(nil, fixedTime(9, 0), "2026-05-27", 50)
+	if start != 480 {
+		t.Errorf("FILL start: want 480 (08:00), got %d", start)
+	}
+	// end = 480 + 49×15 = 480+735 = 1215
+	wantEnd := 480 + 49*15
+	if end != wantEnd {
+		t.Errorf("FILL end: want %d, got %d", wantEnd, end)
+	}
+}
+
+// TestGridWindow_Fill_EqualBaseRows checks that exactly baseRows returns the default window.
+func TestGridWindow_Fill_EqualBaseRows(t *testing.T) {
+	// baseRows for empty 08:00–17:00 window = 37.
+	start, end := cli.GridWindow(nil, fixedTime(9, 0), "2026-05-27", 37)
+	if start != 480 {
+		t.Errorf("FILL equal start: want 480 (08:00), got %d", start)
+	}
+	if end != 1020 {
+		t.Errorf("FILL equal end: want 1020 (17:00), got %d", end)
+	}
+}
+
+// TestGridWindow_Fill_ClampAt24h checks that the end is clamped to 1440 (24:00).
+func TestGridWindow_Fill_ClampAt24h(t *testing.T) {
+	// Very tall terminal: 200 rows would push end way past 24:00.
+	_, end := cli.GridWindow(nil, fixedTime(9, 0), "2026-05-27", 200)
+	if end > 1440 {
+		t.Errorf("FILL end must be clamped to 1440, got %d", end)
+	}
+	if end != 1440 {
+		t.Errorf("FILL end (200 rows): expected 1440, got %d", end)
+	}
+}
+
+// TestGridWindow_Fill_StartsAt08 checks that 08:00 start is preserved in FILL mode.
+func TestGridWindow_Fill_StartsAt08(t *testing.T) {
+	start, _ := cli.GridWindow(nil, fixedTime(9, 0), "2026-05-27", 60)
+	if start != 480 {
+		t.Errorf("FILL start must be 08:00 (480), got %d", start)
+	}
+}
+
+// ── Feature 035: GridWindow anchor tests (T011) ────────────────────────────────
+
+// TestGridWindow_Anchor_Today anchors to now-block on a short terminal viewing today.
+func TestGridWindow_Anchor_Today(t *testing.T) {
+	// baseRows=37; availableRows=20 (constrained); today at 14:00.
+	today := "2026-05-27"
+	now := time.Date(2026, 5, 27, 14, 7, 0, 0, time.UTC) // nowBlock=snapDown15(847)=840 (14:00)
+	start, end := cli.GridWindow(nil, now, today, 20)
+	if start != 840 {
+		t.Errorf("ANCHOR today start: want 840 (14:00), got %d", start)
+	}
+	// end = 840 + 19×15 = 840+285 = 1125
+	if end != 1125 {
+		t.Errorf("ANCHOR today end: want 1125, got %d", end)
+	}
+}
+
+// TestGridWindow_Anchor_NonToday uses TOP-TRUNCATE (baseStart) when the day is not today.
+func TestGridWindow_Anchor_NonToday(t *testing.T) {
+	today := "2026-05-27"
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	// Render yesterday — should not anchor.
+	start, _ := cli.GridWindow(nil, now, "2026-05-26", 20)
+	if start != 480 {
+		t.Errorf("TOP-TRUNCATE non-today: want 480 (08:00), got %d (today=%s)", start, today)
+	}
+}
+
+// TestGridWindow_Anchor_NowBeforeWindow falls back to baseStart when now is before the window.
+func TestGridWindow_Anchor_NowBeforeWindow(t *testing.T) {
+	today := "2026-05-27"
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // 07:00 — before 08:00 default window
+	start, _ := cli.GridWindow(nil, now, today, 20)
+	if start != 480 {
+		t.Errorf("early now: want 480 (08:00), got %d", start)
+	}
+}
+
+// TestGridWindow_Anchor_LateNow anchors to a late block when now is well into the evening.
+func TestGridWindow_Anchor_LateNow(t *testing.T) {
+	today := "2026-05-27"
+	now := time.Date(2026, 5, 27, 22, 0, 0, 0, time.UTC) // 22:00
+	start, end := cli.GridWindow(nil, now, today, 20)
+	if start != 1320 {
+		t.Errorf("late ANCHOR start: want 1320 (22:00), got %d", start)
+	}
+	// end = 1320 + 19×15 = 1320+285 = 1605 → clamped to 1440
+	if end != 1440 {
+		t.Errorf("late ANCHOR end: want 1440 (clamped), got %d", end)
+	}
+}
+
+// TestGridWindow_Anchor_EndClampedAt24h verifies the 24:00 clamp in ANCHOR mode.
+func TestGridWindow_Anchor_EndClampedAt24h(t *testing.T) {
+	today := "2026-05-27"
+	now := time.Date(2026, 5, 27, 20, 0, 0, 0, time.UTC) // 20:00
+	_, end := cli.GridWindow(nil, now, today, 100)
+	if end > 1440 {
+		t.Errorf("ANCHOR end must not exceed 1440, got %d", end)
+	}
+}
+
+// ---- T013: RenderUntimed tests ----
+
 // TestRenderUntimed_EmptyReturnsEmpty checks that an empty entry list produces no output.
 func TestRenderUntimed_EmptyReturnsEmpty(t *testing.T) {
 	out := cli.RenderUntimed(nil, 80, false, cli.GridOptions{})

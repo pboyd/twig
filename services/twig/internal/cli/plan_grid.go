@@ -15,6 +15,13 @@ type GridOptions struct {
 	SelectedID     int32               // highlight this entry's rows (0 = none); applied only when isTTY
 	Styled         bool                // when true (and isTTY): use accent-color highlight instead of plain bold
 	SelectionStyle func(string) string // when non-nil, styles the selected entry's content cell only; nil = fallback plain behavior
+
+	// WindowStartMin, when non-nil, fixes the grid's first minute (minutes since
+	// midnight) and disables automatic backward expansion of the window start.
+	WindowStartMin *int
+	// WindowEndMin, when non-nil, fixes the grid's last minute and disables
+	// automatic forward expansion of the window end.
+	WindowEndMin *int
 }
 
 // RenderGrid renders a day's plan entries as a calendar grid.
@@ -25,14 +32,25 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 	winStart := 8 * 60
 	winEnd := 17 * 60
 
+	if opts.WindowStartMin != nil {
+		winStart = *opts.WindowStartMin
+	}
+	if opts.WindowEndMin != nil {
+		winEnd = *opts.WindowEndMin
+	}
+
 	for _, e := range entries {
 		sn := snapDown15(int(e.GetStartMinute()))
 		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
-		if h := (sn / 60) * 60; h < winStart {
-			winStart = h
+		if opts.WindowStartMin == nil {
+			if h := (sn / 60) * 60; h < winStart {
+				winStart = h
+			}
 		}
-		if h := ((se + 59) / 60) * 60; h > winEnd {
-			winEnd = h
+		if opts.WindowEndMin == nil {
+			if h := ((se + 59) / 60) * 60; h > winEnd {
+				winEnd = h
+			}
 		}
 	}
 
@@ -507,4 +525,71 @@ func snapDown15(min int) int {
 // snapUp15 rounds min up to the nearest 15-minute boundary.
 func snapUp15(min int) int {
 	return ((min + 14) / 15) * 15
+}
+
+// baseWindowFor returns the entry-extended default window [baseStart, baseEnd]
+// (minutes since midnight, rounded to hour boundaries) that RenderGrid uses
+// when WindowStartMin and WindowEndMin are both nil.
+func baseWindowFor(entries []*planv1.PlanEntry) (baseStart, baseEnd int) {
+	baseStart = 8 * 60
+	baseEnd = 17 * 60
+	for _, e := range entries {
+		sn := snapDown15(int(e.GetStartMinute()))
+		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
+		if h := (sn / 60) * 60; h < baseStart {
+			baseStart = h
+		}
+		if h := ((se + 59) / 60) * 60; h > baseEnd {
+			baseEnd = h
+		}
+	}
+	return
+}
+
+// GridWindow returns the [startMin, endMin] window (minutes since midnight,
+// 15-minute aligned) the TUI should pass to RenderGrid so the timed grid fills
+// availableRows of vertical space.
+//
+//   - entries:       the day's timed plan entries
+//   - now:           current time (for the anchor block and today detection)
+//   - day:           the in-view day, "YYYY-MM-DD"
+//   - availableRows: rows the timed grid may occupy (>= 1)
+//
+// Modes:
+//
+//	FILL          availableRows >= baseRows           → start=baseStart, fill later
+//	ANCHOR        constrained & today & now>=baseStart → start=now-block, fill later
+//	TOP-TRUNCATE  constrained & (not today | early)   → start=baseStart, fill later
+//
+// end is always clamped to 24:00 (1440). The CLI does not call this helper.
+func GridWindow(entries []*planv1.PlanEntry, now time.Time, day string, availableRows int) (startMin, endMin int) {
+	baseStart, baseEnd := baseWindowFor(entries)
+	baseRows := (baseEnd-baseStart)/15 + 1
+
+	var start int
+	if availableRows >= baseRows {
+		// FILL: keep the default start, extend the end to use available rows.
+		start = baseStart
+	} else {
+		// Constrained.
+		if now.Format("2006-01-02") == day {
+			nowBlock := snapDown15(now.Hour()*60 + now.Minute())
+			if nowBlock >= baseStart {
+				// ANCHOR: start the grid at the current-time block.
+				start = nowBlock
+			} else {
+				// now is before the window; TOP-TRUNCATE from default start.
+				start = baseStart
+			}
+		} else {
+			// Not today: TOP-TRUNCATE from default start.
+			start = baseStart
+		}
+	}
+
+	end := start + (availableRows-1)*15
+	if end > 1440 {
+		end = 1440
+	}
+	return start, end
 }

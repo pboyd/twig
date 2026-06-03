@@ -78,6 +78,14 @@ func (m Model) renderPlanningView(width, height int, now time.Time) string {
 	opts := m.planGridOptions()
 	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
 	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
+	untimedLines := strings.Count(untimedStr, "\n") + strings.Count(sep, "\n")
+	availableRows := gridHeight - untimedLines
+	if availableRows < 1 {
+		availableRows = 1
+	}
+	start, end := cli.GridWindow(timed, now, m.plan.day, availableRows)
+	opts.WindowStartMin = &start
+	opts.WindowEndMin = &end
 	grid := cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 
 	// Combine header + untimed pane + separator + grid, trimmed to gridHeight.
@@ -209,9 +217,17 @@ func (m Model) planDayTitle(now time.Time) string {
 func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	untimed, timed := splitPlanEntries(m.plan.entries)
 	opts := m.planGridOptions()
-	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
-		cli.RenderUntimedSeparator(untimedIDs(untimed), width) +
-		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
+	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
+	untimedLines := strings.Count(untimedStr, "\n") + strings.Count(sep, "\n")
+	availableRows := height - untimedLines
+	if availableRows < 1 {
+		availableRows = 1
+	}
+	start, end := cli.GridWindow(timed, now, m.plan.day, availableRows)
+	opts.WindowStartMin = &start
+	opts.WindowEndMin = &end
+	combined := untimedStr + sep + cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > height {
 		lines = lines[:height]
@@ -233,15 +249,23 @@ func untimedIDs(entries []*planv1.PlanEntry) []int {
 // the non-styled fallback path where the header appears inline as the first row.
 func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	header := m.planDayHeader(now)
-	gridH := height - 1
+	gridH := height - 1 // subtract the inline header line
 	if gridH < 1 {
 		gridH = 1
 	}
 	untimed, timed := splitPlanEntries(m.plan.entries)
 	opts := m.planGridOptions()
-	combined := cli.RenderUntimed(untimed, width, m.styled, opts) +
-		cli.RenderUntimedSeparator(untimedIDs(untimed), width) +
-		cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
+	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
+	untimedLines := strings.Count(untimedStr, "\n") + strings.Count(sep, "\n")
+	availableRows := gridH - untimedLines
+	if availableRows < 1 {
+		availableRows = 1
+	}
+	start, end := cli.GridWindow(timed, now, m.plan.day, availableRows)
+	opts.WindowStartMin = &start
+	opts.WindowEndMin = &end
+	combined := untimedStr + sep + cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridH {
 		lines = lines[:gridH]

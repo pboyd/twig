@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -659,8 +660,10 @@ func TestSeparator_PresentWhenUntimedEntriesExist(t *testing.T) {
 		{Id: 2, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30}, // timed
 	}
 
-	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
-	out := m.renderPlanningView(80, 35, now)
+	// Use now before the default 08:00 window so nowBlock < baseStart → TOP-TRUNCATE
+	// and the 09:00 Standup stays visible regardless of terminal height.
+	now := time.Date(2026, 6, 1, 7, 0, 0, 0, time.UTC)
+	out := m.renderPlanningView(80, 50, now)
 
 	// The separator is a line containing only box-drawing divider chars (─, ┤, ├, etc.)
 	// It must appear between the untimed pane and the grid.
@@ -694,8 +697,10 @@ func TestSeparator_AbsentWhenNoUntimedEntries(t *testing.T) {
 		{Id: 1, Name: "Timed event", StartMinute: pint32(540), DurationMinute: 30},
 	}
 
-	now := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
-	timedOnly := m.renderPlanningView(80, 35, now)
+	// Use now before the default 08:00 window so TOP-TRUNCATE is used and the
+	// 09:00 entry stays visible regardless of terminal height.
+	now := time.Date(2026, 6, 1, 7, 0, 0, 0, time.UTC)
+	timedOnly := m.renderPlanningView(80, 50, now)
 
 	// Model with the same timed entry plus an untimed entry.
 	m2 := m
@@ -703,7 +708,7 @@ func TestSeparator_AbsentWhenNoUntimedEntries(t *testing.T) {
 		{Id: 2, Name: "Untimed task", DurationMinute: 30}, // untimed
 		{Id: 1, Name: "Timed event", StartMinute: pint32(540), DurationMinute: 30},
 	}
-	withUntimed := m2.renderPlanningView(80, 35, now)
+	withUntimed := m2.renderPlanningView(80, 50, now)
 
 	// When untimed entries exist, the output must be different (untimed pane + separator added).
 	if timedOnly == withUntimed {
@@ -831,5 +836,132 @@ func TestRenderPlanDetail_GlyphRowNoPomodoros(t *testing.T) {
 	out := renderPlanDetail(entry, task, 60, false)
 	if strings.Contains(out, "🍅") {
 		t.Errorf("task with 0 estimate and 0 completed must not show glyph row; got %q", out)
+	}
+}
+
+// ── Feature 035: TUI fill, anchor, and untimed tests ──────────────────────────
+
+// TestPlanningView_Fill_TallTerminal checks that on a tall terminal the timed grid
+// extends past 17:00 to fill available space (US1, T009).
+func TestPlanningView_Fill_TallTerminal(t *testing.T) {
+	day := "2026-05-27"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.plan.day = day
+	m.plan.loaded = true
+	// No entries — default 08:00–17:00 base window (37 rows).
+
+	// A tall terminal: 80 rows available for the grid means FILL mode.
+	now := time.Date(2026, 5, 27, 9, 0, 0, 0, time.UTC)
+	out := m.renderPlanningView(80, 81, now) // header(1) + gridHeight(80)
+
+	// The grid should extend past 17:00.
+	if !strings.Contains(out, "18:00") {
+		t.Errorf("tall terminal fill: expected hours past 17:00 in output:\n%s", out)
+	}
+	// Should not contain a large blank gap at the bottom: last rendered hour
+	// should be beyond 17:00.
+	if strings.HasSuffix(strings.TrimRight(out, "\n "), "17:00") {
+		t.Errorf("tall terminal fill: grid should not end at 17:00 when space is available")
+	}
+}
+
+// TestPlanningView_Anchor_ShortToday checks that on a short terminal viewing today,
+// the grid starts at the current-time block (US2, T012).
+func TestPlanningView_Anchor_ShortToday(t *testing.T) {
+	day := "2026-05-27"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.plan.day = day
+	m.plan.loaded = true
+	// Entry at 15:00 so it remains visible in the anchored window.
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Afternoon", StartMinute: pint32(900), DurationMinute: 30},
+	}
+
+	// Short terminal: 15 rows total (header + 14 grid rows = 14 rows, baseRows=37 → constrained).
+	// now = 13:00 on day → ANCHOR at 13:00.
+	now := time.Date(2026, 5, 27, 13, 0, 0, 0, time.UTC)
+	out := m.renderPlanningView(80, 15, now)
+
+	// The grid must not show morning hours (08:00 should be absent, or 13:00 should be present).
+	if strings.Contains(out, "08:00") {
+		t.Errorf("ANCHOR short today: expected no 08:00 morning row; got:\n%s", out)
+	}
+	if !strings.Contains(out, "13:00") {
+		t.Errorf("ANCHOR short today: expected 13:00 (now-block) as grid start; got:\n%s", out)
+	}
+}
+
+// TestPlanningView_NonToday_TopTruncate checks that a short terminal on a non-today day
+// starts at the default top without anchoring (US2, T013).
+func TestPlanningView_NonToday_TopTruncate(t *testing.T) {
+	yesterday := "2026-05-26"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.plan.day = yesterday
+	m.plan.loaded = true
+
+	// now is today (2026-05-27), but we're viewing yesterday.
+	now := time.Date(2026, 5, 27, 13, 0, 0, 0, time.UTC)
+	out := m.renderPlanningView(80, 15, now)
+
+	// Non-today: must start at the default 08:00 top.
+	if !strings.Contains(out, "08:00") {
+		t.Errorf("TOP-TRUNCATE non-today: expected 08:00 default start; got:\n%s", out)
+	}
+}
+
+// TestPlanningView_Untimed_VisibleBeforeGrid checks that on a constrained terminal with
+// untimed entries, all untimed boxes and separator appear before the timed grid (US3, T015).
+func TestPlanningView_Untimed_VisibleBeforeGrid(t *testing.T) {
+	day := "2026-05-27"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.plan.day = day
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "BacklogTask", DurationMinute: 15}, // untimed
+		{Id: 2, Name: "Lunch", StartMinute: pint32(720), DurationMinute: 60},
+	}
+
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before window → TOP-TRUNCATE
+	out := m.renderPlanningView(80, 25, now)
+
+	untimedPos := strings.Index(out, "BacklogTask")
+	gridPos := strings.Index(out, "Lunch")
+	if untimedPos < 0 {
+		t.Fatalf("untimed priority: 'BacklogTask' not found in output:\n%s", out)
+	}
+	if gridPos < 0 {
+		t.Fatalf("untimed priority: 'Lunch' not found in output:\n%s", out)
+	}
+	if untimedPos > gridPos {
+		t.Errorf("untimed priority: untimed entry must appear before timed grid; positions: untimed=%d, grid=%d", untimedPos, gridPos)
+	}
+}
+
+// TestPlanningView_Untimed_GracefulWhenOverfull checks that when untimed entries
+// alone exceed the available height, the view does not panic and stays within bounds (US3, T015).
+func TestPlanningView_Untimed_GracefulWhenOverfull(t *testing.T) {
+	day := "2026-05-27"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.plan.day = day
+	m.plan.loaded = true
+	// Many untimed entries to fill more than the available height.
+	entries := make([]*planv1.PlanEntry, 20)
+	for i := range entries {
+		entries[i] = &planv1.PlanEntry{Id: int32(i + 1), Name: fmt.Sprintf("Backlog%d", i+1), DurationMinute: 30}
+	}
+	m.plan.entries = entries
+
+	now := time.Date(2026, 5, 27, 9, 0, 0, 0, time.UTC)
+	// This must not panic.
+	out := m.renderPlanningView(80, 10, now)
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) > 10 {
+		t.Errorf("overfull untimed: output has %d lines, exceeds height 10", len(lines))
 	}
 }
