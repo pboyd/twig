@@ -213,16 +213,24 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 		case top != nil:
 			isSelected := isTTY && opts.SelectedID != 0 && top.e.Id == opts.SelectedID
-			line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
-			if isSelected {
-				line = applySelection(line, top.e.Id, opts, isTTY)
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┏"+hHeavy+"┓") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
+				if isSelected {
+					line = accentOpen(opts) + line + "\x1b[0m"
+				}
 			}
 
 		case bot != nil:
 			isSelected := isTTY && opts.SelectedID != 0 && bot.e.Id == opts.SelectedID
-			line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
-			if isSelected {
-				line = applySelection(line, bot.e.Id, opts, isTTY)
+			if isSelected && opts.SelectionStyle != nil {
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┗"+hHeavy+"┛") + padChar + rightRail
+			} else {
+				line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
+				if isSelected {
+					line = accentOpen(opts) + line + "\x1b[0m"
+				}
 			}
 
 		case single != nil:
@@ -318,9 +326,14 @@ func RenderUntimed(entries []*planv1.PlanEntry, width int, isTTY bool, opts Grid
 
 		// Top border (skipped when the previous entry's shared bottom serves as our top).
 		if !skipTop {
-			line := gutter + "│ ┏" + hHeavy + "┓ │"
-			line = applySelection(line, e.Id, opts, isTTY)
-			sb.WriteString(line + "\n")
+			if isSelected && opts.SelectionStyle != nil {
+				line := gutter + "│ " + opts.SelectionStyle("┏"+hHeavy+"┓") + " │"
+				sb.WriteString(line + "\n")
+			} else {
+				line := gutter + "│ ┏" + hHeavy + "┓ │"
+				line = applySelection(line, e.Id, opts, isTTY)
+				sb.WriteString(line + "\n")
+			}
 		}
 		skipTop = false
 
@@ -361,9 +374,14 @@ func RenderUntimed(entries []*planv1.PlanEntry, width int, isTTY bool, opts Grid
 			sb.WriteString(line + "\n")
 			skipTop = true // next entry's top is already provided by this ┣┫
 		} else {
-			line := gutter + "│ ┗" + hHeavy + "┛ │"
-			line = applySelection(line, e.Id, opts, isTTY)
-			sb.WriteString(line + "\n")
+			if isSelected && opts.SelectionStyle != nil {
+				line := gutter + "│ " + opts.SelectionStyle("┗"+hHeavy+"┛") + " │"
+				sb.WriteString(line + "\n")
+			} else {
+				line := gutter + "│ ┗" + hHeavy + "┛ │"
+				line = applySelection(line, e.Id, opts, isTTY)
+				sb.WriteString(line + "\n")
+			}
 			skipTop = false
 		}
 	}

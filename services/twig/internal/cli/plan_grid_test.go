@@ -671,8 +671,9 @@ func TestSelectionStyle_SingleRowEntry(t *testing.T) {
 	}
 }
 
-// TestSelectionStyle_MultiRowEntry checks that SelectionStyle is applied only to
-// interior content rows of a multi-row entry, not to the top/bottom border rows (T015).
+// TestSelectionStyle_MultiRowEntry checks that SelectionStyle is applied to
+// all rows of a selected multi-row entry: top border, interior content rows,
+// and bottom border (T015 + standalone-border fix).
 func TestSelectionStyle_MultiRowEntry(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Focus", StartMinute: pint32(480), DurationMinute: 120},
@@ -682,13 +683,13 @@ func TestSelectionStyle_MultiRowEntry(t *testing.T) {
 	lines := rowsOf(out)
 
 	for _, l := range lines {
-		// Top border line (┏━┓) must NOT have selection markers.
-		if strings.Contains(l, "┏") && strings.Contains(l, "<<") {
-			t.Errorf("top border row must not be styled; line: %q", l)
+		// Top border line (┏━┓) MUST have selection markers.
+		if strings.Contains(l, "┏") && !strings.Contains(l, "<<") {
+			t.Errorf("top border row must be styled; line: %q", l)
 		}
-		// Bottom border line (┗━┛) must NOT have selection markers.
-		if strings.Contains(l, "┗") && strings.Contains(l, "<<") {
-			t.Errorf("bottom border row must not be styled; line: %q", l)
+		// Bottom border line (┗━┛) MUST have selection markers.
+		if strings.Contains(l, "┗") && !strings.Contains(l, "<<") {
+			t.Errorf("bottom border row must be styled; line: %q", l)
 		}
 		// Interior row (┃content┃) MUST have selection markers.
 		if strings.Contains(l, "┃") && !strings.Contains(l, "<<") {
@@ -957,8 +958,8 @@ func TestRenderUntimed_SharedBorderBetweenAdjacentEntries(t *testing.T) {
 }
 
 // TestRenderUntimed_LastLineColorMatchesInterior checks that the last line of a
-// multi-row untimed entry (the ┗┛ bottom) receives the same selection styling as
-// the interior lines (regression: last line was not styled consistently).
+// multi-row untimed entry (the ┗┛ bottom) receives SelectionStyle markers just
+// like the interior lines (standalone-border fix).
 func TestRenderUntimed_LastLineColorMatchesInterior(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Style test", DurationMinute: 30},
@@ -967,20 +968,52 @@ func TestRenderUntimed_LastLineColorMatchesInterior(t *testing.T) {
 	out := cli.RenderUntimed(entries, 80, true, opts)
 	lines := rowsOf(out)
 
-	// The ┗┛ bottom line (last line) must carry the selection marker.
 	lastLine := lines[len(lines)-1]
 	if !strings.Contains(lastLine, "┗") && !strings.Contains(lastLine, "┛") {
 		t.Fatalf("last line is not the bottom border; got %q", lastLine)
 	}
-	if !strings.Contains(lastLine, "<<") && !strings.Contains(lastLine, ">>") {
-		// The bottom border itself may not get the SelectionStyle applied (only interior does).
-		// But it should at least get the accent color from applySelection.
-		// Check that it does NOT contain the top border (bug was: last line was wrong color).
-		// This test verifies the line IS styled (not plain).
-		// If the implementation uses applySelection for the bottom line, it won't have << markers
-		// but it should have ANSI codes.
-		if !strings.Contains(lastLine, "\x1b[") {
-			t.Errorf("selected entry bottom line: expected ANSI styling; got %q", lastLine)
+	if !strings.Contains(lastLine, "<<") {
+		t.Errorf("selected entry bottom border must carry SelectionStyle markers; got %q", lastLine)
+	}
+}
+
+// TestSelectionStyle_StandaloneBorders_GapBeforeAfter checks that when an entry
+// has a gap before and after it (standalone top and bottom borders), those border
+// lines carry SelectionStyle markers and the hour gutter is left unstyled.
+func TestSelectionStyle_StandaloneBorders_GapBeforeAfter(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Early", StartMinute: pint32(480), DurationMinute: 60},  // 08:00–09:00
+		{Id: 2, Name: "Later", StartMinute: pint32(660), DurationMinute: 60},  // 11:00–12:00
+	}
+	opts := cli.GridOptions{HideID: true, SelectedID: 2, Styled: true, SelectionStyle: styleMarker}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
+	lines := rowsOf(out)
+
+	for _, l := range lines {
+		if strings.Contains(l, "┏") || strings.Contains(l, "┗") {
+			// Only the selected entry's borders should carry the marker.
+			if strings.Contains(l, "11:00") || strings.Contains(l, "12:00") ||
+				(!strings.Contains(l, "08:00") && !strings.Contains(l, "09:00")) {
+				// This is a border line for the selected entry (id 2) or an empty row.
+				// Selected entry borders must have the marker.
+				if strings.Contains(l, "<<") {
+					// Gutter (first 7 chars) must not contain the marker.
+					if len(l) >= 7 && strings.Contains(l[:7], "<<") {
+						t.Errorf("hour gutter must not contain SelectionStyle marker; line: %q", l)
+					}
+				}
+			}
+		}
+		// The selected entry's standalone top/bottom borders must be styled.
+		if strings.Contains(l, "┏") && strings.Contains(l, "11") {
+			if !strings.Contains(l, "<<") {
+				t.Errorf("selected entry standalone top border must be styled; line: %q", l)
+			}
+		}
+		if strings.Contains(l, "┗") && strings.Contains(l, "12") {
+			if !strings.Contains(l, "<<") {
+				t.Errorf("selected entry standalone bottom border must be styled; line: %q", l)
+			}
 		}
 	}
 }
