@@ -11,6 +11,9 @@ build:
 cli:
 	cd services/twig && go build -o twig ./cmd/twig
 
+cli-install:
+	cd services/twig && go install ./cmd/twig
+
 dev:
 	podman-compose up -d --build --force-recreate server
 
