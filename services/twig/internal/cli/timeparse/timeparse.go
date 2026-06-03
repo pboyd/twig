@@ -117,6 +117,21 @@ func ParseStartOrNull(s string) (minute int, timed bool, err error) {
 	return m, true, nil
 }
 
+// FormatDuration formats minutes as a compact unit string: "30m", "1h", "1h30m".
+// Zero minutes returns "0m".
+func FormatDuration(minutes int) string {
+	h := minutes / 60
+	m := minutes % 60
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%dm", m)
+	case m == 0:
+		return fmt.Sprintf("%dh", h)
+	default:
+		return fmt.Sprintf("%dh%dm", h, m)
+	}
+}
+
 // ParseDurationOrEnd parses either a duration ("90m", "1h30m") or an end
 // time-of-day ("15:00", "1500", "3:00pm"), returning the duration in minutes.
 // startMinute is required when an end time is given, to compute the difference.

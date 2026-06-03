@@ -591,9 +591,21 @@ func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.plan.mode = planList
 		m.plan.err = nil
 		return m, nil
-	case key.Matches(msg, m.keys.Save) || msg.Type == tea.KeyEnter:
+	case key.Matches(msg, m.keys.Save):
 		cmd := m.submitPlanForm()
 		return m, cmd
+	case msg.Type == tea.KeyEnter:
+		if planFocusSave(m.plan.form) {
+			cmd := m.submitPlanForm()
+			return m, cmd
+		}
+		if planFocusCancel(m.plan.form) {
+			m.plan.mode = planList
+			m.plan.err = nil
+			return m, nil
+		}
+		m.cyclePlanFormFocus(1)
+		return m, nil
 	case key.Matches(msg, m.keys.Tab):
 		m.cyclePlanFormFocus(1)
 		return m, nil
@@ -602,8 +614,8 @@ func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Forward to focused text input.
-	if len(m.plan.form.fields) > 0 {
+	// Forward to focused text input only when a text field is focused.
+	if m.plan.form.focus < len(m.plan.form.fields) {
 		var cmd tea.Cmd
 		m.plan.form.fields[m.plan.form.focus], cmd = m.plan.form.fields[m.plan.form.focus].Update(msg)
 		return m, cmd

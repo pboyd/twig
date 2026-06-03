@@ -564,6 +564,86 @@ func TestViewPlanning_FormInRightPane_Unstyled(t *testing.T) {
 	}
 }
 
+// ── T007: Foundational form render assertions ─────────────────────────────
+
+// TestPlanFormView_ButtonsAndHelpLine checks that renderPlanFormView emits
+// Save/Cancel buttons and the exact help line for all three form modes.
+func TestPlanFormView_ButtonsAndHelpLine(t *testing.T) {
+	cases := []struct {
+		mode planMode
+		name string
+	}{
+		{planEdit, "Edit entry"},
+		{planTaskTime, "Schedule task"},
+		{planEventForm, "Add event"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := ExportNewModel(nil, nil)
+			m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540), DurationMinute: 30}}
+			m.plan.cursor = 0
+			switch c.mode {
+			case planEdit:
+				m.initEditForm()
+			case planTaskTime:
+				m.initTaskTimeForm(1)
+			case planEventForm:
+				m.initAddEventForm()
+			}
+			out := m.renderPlanFormView(80)
+
+			if !strings.Contains(out, "[ Save ]") {
+				t.Errorf("form should contain '[ Save ]'; got:\n%s", out)
+			}
+			if !strings.Contains(out, "[ Cancel ]") {
+				t.Errorf("form should contain '[ Cancel ]'; got:\n%s", out)
+			}
+			const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+			if !strings.Contains(out, wantHelp) {
+				t.Errorf("form should contain help line %q; got:\n%s", wantHelp, out)
+			}
+		})
+	}
+}
+
+// TestPlanFormView_FocusedSaveButton checks that the Save button renders as
+// [>Save<] when its virtual slot is focused.
+func TestPlanFormView_FocusedSaveButton(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	for !planFocusSave(m.plan.form) {
+		m.cyclePlanFormFocus(1)
+	}
+	out := m.renderPlanFormView(80)
+	if !strings.Contains(out, "[>Save<]") {
+		t.Errorf("focused Save button: want '[>Save<]'; got:\n%s", out)
+	}
+	if strings.Contains(out, "[>Cancel<]") {
+		t.Errorf("focused Save button: Cancel should not be focused; got:\n%s", out)
+	}
+}
+
+// TestPlanFormView_FocusedCancelButton checks that the Cancel button renders
+// as [>Cancel<] when its virtual slot is focused.
+func TestPlanFormView_FocusedCancelButton(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm()
+	for !planFocusCancel(m.plan.form) {
+		m.cyclePlanFormFocus(1)
+	}
+	out := m.renderPlanFormView(80)
+	if !strings.Contains(out, "[>Cancel<]") {
+		t.Errorf("focused Cancel button: want '[>Cancel<]'; got:\n%s", out)
+	}
+	if strings.Contains(out, "[>Save<]") {
+		t.Errorf("focused Cancel button: Save should not be focused; got:\n%s", out)
+	}
+}
+
 // ── T015: US4 — separator between untimed pane and grid ────────────────────
 
 // TestSeparator_PresentWhenUntimedEntriesExist checks that a horizontal separator

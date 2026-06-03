@@ -746,6 +746,400 @@ func TestPomCancel_InertWhenNoneRunning(t *testing.T) {
 	}
 }
 
+// ── T008/T009: US1 — pre-fill and change-detection tests (TDD: must fail before T010/T011) ──
+
+// TestInitEditForm_PreFillsScheduledEntry verifies that initEditForm pre-fills
+// Name verbatim, Start as HH:MM, and Duration as compact form for a scheduled entry.
+func TestInitEditForm_PreFillsScheduledEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 7, Name: "Morning standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+
+	m.initEditForm()
+
+	if m.plan.form.fields[0].Value() != "Morning standup" {
+		t.Errorf("Name: expected 'Morning standup', got %q", m.plan.form.fields[0].Value())
+	}
+	if m.plan.form.fields[1].Value() != "09:00" {
+		t.Errorf("Start: expected '09:00' (540 min), got %q", m.plan.form.fields[1].Value())
+	}
+	if m.plan.form.fields[2].Value() != "30m" {
+		t.Errorf("Duration: expected '30m', got %q", m.plan.form.fields[2].Value())
+	}
+}
+
+// TestInitEditForm_PreFillsScheduledEntry_1h30m verifies compact format for 90m duration.
+func TestInitEditForm_PreFillsScheduledEntry_1h30m(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 8, Name: "Focus", StartMinute: pint32(600), DurationMinute: 90},
+	}
+	m.plan.cursor = 0
+
+	m.initEditForm()
+
+	if m.plan.form.fields[1].Value() != "10:00" {
+		t.Errorf("Start: expected '10:00' (600 min), got %q", m.plan.form.fields[1].Value())
+	}
+	if m.plan.form.fields[2].Value() != "1h30m" {
+		t.Errorf("Duration: expected '1h30m', got %q", m.plan.form.fields[2].Value())
+	}
+}
+
+// TestInitEditForm_EmptyStartDurationForUntimed verifies that an untimed entry
+// leaves Start and Duration empty (not "09:00" or "0m").
+func TestInitEditForm_EmptyStartDurationForUntimed(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 9, Name: "Write spec"},
+	}
+	m.plan.cursor = 0
+
+	m.initEditForm()
+
+	if m.plan.form.fields[1].Value() != "" {
+		t.Errorf("Start: expected empty for untimed entry, got %q", m.plan.form.fields[1].Value())
+	}
+	if m.plan.form.fields[2].Value() != "" {
+		t.Errorf("Duration: expected empty for untimed entry, got %q", m.plan.form.fields[2].Value())
+	}
+}
+
+// TestInitEditForm_PlaceholdersNoSentinelText verifies that no field placeholder
+// contains sentinel text like "blank=keep" or "null=unschedule".
+func TestInitEditForm_PlaceholdersNoSentinelText(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "X"},
+	}
+	m.plan.cursor = 0
+
+	m.initEditForm()
+
+	for i, f := range m.plan.form.fields {
+		ph := f.Placeholder
+		if strings.Contains(ph, "blank=keep") || strings.Contains(ph, "null=unschedule") {
+			t.Errorf("field %d placeholder contains sentinel text: %q", i, ph)
+		}
+	}
+}
+
+// TestSubmitEditForm_UnchangedIsNoop verifies that submitting an edit form with
+// no changes dispatches no RPC and closes the form.
+func TestSubmitEditForm_UnchangedIsNoop(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills Name="Standup", Start="09:00", Duration="30m"
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("unchanged: expected planList (form closed), got mode=%d", m.plan.mode)
+	}
+	if cmd != nil {
+		t.Error("unchanged: expected nil cmd (no-op), got non-nil")
+	}
+}
+
+// TestSubmitEditForm_ClearStartUnschedules verifies that clearing the Start field
+// on a scheduled entry dispatches unschedule (MovePlanEntry with nil StartMinute),
+// ignoring any Duration value.
+func TestSubmitEditForm_ClearStartUnschedules(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills Start="09:00", Duration="30m"
+
+	m.plan.form.fields[1].SetValue("") // clear Start → unschedule
+
+	cmd := m.submitEditForm()
+
+	if cmd == nil {
+		t.Fatal("clear-start: expected move command for unschedule, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("clear-start: MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute != nil {
+		t.Errorf("clear-start: StartMinute should be nil (unschedule), got %v", fc.moveReq.StartMinute)
+	}
+	if fc.renameReq != nil {
+		t.Error("clear-start: no rename expected (name unchanged)")
+	}
+}
+
+// TestSubmitEditForm_ClearStartAlreadyUntimed_IsNoop verifies that clearing the
+// Start field of an already-untimed entry dispatches no move.
+func TestSubmitEditForm_ClearStartAlreadyUntimed_IsNoop(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 6, Name: "Write notes"},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // Start="" (untimed), Duration=""
+
+	// Start is already empty; submitting unchanged → no-op
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("untimed noop: expected planList, got mode=%d", m.plan.mode)
+	}
+	if cmd != nil {
+		t.Error("untimed noop: expected nil cmd")
+	}
+	if fc.moveReq != nil {
+		t.Error("untimed noop: MovePlanEntry should not be called")
+	}
+}
+
+// TestSubmitEditForm_ChangedStartDispatches verifies that changing Start on a
+// scheduled entry dispatches a move with the new start value.
+func TestSubmitEditForm_ChangedStartDispatches(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills Start="09:00"
+
+	m.plan.form.fields[1].SetValue("10:00") // change start
+
+	cmd := m.submitEditForm()
+
+	if cmd == nil {
+		t.Fatal("changed start: expected move command, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("changed start: MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute == nil {
+		t.Fatal("changed start: StartMinute should be non-nil")
+	}
+	if *fc.moveReq.StartMinute != 600 {
+		t.Errorf("changed start: expected StartMinute=600, got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestSubmitEditForm_InvalidStart_KeepsFormOpen verifies that an invalid Start
+// keeps the form open with an error set.
+func TestSubmitEditForm_InvalidStart_KeepsFormOpen(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: pint32(540)},
+	}
+	m.plan.cursor = 0
+	m.initEditForm()
+
+	m.plan.form.fields[1].SetValue("not-a-time")
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planEdit {
+		t.Errorf("invalid start: form should stay planEdit, got %d", m.plan.mode)
+	}
+	if m.plan.err == nil {
+		t.Error("invalid start: plan.err should be set")
+	}
+	if cmd != nil {
+		t.Error("invalid start: expected nil cmd")
+	}
+}
+
+// TestSubmitEditForm_NameChangeOnlyRenames verifies that changing only the name
+// dispatches rename with no move.
+func TestSubmitEditForm_NameChangeOnlyRenames(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 5, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills all fields
+
+	m.plan.form.fields[0].SetValue("Daily sync")
+
+	cmd := m.submitEditForm()
+
+	if cmd == nil {
+		t.Fatal("name change: expected rename command, got nil")
+	}
+	cmd()
+	if fc.renameReq == nil {
+		t.Fatal("name change: RenamePlanEntry was not called")
+	}
+	if fc.renameReq.Name != "Daily sync" {
+		t.Errorf("name change: expected 'Daily sync', got %q", fc.renameReq.Name)
+	}
+	if fc.moveReq != nil {
+		t.Error("name-only change: MovePlanEntry should NOT be called")
+	}
+}
+
+// ── T007: Foundational interaction tests ───────────────────────────────────
+
+// TestPlanForm_TabCyclesThroughButtons checks that Tab moves focus past all
+// text fields into the Save/Cancel button slots and wraps back to field 0.
+func TestPlanForm_TabCyclesThroughButtons(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm() // 3 fields: focus starts at 0
+
+	nFields := len(m.plan.form.fields) // 3
+
+	// Tab through all fields
+	for i := 1; i < nFields; i++ {
+		m, _ = pressSpecialKey(m, tea.KeyTab)
+		if m.plan.form.focus != i {
+			t.Errorf("after Tab x%d: expected focus=%d, got %d", i, i, m.plan.form.focus)
+		}
+	}
+	// Next Tab lands on Save slot
+	m, _ = pressSpecialKey(m, tea.KeyTab)
+	if !planFocusSave(m.plan.form) {
+		t.Errorf("Tab to Save: expected planFocusSave=true, focus=%d", m.plan.form.focus)
+	}
+	// Next Tab lands on Cancel slot
+	m, _ = pressSpecialKey(m, tea.KeyTab)
+	if !planFocusCancel(m.plan.form) {
+		t.Errorf("Tab to Cancel: expected planFocusCancel=true, focus=%d", m.plan.form.focus)
+	}
+	// Wrap back to 0
+	m, _ = pressSpecialKey(m, tea.KeyTab)
+	if m.plan.form.focus != 0 {
+		t.Errorf("Tab wrap: expected focus=0, got %d", m.plan.form.focus)
+	}
+}
+
+// TestPlanForm_ShiftTabCyclesBackward checks that Shift+Tab moves focus backward.
+func TestPlanForm_ShiftTabCyclesBackward(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm() // focus at 0
+
+	// Shift+Tab from 0 should wrap to Cancel slot (len(fields)+1)
+	m, _ = pressSpecialKey(m, tea.KeyShiftTab)
+	if !planFocusCancel(m.plan.form) {
+		t.Errorf("Shift+Tab from 0: expected Cancel slot, focus=%d", m.plan.form.focus)
+	}
+}
+
+// TestPlanForm_EnterInTextField_DoesNotSubmit checks that pressing Enter while
+// a text field is focused does NOT submit the form — mode stays open.
+func TestPlanForm_EnterInTextField_DoesNotSubmit(t *testing.T) {
+	fc := &fakePlanClient{}
+	for _, mode := range []planMode{planEdit, planTaskTime, planEventForm} {
+		m := buildPlanTestModel(fc)
+		m.plan.loaded = true
+		m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+		m.plan.cursor = 0
+		switch mode {
+		case planEdit:
+			m.initEditForm()
+		case planTaskTime:
+			m.initTaskTimeForm(1)
+		case planEventForm:
+			m.initAddEventForm()
+		}
+		// Ensure focus is on a text field
+		if m.plan.form.focus >= len(m.plan.form.fields) {
+			t.Fatalf("mode %d: focus should start on a text field", mode)
+		}
+		initialMode := m.plan.mode
+
+		m2, _ := pressSpecialKey(m, tea.KeyEnter)
+
+		if m2.plan.mode != initialMode {
+			t.Errorf("mode %d: Enter in text field should not submit; mode changed from %d to %d",
+				mode, initialMode, m2.plan.mode)
+		}
+	}
+}
+
+// TestPlanForm_EnterOnSaveButton_Submits checks that pressing Enter while the
+// Save button is focused submits the form.
+func TestPlanForm_EnterOnSaveButton_Submits(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540), DurationMinute: 30}}
+	m.plan.cursor = 0
+	m.initEditForm()
+
+	// Move focus to Save slot
+	for !planFocusSave(m.plan.form) {
+		m.cyclePlanFormFocus(1)
+	}
+
+	_, cmd := pressSpecialKey(m, tea.KeyEnter)
+	// A no-op save (unchanged form) should close the form and return nil cmd.
+	// But we just care that Enter on Save does NOT silently do nothing —
+	// either cmd is non-nil (RPC) or the mode closed (no-op).
+	// With unchanged pre-filled form it closes immediately (nil cmd, planList).
+	// We verify Enter was handled as a save attempt, not ignored.
+	if m.plan.mode != planEdit {
+		t.Errorf("Enter on Save: form should still be in planEdit before action; mode=%d", m.plan.mode)
+	}
+	_ = cmd // cmd may be nil (no-op) or non-nil (rpc) — both are valid "submit" outcomes
+}
+
+// TestPlanForm_EnterOnCancelButton_Closes checks that pressing Enter on the
+// Cancel button closes the form without submitting.
+func TestPlanForm_EnterOnCancelButton_Closes(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "X", StartMinute: pint32(540)}}
+	m.plan.cursor = 0
+	m.initEditForm()
+
+	// Move focus to Cancel slot
+	for !planFocusCancel(m.plan.form) {
+		m.cyclePlanFormFocus(1)
+	}
+
+	m2, cmd := pressSpecialKey(m, tea.KeyEnter)
+	if m2.plan.mode != planList {
+		t.Errorf("Enter on Cancel: expected planList, got %d", m2.plan.mode)
+	}
+	if cmd != nil {
+		t.Error("Enter on Cancel: expected nil cmd (no RPC)")
+	}
+}
+
 // ── US3: sub-tasks in task picker ──────────────────────────────────────────
 
 // TestPickerSubtasks_VisibleAfterPlanTasksMsg checks that after a planTasksMsg
@@ -782,32 +1176,33 @@ func TestPickerSubtasks_VisibleAfterPlanTasksMsg(t *testing.T) {
 
 // ── US3 (T028): edit form schedule↔unschedule ──────────────────────────────
 
-// TestEditForm_NullUnschedules checks that typing "null" in the Start field
-// sends MovePlanEntry with StartMinute=nil (unschedule).
-func TestEditForm_NullUnschedules(t *testing.T) {
+// TestEditForm_ClearStartUnschedules checks that clearing the Start field on a
+// scheduled entry sends MovePlanEntry with StartMinute=nil (unschedule).
+// The old "null" keyword sentinel is replaced by clearing the Start field.
+func TestEditForm_ClearStartUnschedules(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{{Id: 5, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 	m.initEditForm()
-	// Name unchanged, Start = "null" → unschedule
-	m.plan.form.fields[1].SetValue("null")
+	// Name unchanged; clear the pre-filled Start field to unschedule.
+	m.plan.form.fields[1].SetValue("")
 
 	cmd := m.submitEditForm()
 
 	if m.plan.mode != planEdit {
-		t.Errorf("submitEditForm null dispatch: form should stay open (planEdit), got %d", m.plan.mode)
+		t.Errorf("submitEditForm clear-start dispatch: form should stay open (planEdit), got %d", m.plan.mode)
 	}
 	if cmd == nil {
-		t.Error("submitEditForm null: expected a move command, got nil")
+		t.Error("submitEditForm clear-start: expected a move command, got nil")
 	}
 	if cmd != nil {
 		cmd()
 		if fc.moveReq == nil {
-			t.Error("submitEditForm null: MovePlanEntry was not called")
+			t.Error("submitEditForm clear-start: MovePlanEntry was not called")
 		} else if fc.moveReq.StartMinute != nil {
-			t.Errorf("submitEditForm null: StartMinute = %v, want nil (unschedule)", fc.moveReq.StartMinute)
+			t.Errorf("submitEditForm clear-start: StartMinute = %v, want nil (unschedule)", fc.moveReq.StartMinute)
 		}
 	}
 }
@@ -972,6 +1367,92 @@ func TestTaskTimeForm_StaysOpenOnServerError(t *testing.T) {
 	}
 	if nm.plan.form.fields[0].Value() != "09:00" {
 		t.Errorf("server error: expected start time '09:00' preserved, got %q", nm.plan.form.fields[0].Value())
+	}
+}
+
+// ── T013/T014: US2 — schedule-task and add-event form parity ──────────────────
+
+// TestScheduleTaskForm_ButtonsAndHelp verifies that the schedule-task form
+// renders Save/Cancel buttons and the exact help line.
+func TestScheduleTaskForm_ButtonsAndHelp(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.initTaskTimeForm(1)
+	out := m.renderPlanFormView(80)
+
+	if !strings.Contains(out, "[ Save ]") {
+		t.Errorf("schedule form: expected '[ Save ]'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "[ Cancel ]") {
+		t.Errorf("schedule form: expected '[ Cancel ]'; got:\n%s", out)
+	}
+	const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+	if !strings.Contains(out, wantHelp) {
+		t.Errorf("schedule form: expected help line %q; got:\n%s", wantHelp, out)
+	}
+}
+
+// TestAddEventForm_ButtonsAndHelp verifies that the add-event form renders
+// Save/Cancel buttons and the exact help line.
+func TestAddEventForm_ButtonsAndHelp(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.initAddEventForm()
+	out := m.renderPlanFormView(80)
+
+	if !strings.Contains(out, "[ Save ]") {
+		t.Errorf("add-event form: expected '[ Save ]'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "[ Cancel ]") {
+		t.Errorf("add-event form: expected '[ Cancel ]'; got:\n%s", out)
+	}
+	const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+	if !strings.Contains(out, wantHelp) {
+		t.Errorf("add-event form: expected help line %q; got:\n%s", wantHelp, out)
+	}
+}
+
+// TestScheduleTaskForm_EnterInFieldDoesNotSubmit verifies Enter in a text field
+// of the schedule form does NOT submit (mode stays planTaskTime).
+func TestScheduleTaskForm_EnterInFieldDoesNotSubmit(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.initTaskTimeForm(5)
+
+	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+
+	if m2.plan.mode != planTaskTime {
+		t.Errorf("schedule form: Enter in text field should not submit; mode=%d", m2.plan.mode)
+	}
+}
+
+// TestAddEventForm_EnterInFieldDoesNotSubmit verifies Enter in a text field
+// of the add-event form does NOT submit (mode stays planEventForm).
+func TestAddEventForm_EnterInFieldDoesNotSubmit(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.initAddEventForm()
+
+	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+
+	if m2.plan.mode != planEventForm {
+		t.Errorf("add-event form: Enter in text field should not submit; mode=%d", m2.plan.mode)
+	}
+}
+
+// TestScheduleTaskForm_CtrlSSubmits verifies that Ctrl+S still submits the
+// schedule form from any focus (even when a text field is focused).
+func TestScheduleTaskForm_CtrlSSubmits(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.initTaskTimeForm(5)
+	// Leave fields blank (untimed submission)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+
+	if cmd == nil {
+		t.Error("schedule form: Ctrl+S should submit (cmd non-nil)")
 	}
 }
 

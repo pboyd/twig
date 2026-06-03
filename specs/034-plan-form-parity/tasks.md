@@ -30,7 +30,7 @@ description: "Task list for Plan Entry Form Parity with Task Form"
 
 **Purpose**: Establish a known-good baseline before changes.
 
-- [ ] T001 Confirm baseline is green: from `services/twig/` run `go test ./internal/tui/... ./internal/cli/timeparse/...` and record that it passes before any edits.
+- [X] T001 Confirm baseline is green: from `services/twig/` run `go test ./internal/tui/... ./internal/cli/timeparse/...` and record that it passes before any edits.
 
 ---
 
@@ -38,12 +38,12 @@ description: "Task list for Plan Entry Form Parity with Task Form"
 
 **Purpose**: Shared form mechanics used by all three planning modes. MUST complete before US1 and US2. After this phase, all three forms render with title/spacing/buttons/help-line parity, Enter no longer saves, and focus cycles through the buttons.
 
-- [ ] T002 [P] Add `FormatDuration(minutes int) string` (compact form: `30m`, `1h30m`) to `services/twig/internal/cli/timeparse/timeparse.go`, and add a round-trip unit test (`ParseDuration(FormatDuration(m)) == m` for representative values incl. 0/30/90/600) in `services/twig/internal/cli/timeparse/timeparse_test.go`.
-- [ ] T003 Extend the focus model in `services/twig/internal/tui/plan_update.go`: treat focus indices `len(fields)` and `len(fields)+1` as virtual Save/Cancel slots; update `cyclePlanFormFocus` to wrap over `len(fields)+2` and `Blur()` all fields when a button slot is focused. Add helper predicates `planFocusSave`/`planFocusCancel` (in `services/twig/internal/tui/plan_view.go` or `model.go`).
-- [ ] T004 Update `renderPlanFormView` in `services/twig/internal/tui/plan_view.go`: emit the (currently discarded) per-mode `title` followed by a blank line; insert one blank line between adjacent fields; render `[ Save ]  [ Cancel ]` below the fields with `[>Save<]`/`[>Cancel<]` when the corresponding button slot is focused; replace the help line with exactly `Ctrl+S: save  Esc: cancel  Tab: next field` (preceded by a blank line). Conform to `contracts/edit-form-ui.md` R1–R4.
-- [ ] T005 Update `handlePlanFormKey` in `services/twig/internal/tui/update.go`: remove `|| msg.Type == tea.KeyEnter` from the Save case; add Enter handling that submits when Save is focused, cancels when Cancel is focused, else advances focus (`cyclePlanFormFocus(1)`); guard the text-input forwarding so a focused **button** slot (`focus >= len(fields)`) is not indexed into `fields`. Keep `keys.Save` (Ctrl+S) submitting from any focus. Conform to contract key-binding table.
-- [ ] T006 [P] Remove sentinel hint text in `services/twig/internal/tui/plan_view.go` (`planFieldLabel` for `planEdit` → plain `Start` / `Duration`) and `services/twig/internal/tui/plan_update.go` (neutral placeholders, e.g. `e.g. 09:00` / `e.g. 30m`). No `blank=keep` or `null=unschedule` may remain (contract R5).
-- [ ] T007 Add foundational render/interaction tests in `services/twig/internal/tui/plan_view_test.go` and `services/twig/internal/tui/plan_update_test.go`: assert the title line, `[ Save ]`/`[ Cancel ]`, and the exact help line render; Tab/Shift-Tab cycles focus through the buttons; Enter in a focused text field does not submit (mode stays open). Cover all three modes where practical.
+- [X] T002 [P] Add `FormatDuration(minutes int) string` (compact form: `30m`, `1h30m`) to `services/twig/internal/cli/timeparse/timeparse.go`, and add a round-trip unit test (`ParseDuration(FormatDuration(m)) == m` for representative values incl. 0/30/90/600) in `services/twig/internal/cli/timeparse/timeparse_test.go`.
+- [X] T003 Extend the focus model in `services/twig/internal/tui/plan_update.go`: treat focus indices `len(fields)` and `len(fields)+1` as virtual Save/Cancel slots; update `cyclePlanFormFocus` to wrap over `len(fields)+2` and `Blur()` all fields when a button slot is focused. Add helper predicates `planFocusSave`/`planFocusCancel` (in `services/twig/internal/tui/plan_view.go` or `model.go`).
+- [X] T004 Update `renderPlanFormView` in `services/twig/internal/tui/plan_view.go`: emit the (currently discarded) per-mode `title` followed by a blank line; insert one blank line between adjacent fields; render `[ Save ]  [ Cancel ]` below the fields with `[>Save<]`/`[>Cancel<]` when the corresponding button slot is focused; replace the help line with exactly `Ctrl+S: save  Esc: cancel  Tab: next field` (preceded by a blank line). Conform to `contracts/edit-form-ui.md` R1–R4.
+- [X] T005 Update `handlePlanFormKey` in `services/twig/internal/tui/update.go`: remove `|| msg.Type == tea.KeyEnter` from the Save case; add Enter handling that submits when Save is focused, cancels when Cancel is focused, else advances focus (`cyclePlanFormFocus(1)`); guard the text-input forwarding so a focused **button** slot (`focus >= len(fields)`) is not indexed into `fields`. Keep `keys.Save` (Ctrl+S) submitting from any focus. Conform to contract key-binding table.
+- [X] T006 [P] Remove sentinel hint text in `services/twig/internal/tui/plan_view.go` (`planFieldLabel` for `planEdit` → plain `Start` / `Duration`) and `services/twig/internal/tui/plan_update.go` (neutral placeholders, e.g. `e.g. 09:00` / `e.g. 30m`). No `blank=keep` or `null=unschedule` may remain (contract R5).
+- [X] T007 Add foundational render/interaction tests in `services/twig/internal/tui/plan_view_test.go` and `services/twig/internal/tui/plan_update_test.go`: assert the title line, `[ Save ]`/`[ Cancel ]`, and the exact help line render; Tab/Shift-Tab cycles focus through the buttons; Enter in a focused text field does not submit (mode stays open). Cover all three modes where practical.
 
 **Checkpoint**: All three planning forms now look and behave like the task form (presentation + key handling). US1 and US2 can proceed in parallel.
 
@@ -57,14 +57,14 @@ description: "Task list for Plan Entry Form Parity with Task Form"
 
 ### Tests (write first — they must fail before T010/T011)
 
-- [ ] T008 [P] [US1] Test in `services/twig/internal/tui/plan_update_test.go`: `initEditForm` pre-fills Name verbatim, Start as `HH:MM`, Duration as compact form for a scheduled entry; leaves Start/Duration empty for an untimed entry; placeholders contain no `blank=keep` text.
-- [ ] T009 [P] [US1] Test in `services/twig/internal/tui/plan_update_test.go`: `submitEditForm` change-detection — unchanged form dispatches no rename/move and closes; name-only change dispatches rename only; clearing Start on a scheduled entry dispatches unschedule and ignores Duration; changed start/duration dispatches a scheduled move; invalid start or duration keeps the form open with an error.
+- [X] T008 [P] [US1] Test in `services/twig/internal/tui/plan_update_test.go`: `initEditForm` pre-fills Name verbatim, Start as `HH:MM`, Duration as compact form for a scheduled entry; leaves Start/Duration empty for an untimed entry; placeholders contain no `blank=keep` text.
+- [X] T009 [P] [US1] Test in `services/twig/internal/tui/plan_update_test.go`: `submitEditForm` change-detection — unchanged form dispatches no rename/move and closes; name-only change dispatches rename only; clearing Start on a scheduled entry dispatches unschedule and ignores Duration; changed start/duration dispatches a scheduled move; invalid start or duration keeps the form open with an error.
 
 ### Implementation
 
-- [ ] T010 [US1] Update `initEditForm` in `services/twig/internal/tui/plan_update.go`: pre-fill Start (`fmt.Sprintf("%02d:%02d", …)`) and Duration (`timeparse.FormatDuration`) from the selected entry; set neutral placeholders; keep Name pre-fill and `entryID`.
-- [ ] T011 [US1] Rewrite `submitEditForm` in `services/twig/internal/tui/plan_update.go`: compare trimmed fields against the original entry; rename only on name change; on empty Start unschedule a scheduled entry (ignore Duration) / no-op if already untimed; on present Start, parse and dispatch a move only if start/duration changed; remove the `null`-keyword path; preserve empty-name validation; keep the "no commands → close form" no-op path.
-- [ ] T012 [US1] Repair pre-existing edit tests in `services/twig/internal/tui/plan_update_test.go` that assumed `blank=keep`/`null` semantics (e.g. `TestEditForm_RenameOnNameChange` setup comment and move-count assertions) so they reflect pre-filled values + change-detection.
+- [X] T010 [US1] Update `initEditForm` in `services/twig/internal/tui/plan_update.go`: pre-fill Start (`fmt.Sprintf("%02d:%02d", …)`) and Duration (`timeparse.FormatDuration`) from the selected entry; set neutral placeholders; keep Name pre-fill and `entryID`.
+- [X] T011 [US1] Rewrite `submitEditForm` in `services/twig/internal/tui/plan_update.go`: compare trimmed fields against the original entry; rename only on name change; on empty Start unschedule a scheduled entry (ignore Duration) / no-op if already untimed; on present Start, parse and dispatch a move only if start/duration changed; remove the `null`-keyword path; preserve empty-name validation; keep the "no commands → close form" no-op path.
+- [X] T012 [US1] Repair pre-existing edit tests in `services/twig/internal/tui/plan_update_test.go` that assumed `blank=keep`/`null` semantics (e.g. `TestEditForm_RenameOnNameChange` setup comment and move-count assertions) so they reflect pre-filled values + change-detection.
 
 **Checkpoint**: US1 is independently testable and constitutes the MVP — the requested edit-form fix is fully delivered.
 
@@ -78,12 +78,12 @@ description: "Task list for Plan Entry Form Parity with Task Form"
 
 ### Tests
 
-- [ ] T013 [P] [US2] Test in `services/twig/internal/tui/plan_view_test.go`: the Schedule-task form renders title `Schedule task` and the Add-event form renders title `Add event`, each with `[ Save ]`/`[ Cancel ]` and the exact help line.
-- [ ] T014 [P] [US2] Test in `services/twig/internal/tui/plan_update_test.go`: pressing Enter in a text field of the schedule and add-event forms does not submit (mode stays `planTaskTime` / `planEventForm`); Ctrl+S still submits.
+- [X] T013 [P] [US2] Test in `services/twig/internal/tui/plan_view_test.go`: the Schedule-task form renders title `Schedule task` and the Add-event form renders title `Add event`, each with `[ Save ]`/`[ Cancel ]` and the exact help line.
+- [X] T014 [P] [US2] Test in `services/twig/internal/tui/plan_update_test.go`: pressing Enter in a text field of the schedule and add-event forms does not submit (mode stays `planTaskTime` / `planEventForm`); Ctrl+S still submits.
 
 ### Implementation
 
-- [ ] T015 [US2] In `services/twig/internal/tui/plan_update.go`, align the add-event/schedule placeholders with the parity tone and confirm the 2-field schedule form (`planTaskTime`) cycles focus correctly across Start, Duration, Save, Cancel (no out-of-range field access). Make only the minimal changes needed for consistency.
+- [X] T015 [US2] In `services/twig/internal/tui/plan_update.go`, align the add-event/schedule placeholders with the parity tone and confirm the 2-field schedule form (`planTaskTime`) cycles focus correctly across Start, Duration, Save, Cancel (no out-of-range field access). Make only the minimal changes needed for consistency.
 
 **Checkpoint**: All three planning forms verified consistent with the task form.
 
@@ -91,9 +91,9 @@ description: "Task list for Plan Entry Form Parity with Task Form"
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T016 [P] Guard check: from repo root, `! grep -rn "blank=keep\|null=unschedule\|ctrl+s/enter" services/twig/internal/tui/*.go` returns clean (contract R5 + help-line FR-008).
-- [ ] T017 [P] From `services/twig/`, run `go test ./...` and `go build -o twig ./cmd/twig`; both must pass.
-- [ ] T018 Walk through `quickstart.md` against `./twig` and confirm Constitution Principle III (visual/interaction parity) and IV (message tone of any validation copy) per quality gates 5–6.
+- [X] T016 [P] Guard check: from repo root, `! grep -rn "blank=keep\|null=unschedule\|ctrl+s/enter" services/twig/internal/tui/*.go` returns clean (contract R5 + help-line FR-008).
+- [X] T017 [P] From `services/twig/`, run `go test ./...` and `go build -o twig ./cmd/twig`; both must pass.
+- [X] T018 Walk through `quickstart.md` against `./twig` and confirm Constitution Principle III (visual/interaction parity) and IV (message tone of any validation copy) per quality gates 5–6.
 
 ---
 

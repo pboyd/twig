@@ -146,6 +146,37 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
+func TestFormatDuration(t *testing.T) {
+	cases := []struct {
+		minutes int
+		want    string
+	}{
+		{0, "0m"},
+		{30, "30m"},
+		{60, "1h"},
+		{90, "1h30m"},
+		{600, "10h"},
+		{45, "45m"},
+		{120, "2h"},
+		{125, "2h5m"},
+	}
+	for _, c := range cases {
+		t.Run(c.want, func(t *testing.T) {
+			got := timeparse.FormatDuration(c.minutes)
+			if got != c.want {
+				t.Errorf("FormatDuration(%d) = %q, want %q", c.minutes, got, c.want)
+			}
+			// Round-trip: ParseDuration(FormatDuration(m)) == m
+			rt, err := timeparse.ParseDuration(got)
+			if err != nil {
+				t.Errorf("ParseDuration(%q) round-trip error: %v", got, err)
+			} else if rt != c.minutes {
+				t.Errorf("round-trip: ParseDuration(FormatDuration(%d)) = %d, want %d", c.minutes, rt, c.minutes)
+			}
+		})
+	}
+}
+
 func TestParseStartOrNull(t *testing.T) {
 	cases := []struct {
 		input     string

@@ -245,7 +245,7 @@ func (m *Model) initTaskTimeForm(taskID int64) {
 }
 
 // initEditForm opens the unified edit form for the selected entry.
-// Name is prefilled; Start and Duration are blank (blank = keep existing).
+// Name, Start (HH:MM), and Duration (compact) are pre-filled from the entry.
 func (m *Model) initEditForm() {
 	if len(m.plan.entries) == 0 {
 		return
@@ -254,8 +254,17 @@ func (m *Model) initEditForm() {
 	name := newPlanInput("Name")
 	name.SetValue(entry.Name)
 	name.Focus()
-	start := newPlanInput("New start time (e.g. 09:00, blank=keep)")
-	dur := newPlanInput("New duration (e.g. 30m, blank=keep)")
+
+	start := newPlanInput("e.g. 09:00")
+	if entry.StartMinute != nil {
+		min := int(entry.GetStartMinute())
+		start.SetValue(fmt.Sprintf("%02d:%02d", min/60, min%60))
+	}
+
+	dur := newPlanInput("e.g. 30m")
+	if entry.StartMinute != nil && entry.DurationMinute > 0 {
+		dur.SetValue(timeparse.FormatDuration(int(entry.DurationMinute)))
+	}
 
 	m.plan.form = planFormState{
 		fields:  []textinput.Model{name, start, dur},
@@ -265,15 +274,21 @@ func (m *Model) initEditForm() {
 	m.plan.mode = planEdit
 }
 
-// cyclePlanFormFocus moves focus to the next/prev field in the current form.
+// cyclePlanFormFocus moves focus forward/back across all fields and the two
+// virtual button slots (Save = len(fields), Cancel = len(fields)+1).
 func (m *Model) cyclePlanFormFocus(delta int) {
 	if len(m.plan.form.fields) == 0 {
 		return
 	}
-	m.plan.form.fields[m.plan.form.focus].Blur()
-	n := len(m.plan.form.fields)
+	n := len(m.plan.form.fields) + 2 // +2 for Save / Cancel
 	m.plan.form.focus = ((m.plan.form.focus+delta)%n + n) % n
-	m.plan.form.fields[m.plan.form.focus].Focus()
+
+	for i := range m.plan.form.fields {
+		m.plan.form.fields[i].Blur()
+	}
+	if m.plan.form.focus < len(m.plan.form.fields) {
+		m.plan.form.fields[m.plan.form.focus].Focus()
+	}
 }
 
 // submitPlanForm validates and submits the current planning form.
@@ -344,9 +359,8 @@ func (m *Model) submitEventForm() tea.Cmd {
 	return addPlanEventCmd(m.planClient, m.plan.day, nameStr, start, dur)
 }
 
-// submitEditForm validates and submits the unified Edit form.
-// Issues RenamePlanEntry if the name changed, MovePlanEntry if a start time was given.
-// If neither changed, closes the form without an RPC (no-op).
+// submitEditForm validates and submits the unified Edit form using change
+// detection against the pre-filled original values.
 func (m *Model) submitEditForm() tea.Cmd {
 	nameStr := strings.TrimSpace(m.plan.form.fields[0].Value())
 	startStr := strings.TrimSpace(m.plan.form.fields[1].Value())
@@ -357,55 +371,55 @@ func (m *Model) submitEditForm() tea.Cmd {
 		return nil
 	}
 
-	// Look up the original entry to detect whether the name changed.
-	var originalName string
+	// Find the original entry for change detection.
+	var orig *planv1.PlanEntry
 	for _, e := range m.plan.entries {
 		if e.Id == m.plan.form.entryID {
-			originalName = e.Name
+			orig = e
 			break
 		}
 	}
 
 	var cmds []tea.Cmd
 
-	if nameStr != originalName {
+	if orig != nil && nameStr != orig.Name {
 		cmds = append(cmds, renamePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, nameStr))
 	}
 
-	if startStr != "" {
-		if strings.EqualFold(startStr, "null") {
-			// null = unschedule; duration field may override duration (0=keep)
-			var dur int
-			if durStr != "" {
-				var err error
-				dur, err = timeparse.ParseDuration(durStr)
-				if err != nil {
-					m.plan.err = fmt.Errorf("invalid duration: %w", err)
-					return nil
-				}
-			}
-			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, 0, dur, false))
-		} else {
-			start, err := timeparse.ParseStart(startStr)
+	if startStr == "" {
+		// Start cleared: unschedule only if the entry was scheduled.
+		if orig != nil && orig.StartMinute != nil {
+			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, 0, 0, false))
+		}
+		// If already untimed: no move.
+	} else {
+		start, err := timeparse.ParseStart(startStr)
+		if err != nil {
+			m.plan.err = fmt.Errorf("invalid start time: %w", err)
+			return nil
+		}
+		var dur int
+		if durStr != "" {
+			dur, err = timeparse.ParseDurationOrEnd(durStr, start)
 			if err != nil {
-				m.plan.err = fmt.Errorf("invalid start time: %w", err)
+				m.plan.err = fmt.Errorf("invalid duration: %w", err)
 				return nil
 			}
-			var dur int
-			if durStr != "" {
-				dur, err = timeparse.ParseDurationOrEnd(durStr, start)
-				if err != nil {
-					m.plan.err = fmt.Errorf("invalid duration: %w", err)
-					return nil
-				}
-			}
+		}
+		// Only move if start or duration changed from original.
+		origStart := -1 // sentinel: was untimed
+		origDur := 0
+		if orig != nil && orig.StartMinute != nil {
+			origStart = int(orig.GetStartMinute())
+			origDur = int(orig.DurationMinute)
+		}
+		if origStart != start || origDur != dur {
 			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, start, dur, true))
 		}
 	}
 
 	m.plan.err = nil
 	if len(cmds) == 0 {
-		// No change — close the form immediately (no planMutatedMsg will arrive).
 		m.plan.mode = planList
 		return nil
 	}

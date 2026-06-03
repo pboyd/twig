@@ -142,17 +142,6 @@ func (m Model) renderPlanPickerView(width int) string {
 // renderPlanFormView renders the current planning prompt form.
 func (m Model) renderPlanFormView(width int) string {
 	var sb strings.Builder
-
-	var title string
-	switch m.plan.mode {
-	case planTaskTime:
-		title = "Schedule task"
-	case planEventForm:
-		title = "Add event"
-	case planEdit:
-		title = "Edit entry"
-	}
-	_ = title
 	_ = width
 
 	for i, field := range m.plan.form.fields {
@@ -162,8 +151,19 @@ func (m Model) renderPlanFormView(width int) string {
 		} else {
 			sb.WriteString(fmt.Sprintf("    %s: %s\n", label, field.View()))
 		}
+		sb.WriteString("\n")
 	}
-	sb.WriteString("  [tab] next field  [ctrl+s/enter] save  [esc] cancel\n")
+
+	saveBtn := "[ Save ]"
+	cancelBtn := "[ Cancel ]"
+	if planFocusSave(m.plan.form) {
+		saveBtn = "[>Save<]"
+	}
+	if planFocusCancel(m.plan.form) {
+		cancelBtn = "[>Cancel<]"
+	}
+	sb.WriteString(fmt.Sprintf("  %s  %s\n", saveBtn, cancelBtn))
+	sb.WriteString("\nCtrl+S: save  Esc: cancel  Tab: next field\n")
 	return sb.String()
 }
 
@@ -331,6 +331,16 @@ func splitPlanEntries(entries []*planv1.PlanEntry) (untimed, timed []*planv1.Pla
 	return
 }
 
+// planFocusSave reports whether the form's focus is on the Save button slot.
+func planFocusSave(form planFormState) bool {
+	return form.focus == len(form.fields)
+}
+
+// planFocusCancel reports whether the form's focus is on the Cancel button slot.
+func planFocusCancel(form planFormState) bool {
+	return form.focus == len(form.fields)+1
+}
+
 // planFieldLabel returns a human-readable label for a planning form field.
 func planFieldLabel(mode planMode, idx int) string {
 	switch mode {
@@ -345,7 +355,7 @@ func planFieldLabel(mode planMode, idx int) string {
 			return labels[idx]
 		}
 	case planEdit:
-		labels := []string{"Name", "Start (blank=keep, null=unschedule)", "Duration (optional)"}
+		labels := []string{"Name", "Start", "Duration"}
 		if idx < len(labels) {
 			return labels[idx]
 		}
