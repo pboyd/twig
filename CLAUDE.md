@@ -152,5 +152,5 @@ Key frontend source paths:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/036-tui-tree-state-persistence/plan.md`.
+`specs/037-task-ordering/plan.md`.
 <!-- SPECKIT END -->
