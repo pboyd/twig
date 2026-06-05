@@ -1315,3 +1315,295 @@ func TestRenderUntimedSeparator_WidthMatchesGrid(t *testing.T) {
 		t.Errorf("separator width = %d, want %d (grid width); line: %q", w, wantWidth, sepLines[0])
 	}
 }
+
+// ── T003: Backward-compatibility guard ────────────────────────────────────────
+
+// TestRenderGrid_BackwardCompat_PreviewZero verifies that when PreviewID == 0
+// and PreviewConflictSlots is empty/nil, RenderGrid output is byte-for-byte
+// identical to a call with a zero-value GridOptions (contract §5).
+func TestRenderGrid_BackwardCompat_PreviewZero(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+		{Day: "2026-05-27", Id: 2, Name: "Lunch", StartMinute: pint32(720), DurationMinute: 60},
+	}
+	day := "2026-05-27"
+	now := fixedTime(9, 0)
+
+	baseline := cli.RenderGrid(entries, day, now, 80, false, cli.GridOptions{})
+	withPreviewFields := cli.RenderGrid(entries, day, now, 80, false, cli.GridOptions{
+		PreviewID:            0,
+		PreviewConflictSlots: nil,
+	})
+
+	if baseline != withPreviewFields {
+		t.Errorf("RenderGrid: output changed when PreviewID==0 and PreviewConflictSlots is nil\nbaseline:\n%s\nwith zero preview fields:\n%s", baseline, withPreviewFields)
+	}
+}
+
+// TestRenderUntimed_BackwardCompat_PreviewZero verifies RenderUntimed is unchanged
+// with zero preview fields.
+func TestRenderUntimed_BackwardCompat_PreviewZero(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Review PR", DurationMinute: 30},
+	}
+	baseline := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
+	withPreviewFields := cli.RenderUntimed(entries, 80, false, cli.GridOptions{
+		PreviewID:            0,
+		PreviewConflictSlots: nil,
+	})
+
+	if baseline != withPreviewFields {
+		t.Errorf("RenderUntimed: output changed when PreviewID==0 and PreviewConflictSlots is nil")
+	}
+}
+
+// ── T005: Dashed-rune rendering tests ────────────────────────────────────────
+
+// TestRenderGrid_PreviewEntry_DashedRunes verifies that an entry with Id == PreviewID
+// renders with dashed runes (┅/┇) while saved entries keep solid runes (━/┃).
+func TestRenderGrid_PreviewEntry_DashedRunes(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Saved", StartMinute: pint32(540), DurationMinute: 60},
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(630), DurationMinute: 60},
+	}
+	opts := cli.GridOptions{
+		HideID:    true,
+		PreviewID: previewID,
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+
+	// Preview entry must use dashed horizontal rune ┅.
+	if !strings.Contains(out, "┅") {
+		t.Errorf("preview entry: expected dashed horizontal rune ┅ in output:\n%s", out)
+	}
+	// Preview entry must use dashed vertical rune ┇.
+	if !strings.Contains(out, "┇") {
+		t.Errorf("preview entry: expected dashed vertical rune ┇ in output:\n%s", out)
+	}
+	// Saved entry must still use solid horizontal rune ━.
+	if !strings.Contains(out, "━") {
+		t.Errorf("saved entry: expected solid horizontal rune ━ in output:\n%s", out)
+	}
+	// Saved entry must still use solid vertical rune ┃.
+	if !strings.Contains(out, "┃") {
+		t.Errorf("saved entry: expected solid vertical rune ┃ in output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_PreviewEntry_SingleRow verifies single-row preview uses dashed rune.
+func TestRenderGrid_PreviewEntry_SingleRow(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: previewID, Name: "Micro", StartMinute: pint32(540), DurationMinute: 15},
+	}
+	opts := cli.GridOptions{
+		HideID:    true,
+		PreviewID: previewID,
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+
+	if !strings.Contains(out, "┅") {
+		t.Errorf("single-row preview: expected dashed rune ┅:\n%s", out)
+	}
+}
+
+// ── T012: Conflict-rendering tests (US2) ─────────────────────────────────────
+
+// TestRenderGrid_ConflictStyle_StyledMode verifies that preview rows whose slot is in
+// PreviewConflictSlots are wrapped with ConflictStyle in styled mode (contract §1.4).
+func TestRenderGrid_ConflictStyle_StyledMode(t *testing.T) {
+	const previewID int32 = -1
+	// Preview: 10:00–11:00 (600–660). Existing entry: 10:30–11:30 (630–690).
+	// Overlapping slots: 630 (10:30) and 645 (10:45).
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Saved", StartMinute: pint32(630), DurationMinute: 60},
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(600), DurationMinute: 60},
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            previewID,
+		PreviewConflictSlots: map[int]bool{630: true, 645: true},
+		ConflictStyle:        styleMarker,
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, true, opts)
+
+	// Some rows must have the conflict markers.
+	if !strings.Contains(out, "<<") || !strings.Contains(out, ">>") {
+		t.Errorf("conflict styled mode: expected ConflictStyle markers in output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_ConflictStyle_PlainFallback verifies that when ConflictStyle is nil,
+// conflicting preview rows show a '!' gutter marker (contract §4).
+func TestRenderGrid_ConflictStyle_PlainFallback(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Saved", StartMinute: pint32(630), DurationMinute: 60},
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(600), DurationMinute: 60},
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            previewID,
+		PreviewConflictSlots: map[int]bool{630: true, 645: true},
+		ConflictStyle:        nil, // plain-mode fallback
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+
+	lines := rowsOf(out)
+	// winStart=480; slot 630 → row (630-480)/15=10; slot 645 → row 11.
+	// Gutter char is at index 6 in each line.
+	foundBang := false
+	for _, i := range []int{10, 11} {
+		if i < len(lines) && strings.HasPrefix(lines[i][6:], "!") {
+			foundBang = true
+		}
+	}
+	if !foundBang {
+		t.Errorf("conflict plain fallback: expected '!' gutter marker on conflicting preview row:\n%s", out)
+	}
+}
+
+// TestRenderGrid_ConflictStyle_NonConflictingPreviewUnchanged verifies that preview rows
+// NOT in PreviewConflictSlots do not receive the conflict marker/style (contract §1.3).
+func TestRenderGrid_ConflictStyle_NonConflictingPreviewUnchanged(t *testing.T) {
+	const previewID int32 = -1
+	// Preview at 10:00–11:00; conflict only at slot 630 (10:30).
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(600), DurationMinute: 60},
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            previewID,
+		PreviewConflictSlots: map[int]bool{630: true}, // only 10:30 conflicts
+		ConflictStyle:        nil,
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+
+	lines := rowsOf(out)
+	// winStart=480; slot 600 → row 8; slot 615 → row 9; slot 630 → row 10; slot 645 → row 11.
+	// Rows 8, 9, 11 should NOT have '!' in the gutter (only row 10 should).
+	for _, i := range []int{8, 9} {
+		if i < len(lines) && len(lines[i]) > 6 && lines[i][6] == '!' {
+			t.Errorf("non-conflicting row %d: unexpected '!' gutter marker; line: %q", i, lines[i])
+		}
+	}
+}
+
+// TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow tests the case where the
+// preview starts at the same row as another entry's interior (their time windows
+// overlap). The preview's top border at that row must be styled with ConflictStyle
+// (not swallowed by the existing entry's interior case).
+func TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow(t *testing.T) {
+	const previewID int32 = -1
+	// Coffee: 08:45–09:15 (525–555). Preview: 09:00–09:45 (540–585).
+	// Coffee's interior is at row 4 (09:00). Preview's top is also at row 4.
+	// Conflict slot: 540 (09:00).
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Coffee", StartMinute: pint32(525), DurationMinute: 30},
+		{Day: "2026-05-27", Id: previewID, Name: "Collect eggs", StartMinute: pint32(540), DurationMinute: 45},
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            previewID,
+		PreviewConflictSlots: map[int]bool{540: true},
+		ConflictStyle:        styleMarker,
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, true, opts)
+	lines := rowsOf(out)
+
+	// winStart=480; row 4 = (540-480)/15 = 4. Preview's top must appear there with conflict marker.
+	if len(lines) <= 4 {
+		t.Fatalf("not enough rows: %d", len(lines))
+	}
+	row4 := lines[4]
+	// Row 4 must have the conflict style markers (dashed preview top border styled red).
+	if !strings.Contains(row4, "<<") || !strings.Contains(row4, ">>") {
+		t.Errorf("row 4 (09:00, preview topLine = conflict slot): expected ConflictStyle markers; got: %q", row4)
+	}
+	// It must use dashed runes (preview top border) not solid (Coffee interior).
+	if !strings.Contains(row4, "┅") {
+		t.Errorf("row 4: expected dashed rune ┅ for preview top border; got: %q", row4)
+	}
+}
+
+// TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow_PlainFallback tests that
+// the plain-mode '!' gutter marker appears when ConflictStyle is nil and the
+// preview's top row coincides with another entry's interior row.
+func TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow_PlainFallback(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Coffee", StartMinute: pint32(525), DurationMinute: 30},
+		{Day: "2026-05-27", Id: previewID, Name: "Collect eggs", StartMinute: pint32(540), DurationMinute: 45},
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            previewID,
+		PreviewConflictSlots: map[int]bool{540: true},
+		ConflictStyle:        nil, // plain fallback
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+	lines := rowsOf(out)
+
+	// winStart=480; row 4 = 09:00. Gutter char (index 6) should be '!'.
+	if len(lines) <= 4 {
+		t.Fatalf("not enough rows: %d", len(lines))
+	}
+	row4 := lines[4]
+	if len(row4) < 7 || row4[6] != '!' {
+		t.Errorf("row 4 plain fallback: expected '!' at gutter index 6; got: %q", row4)
+	}
+}
+
+// ── T016: Gap-visibility test (US3) ──────────────────────────────────────────
+
+// TestRenderGrid_GapVisibility_PreviewWithGap verifies that a preview starting at 10:30
+// after an entry ending at 10:00 leaves visible empty grid rows for the 10:00–10:30 gap.
+func TestRenderGrid_GapVisibility_PreviewWithGap(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120}, // 08:00–10:00
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(630), DurationMinute: 30}, // 10:30–11:00
+	}
+	opts := cli.GridOptions{HideID: true, PreviewID: previewID}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+	lines := rowsOf(out)
+
+	// winStart=480; 10:00=row 8 (bottom of morning), 10:15=row 9 (gap), 10:30=row 10 (top of preview).
+	// Row 9 (10:15) must be an empty grid row, not an entry row.
+	if len(lines) <= 9 {
+		t.Fatalf("not enough rows in output: %d", len(lines))
+	}
+	gapRow := lines[9]
+	if strings.ContainsAny(gapRow, "┏┓┗┛┣┫┃┅┇") {
+		t.Errorf("gap row (10:15) should be an empty grid row, but has entry runes: %q", gapRow)
+	}
+	// Row 10 (10:30) must be the top of the preview box.
+	previewRow := lines[10]
+	if !strings.Contains(previewRow, "┅") && !strings.Contains(previewRow, "┏") {
+		t.Errorf("preview top row (10:30): expected preview or box border rune: %q", previewRow)
+	}
+}
+
+// TestRenderGrid_GapVisibility_PreviewFlush verifies that a preview starting at 10:00
+// is flush with an entry ending at 10:00 (shared border, no empty row between them).
+func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {
+	const previewID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120}, // 08:00–10:00
+		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(600), DurationMinute: 30}, // 10:00–10:30
+	}
+	opts := cli.GridOptions{HideID: true, PreviewID: previewID}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
+	lines := rowsOf(out)
+
+	// winStart=480; row 8 = 10:00. With flush entries the shared-border row at 10:00
+	// must contain ┣ or ┗ (entry boundary, not empty grid).
+	if len(lines) <= 8 {
+		t.Fatalf("not enough rows in output: %d", len(lines))
+	}
+	sharedRow := lines[8]
+	if !strings.ContainsAny(sharedRow, "┣┗┅┏") {
+		t.Errorf("flush preview: expected entry boundary at row 8 (10:00), got: %q", sharedRow)
+	}
+}

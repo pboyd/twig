@@ -970,3 +970,49 @@ func TestPlanningView_Untimed_GracefulWhenOverfull(t *testing.T) {
 		t.Errorf("overfull untimed: output has %d lines, exceeds height 10", len(lines))
 	}
 }
+
+// ── T010: Preview lifecycle — entries unchanged after form open/cancel ─────────
+
+// TestPreviewLifecycle_EntriesUnchangedAfterFormOpenCancel verifies that
+// m.plan.entries is not mutated when a form is opened or when the preview is built.
+func TestPreviewLifecycle_EntriesUnchangedAfterFormOpenCancel(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 45
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+	}
+	origLen := len(m.plan.entries)
+	origID := m.plan.entries[0].Id
+
+	// Open the edit form.
+	m.initEditForm()
+	if len(m.plan.entries) != origLen {
+		t.Errorf("after initEditForm: entries length changed: want %d, got %d", origLen, len(m.plan.entries))
+	}
+	if m.plan.entries[0].Id != origID {
+		t.Errorf("after initEditForm: entry Id changed: want %d, got %d", origID, m.plan.entries[0].Id)
+	}
+
+	// Render (this is where buildTimedSliceWithPreview runs).
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC)
+	_ = m.renderPlanGrid(80, 40, now)
+
+	if len(m.plan.entries) != origLen {
+		t.Errorf("after renderPlanGrid: entries length changed: want %d, got %d", origLen, len(m.plan.entries))
+	}
+	if m.plan.entries[0].Id != origID {
+		t.Errorf("after renderPlanGrid: entry Id changed: want %d, got %d", origID, m.plan.entries[0].Id)
+	}
+
+	// Cancel: return to planList mode.
+	m.plan.mode = planList
+
+	if len(m.plan.entries) != origLen {
+		t.Errorf("after cancel (planList): entries length changed: want %d, got %d", origLen, len(m.plan.entries))
+	}
+}

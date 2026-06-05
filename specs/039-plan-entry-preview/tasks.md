@@ -28,7 +28,7 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 **Purpose**: Confirm a clean baseline before touching rendering code.
 
-- [ ] T001 Confirm baseline build and tests are green: run `go build ./... && go test ./internal/cli/... ./internal/tui/...` from repo root and note the current pass state (no code changes).
+- [X] T001 Confirm baseline build and tests are green: run `go build ./... && go test ./internal/cli/... ./internal/tui/...` from repo root and note the current pass state (no code changes).
 
 ---
 
@@ -38,8 +38,8 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 **⚠️ CRITICAL**: Must complete before US1/US2 rendering work begins.
 
-- [ ] T002 Extend `GridOptions` in `internal/cli/plan_grid.go` with the four preview fields per `contracts/grid-preview.md` §1: `PreviewID int32`, `PreviewStyle func(string) string`, `ConflictStyle func(string) string`, `PreviewConflictSlots map[int]bool` (struct + doc comments only; no rendering behavior yet).
-- [ ] T003 [P] Add a backward-compatibility test in `internal/cli/plan_grid_test.go` asserting that `RenderGrid`/`RenderUntimed` output is unchanged when `PreviewID == 0` and `PreviewConflictSlots` is empty (locks contract §5 before behavior is added).
+- [X] T002 Extend `GridOptions` in `internal/cli/plan_grid.go` with the four preview fields per `contracts/grid-preview.md` §1: `PreviewID int32`, `PreviewStyle func(string) string`, `ConflictStyle func(string) string`, `PreviewConflictSlots map[int]bool` (struct + doc comments only; no rendering behavior yet).
+- [X] T003 [P] Add a backward-compatibility test in `internal/cli/plan_grid_test.go` asserting that `RenderGrid`/`RenderUntimed` output is unchanged when `PreviewID == 0` and `PreviewConflictSlots` is empty (locks contract §5 before behavior is added).
 
 **Checkpoint**: `GridOptions` carries the preview fields; all existing tests still pass.
 
@@ -53,16 +53,16 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 ### Tests for User Story 1 ⚠️ (write first, expect failure)
 
-- [ ] T004 [P] [US1] Add preview-construction tests in `internal/tui/plan_preview_test.go` (new file; expose helpers via `internal/tui/export_test.go` as needed): `buildPlanPreview` returns an entry with `Id == previewID`, name + start + duration derived from form fields for each of `planTaskTime`/`planEventForm`/`planEdit`; returns `nil` when Start is empty/invalid (FR-009); returns `nil` when `mode == planList`.
-- [ ] T005 [P] [US1] Add dashed-rune rendering test in `internal/cli/plan_grid_test.go`: an entry whose `Id == PreviewID` renders its box with `┅`/`┇` (and corners `┏┓┗┛`), while sibling saved entries keep solid `━`/`┃` (contract §1 invariants 1–2).
+- [X] T004 [P] [US1] Add preview-construction tests in `internal/tui/plan_preview_test.go` (new file; expose helpers via `internal/tui/export_test.go` as needed): `buildPlanPreview` returns an entry with `Id == previewID`, name + start + duration derived from form fields for each of `planTaskTime`/`planEventForm`/`planEdit`; returns `nil` when Start is empty/invalid (FR-009); returns `nil` when `mode == planList`.
+- [X] T005 [P] [US1] Add dashed-rune rendering test in `internal/cli/plan_grid_test.go`: an entry whose `Id == PreviewID` renders its box with `┅`/`┇` (and corners `┏┓┗┛`), while sibling saved entries keep solid `━`/`┃` (contract §1 invariants 1–2).
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Create `internal/tui/plan_preview.go` with `const previewID int32 = -1` and `func (m Model) buildPlanPreview() *planv1.PlanEntry` per `contracts/grid-preview.md` §2: gated on timed-form modes, parses Start via `timeparse.ParseStart` (nil if invalid), duration via `timeparse.ParseDurationOrEnd`, name from Name field or `findTask(m.tree, taskID)` for `planTaskTime`.
-- [ ] T007 [US1] Implement dashed-rune substitution in `RenderGrid` (`internal/cli/plan_grid.go`): for the entry matching `opts.PreviewID`, emit `┅`/`┇` in place of `━`/`┃` across its top/interior/bottom/single/shared-border rows, and wrap its runes with `opts.PreviewStyle` when non-nil (contract §1.2, decision 2).
-- [ ] T008 [US1] Wire preview rendering in `internal/tui/plan_grid.go` `planGridOptions`: set `opts.PreviewID = previewID` and, in styled mode, `opts.PreviewStyle` from the shared `dim` color in `internal/tui/theme.go` (Principle III).
-- [ ] T009 [US1] Inject the preview into the rendered timed slice in `internal/tui/plan_view.go` (`renderPlanGrid` styled path and `renderPlanGridContent` plain path): build `timedOthers` excluding `m.plan.form.entryID` (self-exclusion, FR-006), append `buildPlanPreview()` when non-nil, and pass this combined slice to both `cli.GridWindow` (so the window grows to include the preview, decision 5) and `cli.RenderGrid`.
-- [ ] T010 [US1] Confirm lifecycle correctness (FR-010/011/012) is purely derived: verify no `planState` field is added and `m.plan.entries` is never mutated (the exclusion/append operate on a local slice). Add a `plan_view_test.go` assertion that opening then cancelling a form leaves `m.plan.entries` unchanged.
+- [X] T006 [US1] Create `internal/tui/plan_preview.go` with `const previewID int32 = -1` and `func (m Model) buildPlanPreview() *planv1.PlanEntry` per `contracts/grid-preview.md` §2: gated on timed-form modes, parses Start via `timeparse.ParseStart` (nil if invalid), duration via `timeparse.ParseDurationOrEnd`, name from Name field or `findTask(m.tree, taskID)` for `planTaskTime`.
+- [X] T007 [US1] Implement dashed-rune substitution in `RenderGrid` (`internal/cli/plan_grid.go`): for the entry matching `opts.PreviewID`, emit `┅`/`┇` in place of `━`/`┃` across its top/interior/bottom/single/shared-border rows, and wrap its runes with `opts.PreviewStyle` when non-nil (contract §1.2, decision 2).
+- [X] T008 [US1] Wire preview rendering in `internal/tui/plan_grid.go` `planGridOptions`: set `opts.PreviewID = previewID` and, in styled mode, `opts.PreviewStyle` from the shared `dim` color in `internal/tui/theme.go` (Principle III).
+- [X] T009 [US1] Inject the preview into the rendered timed slice in `internal/tui/plan_view.go` (`renderPlanGrid` styled path and `renderPlanGridContent` plain path): build `timedOthers` excluding `m.plan.form.entryID` (self-exclusion, FR-006), append `buildPlanPreview()` when non-nil, and pass this combined slice to both `cli.GridWindow` (so the window grows to include the preview, decision 5) and `cli.RenderGrid`.
+- [X] T010 [US1] Confirm lifecycle correctness (FR-010/011/012) is purely derived: verify no `planState` field is added and `m.plan.entries` is never mutated (the exclusion/append operate on a local slice). Add a `plan_view_test.go` assertion that opening then cancelling a form leaves `m.plan.entries` unchanged.
 
 **Checkpoint**: US1 fully functional — dashed preview tracks form input and vanishes on cancel/save. MVP deliverable.
 
@@ -78,14 +78,14 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 ### Tests for User Story 2 ⚠️ (write first, expect failure)
 
-- [ ] T011 [P] [US2] Add conflict-detection tests in `internal/tui/plan_preview_test.go`: `planPreviewConflicts` returns the overlapping 15-min slot-start minutes for an overlapping preview, an empty/nil set for a touching boundary (FR-008), and excludes the edit target from comparison (FR-006).
-- [ ] T012 [P] [US2] Add conflict-rendering tests in `internal/cli/plan_grid_test.go`: preview rows whose slot is in `PreviewConflictSlots` are wrapped with `ConflictStyle` in styled mode, and show a gutter `!` marker when `ConflictStyle == nil` (contract §1.4, §4); non-conflicting preview rows are not marked.
+- [X] T011 [P] [US2] Add conflict-detection tests in `internal/tui/plan_preview_test.go`: `planPreviewConflicts` returns the overlapping 15-min slot-start minutes for an overlapping preview, an empty/nil set for a touching boundary (FR-008), and excludes the edit target from comparison (FR-006).
+- [X] T012 [P] [US2] Add conflict-rendering tests in `internal/cli/plan_grid_test.go`: preview rows whose slot is in `PreviewConflictSlots` are wrapped with `ConflictStyle` in styled mode, and show a gutter `!` marker when `ConflictStyle == nil` (contract §1.4, §4); non-conflicting preview rows are not marked.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] In `internal/tui/plan_preview.go`, add a local half-open interval overlap helper and `func planPreviewConflicts(preview *planv1.PlanEntry, others []*planv1.PlanEntry) map[int]bool` per `contracts/grid-preview.md` §2 (15-min slot granularity; `others` must already exclude the edit target).
-- [ ] T014 [US2] Render conflict marking in `RenderGrid` (`internal/cli/plan_grid.go`): for preview rows at a slot in `opts.PreviewConflictSlots`, apply `opts.ConflictStyle` when non-nil; otherwise place `!` in the gutter marker column (the `▶` now-marker column), with the conflict `!` taking precedence on a coinciding row (contract §4).
-- [ ] T015 [US2] Wire conflict options in `internal/tui/plan_grid.go` `planGridOptions` (and pass the edit-target-excluded `timedOthers` from `plan_view.go` per T009): set `opts.PreviewConflictSlots = planPreviewConflicts(preview, timedOthers)` and, in styled mode, `opts.ConflictStyle` from the shared `errorColor` in `internal/tui/theme.go`.
+- [X] T013 [US2] In `internal/tui/plan_preview.go`, add a local half-open interval overlap helper and `func planPreviewConflicts(preview *planv1.PlanEntry, others []*planv1.PlanEntry) map[int]bool` per `contracts/grid-preview.md` §2 (15-min slot granularity; `others` must already exclude the edit target).
+- [X] T014 [US2] Render conflict marking in `RenderGrid` (`internal/cli/plan_grid.go`): for preview rows at a slot in `opts.PreviewConflictSlots`, apply `opts.ConflictStyle` when non-nil; otherwise place `!` in the gutter marker column (the `▶` now-marker column), with the conflict `!` taking precedence on a coinciding row (contract §4).
+- [X] T015 [US2] Wire conflict options in `internal/tui/plan_grid.go` `planGridOptions` (and pass the edit-target-excluded `timedOthers` from `plan_view.go` per T009): set `opts.PreviewConflictSlots = planPreviewConflicts(preview, timedOthers)` and, in styled mode, `opts.ConflictStyle` from the shared `errorColor` in `internal/tui/theme.go`.
 
 **Checkpoint**: US2 functional — overlapping portion shown in red (styled) / `!` (plain), clears on edit, self-overlap and touching excluded.
 
@@ -99,7 +99,7 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 **Dependency**: Requires US1 (accurate live preview placement).
 
-- [ ] T016 [US3] Add a gap-visibility test in `internal/cli/plan_grid_test.go` (or `internal/tui/plan_view_test.go`): a preview at 10:30 after an entry ending 10:00 renders empty grid rows for the 10:00–10:30 slots between them, and a preview at 10:00 renders flush (no empty slot) — asserting the preview occupies exactly its snapped window.
+- [X] T016 [US3] Add a gap-visibility test in `internal/cli/plan_grid_test.go` (or `internal/tui/plan_view_test.go`): a preview at 10:30 after an entry ending 10:00 renders empty grid rows for the 10:00–10:30 slots between them, and a preview at 10:00 renders flush (no empty slot) — asserting the preview occupies exactly its snapped window.
 
 **Checkpoint**: Gap scenarios verified via the existing preview placement.
 
@@ -109,9 +109,9 @@ Single root Go module (`github.com/pboyd/twig`). Renderer lives in `internal/cli
 
 **Purpose**: Final verification, consistency, and manual confirmation.
 
-- [ ] T017 [P] Run `gofmt -l` and `go vet ./...`; fix any formatting/vet issues introduced in `internal/cli/plan_grid.go`, `internal/tui/plan_preview.go`, `internal/tui/plan_view.go`, `internal/tui/plan_grid.go`.
-- [ ] T018 Run the full suite `go test ./...` from repo root and confirm all packages pass, including the T003 backward-compat guard.
-- [ ] T019 [P] Verify Principle III compliance: confirm preview color = `dim` and conflict color = `errorColor` are the only palette references added, both from `internal/tui/theme.go` (no ad-hoc colors); and Principle IV: confirm no new user-facing prose was introduced (visual-only feature).
+- [X] T017 [P] Run `gofmt -l` and `go vet ./...`; fix any formatting/vet issues introduced in `internal/cli/plan_grid.go`, `internal/tui/plan_preview.go`, `internal/tui/plan_view.go`, `internal/tui/plan_grid.go`.
+- [X] T018 Run the full suite `go test ./...` from repo root and confirm all packages pass, including the T003 backward-compat guard.
+- [X] T019 [P] Verify Principle III compliance: confirm preview color = `dim` and conflict color = `errorColor` are the only palette references added, both from `internal/tui/theme.go` (no ad-hoc colors); and Principle IV: confirm no new user-facing prose was introduced (visual-only feature).
 - [ ] T020 Walk through `specs/039-plan-entry-preview/quickstart.md` Scenarios A–D against `./twig` (styled) and once with `NO_COLOR=1` (plain) to confirm dashed preview, red/`!` overlap marking, untimed/invalid no-show, and save-replaces-preview.
 
 ---

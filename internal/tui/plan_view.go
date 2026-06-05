@@ -216,7 +216,9 @@ func (m Model) planDayTitle(now time.Time) string {
 // calendar grid rows, trimmed to height lines. Used in the styled two-pane path.
 func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	untimed, timed := splitPlanEntries(m.plan.entries)
+	timedOthers, renderTimed := m.buildTimedSliceWithPreview(timed)
 	opts := m.planGridOptions()
+	opts.PreviewConflictSlots = planPreviewConflicts(m.buildPlanPreview(), timedOthers)
 	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
 	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
 	untimedLines := strings.Count(untimedStr, "\n") + strings.Count(sep, "\n")
@@ -224,10 +226,10 @@ func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	if availableRows < 1 {
 		availableRows = 1
 	}
-	start, end := cli.GridWindow(timed, now, m.plan.day, availableRows)
+	start, end := cli.GridWindow(renderTimed, now, m.plan.day, availableRows)
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
-	combined := untimedStr + sep + cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > height {
 		lines = lines[:height]
@@ -254,7 +256,9 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 		gridH = 1
 	}
 	untimed, timed := splitPlanEntries(m.plan.entries)
+	timedOthers, renderTimed := m.buildTimedSliceWithPreview(timed)
 	opts := m.planGridOptions()
+	opts.PreviewConflictSlots = planPreviewConflicts(m.buildPlanPreview(), timedOthers)
 	untimedStr := cli.RenderUntimed(untimed, width, m.styled, opts)
 	sep := cli.RenderUntimedSeparator(untimedIDs(untimed), width)
 	untimedLines := strings.Count(untimedStr, "\n") + strings.Count(sep, "\n")
@@ -262,10 +266,10 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	if availableRows < 1 {
 		availableRows = 1
 	}
-	start, end := cli.GridWindow(timed, now, m.plan.day, availableRows)
+	start, end := cli.GridWindow(renderTimed, now, m.plan.day, availableRows)
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
-	combined := untimedStr + sep + cli.RenderGrid(timed, m.plan.day, now, width, m.styled, opts)
+	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
 	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
 	if len(lines) > gridH {
 		lines = lines[:gridH]
@@ -340,6 +344,37 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 		}
 	}
 	return sb.String()
+}
+
+// buildTimedSliceWithPreview returns two slices derived from timedEntries:
+//
+//   - timedOthers: the timed entries excluding the current edit target (m.plan.form.entryID
+//     when mode == planEdit). Used for conflict detection.
+//   - renderTimed: timedOthers with the preview appended (when non-nil). Passed to
+//     RenderGrid and GridWindow so the grid expands to include the preview window.
+//
+// m.plan.entries is never modified. When no form is active, both slices equal timedEntries.
+func (m Model) buildTimedSliceWithPreview(timedEntries []*planv1.PlanEntry) (timedOthers, renderTimed []*planv1.PlanEntry) {
+	// Exclude the edit target from timedOthers (self-exclusion for planEdit).
+	editTarget := m.plan.form.entryID // 0 when no edit form open
+	timedOthers = make([]*planv1.PlanEntry, 0, len(timedEntries))
+	for _, e := range timedEntries {
+		if editTarget != 0 && e.Id == editTarget {
+			continue
+		}
+		timedOthers = append(timedOthers, e)
+	}
+
+	// Append the preview when one should be shown.
+	preview := m.buildPlanPreview()
+	if preview != nil {
+		renderTimed = make([]*planv1.PlanEntry, len(timedOthers)+1)
+		copy(renderTimed, timedOthers)
+		renderTimed[len(timedOthers)] = preview
+	} else {
+		renderTimed = timedOthers
+	}
+	return timedOthers, renderTimed
 }
 
 // splitPlanEntries partitions entries into untimed (nil StartMinute) and timed slices,

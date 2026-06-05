@@ -22,6 +22,24 @@ type GridOptions struct {
 	// WindowEndMin, when non-nil, fixes the grid's last minute and disables
 	// automatic forward expansion of the window end.
 	WindowEndMin *int
+
+	// PreviewID, when non-zero, marks the entry (by Id) that is an unsaved,
+	// in-progress preview. Its box is drawn with dashed runes instead of solid.
+	PreviewID int32
+
+	// PreviewStyle, when non-nil, styles the preview entry's non-conflicting
+	// runes (e.g. a dim foreground). When nil, the dashed runes are emitted
+	// unstyled (plain/non-TTY mode still distinguishes the preview structurally).
+	PreviewStyle func(string) string
+
+	// ConflictStyle, when non-nil, styles the preview rows that fall in
+	// PreviewConflictSlots (e.g. a red foreground). When nil, the renderer
+	// applies the plain-mode fallback marker (see contracts/grid-preview.md §4).
+	ConflictStyle func(string) string
+
+	// PreviewConflictSlots holds the slot-start minutes (multiples of 15) of the
+	// preview entry that overlap another timed entry. Empty/nil ⇒ no conflict.
+	PreviewConflictSlots map[int]bool
 }
 
 // RenderGrid renders a day's plan entries as a calendar grid.
@@ -140,27 +158,90 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 	hLight := strings.Repeat("─", boxWidth+2)   // fills inner region for empty hour rows
 	hHeavy := strings.Repeat("━", contentWidth) // fills between heavy box corners
+	hDash := strings.Repeat("┅", contentWidth)  // dashed fill for preview entry borders
+
+	// isPreviewEntry reports whether e is the transient preview entry.
+	isPreviewEntry := func(e *planv1.PlanEntry) bool {
+		return opts.PreviewID != 0 && e != nil && e.Id == opts.PreviewID
+	}
+
+	// previewBoxH returns the horizontal fill for a box border: dashed for preview, solid otherwise.
+	previewBoxH := func(e *planv1.PlanEntry) string {
+		if isPreviewEntry(e) {
+			return hDash
+		}
+		return hHeavy
+	}
+
+	// previewBoxV returns the vertical border rune string: dashed for preview, solid otherwise.
+	previewBoxV := func(e *planv1.PlanEntry) string {
+		if isPreviewEntry(e) {
+			return "┇"
+		}
+		return "┃"
+	}
+
+	// applyPreviewStyle wraps s with the appropriate style for a preview row.
+	// slotMinute is the slot-start minute (winStart + L*15) for the current grid row.
+	applyPreviewStyle := func(s string, e *planv1.PlanEntry, slotMinute int) string {
+		if !isPreviewEntry(e) {
+			return s
+		}
+		if opts.PreviewConflictSlots[slotMinute] && opts.ConflictStyle != nil {
+			return opts.ConflictStyle(s)
+		}
+		if opts.PreviewStyle != nil {
+			return opts.PreviewStyle(s)
+		}
+		return s
+	}
 
 	var sb strings.Builder
 	for L := 0; L < totalLines; L++ {
 		t := winStart + L*15
 		isHour := t%60 == 0
 
+		// Look up entry layouts for this row (needed before gutter for conflict detection).
+		top := topAt[L]
+		bot := botAt[L]
+		single := singleAt[L]
+		interior := interiorAt[L]
+
+		// Determine whether this row needs a plain-mode conflict gutter marker.
+		isPreviewConflictRow := false
+		if opts.PreviewID != 0 && opts.PreviewConflictSlots[t] && opts.ConflictStyle == nil {
+			switch {
+			case interior != nil:
+				// Also check top: preview may start at the same row as another entry's interior.
+				isPreviewConflictRow = isPreviewEntry(interior.e) || (top != nil && isPreviewEntry(top.e))
+			case top != nil && bot != nil:
+				isPreviewConflictRow = isPreviewEntry(top.e) || isPreviewEntry(bot.e)
+			case bot != nil && single != nil:
+				isPreviewConflictRow = isPreviewEntry(bot.e) || isPreviewEntry(single.e)
+			case top != nil:
+				isPreviewConflictRow = isPreviewEntry(top.e)
+			case bot != nil:
+				isPreviewConflictRow = isPreviewEntry(bot.e)
+			case single != nil:
+				isPreviewConflictRow = isPreviewEntry(single.e)
+			}
+		}
+
 		// Build gutter (7 display columns): label + space + marker-col.
+		// Conflict ! takes precedence over now-marker ▶ per contract §4.
 		var gutter string
+		markerChar := " "
+		if L == nowLine {
+			markerChar = "▶"
+		}
+		if isPreviewConflictRow {
+			markerChar = "!"
+		}
 		if isHour {
 			label := fmt.Sprintf("%02d:%02d", t/60, t%60)
-			if L == nowLine {
-				gutter = label + " ▶"
-			} else {
-				gutter = label + "  "
-			}
+			gutter = label + " " + markerChar
 		} else {
-			if L == nowLine {
-				gutter = "      ▶"
-			} else {
-				gutter = "       "
-			}
+			gutter = "      " + markerChar
 		}
 
 		// Rail and padding chars: hour rows use ├/┤ and ─; non-hour use │ and space.
@@ -175,14 +256,18 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			padChar = " "
 		}
 
-		top := topAt[L]
-		bot := botAt[L]
-		single := singleAt[L]
-		interior := interiorAt[L]
-
 		var line string
 		switch {
 		case interior != nil:
+			// When the preview starts at this same row (its top border coincides with
+			// another entry's interior), render the preview's top border so conflict
+			// styling is applied at the correct conflicting slot.
+			if top != nil && isPreviewEntry(top.e) {
+				h := previewBoxH(top.e)
+				inner := applyPreviewStyle("┏"+h+"┓", top.e, t)
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
+				break
+			}
 			// Interior row of a multi-row entry.
 			rowIdx := L - interior.topLine - 1
 			label := ""
@@ -191,25 +276,43 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			}
 			content := padRight(label, contentWidth)
 			content = applyCompletion(content, interior.e, isTTY)
+			v := previewBoxV(interior.e)
 			if isTTY && opts.SelectedID != 0 && interior.e.Id == opts.SelectedID {
 				if opts.SelectionStyle != nil {
 					// Include border walls in the styled region.
-					line = gutter + leftRail + padChar + opts.SelectionStyle("┃"+content+"┃") + padChar + rightRail
+					line = gutter + leftRail + padChar + opts.SelectionStyle(v+content+v) + padChar + rightRail
 				} else {
-					line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
+					line = gutter + leftRail + padChar + v + content + v + padChar + rightRail
 					line = accentOpen(opts) + line + "\x1b[0m"
 				}
 			} else {
-				line = gutter + leftRail + padChar + "┃" + content + "┃" + padChar + rightRail
+				inner := applyPreviewStyle(v+content+v, interior.e, t)
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 			}
 
 		case top != nil && bot != nil:
 			// Shared border: multi-row entry A ends here, entry B starts here.
+			// Use dashed fill if either entry is the preview.
+			hFill := hHeavy
+			if isPreviewEntry(top.e) || isPreviewEntry(bot.e) {
+				hFill = hDash
+			}
+			// Determine which entry drives the preview style (prefer the preview one).
+			var previewE *planv1.PlanEntry
+			if isPreviewEntry(top.e) {
+				previewE = top.e
+			} else if isPreviewEntry(bot.e) {
+				previewE = bot.e
+			}
 			isSelected := isTTY && opts.SelectedID != 0 && (top.e.Id == opts.SelectedID || bot.e.Id == opts.SelectedID)
 			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+hHeavy+"┫") + padChar + rightRail
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+hFill+"┫") + padChar + rightRail
 			} else {
-				line = gutter + leftRail + padChar + "┣" + hHeavy + "┫" + padChar + rightRail
+				inner := "┣" + hFill + "┫"
+				if previewE != nil {
+					inner = applyPreviewStyle(inner, previewE, t)
+				}
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 				if isSelected {
 					line = accentOpen(opts) + line + "\x1b[0m"
 				}
@@ -217,48 +320,68 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 		case bot != nil && single != nil:
 			// Shared: multi-row entry ends here AND single-row entry starts here.
-			label := singleLabelContent(single.labelRows, contentWidth)
+			isPreviewSingle := isPreviewEntry(single.e)
+			padRune := "━"
+			if isPreviewSingle {
+				padRune = "┅"
+			}
+			label := singleLabelContentPad(single.labelRows, contentWidth, padRune)
 			label = applyCompletion(label, single.e, isTTY)
 			isSelected := isTTY && opts.SelectedID != 0 && (bot.e.Id == opts.SelectedID || single.e.Id == opts.SelectedID)
 			if isSelected && opts.SelectionStyle != nil {
 				line = gutter + leftRail + padChar + "┣" + opts.SelectionStyle(label) + "┫" + padChar + rightRail
 			} else {
-				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+				inner := "┣" + label + "┫"
+				if isPreviewSingle {
+					inner = applyPreviewStyle(inner, single.e, t)
+				}
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 				if isSelected {
 					line = accentOpen(opts) + line + "\x1b[0m"
 				}
 			}
 
 		case top != nil:
+			h := previewBoxH(top.e)
 			isSelected := isTTY && opts.SelectedID != 0 && top.e.Id == opts.SelectedID
 			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┏"+hHeavy+"┓") + padChar + rightRail
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┏"+h+"┓") + padChar + rightRail
 			} else {
-				line = gutter + leftRail + padChar + "┏" + hHeavy + "┓" + padChar + rightRail
+				inner := applyPreviewStyle("┏"+h+"┓", top.e, t)
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 				if isSelected {
 					line = accentOpen(opts) + line + "\x1b[0m"
 				}
 			}
 
 		case bot != nil:
+			h := previewBoxH(bot.e)
 			isSelected := isTTY && opts.SelectedID != 0 && bot.e.Id == opts.SelectedID
 			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + leftRail + padChar + opts.SelectionStyle("┗"+hHeavy+"┛") + padChar + rightRail
+				line = gutter + leftRail + padChar + opts.SelectionStyle("┗"+h+"┛") + padChar + rightRail
 			} else {
-				line = gutter + leftRail + padChar + "┗" + hHeavy + "┛" + padChar + rightRail
+				inner := applyPreviewStyle("┗"+h+"┛", bot.e, t)
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 				if isSelected {
 					line = accentOpen(opts) + line + "\x1b[0m"
 				}
 			}
 
 		case single != nil:
-			label := singleLabelContent(single.labelRows, contentWidth)
+			isPreviewSingle := isPreviewEntry(single.e)
+			padRune := "━"
+			if isPreviewSingle {
+				padRune = "┅"
+			}
+			label := singleLabelContentPad(single.labelRows, contentWidth, padRune)
 			label = applyCompletion(label, single.e, isTTY)
 			if isTTY && opts.SelectedID != 0 && single.e.Id == opts.SelectedID && opts.SelectionStyle != nil {
 				// Style only the content cell, not the border rails.
 				line = gutter + leftRail + padChar + "┣" + opts.SelectionStyle(label) + "┫" + padChar + rightRail
 			} else {
-				line = gutter + leftRail + padChar + "┣" + label + "┫" + padChar + rightRail
+				inner := "┣" + label + "┫"
+				inner = applyPreviewStyle(inner, single.e, t)
+				line = gutter + leftRail + padChar + inner + padChar + rightRail
 				line = applySelection(line, single.e.Id, opts, isTTY)
 			}
 
@@ -423,6 +546,12 @@ func RenderUntimedSeparator(untimedIDs []int, width int) string {
 
 // singleLabelContent returns the field content for a single-row entry, padded with heavy chars.
 func singleLabelContent(labelRows []string, fieldWidth int) string {
+	return singleLabelContentPad(labelRows, fieldWidth, "━")
+}
+
+// singleLabelContentPad returns the field content for a single-row entry, padded with padStr.
+// padStr should be a single-rune string (e.g. "━" or "┅").
+func singleLabelContentPad(labelRows []string, fieldWidth int, padStr string) string {
 	label := ""
 	if len(labelRows) > 0 {
 		label = labelRows[0]
@@ -431,7 +560,7 @@ func singleLabelContent(labelRows []string, fieldWidth int) string {
 	if n >= fieldWidth {
 		return truncateRunes(label, fieldWidth)
 	}
-	return label + strings.Repeat("━", fieldWidth-n)
+	return label + strings.Repeat(padStr, fieldWidth-n)
 }
 
 // applyCompletion wraps content with dim+strikethrough codes when entry is completed and isTTY.
