@@ -319,9 +319,9 @@ func RenderUntimed(entries []*planv1.PlanEntry, width int, isTTY bool, opts Grid
 
 		var labelText string
 		if opts.HideID {
-			labelText = fmt.Sprintf("%s (%dmin)", e.Name, e.DurationMinute)
+			labelText = e.Name
 		} else {
-			labelText = fmt.Sprintf("[%d] %s (%dmin)", e.Id, e.Name, e.DurationMinute)
+			labelText = fmt.Sprintf("[%d] %s", e.Id, e.Name)
 		}
 
 		if !isMulti {

@@ -1004,9 +1004,6 @@ func TestRenderUntimed_SingleEntry15min(t *testing.T) {
 	if !strings.Contains(lines[0], "Quick task") {
 		t.Errorf("15min entry: expected name in output; got %q", lines[0])
 	}
-	if !strings.Contains(lines[0], "15min") {
-		t.Errorf("15min entry: expected duration in output; got %q", lines[0])
-	}
 }
 
 // TestRenderUntimed_Entry30min checks that a 30-minute entry renders with correct box geometry:
@@ -1284,6 +1281,21 @@ func TestRenderUntimedSeparator_AbsentWhenEmpty(t *testing.T) {
 	sep := cli.RenderUntimedSeparator(nil, 80)
 	if sep != "" {
 		t.Errorf("separator with no untimed entries: expected empty string, got %q", sep)
+	}
+}
+
+// TestRenderUntimed_LabelHasNoDurationSuffix verifies that untimed entry boxes
+// show only the entry name — no "(30min)" or similar parenthetical duration.
+func TestRenderUntimed_LabelHasNoDurationSuffix(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Build fence", DurationMinute: 30},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	if strings.Contains(out, "min)") {
+		t.Errorf("RenderUntimed: box label should not contain a duration suffix like '(30min)'; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Build fence") {
+		t.Errorf("RenderUntimed: box label should contain the entry name 'Build fence'; got:\n%s", out)
 	}
 }
 

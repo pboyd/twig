@@ -262,7 +262,7 @@ func (m *Model) initEditForm() {
 	}
 
 	dur := newPlanInput("e.g. 30m")
-	if entry.StartMinute != nil && entry.DurationMinute > 0 {
+	if entry.DurationMinute > 0 {
 		dur.SetValue(timeparse.FormatDuration(int(entry.DurationMinute)))
 	}
 
@@ -387,11 +387,31 @@ func (m *Model) submitEditForm() tea.Cmd {
 	}
 
 	if startStr == "" {
-		// Start cleared: unschedule only if the entry was scheduled.
-		if orig != nil && orig.StartMinute != nil {
-			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, 0, 0, false))
+		// Staying/becoming untimed (no start time). Parse an optional duration.
+		var dur int
+		if durStr != "" {
+			var err error
+			dur, err = timeparse.ParseDuration(durStr)
+			if err != nil {
+				m.plan.err = fmt.Errorf("invalid duration: %w", err)
+				return nil
+			}
 		}
-		// If already untimed: no move.
+		wasTimed := orig != nil && orig.StartMinute != nil
+		origDur := 0
+		if orig != nil {
+			origDur = int(orig.DurationMinute)
+		}
+		durChanged := durStr != "" && dur != origDur
+		if wasTimed || durChanged {
+			// dur==0 tells the server to keep the existing duration; a positive
+			// value updates it. Either way StartMinute stays nil (untimed).
+			sendDur := 0
+			if durChanged {
+				sendDur = dur
+			}
+			cmds = append(cmds, movePlanCmd(m.planClient, m.plan.day, m.plan.form.entryID, 0, sendDur, false))
+		}
 	} else {
 		start, err := timeparse.ParseStart(startStr)
 		if err != nil {

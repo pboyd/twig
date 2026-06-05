@@ -914,6 +914,117 @@ func TestSubmitEditForm_ClearStartAlreadyUntimed_IsNoop(t *testing.T) {
 	}
 }
 
+// TestInitEditForm_PreFillsDurationForUntimedEntry verifies that an untimed entry
+// that already has a duration pre-fills the Duration field (not the old behavior
+// of leaving it empty just because StartMinute is nil).
+func TestInitEditForm_PreFillsDurationForUntimedEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 10, Name: "Build fence", DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+
+	m.initEditForm()
+
+	if m.plan.form.fields[1].Value() != "" {
+		t.Errorf("Start: expected empty for untimed entry, got %q", m.plan.form.fields[1].Value())
+	}
+	if m.plan.form.fields[2].Value() != "30m" {
+		t.Errorf("Duration: expected '30m' pre-filled for untimed entry with DurationMinute=30, got %q",
+			m.plan.form.fields[2].Value())
+	}
+}
+
+// TestSubmitEditForm_UntimedChangeDuration verifies that changing the Duration
+// of an already-untimed entry issues a MovePlanEntry with StartMinute=nil and
+// the new DurationMinute (the fix for the bug where duration changes were silently dropped).
+func TestSubmitEditForm_UntimedChangeDuration(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 11, Name: "Build fence", DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills Duration="30m", Start=""
+
+	m.plan.form.fields[2].SetValue("1h") // change duration to 60m
+
+	cmd := m.submitEditForm()
+
+	if cmd == nil {
+		t.Fatal("untimed change duration: expected a command, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("untimed change duration: MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute != nil {
+		t.Errorf("untimed change duration: StartMinute should be nil (stay untimed), got %v", fc.moveReq.StartMinute)
+	}
+	if fc.moveReq.DurationMinute != 60 {
+		t.Errorf("untimed change duration: expected DurationMinute=60, got %d", fc.moveReq.DurationMinute)
+	}
+}
+
+// TestSubmitEditForm_UntimedUnchangedDuration_IsNoop verifies that submitting an
+// untimed entry with the same duration (pre-filled) dispatches no command.
+func TestSubmitEditForm_UntimedUnchangedDuration_IsNoop(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 12, Name: "Build fence", DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm() // pre-fills Duration="30m", Start=""
+
+	// Leave Duration at the pre-filled "30m" — no change.
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planList {
+		t.Errorf("untimed unchanged duration: expected planList, got mode=%d", m.plan.mode)
+	}
+	if cmd != nil {
+		t.Error("untimed unchanged duration: expected nil cmd (no-op)")
+	}
+	if fc.moveReq != nil {
+		t.Error("untimed unchanged duration: MovePlanEntry should not be called")
+	}
+}
+
+// TestSubmitEditForm_UntimedInvalidDuration_KeepsFormOpen verifies that an invalid
+// duration string on an untimed entry keeps the form open with an error.
+func TestSubmitEditForm_UntimedInvalidDuration_KeepsFormOpen(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 13, Name: "Build fence", DurationMinute: 30},
+	}
+	m.plan.cursor = 0
+	m.initEditForm()
+
+	m.plan.form.fields[2].SetValue("not-a-duration")
+
+	cmd := m.submitEditForm()
+
+	if m.plan.mode != planEdit {
+		t.Errorf("invalid duration: form should stay planEdit, got %d", m.plan.mode)
+	}
+	if m.plan.err == nil {
+		t.Error("invalid duration: plan.err should be set")
+	}
+	if cmd != nil {
+		t.Error("invalid duration: expected nil cmd")
+	}
+	if fc.moveReq != nil {
+		t.Error("invalid duration: MovePlanEntry should not be called")
+	}
+}
+
 // TestSubmitEditForm_ChangedStartDispatches verifies that changing Start on a
 // scheduled entry dispatches a move with the new start value.
 func TestSubmitEditForm_ChangedStartDispatches(t *testing.T) {
