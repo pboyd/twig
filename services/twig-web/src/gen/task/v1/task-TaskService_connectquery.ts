@@ -18,6 +18,15 @@ import { TaskService } from "./task_pb";
 export const createTask = TaskService.method.createTask;
 
 /**
+ * ReorderTask repositions a task within its current sibling group by placing it
+ * immediately before or after a sibling anchor. It never changes the task's
+ * parent. The whole sibling group is renumbered to a contiguous order.
+ *
+ * @generated from rpc task.v1.TaskService.ReorderTask
+ */
+export const reorderTask = TaskService.method.reorderTask;
+
+/**
  * GetTask returns a single task by id.
  *
  * @generated from rpc task.v1.TaskService.GetTask

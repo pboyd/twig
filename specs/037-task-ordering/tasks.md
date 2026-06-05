@@ -74,13 +74,13 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 **Independent Test**: Drag a task above/below a sibling → order updates; reload → persists; cancelled drag/drop-on-self → unchanged; cannot drop under a different parent.
 
-- [ ] T016 [US2] Add `@dnd-kit/core` and `@dnd-kit/sortable` to `services/twig-web/package.json` and run `npm install` (from `services/twig-web/`).
-- [ ] T017 [P] [US2] In `services/twig-web/src/lib/tree.ts`, sort each sibling list by `task.position` (then `id`) when building the tree (web stops relying on flat-list order).
-- [ ] T018 [P] [US2] Create `services/twig-web/src/lib/reorderAnchor.ts`: a pure function mapping a dnd-kit drop (active id, over id, direction) to a `{ before_task_id }` or `{ after_task_id }` `ReorderTask` request, returning none for drop-on-self.
-- [ ] T019 [P] [US2] Add reorder-related copy (e.g., drag handle aria-label, reorder error/empty hints) to `services/twig-web/src/theme/messages.ts` in the warm/playful tone (Principle IV).
-- [ ] T020 [US2] Make sibling rows sortable in `services/twig-web/src/components/TreeRow.tsx` using `useSortable`, restricting drag/drop targets to the same sibling group (reorder-only, FR-008) and using existing `theme/tokens.ts` for drag affordances (Principle III). (depends on T016)
-- [ ] T021 [US2] Wire `DndContext` + `SortableContext` and an `onDragEnd` handler in `services/twig-web/src/pages/TaskTreePage.tsx` that calls the `ReorderTask` mutation (via connect-query) using `reorderAnchor.ts`, then updates the `listTasks` query cache from the returned `ReorderTaskResponse.siblings` (e.g., `queryClient.setQueryData` on `listTasksKey`) instead of invalidating — avoiding a refetch; cancelled/no-op drags make no call (FR-009). (depends on T016, T018, T020)
-- [ ] T022 [P] [US2] Add web tests: `services/twig-web/src/lib/tree.test.ts` for sibling sort-by-position and `services/twig-web/src/lib/reorderAnchor.test.ts` for the drop→before/after mapping (incl. drop-on-self → no request).
+- [X] T016 [US2] Add `@dnd-kit/core` and `@dnd-kit/sortable` to `services/twig-web/package.json` and run `npm install` (from `services/twig-web/`).
+- [X] T017 [P] [US2] In `services/twig-web/src/lib/tree.ts`, sort each sibling list by `task.position` (then `id`) when building the tree (web stops relying on flat-list order).
+- [X] T018 [P] [US2] Create `services/twig-web/src/lib/reorderAnchor.ts`: a pure function mapping a dnd-kit drop (active id, over id, direction) to a `{ before_task_id }` or `{ after_task_id }` `ReorderTask` request, returning none for drop-on-self.
+- [X] T019 [P] [US2] Add reorder-related copy (e.g., drag handle aria-label, reorder error/empty hints) to `services/twig-web/src/theme/messages.ts` in the warm/playful tone (Principle IV).
+- [X] T020 [US2] Make sibling rows sortable in `services/twig-web/src/components/TreeRow.tsx` using `useSortable`, restricting drag/drop targets to the same sibling group (reorder-only, FR-008) and using existing `theme/tokens.ts` for drag affordances (Principle III). (depends on T016)
+- [X] T021 [US2] Wire `DndContext` + `SortableContext` and an `onDragEnd` handler in `services/twig-web/src/pages/TaskTreePage.tsx` that calls the `ReorderTask` mutation (via connect-query) using `reorderAnchor.ts`, then updates the `listTasks` query cache from the returned `ReorderTaskResponse.siblings` (e.g., `queryClient.setQueryData` on `listTasksKey`) instead of invalidating — avoiding a refetch; cancelled/no-op drags make no call (FR-009). (depends on T016, T018, T020)
+- [X] T022 [P] [US2] Add web tests: `services/twig-web/src/lib/tree.test.ts` for sibling sort-by-position and `services/twig-web/src/lib/reorderAnchor.test.ts` for the drop→before/after mapping (incl. drop-on-self → no request).
 
 **Checkpoint**: Web drag-and-drop reordering works and persists, independently of the TUI.
 

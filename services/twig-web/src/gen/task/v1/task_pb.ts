@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file task/v1/task.proto.
  */
 export const file_task_v1_task: GenFile = /*@__PURE__*/
-  fileDesc("ChJ0YXNrL3YxL3Rhc2sucHJvdG8SB3Rhc2sudjEiyAEKBFRhc2sSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIZXN0aW1hdGUYByABKAVCDAoKX3BhcmVudF9pZCKTAQoIUG9tb2Rvcm8SCgoCaWQYASABKAMSDwoHdGFza19pZBgCIAEoAxIsCghzdGFydF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASKgoGZW5kX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjb21wbGV0ZRgFIAEoCCIhChNDb21wbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIjMKFENvbXBsZXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siIwoVVW5jb21wbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIjUKFlVuY29tcGxldGVUYXNrUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzayKFAQoRQ3JlYXRlVGFza1JlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgtkZXNjcmlwdGlvbhgCIAEoCRInCgNkdWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgEIAEoA0gAiAEBQgwKCl9wYXJlbnRfaWQiMQoSQ3JlYXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siHAoOR2V0VGFza1JlcXVlc3QSCgoCaWQYASABKAMidgoPR2V0VGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2sSIAoYY29tcGxldGVkX3BvbW9kb3JvX2NvdW50GAIgASgDEiQKCXBvbW9kb3JvcxgDIAMoCzIRLnRhc2sudjEuUG9tb2Rvcm8iEgoQTGlzdFRhc2tzUmVxdWVzdCIxChFMaXN0VGFza3NSZXNwb25zZRIcCgV0YXNrcxgBIAMoCzINLnRhc2sudjEuVGFzayKRAQoRVXBkYXRlVGFza1JlcXVlc3QSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBQgwKCl9wYXJlbnRfaWQiMQoSVXBkYXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siHwoRRGVsZXRlVGFza1JlcXVlc3QSCgoCaWQYASABKAMiFAoSRGVsZXRlVGFza1Jlc3BvbnNlIjcKElNldEVzdGltYXRlUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgDEhAKCGVzdGltYXRlGAIgASgFIjIKE1NldEVzdGltYXRlUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzayInChRTdGFydFBvbW9kb3JvUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgDIjwKFVN0YXJ0UG9tb2Rvcm9SZXNwb25zZRIjCghwb21vZG9ybxgBIAEoCzIRLnRhc2sudjEuUG9tb2Rvcm8iFwoVQ2FuY2VsUG9tb2Rvcm9SZXF1ZXN0Ij0KFkNhbmNlbFBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvIhkKF0NvbXBsZXRlUG9tb2Rvcm9SZXF1ZXN0Ij8KGENvbXBsZXRlUG9tb2Rvcm9SZXNwb25zZRIjCghwb21vZG9ybxgBIAEoCzIRLnRhc2sudjEuUG9tb2Rvcm8iGgoYR2V0QWN0aXZlUG9tb2Rvcm9SZXF1ZXN0IkAKGUdldEFjdGl2ZVBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvMqYHCgtUYXNrU2VydmljZRJFCgpDcmVhdGVUYXNrEhoudGFzay52MS5DcmVhdGVUYXNrUmVxdWVzdBobLnRhc2sudjEuQ3JlYXRlVGFza1Jlc3BvbnNlEjwKB0dldFRhc2sSFy50YXNrLnYxLkdldFRhc2tSZXF1ZXN0GhgudGFzay52MS5HZXRUYXNrUmVzcG9uc2USQgoJTGlzdFRhc2tzEhkudGFzay52MS5MaXN0VGFza3NSZXF1ZXN0GhoudGFzay52MS5MaXN0VGFza3NSZXNwb25zZRJFCgpVcGRhdGVUYXNrEhoudGFzay52MS5VcGRhdGVUYXNrUmVxdWVzdBobLnRhc2sudjEuVXBkYXRlVGFza1Jlc3BvbnNlEkUKCkRlbGV0ZVRhc2sSGi50YXNrLnYxLkRlbGV0ZVRhc2tSZXF1ZXN0GhsudGFzay52MS5EZWxldGVUYXNrUmVzcG9uc2USSwoMQ29tcGxldGVUYXNrEhwudGFzay52MS5Db21wbGV0ZVRhc2tSZXF1ZXN0Gh0udGFzay52MS5Db21wbGV0ZVRhc2tSZXNwb25zZRJRCg5VbmNvbXBsZXRlVGFzaxIeLnRhc2sudjEuVW5jb21wbGV0ZVRhc2tSZXF1ZXN0Gh8udGFzay52MS5VbmNvbXBsZXRlVGFza1Jlc3BvbnNlEkgKC1NldEVzdGltYXRlEhsudGFzay52MS5TZXRFc3RpbWF0ZVJlcXVlc3QaHC50YXNrLnYxLlNldEVzdGltYXRlUmVzcG9uc2USTgoNU3RhcnRQb21vZG9ybxIdLnRhc2sudjEuU3RhcnRQb21vZG9yb1JlcXVlc3QaHi50YXNrLnYxLlN0YXJ0UG9tb2Rvcm9SZXNwb25zZRJRCg5DYW5jZWxQb21vZG9ybxIeLnRhc2sudjEuQ2FuY2VsUG9tb2Rvcm9SZXF1ZXN0Gh8udGFzay52MS5DYW5jZWxQb21vZG9yb1Jlc3BvbnNlElcKEENvbXBsZXRlUG9tb2Rvcm8SIC50YXNrLnYxLkNvbXBsZXRlUG9tb2Rvcm9SZXF1ZXN0GiEudGFzay52MS5Db21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USWgoRR2V0QWN0aXZlUG9tb2Rvcm8SIS50YXNrLnYxLkdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdBoiLnRhc2sudjEuR2V0QWN0aXZlUG9tb2Rvcm9SZXNwb25zZUI4WjZnaXRodWIuY29tL3Bib3lkL3RvZG8vc2VydmljZXMvdG9kby9nZW4vdGFzay92MTt0YXNrdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChJ0YXNrL3YxL3Rhc2sucHJvdG8SB3Rhc2sudjEi/AEKBFRhc2sSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIZXN0aW1hdGUYByABKAUSIAoYY29tcGxldGVkX3BvbW9kb3JvX2NvdW50GAggASgFEhAKCHBvc2l0aW9uGAkgASgDQgwKCl9wYXJlbnRfaWQikwEKCFBvbW9kb3JvEgoKAmlkGAEgASgDEg8KB3Rhc2tfaWQYAiABKAMSLAoIc3RhcnRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmVuZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIY29tcGxldGUYBSABKAgiIQoTQ29tcGxldGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyIzChRDb21wbGV0ZVRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIiMKFVVuY29tcGxldGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyI1ChZVbmNvbXBsZXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2sihQEKEUNyZWF0ZVRhc2tSZXF1ZXN0EgwKBG5hbWUYASABKAkSEwoLZGVzY3JpcHRpb24YAiABKAkSJwoDZHVlGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIWCglwYXJlbnRfaWQYBCABKANIAIgBAUIMCgpfcGFyZW50X2lkIjEKEkNyZWF0ZVRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIhwKDkdldFRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDInYKD0dldFRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrEiAKGGNvbXBsZXRlZF9wb21vZG9yb19jb3VudBgCIAEoAxIkCglwb21vZG9yb3MYAyADKAsyES50YXNrLnYxLlBvbW9kb3JvIhIKEExpc3RUYXNrc1JlcXVlc3QiMQoRTGlzdFRhc2tzUmVzcG9uc2USHAoFdGFza3MYASADKAsyDS50YXNrLnYxLlRhc2sikQEKEVVwZGF0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDEgwKBG5hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkSJwoDZHVlGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIWCglwYXJlbnRfaWQYBSABKANIAIgBAUIMCgpfcGFyZW50X2lkIjEKElVwZGF0ZVRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIh8KEURlbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIhQKEkRlbGV0ZVRhc2tSZXNwb25zZSI3ChJTZXRFc3RpbWF0ZVJlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIQCghlc3RpbWF0ZRgCIAEoBSIyChNTZXRFc3RpbWF0ZVJlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siJwoUU3RhcnRQb21vZG9yb1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAyI8ChVTdGFydFBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvIhcKFUNhbmNlbFBvbW9kb3JvUmVxdWVzdCI9ChZDYW5jZWxQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyIZChdDb21wbGV0ZVBvbW9kb3JvUmVxdWVzdCI/ChhDb21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvIhoKGEdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdCJAChlHZXRBY3RpdmVQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyJiChJSZW9yZGVyVGFza1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIYCg5iZWZvcmVfdGFza19pZBgCIAEoA0gAEhcKDWFmdGVyX3Rhc2tfaWQYAyABKANIAEIICgZhbmNob3IiNgoTUmVvcmRlclRhc2tSZXNwb25zZRIfCghzaWJsaW5ncxgBIAMoCzINLnRhc2sudjEuVGFzazLwBwoLVGFza1NlcnZpY2USRQoKQ3JlYXRlVGFzaxIaLnRhc2sudjEuQ3JlYXRlVGFza1JlcXVlc3QaGy50YXNrLnYxLkNyZWF0ZVRhc2tSZXNwb25zZRJICgtSZW9yZGVyVGFzaxIbLnRhc2sudjEuUmVvcmRlclRhc2tSZXF1ZXN0GhwudGFzay52MS5SZW9yZGVyVGFza1Jlc3BvbnNlEjwKB0dldFRhc2sSFy50YXNrLnYxLkdldFRhc2tSZXF1ZXN0GhgudGFzay52MS5HZXRUYXNrUmVzcG9uc2USQgoJTGlzdFRhc2tzEhkudGFzay52MS5MaXN0VGFza3NSZXF1ZXN0GhoudGFzay52MS5MaXN0VGFza3NSZXNwb25zZRJFCgpVcGRhdGVUYXNrEhoudGFzay52MS5VcGRhdGVUYXNrUmVxdWVzdBobLnRhc2sudjEuVXBkYXRlVGFza1Jlc3BvbnNlEkUKCkRlbGV0ZVRhc2sSGi50YXNrLnYxLkRlbGV0ZVRhc2tSZXF1ZXN0GhsudGFzay52MS5EZWxldGVUYXNrUmVzcG9uc2USSwoMQ29tcGxldGVUYXNrEhwudGFzay52MS5Db21wbGV0ZVRhc2tSZXF1ZXN0Gh0udGFzay52MS5Db21wbGV0ZVRhc2tSZXNwb25zZRJRCg5VbmNvbXBsZXRlVGFzaxIeLnRhc2sudjEuVW5jb21wbGV0ZVRhc2tSZXF1ZXN0Gh8udGFzay52MS5VbmNvbXBsZXRlVGFza1Jlc3BvbnNlEkgKC1NldEVzdGltYXRlEhsudGFzay52MS5TZXRFc3RpbWF0ZVJlcXVlc3QaHC50YXNrLnYxLlNldEVzdGltYXRlUmVzcG9uc2USTgoNU3RhcnRQb21vZG9ybxIdLnRhc2sudjEuU3RhcnRQb21vZG9yb1JlcXVlc3QaHi50YXNrLnYxLlN0YXJ0UG9tb2Rvcm9SZXNwb25zZRJRCg5DYW5jZWxQb21vZG9ybxIeLnRhc2sudjEuQ2FuY2VsUG9tb2Rvcm9SZXF1ZXN0Gh8udGFzay52MS5DYW5jZWxQb21vZG9yb1Jlc3BvbnNlElcKEENvbXBsZXRlUG9tb2Rvcm8SIC50YXNrLnYxLkNvbXBsZXRlUG9tb2Rvcm9SZXF1ZXN0GiEudGFzay52MS5Db21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USWgoRR2V0QWN0aXZlUG9tb2Rvcm8SIS50YXNrLnYxLkdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdBoiLnRhc2sudjEuR2V0QWN0aXZlUG9tb2Rvcm9SZXNwb25zZUIuWixnaXRodWIuY29tL3Bib3lkL3R3aWcvYXBpL2dlbi90YXNrL3YxO3Rhc2t2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -77,6 +77,23 @@ export type Task = Message<"task.v1.Task"> & {
    * @generated from field: int32 estimate = 7;
    */
   estimate: number;
+
+  /**
+   * Number of completed pomodoros for this task by the calling user.
+   * Read-only; computed server-side. 0 when none. Ignored on writes.
+   *
+   * @generated from field: int32 completed_pomodoro_count = 8;
+   */
+  completedPomodoroCount: number;
+
+  /**
+   * Order of this task within its sibling group (tasks sharing the same
+   * parent_id, or the root group for parentless tasks). Lower sorts first.
+   * Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
+   *
+   * @generated from field: int64 position = 9;
+   */
+  position: bigint;
 };
 
 /**
@@ -573,6 +590,68 @@ export const GetActivePomodoroResponseSchema: GenMessage<GetActivePomodoroRespon
   messageDesc(file_task_v1_task, 25);
 
 /**
+ * @generated from message task.v1.ReorderTaskRequest
+ */
+export type ReorderTaskRequest = Message<"task.v1.ReorderTaskRequest"> & {
+  /**
+   * The task to move.
+   *
+   * @generated from field: int64 task_id = 1;
+   */
+  taskId: bigint;
+
+  /**
+   * Where to place it, relative to a sibling anchor. Exactly one must be set.
+   *
+   * @generated from oneof task.v1.ReorderTaskRequest.anchor
+   */
+  anchor: {
+    /**
+     * Place task_id immediately before this sibling.
+     *
+     * @generated from field: int64 before_task_id = 2;
+     */
+    value: bigint;
+    case: "beforeTaskId";
+  } | {
+    /**
+     * Place task_id immediately after this sibling.
+     *
+     * @generated from field: int64 after_task_id = 3;
+     */
+    value: bigint;
+    case: "afterTaskId";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message task.v1.ReorderTaskRequest.
+ * Use `create(ReorderTaskRequestSchema)` to create a new message.
+ */
+export const ReorderTaskRequestSchema: GenMessage<ReorderTaskRequest> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 26);
+
+/**
+ * @generated from message task.v1.ReorderTaskResponse
+ */
+export type ReorderTaskResponse = Message<"task.v1.ReorderTaskResponse"> & {
+  /**
+   * The moved task's sibling group (including the moved task), in the new
+   * order, each with its updated position.
+   *
+   * @generated from field: repeated task.v1.Task siblings = 1;
+   */
+  siblings: Task[];
+};
+
+/**
+ * Describes the message task.v1.ReorderTaskResponse.
+ * Use `create(ReorderTaskResponseSchema)` to create a new message.
+ */
+export const ReorderTaskResponseSchema: GenMessage<ReorderTaskResponse> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 27);
+
+/**
  * TaskService provides CRUD operations over tasks.
  *
  * @generated from service task.v1.TaskService
@@ -587,6 +666,18 @@ export const TaskService: GenService<{
     methodKind: "unary";
     input: typeof CreateTaskRequestSchema;
     output: typeof CreateTaskResponseSchema;
+  },
+  /**
+   * ReorderTask repositions a task within its current sibling group by placing it
+   * immediately before or after a sibling anchor. It never changes the task's
+   * parent. The whole sibling group is renumbered to a contiguous order.
+   *
+   * @generated from rpc task.v1.TaskService.ReorderTask
+   */
+  reorderTask: {
+    methodKind: "unary";
+    input: typeof ReorderTaskRequestSchema;
+    output: typeof ReorderTaskResponseSchema;
   },
   /**
    * GetTask returns a single task by id.

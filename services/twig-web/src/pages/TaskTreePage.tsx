@@ -1,13 +1,17 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, createConnectQueryKey } from "@connectrpc/connect-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   listTasks,
   createTask,
+  reorderTask,
 } from "../gen/task/v1/task-TaskService_connectquery";
-import { buildTree } from "../lib/tree";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { buildTree, findSiblingIds } from "../lib/tree";
 import type { TaskNode } from "../lib/tree";
 import { filterTree } from "../lib/filterTree";
+import { reorderAnchor, type ReorderAnchor } from "../lib/reorderAnchor";
 import { readShowCompleted, writeShowCompleted } from "../lib/showCompletedPref";
 import { AppHeader } from "../components/AppHeader";
 import { Spinner } from "../components/Spinner";
@@ -55,16 +59,20 @@ export default function TaskTreePage() {
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<bigint>>(new Set());
+  const [reorderError, setReorderError] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery(listTasks, {});
   const { mutateAsync: doCreateTask, isPending } = useMutation(createTask);
+  const { mutateAsync: doReorderTask } = useMutation(reorderTask);
 
   const [showCompleted, setShowCompleted] = useState(readShowCompleted);
 
   const tasks = data?.tasks ?? [];
   const tree = buildTree(tasks);
   const filteredTree = filterTree(tree, showCompleted);
+
+  const listTasksKey = createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" });
 
   // Initialize expand state once when tree data arrives
   useEffect(() => {
@@ -94,10 +102,41 @@ export default function TaskTreePage() {
   async function handleAddTask(name: string, description: string) {
     await doCreateTask({ name, description });
     await queryClient.invalidateQueries({
-      queryKey: createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" }),
+      queryKey: listTasksKey,
     });
     setShowAddForm(false);
   }
+
+  const handleReorder = useCallback(async (taskId: bigint, anchor: ReorderAnchor) => {
+    setReorderError(null);
+    try {
+      await doReorderTask({ taskId, anchor });
+      await queryClient.invalidateQueries({ queryKey: listTasksKey });
+    } catch {
+      setReorderError(messages.reorderError);
+    }
+  }, [doReorderTask, queryClient, listTasksKey]);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeId = BigInt(active.id as string);
+    const overId = BigInt(over.id as string);
+
+    const siblingIds = findSiblingIds(filteredTree, activeId);
+    if (!siblingIds) return;
+
+    // Ensure over item is in the same sibling group (reorder-only, no re-parenting)
+    if (!siblingIds.includes(overId)) return;
+
+    const anchor = reorderAnchor(activeId, overId, siblingIds);
+    if (!anchor) return;
+
+    void handleReorder(activeId, anchor);
+  }
+
+  const rootSiblingIds = filteredTree.map((n) => String(n.task.id));
 
   return (
     <div className="flex min-h-svh flex-col bg-gray-50 dark:bg-gray-900">
@@ -128,6 +167,12 @@ export default function TaskTreePage() {
               onCancel={() => setShowAddForm(false)}
               loading={isPending}
             />
+          </div>
+        )}
+
+        {reorderError && (
+          <div className="mx-4 mb-2">
+            <ErrorBanner message={reorderError} onRetry={() => setReorderError(null)} />
           </div>
         )}
 
@@ -164,16 +209,21 @@ export default function TaskTreePage() {
         )}
 
         {!isLoading && !isError && filteredTree.length > 0 && (
-          <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
-            {filteredTree.map((node) => (
-              <TreeRow
-                key={String(node.task.id)}
-                node={node}
-                expandedIds={expandedIds}
-                onToggleExpand={toggleExpand}
-              />
-            ))}
-          </ul>
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={rootSiblingIds} strategy={verticalListSortingStrategy}>
+              <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
+                {filteredTree.map((node) => (
+                  <TreeRow
+                    key={String(node.task.id)}
+                    node={node}
+                    expandedIds={expandedIds}
+                    onToggleExpand={toggleExpand}
+                    onReorder={handleReorder}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
         )}
       </main>
     </div>

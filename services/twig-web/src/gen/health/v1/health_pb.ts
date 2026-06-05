@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file health/v1/health.proto.
  */
 export const file_health_v1_health: GenFile = /*@__PURE__*/
-  fileDesc("ChZoZWFsdGgvdjEvaGVhbHRoLnByb3RvEgloZWFsdGgudjEiDgoMQ2hlY2tSZXF1ZXN0Ih8KDUNoZWNrUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJMksKDUhlYWx0aFNlcnZpY2USOgoFQ2hlY2sSFy5oZWFsdGgudjEuQ2hlY2tSZXF1ZXN0GhguaGVhbHRoLnYxLkNoZWNrUmVzcG9uc2VCPFo6Z2l0aHViLmNvbS9wYm95ZC90b2RvL3NlcnZpY2VzL3RvZG8vZ2VuL2hlYWx0aC92MTtoZWFsdGh2MWIGcHJvdG8z");
+  fileDesc("ChZoZWFsdGgvdjEvaGVhbHRoLnByb3RvEgloZWFsdGgudjEiDgoMQ2hlY2tSZXF1ZXN0Ih8KDUNoZWNrUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJMksKDUhlYWx0aFNlcnZpY2USOgoFQ2hlY2sSFy5oZWFsdGgudjEuQ2hlY2tSZXF1ZXN0GhguaGVhbHRoLnYxLkNoZWNrUmVzcG9uc2VCMlowZ2l0aHViLmNvbS9wYm95ZC90d2lnL2FwaS9nZW4vaGVhbHRoL3YxO2hlYWx0aHYxYgZwcm90bzM");
 
 /**
  * @generated from message health.v1.CheckRequest

@@ -6,6 +6,14 @@ export interface TaskNode {
   depth: number;
 }
 
+function sortSiblings(nodes: TaskNode[]): void {
+  nodes.sort((a, b) => {
+    const pd = Number(a.task.position) - Number(b.task.position);
+    if (pd !== 0) return pd;
+    return Number(a.task.id) - Number(b.task.id);
+  });
+}
+
 export function buildTree(tasks: Task[]): TaskNode[] {
   const nodeMap = new Map<bigint, TaskNode>();
 
@@ -30,5 +38,23 @@ export function buildTree(tasks: Task[]): TaskNode[] {
     }
   }
 
+  sortSiblings(roots);
+  for (const node of nodeMap.values()) {
+    if (node.children.length > 0) {
+      sortSiblings(node.children);
+    }
+  }
+
   return roots;
+}
+
+export function findSiblingIds(tree: TaskNode[], taskId: bigint): bigint[] | null {
+  if (tree.some((n) => n.task.id === taskId)) {
+    return tree.map((n) => n.task.id);
+  }
+  for (const node of tree) {
+    const result = findSiblingIds(node.children, taskId);
+    if (result !== null) return result;
+  }
+  return null;
 }

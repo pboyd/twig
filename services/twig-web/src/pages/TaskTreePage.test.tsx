@@ -9,6 +9,7 @@ vi.mock("../gen/task/v1/task-TaskService_connectquery", () => ({
   createTask: "schema:createTask",
   completeTask: "schema:completeTask",
   uncompleteTask: "schema:uncompleteTask",
+  reorderTask: "schema:reorderTask",
 }));
 
 vi.mock("../components/AppHeader", () => ({
