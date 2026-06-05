@@ -850,3 +850,50 @@ func TestUncompleteNotFound(t *testing.T) {
 		t.Error("expected error message on stderr")
 	}
 }
+
+// --- T023: CLI respects position ordering (US3) ---
+
+func TestListRootSiblingsByPosition(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"alpha"}) // id=1
+	runCmd(runAdd, h, []string{"beta"})  // id=2
+	runCmd(runAdd, h, []string{"gamma"}) // id=3
+
+	// Set positions so gamma < beta < alpha (reverse of id order).
+	h.svc.mu.Lock()
+	h.svc.tasks[1].Position = 2
+	h.svc.tasks[2].Position = 1
+	h.svc.tasks[3].Position = 0
+	h.svc.mu.Unlock()
+
+	stdout, _, _ := runCmd(runList, h, []string{})
+	idxAlpha := strings.Index(stdout, "alpha")
+	idxBeta := strings.Index(stdout, "beta")
+	idxGamma := strings.Index(stdout, "gamma")
+	if idxGamma > idxBeta || idxBeta > idxAlpha {
+		t.Errorf("expected position order gamma < beta < alpha, got:\n%s", stdout)
+	}
+}
+
+func TestListSubtaskSiblingsByPosition(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"parent"})                  // id=1
+	runCmd(runAdd, h, []string{"--parent", "1", "child-a"}) // id=2
+	runCmd(runAdd, h, []string{"--parent", "1", "child-b"}) // id=3
+	runCmd(runAdd, h, []string{"--parent", "1", "child-c"}) // id=4
+
+	// Set positions so child-c < child-a < child-b (shuffled).
+	h.svc.mu.Lock()
+	h.svc.tasks[2].Position = 1 // child-a middle
+	h.svc.tasks[3].Position = 2 // child-b last
+	h.svc.tasks[4].Position = 0 // child-c first
+	h.svc.mu.Unlock()
+
+	stdout, _, _ := runCmd(runList, h, []string{})
+	idxA := strings.Index(stdout, "child-a")
+	idxB := strings.Index(stdout, "child-b")
+	idxC := strings.Index(stdout, "child-c")
+	if idxC > idxA || idxA > idxB {
+		t.Errorf("expected position order child-c < child-a < child-b, got:\n%s", stdout)
+	}
+}

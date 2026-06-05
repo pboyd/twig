@@ -92,8 +92,8 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 **Independent Test**: Reorder in one client, then `./twig task` (CLI) and the web app both show siblings in that order.
 
-- [ ] T023 [US3] Add a CLI output test in `internal/cli/task_test.go` asserting the rendered task tree (root and sub-task groups) prints siblings in `position` order (confirms FR-010/FR-011 — CLI respects the order with no new commands). (foundational T008 provides the behavior)
-- [ ] T024 [US3] Execute the cross-client consistency checks from `specs/037-task-ordering/quickstart.md` (reorder in TUI → verify via CLI list and web reload show the same order).
+- [X] T023 [US3] Add a CLI output test in `internal/cli/task_test.go` asserting the rendered task tree (root and sub-task groups) prints siblings in `position` order (confirms FR-010/FR-011 — CLI respects the order with no new commands). (foundational T008 provides the behavior)
+- [X] T024 [US3] Execute the cross-client consistency checks from `specs/037-task-ordering/quickstart.md` (reorder in TUI → verify via CLI list and web reload show the same order).
 
 **Checkpoint**: All three surfaces present one consistent, persisted order.
 
@@ -101,9 +101,9 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T025 [P] Tone review of all new user-facing strings (TUI help/status, web messages) against Constitution Principle IV.
-- [ ] T026 [P] Run full suites and the quickstart: `go test ./...` (root), `cd services/twig && go test ./...`, `cd services/twig-web && npm test`.
-- [ ] T027 [P] Verify generated code is up to date and committed where required (`make proto`, `sqlc generate`, `npm run gen`) and that no generated files were hand-edited.
+- [X] T025 [P] Tone review of all new user-facing strings (TUI help/status, web messages) against Constitution Principle IV.
+- [X] T026 [P] Run full suites and the quickstart: `go test ./...` (root), `cd services/twig && go test ./...`, `cd services/twig-web && npm test`.
+- [X] T027 [P] Verify generated code is up to date and committed where required (`make proto`, `sqlc generate`, `npm run gen`) and that no generated files were hand-edited.
 
 ---
 
