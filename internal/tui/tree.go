@@ -107,15 +107,17 @@ func emitNode(
 	hasChildren := len(node.Children) > 0
 	isExpanded := expanded[id]
 
-	// [+] only when collapsing would reveal children — i.e. at least one child
-	// would be visible given the current filter settings.
-	hasExpandableChildren := false
-	if hasChildren && !isExpanded {
+	// hasVisibleChildren: at least one child would appear given current filter
+	// settings. Computed unconditionally (regardless of expanded state) so that
+	// the expandable/expanded flags are always driven by visible children, not
+	// all children (which may include hidden completed ones).
+	hasVisibleChildren := false
+	if hasChildren {
 		for _, child := range node.Children {
 			childCompleted := child.Task.GetCompletedAt() != nil
 			childIsPending := pendingComplete != nil && *pendingComplete == child.Task.Id
 			if !childCompleted || showCompleted || childIsPending {
-				hasExpandableChildren = true
+				hasVisibleChildren = true
 				break
 			}
 		}
@@ -141,8 +143,8 @@ func emitNode(
 
 	// expandable: has children that can be toggled (collapsed-with-visible-children,
 	// or currently expanded). expanded: is currently open.
-	nodeExpandable := hasExpandableChildren || (hasChildren && isExpanded)
-	nodeExpanded := hasChildren && isExpanded
+	nodeExpandable := hasVisibleChildren
+	nodeExpanded := hasVisibleChildren && isExpanded
 
 	*rows = append(*rows, &visibleRow{
 		node:       node,

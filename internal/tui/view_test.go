@@ -213,6 +213,35 @@ func TestRenderList_CollapsedExpandableChevron(t *testing.T) {
 	}
 }
 
+// TestRenderList_NoChevronWhenAllChildrenCompleted asserts that a task whose
+// only subtasks are completed does not show a chevron when showCompleted is off,
+// even after the user has "expanded" it.
+func TestRenderList_NoChevronWhenAllChildrenCompleted(t *testing.T) {
+	now := timestamppb.New(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	parentID := int64(1)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "parent"},
+		{Id: 2, Name: "completed child", ParentId: &parentID, CompletedAt: now},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.showCompleted = false
+	m.expanded[1] = true // user "expanded" the task
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+
+	out := m.renderList(80)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	// Only the parent row should be visible; completed child is hidden.
+	if len(lines) != 1 {
+		t.Errorf("expected 1 visible row, got %d: %v", len(lines), lines)
+	}
+	// Parent has no visible children → must not show any chevron.
+	if strings.ContainsAny(lines[0], "▾▸") {
+		t.Errorf("parent with only-completed children: unexpected chevron; got: %q", lines[0])
+	}
+}
+
 // TestRenderList_StrikethroughAtMultipleDepths (T013 / FR-003) asserts that
 // strikethrough is present on every completed row regardless of nesting depth.
 func TestRenderList_StrikethroughAtMultipleDepths(t *testing.T) {
