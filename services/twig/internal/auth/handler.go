@@ -3,8 +3,11 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,10 +31,19 @@ type loginRequest struct {
 }
 
 // LoginHandler returns an http.Handler for POST /auth/login.
-func LoginHandler(q HandlerQuerier, sessionLifetime time.Duration) http.Handler {
+// limiter enforces per-IP and per-username failure rate limits.
+func LoginHandler(q HandlerQuerier, sessionLifetime time.Duration, limiter *LoginLimiter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check per-IP limit before doing any work.
+		ipKey := "ip:" + clientIP(r)
+		if blocked, retryAfter := limiter.Blocked(ipKey); blocked {
+			log.Printf("auth: login rate-limited for IP %s", clientIP(r))
+			writeJSON429(w, retryAfter)
 			return
 		}
 
@@ -47,6 +59,14 @@ func LoginHandler(q HandlerQuerier, sessionLifetime time.Duration) http.Handler 
 			return
 		}
 
+		// Check per-username limit after we have the username.
+		userKey := "user:" + creds.Username
+		if blocked, retryAfter := limiter.Blocked(userKey); blocked {
+			log.Printf("auth: login rate-limited for username %q", creds.Username)
+			writeJSON429(w, retryAfter)
+			return
+		}
+
 		user, err := q.GetUserByUsername(r.Context(), creds.Username)
 		if err != nil {
 			if isNotFound(err) {
@@ -54,15 +74,24 @@ func LoginHandler(q HandlerQuerier, sessionLifetime time.Duration) http.Handler 
 			} else {
 				log.Printf("auth: GetUserByUsername error: %v", err)
 			}
+			limiter.RecordFailure(ipKey)
+			limiter.RecordFailure(userKey)
 			writeJSON401(w)
 			return
 		}
 
 		if err := VerifyPassword(user.PasswordHash, creds.Password); err != nil {
 			log.Printf("auth: login failed (wrong password) for user %q", creds.Username)
+			limiter.RecordFailure(ipKey)
+			limiter.RecordFailure(userKey)
 			writeJSON401(w)
 			return
 		}
+
+		// Credentials verified — reset failure counters so earlier typos
+		// don't carry over to future login windows.
+		limiter.Reset(ipKey)
+		limiter.Reset(userKey)
 
 		token, err := GenerateToken()
 		if err != nil {
@@ -132,4 +161,15 @@ func writeJSON401(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"invalid username or password"}`))
+}
+
+func writeJSON429(w http.ResponseWriter, retryAfter time.Duration) {
+	secs := int(math.Ceil(retryAfter.Seconds()))
+	if secs < 1 {
+		secs = 1
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Retry-After", strconv.Itoa(secs))
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, _ = fmt.Fprintf(w, `{"error":"too many attempts, please try again later"}`)
 }

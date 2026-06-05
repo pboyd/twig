@@ -28,6 +28,8 @@ export default function LoginPage() {
         navigate(next, { replace: true });
       } else if (res.status === 401) {
         setError(messages.loginFailure);
+      } else if (res.status === 429) {
+        setError(messages.loginThrottled);
       } else {
         setError(messages.connectivityError);
       }

@@ -2,6 +2,7 @@ export const messages = {
   emptyTaskList: "Nothing here yet — your future self is grateful. Add the first task.",
   emptyNameValidation: "A task needs a name to live by.",
   loginFailure: "That didn't match. Mind trying again?",
+  loginThrottled: "Too many tries in a row. Take a breather and try again in a few minutes.",
   sessionExpired: "Your session clocked out. Let's sign back in.",
   completeBlockedBySubtasks: "Hold on — finish its sub-tasks first.",
   reopenBlockedByParent: "Reopen its parent first to reopen this one.",

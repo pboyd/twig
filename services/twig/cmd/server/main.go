@@ -80,8 +80,15 @@ func main() {
 
 	const sessionLifetime = 30 * 24 * time.Hour
 
+	// Rate-limit: block an IP or username after 5 failed logins within 15 minutes.
+	const (
+		loginMaxFailures = 5
+		loginWindow      = 15 * time.Minute
+	)
+	loginLimiter := auth.NewLoginLimiter(loginMaxFailures, loginWindow)
+
 	mux := http.NewServeMux()
-	mux.Handle("/auth/login", auth.LoginHandler(queries, sessionLifetime))
+	mux.Handle("/auth/login", auth.LoginHandler(queries, sessionLifetime, loginLimiter))
 	mux.Handle("/auth/logout", auth.LogoutHandler(queries))
 
 	taskMux := http.NewServeMux()

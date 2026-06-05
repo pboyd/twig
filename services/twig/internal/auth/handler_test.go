@@ -68,7 +68,7 @@ func TestLoginHandler_Success(t *testing.T) {
 	q := newStubHandlerQuerier()
 	q.addUser("alice", "s3cr3t")
 
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 	body := `{"username":"alice","password":"s3cr3t"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -111,7 +111,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 	q := newStubHandlerQuerier()
 	q.addUser("alice", "s3cr3t")
 
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 	body := `{"username":"alice","password":"wrongpass"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -138,7 +138,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 func TestLoginHandler_UnknownUser(t *testing.T) {
 	q := newStubHandlerQuerier()
 
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 	body := `{"username":"nobody","password":"pass"}`
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -160,7 +160,7 @@ func TestLoginHandler_UnknownUser(t *testing.T) {
 
 func TestLoginHandler_BadJSON(t *testing.T) {
 	q := newStubHandlerQuerier()
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -173,7 +173,7 @@ func TestLoginHandler_BadJSON(t *testing.T) {
 
 func TestLoginHandler_MissingFields(t *testing.T) {
 	q := newStubHandlerQuerier()
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 
 	for _, body := range []string{`{"username":"alice"}`, `{"password":"pass"}`, `{}`} {
 		req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
@@ -188,7 +188,7 @@ func TestLoginHandler_MissingFields(t *testing.T) {
 
 func TestLoginHandler_NonPost(t *testing.T) {
 	q := newStubHandlerQuerier()
-	h := auth.LoginHandler(q, 30*24*time.Hour)
+	h := auth.LoginHandler(q, 30*24*time.Hour, auth.NewLoginLimiter(100, time.Hour))
 	req := httptest.NewRequest(http.MethodGet, "/auth/login", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
