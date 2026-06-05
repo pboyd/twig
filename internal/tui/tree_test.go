@@ -202,6 +202,21 @@ func TestMarker_AllChildrenCompletedNotExpandable(t *testing.T) {
 	}
 }
 
+// TestBuildVisible_UnseededTaskDefaultsCollapsed verifies that tasks with no
+// stored expansion entry (nil expanded map) render collapsed — new/unknown tasks
+// default correctly without extra logic (FR-004).
+func TestBuildVisible_UnseededTaskDefaultsCollapsed(t *testing.T) {
+	tree := makeTree()
+	// nil expanded map: root has children but no entry → renders collapsed.
+	rows := buildVisible(tree, nil, false, nil)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row (collapsed root), got %d", len(rows))
+	}
+	if rows[0].node.Task.Id != 1 {
+		t.Errorf("expected root id=1, got %d", rows[0].node.Task.Id)
+	}
+}
+
 func TestMarker_SomeChildrenCompletedIsExpandable(t *testing.T) {
 	now := timestamppb.Now()
 	tasks := []*taskv1.Task{

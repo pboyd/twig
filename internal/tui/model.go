@@ -78,31 +78,33 @@ type planState struct {
 
 // Model is the root Bubble Tea model for the TUI.
 type Model struct {
-	client          taskv1connect.TaskServiceClient
-	planClient      planv1connect.PlanServiceClient
-	addr            string
-	pomConfig       config.PomodoroConfig
-	activeTab       tab
-	plan            planState
-	tree            []*cli.TreeNode
-	visible         []*visibleRow
-	cursor          int
-	expanded        map[int64]bool
-	showCompleted   bool
-	pendingComplete *int64
-	mode            viewMode
-	edit            editFormModel
-	move            *moveState
-	originalCursor  int
-	help            help.Model
-	keys            KeyMap
-	err             error
-	width           int
-	height          int
-	styled           bool
+	client            taskv1connect.TaskServiceClient
+	planClient        planv1connect.PlanServiceClient
+	addr              string
+	pomConfig         config.PomodoroConfig
+	activeTab         tab
+	plan              planState
+	tree              []*cli.TreeNode
+	visible           []*visibleRow
+	cursor            int
+	expanded          map[int64]bool
+	statePath         string
+	activeProfile     string
+	showCompleted     bool
+	pendingComplete   *int64
+	mode              viewMode
+	edit              editFormModel
+	move              *moveState
+	originalCursor    int
+	help              help.Model
+	keys              KeyMap
+	err               error
+	width             int
+	height            int
+	styled            bool
 	hasDarkBackground bool
-	pom             *activePom
-	confirmingQuit  bool
+	pom               *activePom
+	confirmingQuit    bool
 	// date prompt state (modeDatePrompt): used when ctrl+p is pressed on Tasks tab
 	datePromptInput    textinput.Model
 	datePromptTaskID   int64
@@ -112,13 +114,16 @@ type Model struct {
 	notice string
 }
 
-func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool) Model {
+func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {
+	if expanded == nil {
+		expanded = make(map[int64]bool)
+	}
 	return Model{
 		client:            client,
 		planClient:        planClient,
 		addr:              addr,
 		pomConfig:         pomConfig,
-		expanded:          make(map[int64]bool),
+		expanded:          expanded,
 		keys:              DefaultKeyMap(),
 		help:              newHelpModel(),
 		styled:            cli.WantStyled(os.Stdout),

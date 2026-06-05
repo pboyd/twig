@@ -1333,7 +1333,7 @@ func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {
 func buildTasksModelWithPlan(fc *fakePlanClient) Model {
 	tasks := []*taskv1.Task{{Id: 1, Name: "Write the tests"}}
 	tree := cli.BuildTree(tasks)
-	m := newModel(nil, fc, "", config.PomodoroConfig{}, false)
+	m := newModel(nil, fc, "", config.PomodoroConfig{}, false, nil)
 	m.activeTab = tabTasks
 	m.tree = tree
 	m.visible = buildVisible(tree, m.expanded, false, nil)

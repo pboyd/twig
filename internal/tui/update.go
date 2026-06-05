@@ -40,6 +40,42 @@ type moveTaskResultMsg struct {
 
 // ── command factories ───────────────────────────────────────────────────────
 
+// persistTreeStateCmd snapshots the current expanded set and saves it
+// asynchronously. Errors are silently discarded (FR-005).
+func (m Model) persistTreeStateCmd() tea.Cmd {
+	path := m.statePath
+	key := m.activeProfile
+	expanded := make(map[int64]bool, len(m.expanded))
+	for id, v := range m.expanded {
+		expanded[id] = v
+	}
+	live := liveTaskIDs(m.tree)
+	return func() tea.Msg {
+		if path != "" {
+			_ = saveTreeState(path, key, expanded, live)
+		}
+		return nil
+	}
+}
+
+// saveAndQuitCmd saves the tree state synchronously and then signals bubbletea
+// to quit. Errors from the save are silently discarded (FR-005).
+func (m Model) saveAndQuitCmd() tea.Cmd {
+	path := m.statePath
+	key := m.activeProfile
+	expanded := make(map[int64]bool, len(m.expanded))
+	for id, v := range m.expanded {
+		expanded[id] = v
+	}
+	live := liveTaskIDs(m.tree)
+	return func() tea.Msg {
+		if path != "" {
+			_ = saveTreeState(path, key, expanded, live)
+		}
+		return tea.QuitMsg{}
+	}
+}
+
 func listTasksCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
@@ -419,7 +455,7 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirmingQuit {
 		switch msg.String() {
 		case "y":
-			return m, tea.Quit
+			return m, m.saveAndQuitCmd()
 		case "n", "esc":
 			m.confirmingQuit = false
 		}
@@ -432,7 +468,7 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirmingQuit = true
 			return m, nil
 		}
-		return m, tea.Quit
+		return m, m.saveAndQuitCmd()
 	}
 
 	// While a modal is open, route to the modal handler; tab-switch is ignored.
@@ -628,7 +664,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.confirmingQuit {
 		switch msg.String() {
 		case "y":
-			return m, tea.Quit
+			return m, m.saveAndQuitCmd()
 		case "n", "esc":
 			m.confirmingQuit = false
 		}
@@ -646,7 +682,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirmingQuit = true
 			return m, nil
 		}
-		return m, tea.Quit
+		return m, m.saveAndQuitCmd()
 
 	case key.Matches(msg, m.keys.NextTab) || key.Matches(msg, m.keys.PrevTab):
 		m.activeTab = tabPlanning
@@ -703,9 +739,10 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.expanded[parent.Task.Id] = false
 				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
 				m.cursor = findCursor(m.visible, parent.Task.Id)
-				return m, nil
+				return m, m.persistTreeStateCmd()
 			}
 			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+			return m, m.persistTreeStateCmd()
 		}
 
 	case key.Matches(msg, m.keys.Expand):
@@ -720,6 +757,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.cursor = next
 				}
 			}
+			return m, m.persistTreeStateCmd()
 		}
 
 	case key.Matches(msg, m.keys.Edit):
