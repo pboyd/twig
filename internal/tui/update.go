@@ -563,6 +563,22 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, removePlanCmd(m.planClient, m.plan.day, entry.Id)
 		}
 
+	case key.Matches(msg, m.keys.PlanGoToTask):
+		if len(m.plan.entries) == 0 {
+			return m, nil
+		}
+		entry := m.plan.entries[m.plan.cursor]
+		if entry.TaskId == 0 {
+			return m, nil
+		}
+		m.activeTab = tabTasks
+		m.keys.PlanningMode = false
+		m.plan.err = nil
+		m.ensureVisible(entry.TaskId)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.cursor = findCursor(m.visible, entry.TaskId)
+		return m, nil
+
 	// Toggle complete on the linked task.
 	case key.Matches(msg, m.keys.Complete):
 		if len(m.plan.entries) > 0 {

@@ -21,10 +21,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T001 [US1] Add `PlanGoToTask key.Binding` field to `KeyMap` struct in `internal/tui/keymap.go`
-- [ ] T002 [US1] Add `ctrl+t` binding in `DefaultKeyMap()` with help text `"ctrl+t", "go to task"` in `internal/tui/keymap.go`
-- [ ] T003 [US1] Add `k.PlanGoToTask` to the `FullHelp()` planning-mode second row (alongside `PlanAddTask`, `PlanAddEvent`, `PlanEdit`, `PlanRemove`) in `internal/tui/keymap.go`
-- [ ] T004 [US1] Add `PlanGoToTask` handler case in `handlePlanningKey` in `internal/tui/update.go`: switch to `tabTasks`, call `m.ensureVisible(entry.TaskId)`, rebuild `m.visible` via `buildVisible`, set `m.cursor` via `findCursor`
+- [x] T001 [US1] Add `PlanGoToTask key.Binding` field to `KeyMap` struct in `internal/tui/keymap.go`
+- [x] T002 [US1] Add `ctrl+t` binding in `DefaultKeyMap()` with help text `"ctrl+t", "go to task"` in `internal/tui/keymap.go`
+- [x] T003 [US1] Add `k.PlanGoToTask` to the `FullHelp()` planning-mode second row (alongside `PlanAddTask`, `PlanAddEvent`, `PlanEdit`, `PlanRemove`) in `internal/tui/keymap.go`
+- [x] T004 [US1] Add `PlanGoToTask` handler case in `handlePlanningKey` in `internal/tui/update.go`: switch to `tabTasks`, call `m.ensureVisible(entry.TaskId)`, rebuild `m.visible` via `buildVisible`, set `m.cursor` via `findCursor`
 
 **Checkpoint**: `ctrl+t` on a linked plan entry navigates to the task in the Tasks tab with the tree expanded.
 
@@ -38,7 +38,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T005 [US2] Add guard in the T004 handler: if `entry.TaskId == 0`, return early with no state change (this guard is part of the same case added in T004 — verify it is present and correct in `internal/tui/update.go`)
+- [x] T005 [US2] Add guard in the T004 handler: if `entry.TaskId == 0`, return early with no state change (this guard is part of the same case added in T004 — verify it is present and correct in `internal/tui/update.go`)
 
 > **Note**: US2 behavior is implemented as a guard within the same handler case as US1 (T004). T005 is a verification/review step to confirm the guard is correct.
 
@@ -48,8 +48,8 @@
 
 ## Phase N: Polish & Cross-Cutting Concerns
 
-- [ ] T006 [P] Verify `ctrl+t` does not conflict with any existing key binding across both tab modes by reviewing all `key.WithKeys` calls in `internal/tui/keymap.go`
-- [ ] T007 Run `go test ./...` from repo root and confirm all existing tests pass
+- [x] T006 [P] Verify `ctrl+t` does not conflict with any existing key binding across both tab modes by reviewing all `key.WithKeys` calls in `internal/tui/keymap.go`
+- [x] T007 Run `go test ./...` from repo root and confirm all existing tests pass
 
 ---
 

@@ -28,13 +28,14 @@ type KeyMap struct {
 	NextTab key.Binding
 	PrevTab key.Binding
 	// Planning actions
-	PlanAddTask  key.Binding
-	PlanAddEvent key.Binding
-	PlanEdit     key.Binding
-	PlanRemove   key.Binding
-	PlanPrevDay  key.Binding
-	PlanNextDay  key.Binding
-	PlanToday    key.Binding
+	PlanAddTask   key.Binding
+	PlanAddEvent  key.Binding
+	PlanEdit      key.Binding
+	PlanRemove    key.Binding
+	PlanGoToTask  key.Binding
+	PlanPrevDay   key.Binding
+	PlanNextDay   key.Binding
+	PlanToday     key.Binding
 	// Rank ordering (Tasks tab)
 	RankUp   key.Binding
 	RankDown key.Binding
@@ -148,6 +149,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+d"),
 			key.WithHelp("ctrl+d", "remove entry"),
 		),
+		PlanGoToTask: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "go to task"),
+		),
 		PlanPrevDay: key.NewBinding(
 			key.WithKeys("["),
 			key.WithHelp("[", "prev day"),
@@ -212,7 +217,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	if k.PlanningMode {
 		return [][]key.Binding{
 			{k.Up, k.Down, k.PlanPrevDay, k.PlanNextDay},
-			{k.PlanAddTask, k.PlanAddEvent, k.PlanEdit, k.PlanRemove},
+			{k.PlanAddTask, k.PlanAddEvent, k.PlanEdit, k.PlanRemove, k.PlanGoToTask},
 			{k.Complete, k.PomStart, k.PomCancel, k.NextTab},
 			{k.PlanToday, k.Refresh, k.Help, k.Quit},
 		}
