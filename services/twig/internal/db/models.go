@@ -51,6 +51,7 @@ type Task struct {
 	UserID      int64
 	CompletedAt pgtype.Timestamptz
 	Estimate    int16
+	Position    int32
 }
 
 type User struct {

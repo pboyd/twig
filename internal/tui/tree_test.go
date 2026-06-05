@@ -235,3 +235,86 @@ func TestMarker_SomeChildrenCompletedIsExpandable(t *testing.T) {
 		t.Errorf("expandable should be true when there is at least one visible child")
 	}
 }
+
+// --- visibleSiblings tests ---
+
+func TestVisibleSiblings_Roots(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "A", Position: 0},
+		{Id: 2, Name: "B", Position: 1},
+		{Id: 3, Name: "C", Position: 2},
+	}
+	tree := cli.BuildTree(tasks)
+	expanded := map[int64]bool{}
+
+	prev, next := visibleSiblings(tree, expanded, false, 2)
+	if prev != 1 {
+		t.Errorf("prev of B = %d, want 1 (A)", prev)
+	}
+	if next != 3 {
+		t.Errorf("next of B = %d, want 3 (C)", next)
+	}
+
+	// First element: no prev.
+	prev, next = visibleSiblings(tree, expanded, false, 1)
+	if prev != 0 {
+		t.Errorf("prev of A = %d, want 0 (none)", prev)
+	}
+	if next != 2 {
+		t.Errorf("next of A = %d, want 2 (B)", next)
+	}
+
+	// Last element: no next.
+	prev, next = visibleSiblings(tree, expanded, false, 3)
+	if prev != 2 {
+		t.Errorf("prev of C = %d, want 2 (B)", prev)
+	}
+	if next != 0 {
+		t.Errorf("next of C = %d, want 0 (none)", next)
+	}
+}
+
+func TestVisibleSiblings_Children(t *testing.T) {
+	parentID := int64(1)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root", Position: 0},
+		{Id: 2, Name: "child-first", Position: 0, ParentId: &parentID},
+		{Id: 3, Name: "child-second", Position: 1, ParentId: &parentID},
+	}
+	tree := cli.BuildTree(tasks)
+	expanded := map[int64]bool{1: true}
+
+	// Siblings among children only.
+	prev, next := visibleSiblings(tree, expanded, false, 2)
+	if prev != 0 {
+		t.Errorf("prev of child-first = %d, want 0", prev)
+	}
+	if next != 3 {
+		t.Errorf("next of child-first = %d, want 3", next)
+	}
+}
+
+func TestVisibleSiblings_HiddenCompleted(t *testing.T) {
+	// When showCompleted=false, completed siblings are hidden and skipped.
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "A", Position: 0},
+		{Id: 2, Name: "B (completed)", Position: 1, CompletedAt: now},
+		{Id: 3, Name: "C", Position: 2},
+	}
+	tree := cli.BuildTree(tasks)
+	expanded := map[int64]bool{}
+
+	// B is hidden; A's next visible sibling should be C.
+	prev, next := visibleSiblings(tree, expanded, false, 1)
+	if next != 3 {
+		t.Errorf("next of A (completed B hidden) = %d, want 3 (C)", next)
+	}
+	_ = prev
+
+	// C's prev visible sibling should be A (B is hidden).
+	prev, _ = visibleSiblings(tree, expanded, false, 3)
+	if prev != 1 {
+		t.Errorf("prev of C (completed B hidden) = %d, want 1 (A)", prev)
+	}
+}

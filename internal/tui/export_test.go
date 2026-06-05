@@ -116,3 +116,17 @@ func ExportRenderDetails(task *taskv1.Task, width int, styled bool) string {
 func ExportSplitPlanEntries(entries []*planv1.PlanEntry) (untimed, timed []*planv1.PlanEntry) {
 	return splitPlanEntries(entries)
 }
+
+// ExportVisibleSiblings exposes visibleSiblings for tree tests.
+func ExportVisibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, taskID int64) (prev, next int64) {
+	return visibleSiblings(tree, expanded, showCompleted, taskID)
+}
+
+// ExportReorderResultMsg exposes reorderResultMsg for update tests.
+type ExportReorderResultMsg = reorderResultMsg
+
+// ExportHandleReorderResult exposes handleReorderResult for update tests.
+func ExportHandleReorderResult(m Model, msg reorderResultMsg) Model {
+	result, _ := m.handleReorderResult(msg)
+	return result
+}

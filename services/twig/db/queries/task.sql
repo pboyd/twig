@@ -1,6 +1,7 @@
 -- name: CreateTask :one
-INSERT INTO tasks (name, description, due, parent_id, user_id)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO tasks (name, description, due, parent_id, user_id, position)
+VALUES ($1, $2, $3, $4, $5,
+  COALESCE((SELECT MAX(position) + 1 FROM tasks WHERE user_id = $5 AND parent_id IS NOT DISTINCT FROM $4), 0))
 RETURNING *;
 
 -- name: GetTask :one
@@ -54,6 +55,20 @@ UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING *;
 
 -- name: GetParentCompletion :one
 SELECT completed_at FROM tasks WHERE id = $1 AND user_id = $2;
+
+-- name: GetMaxSiblingPosition :one
+SELECT COALESCE(MAX(position), -1)::integer AS max_pos
+FROM tasks
+WHERE user_id = $1 AND parent_id IS NOT DISTINCT FROM $2;
+
+-- name: ListSiblingGroup :many
+SELECT * FROM tasks
+WHERE user_id = $1 AND parent_id IS NOT DISTINCT FROM $2
+ORDER BY position, id
+FOR UPDATE;
+
+-- name: UpdateTaskPosition :exec
+UPDATE tasks SET position = $3 WHERE id = $1 AND user_id = $2;
 
 -- name: ListIncompleteDescendantIds :many
 WITH RECURSIVE descendants AS (

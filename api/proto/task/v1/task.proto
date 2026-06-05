@@ -17,6 +17,11 @@ service TaskService {
   // CreateTask stores a new task and returns it with its assigned id.
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
 
+  // ReorderTask repositions a task within its current sibling group by placing it
+  // immediately before or after a sibling anchor. It never changes the task's
+  // parent. The whole sibling group is renumbered to a contiguous order.
+  rpc ReorderTask(ReorderTaskRequest) returns (ReorderTaskResponse);
+
   // GetTask returns a single task by id.
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
 
@@ -86,6 +91,10 @@ message Task {
   // Number of completed pomodoros for this task by the calling user.
   // Read-only; computed server-side. 0 when none. Ignored on writes.
   int32 completed_pomodoro_count = 8;
+  // Order of this task within its sibling group (tasks sharing the same
+  // parent_id, or the root group for parentless tasks). Lower sorts first.
+  // Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
+  int64 position = 9;
 }
 
 message Pomodoro {
@@ -191,4 +200,23 @@ message CompletePomodoroResponse {
 message GetActivePomodoroRequest {}
 message GetActivePomodoroResponse {
   Pomodoro pomodoro = 1;
+}
+
+message ReorderTaskRequest {
+  // The task to move.
+  int64 task_id = 1;
+
+  // Where to place it, relative to a sibling anchor. Exactly one must be set.
+  oneof anchor {
+    // Place task_id immediately before this sibling.
+    int64 before_task_id = 2;
+    // Place task_id immediately after this sibling.
+    int64 after_task_id = 3;
+  }
+}
+
+message ReorderTaskResponse {
+  // The moved task's sibling group (including the moved task), in the new
+  // order, each with its updated position.
+  repeated Task siblings = 1;
 }

@@ -1484,3 +1484,112 @@ func TestDatePrompt_Esc_Cancels(t *testing.T) {
 		t.Error("Esc from date prompt: AddPlanTask should not have been called")
 	}
 }
+
+// --- Reorder / rank-up-rank-down tests ---
+
+// buildReorderModel builds a 3-task model with explicit positions (A=0, B=1, C=2),
+// all expanded, cursor on the given task id.
+func buildReorderModel(cursorID int64) Model {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "A", Position: 0},
+		{Id: 2, Name: "B", Position: 1},
+		{Id: 3, Name: "C", Position: 2},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	m.cursor = findCursor(m.visible, cursorID)
+	return m
+}
+
+// simulateReorderResult applies a reorderResultMsg with the given new sibling
+// ordering to m and returns the updated model.
+func simulateReorderResult(m Model, movedID int64, newOrder []*taskv1.Task) Model {
+	return handleReorderResult_test(m, movedID, newOrder)
+}
+
+func handleReorderResult_test(m Model, movedID int64, siblings []*taskv1.Task) Model {
+	result, _ := m.handleReorderResult(reorderResultMsg{taskID: movedID, siblings: siblings})
+	return result
+}
+
+func TestHandleReorderResult_UpdatesTree(t *testing.T) {
+	m := buildReorderModel(3) // cursor on C
+
+	// Simulate server returning order: C=0, A=1, B=2
+	newSiblings := []*taskv1.Task{
+		{Id: 3, Name: "C", Position: 0},
+		{Id: 1, Name: "A", Position: 1},
+		{Id: 2, Name: "B", Position: 2},
+	}
+	result := simulateReorderResult(m, 3, newSiblings)
+
+	if len(result.visible) != 3 {
+		t.Fatalf("expected 3 visible rows, got %d", len(result.visible))
+	}
+	// First visible row should now be C.
+	if result.visible[0].node.Task.Id != 3 {
+		t.Errorf("visible[0] = %d, want 3 (C)", result.visible[0].node.Task.Id)
+	}
+	// Cursor should still be on C (id=3).
+	if result.visible[result.cursor].node.Task.Id != 3 {
+		t.Errorf("cursor not on moved task; cursor task = %d, want 3", result.visible[result.cursor].node.Task.Id)
+	}
+}
+
+func TestRankUp_AtBoundary_IsNoOp(t *testing.T) {
+	// A is already first; pressing { should not dispatch a command.
+	m := buildReorderModel(1) // cursor on A (position 0)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	if cmd != nil {
+		t.Error("rank-up at first sibling should be a no-op (nil cmd), but got a cmd")
+	}
+}
+
+func TestRankDown_AtBoundary_IsNoOp(t *testing.T) {
+	// C is already last; pressing } should not dispatch a command.
+	m := buildReorderModel(3) // cursor on C (position 2)
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("}")})
+	if cmd != nil {
+		t.Error("rank-down at last sibling should be a no-op (nil cmd), but got a cmd")
+	}
+}
+
+func TestRankUp_Middle_DispatchesCmd(t *testing.T) {
+	// B is in the middle; pressing { should return a cmd.
+	m := buildReorderModel(2) // cursor on B
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	if cmd == nil {
+		t.Error("rank-up on middle sibling should dispatch a cmd")
+	}
+}
+
+func TestRankDown_Middle_DispatchesCmd(t *testing.T) {
+	// B is in the middle; pressing } should return a cmd.
+	m := buildReorderModel(2) // cursor on B
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("}")})
+	if cmd == nil {
+		t.Error("rank-down on middle sibling should dispatch a cmd")
+	}
+}
+
+func TestRankUp_SkipsHiddenCompleted(t *testing.T) {
+	// With showCompleted=false, a completed sibling should not be counted as
+	// prev/next. C should see its prev as A (B is completed and hidden).
+	now := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "A", Position: 0},
+		{Id: 2, Name: "B (completed)", Position: 1, CompletedAt: now},
+		{Id: 3, Name: "C", Position: 2},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	m.showCompleted = false
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.cursor = findCursor(m.visible, 3) // cursor on C
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	// C's only visible prev sibling is A (B is hidden) — so cmd should be dispatched.
+	if cmd == nil {
+		t.Error("rank-up on C with hidden B should dispatch a cmd (prev is A)")
+	}
+}

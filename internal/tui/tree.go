@@ -4,6 +4,66 @@ import (
 	"github.com/pboyd/twig/internal/cli"
 )
 
+// visibleSiblings returns the visible siblings of the task at taskID, given
+// the current tree, expansion state, and completed-task filter. It returns the
+// id of the previous visible sibling (0 if none) and the next visible sibling
+// (0 if none). A sibling is visible when it would appear in the visible row
+// list under current filter settings.
+func visibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, taskID int64) (prev, next int64) {
+	rows := buildVisible(tree, expanded, showCompleted, nil)
+
+	targetIdx := -1
+	for i, r := range rows {
+		if r.node.Task.Id == taskID {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return 0, 0
+	}
+
+	target := rows[targetIdx]
+
+	sameParent := func(r *visibleRow) bool {
+		if r.depth != target.depth {
+			return false
+		}
+		ap, bp := r.node.Task.ParentId, target.node.Task.ParentId
+		if ap == nil && bp == nil {
+			return true
+		}
+		if ap == nil || bp == nil {
+			return false
+		}
+		return *ap == *bp
+	}
+
+	for i := targetIdx - 1; i >= 0; i-- {
+		r := rows[i]
+		if r.depth < target.depth {
+			break
+		}
+		if sameParent(r) {
+			prev = r.node.Task.Id
+			break
+		}
+	}
+
+	for i := targetIdx + 1; i < len(rows); i++ {
+		r := rows[i]
+		if r.depth < target.depth {
+			break
+		}
+		if sameParent(r) {
+			next = r.node.Task.Id
+			break
+		}
+	}
+
+	return prev, next
+}
+
 // visibleRow is one rendered row in the task list pane.
 type visibleRow struct {
 	node       *cli.TreeNode

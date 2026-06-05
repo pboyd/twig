@@ -68,7 +68,7 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 		_, _ = pool.Exec(context.Background(), "DELETE FROM tasks WHERE user_id = $1", userID)
 		_, _ = pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
 	})
-	return &handler.Task{Queries: queries}, userID
+	return &handler.Task{Queries: queries, Pool: pool}, userID
 }
 
 // ctxWithUser returns a context carrying the given user_id.
@@ -1116,3 +1116,290 @@ func TestListTasks_CompletedPomodoroCount(t *testing.T) {
 		t.Errorf("task with no pomodoros: got completed_pomodoro_count=%d, want 0", got)
 	}
 }
+
+// ---- Unit tests: ReorderTask validation (no DB needed) ----
+
+func TestReorderTask_NoAnchor(t *testing.T) {
+	h := &handler.Task{Queries: nil}
+	req := connect.NewRequest(&taskv1.ReorderTaskRequest{TaskId: 1})
+	_, err := h.ReorderTask(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument, got %v", err)
+	}
+}
+
+func TestReorderTask_AnchorEqualsTask(t *testing.T) {
+	h := &handler.Task{Queries: nil}
+	req := connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: 1,
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: 1},
+	})
+	_, err := h.ReorderTask(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument, got %v", err)
+	}
+}
+
+// ---- Integration tests: position and ReorderTask ----
+
+func TestCreateTask_Position(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	r1, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "first"}))
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	if r1.Msg.Task.Position != 0 {
+		t.Errorf("first root task position = %d, want 0", r1.Msg.Task.Position)
+	}
+
+	r2, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "second"}))
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	if r2.Msg.Task.Position != 1 {
+		t.Errorf("second root task position = %d, want 1", r2.Msg.Task.Position)
+	}
+
+	// Child tasks get their own position sequence.
+	parentID := r1.Msg.Task.Id
+	c1, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "child1", ParentId: &parentID}))
+	if err != nil {
+		t.Fatalf("create child1: %v", err)
+	}
+	if c1.Msg.Task.Position != 0 {
+		t.Errorf("first child position = %d, want 0", c1.Msg.Task.Position)
+	}
+
+	c2, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "child2", ParentId: &parentID}))
+	if err != nil {
+		t.Fatalf("create child2: %v", err)
+	}
+	if c2.Msg.Task.Position != 1 {
+		t.Errorf("second child position = %d, want 1", c2.Msg.Task.Position)
+	}
+}
+
+func TestUpdateTask_ReparentPosition(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	p1, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent1"}))
+	p2, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent2"}))
+	p2ID := p2.Msg.Task.Id
+
+	// Add two children under parent2.
+	h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "p2-child1", ParentId: &p2ID}))
+	h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "p2-child2", ParentId: &p2ID}))
+
+	// Move a task from parent1's group to parent2's group.
+	p1ID := p1.Msg.Task.Id
+	child, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "mover", ParentId: &p1ID}))
+	moverID := child.Msg.Task.Id
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       moverID,
+		Name:     "mover",
+		ParentId: &p2ID,
+	}))
+	if err != nil {
+		t.Fatalf("UpdateTask reparent: %v", err)
+	}
+	// Should be at position 2 (end of a 2-item group → index 2).
+	if ur.Msg.Task.Position != 2 {
+		t.Errorf("reparented task position = %d, want 2", ur.Msg.Task.Position)
+	}
+}
+
+func TestReorderTask_BeforeMove(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	a, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "A"}))
+	b, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "B"}))
+	c, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "C"}))
+
+	aID, bID, cID := a.Msg.Task.Id, b.Msg.Task.Id, c.Msg.Task.Id
+
+	// Move C before A → order should be C, A, B.
+	resp, err := h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: cID,
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: aID},
+	}))
+	if err != nil {
+		t.Fatalf("ReorderTask: %v", err)
+	}
+	if len(resp.Msg.Siblings) != 3 {
+		t.Fatalf("expected 3 siblings, got %d", len(resp.Msg.Siblings))
+	}
+	wantOrder := []int64{cID, aID, bID}
+	for i, s := range resp.Msg.Siblings {
+		if s.Id != wantOrder[i] {
+			t.Errorf("siblings[%d].Id = %d, want %d", i, s.Id, wantOrder[i])
+		}
+		if s.Position != int64(i) {
+			t.Errorf("siblings[%d].Position = %d, want %d", i, s.Position, i)
+		}
+	}
+}
+
+func TestReorderTask_AfterMove(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	a, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "A"}))
+	b, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "B"}))
+	c, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "C"}))
+
+	aID, bID, cID := a.Msg.Task.Id, b.Msg.Task.Id, c.Msg.Task.Id
+
+	// Move A after C → order should be B, C, A.
+	resp, err := h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: aID,
+		Anchor: &taskv1.ReorderTaskRequest_AfterTaskId{AfterTaskId: cID},
+	}))
+	if err != nil {
+		t.Fatalf("ReorderTask: %v", err)
+	}
+	wantOrder := []int64{bID, cID, aID}
+	for i, s := range resp.Msg.Siblings {
+		if s.Id != wantOrder[i] {
+			t.Errorf("siblings[%d].Id = %d, want %d", i, s.Id, wantOrder[i])
+		}
+	}
+}
+
+func TestReorderTask_AnchorNotSibling(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	root1, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "root1"}))
+	root2, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "root2"}))
+	root1ID := root1.Msg.Task.Id
+
+	child, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "child", ParentId: &root1ID}))
+
+	// Try to reorder root2 before child (different groups).
+	_, err := h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: root2.Msg.Task.Id,
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: child.Msg.Task.Id},
+	}))
+	if err == nil {
+		t.Fatal("expected error for cross-group reorder, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument, got %v", err)
+	}
+}
+
+func TestReorderTask_TaskNotFound(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	other, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "other"}))
+
+	_, err := h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: 999999,
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: other.Msg.Task.Id},
+	}))
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeNotFound {
+		t.Errorf("expected CodeNotFound, got %v", err)
+	}
+}
+
+func TestReorderTask_NoLoss(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	var ids []int64
+	for i := 0; i < 5; i++ {
+		r, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: fmt.Sprintf("task%d", i)}))
+		ids = append(ids, r.Msg.Task.Id)
+	}
+
+	// Reorder last before first.
+	resp, err := h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: ids[4],
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: ids[0]},
+	}))
+	if err != nil {
+		t.Fatalf("ReorderTask: %v", err)
+	}
+	if len(resp.Msg.Siblings) != 5 {
+		t.Errorf("expected 5 siblings after reorder, got %d", len(resp.Msg.Siblings))
+	}
+	// Verify no duplicates and contiguous positions.
+	seen := make(map[int64]bool)
+	for i, s := range resp.Msg.Siblings {
+		if seen[s.Id] {
+			t.Errorf("duplicate task id %d in siblings", s.Id)
+		}
+		seen[s.Id] = true
+		if s.Position != int64(i) {
+			t.Errorf("siblings[%d].Position = %d, want %d", i, s.Position, i)
+		}
+	}
+}
+
+func TestCompleteTask_PositionUnchanged(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	a, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "A"}))
+	b, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "B"}))
+	c, _ := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "C"}))
+
+	aID, bID, cID := a.Msg.Task.Id, b.Msg.Task.Id, c.Msg.Task.Id
+
+	// Reorder: C, A, B.
+	h.ReorderTask(ctx, connect.NewRequest(&taskv1.ReorderTaskRequest{
+		TaskId: cID,
+		Anchor: &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: aID},
+	}))
+
+	// Complete B.
+	_, err := h.CompleteTask(ctx, connect.NewRequest(&taskv1.CompleteTaskRequest{Id: bID}))
+	if err != nil {
+		t.Fatalf("CompleteTask: %v", err)
+	}
+
+	// Uncomplete B.
+	_, err = h.UncompleteTask(ctx, connect.NewRequest(&taskv1.UncompleteTaskRequest{Id: bID}))
+	if err != nil {
+		t.Fatalf("UncompleteTask: %v", err)
+	}
+
+	// List tasks and verify positions: C=0, A=1, B=2.
+	listResp, err := h.ListTasks(ctx, connect.NewRequest(&taskv1.ListTasksRequest{}))
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	posMap := make(map[int64]int64)
+	for _, task := range listResp.Msg.Tasks {
+		posMap[task.Id] = task.Position
+	}
+	if posMap[cID] != 0 {
+		t.Errorf("C position = %d, want 0", posMap[cID])
+	}
+	if posMap[aID] != 1 {
+		t.Errorf("A position = %d, want 1", posMap[aID])
+	}
+	if posMap[bID] != 2 {
+		t.Errorf("B position = %d, want 2", posMap[bID])
+	}
+}
+

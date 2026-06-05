@@ -24,6 +24,13 @@ type listTasksResultMsg struct {
 	err  error
 }
 
+// reorderResultMsg carries the result of a ReorderTask RPC.
+type reorderResultMsg struct {
+	taskID   int64
+	siblings []*taskv1.Task
+	err      error
+}
+
 // refreshedMsg is returned by mutation commands: RPC + re-fetch bundled together.
 type refreshedMsg struct {
 	tree        []*cli.TreeNode
@@ -184,6 +191,22 @@ func setEstimateCmd(client taskv1connect.TaskServiceClient, id int64, estimate i
 			return refreshedMsg{err: err}
 		}
 		return fetchAfterMutation(client, id)
+	}
+}
+
+func reorderTaskCmd(client taskv1connect.TaskServiceClient, taskID, anchorID int64, insertBefore bool) tea.Cmd {
+	return func() tea.Msg {
+		req := &taskv1.ReorderTaskRequest{TaskId: taskID}
+		if insertBefore {
+			req.Anchor = &taskv1.ReorderTaskRequest_BeforeTaskId{BeforeTaskId: anchorID}
+		} else {
+			req.Anchor = &taskv1.ReorderTaskRequest_AfterTaskId{AfterTaskId: anchorID}
+		}
+		resp, err := client.ReorderTask(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return reorderResultMsg{taskID: taskID, err: err}
+		}
+		return reorderResultMsg{taskID: taskID, siblings: resp.Msg.Siblings}
 	}
 }
 
@@ -350,6 +373,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, pomTickCmd()
 		}
 		return m, nil
+
+	case reorderResultMsg:
+		return m.handleReorderResult(msg)
 
 	case moveTaskResultMsg:
 		return m.handleMoveTaskResult(msg)
@@ -829,6 +855,26 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeDatePrompt
 		}
 
+	case key.Matches(msg, m.keys.RankUp):
+		if len(m.visible) > 0 {
+			id := m.visible[m.cursor].node.Task.Id
+			prev, _ := visibleSiblings(m.tree, m.expanded, m.showCompleted, id)
+			if prev != 0 {
+				m.err = nil
+				return m, reorderTaskCmd(m.client, id, prev, true)
+			}
+		}
+
+	case key.Matches(msg, m.keys.RankDown):
+		if len(m.visible) > 0 {
+			id := m.visible[m.cursor].node.Task.Id
+			_, next := visibleSiblings(m.tree, m.expanded, m.showCompleted, id)
+			if next != 0 {
+				m.err = nil
+				return m, reorderTaskCmd(m.client, id, next, false)
+			}
+		}
+
 	case key.Matches(msg, m.keys.Delete):
 		if len(m.visible) > 0 {
 			id := m.visible[m.cursor].node.Task.Id
@@ -987,6 +1033,47 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 		m.cursor = clampCursor(m.cursor, len(m.visible))
 	}
 	return m, nil
+}
+
+func (m Model) handleReorderResult(msg reorderResultMsg) (Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err
+		return m, nil
+	}
+	// Patch the in-memory model: update positions for all tasks in the returned
+	// sibling group, then rebuild the tree without a server round-trip.
+	posMap := make(map[int64]int64, len(msg.siblings))
+	for _, s := range msg.siblings {
+		posMap[s.Id] = s.Position
+	}
+	for _, root := range m.tree {
+		patchPositions(root, posMap)
+	}
+	m.tree = cli.BuildTree(flattenTree(m.tree))
+	m.err = nil
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.cursor = findCursor(m.visible, msg.taskID)
+	return m, nil
+}
+
+// patchPositions recursively updates Task.Position fields from posMap.
+func patchPositions(node *cli.TreeNode, posMap map[int64]int64) {
+	if pos, ok := posMap[node.Task.Id]; ok {
+		node.Task.Position = pos
+	}
+	for _, child := range node.Children {
+		patchPositions(child, posMap)
+	}
+}
+
+// flattenTree returns a flat slice of all tasks in the tree.
+func flattenTree(nodes []*cli.TreeNode) []*taskv1.Task {
+	var tasks []*taskv1.Task
+	for _, n := range nodes {
+		tasks = append(tasks, n.Task)
+		tasks = append(tasks, flattenTree(n.Children)...)
+	}
+	return tasks
 }
 
 // ensureVisible walks the tree to find the task with the given id and expands

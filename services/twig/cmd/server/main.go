@@ -94,7 +94,7 @@ func main() {
 	taskMux := http.NewServeMux()
 	healthPath, healthH := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
 	taskMux.Handle(healthPath, healthH)
-	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries})
+	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries, Pool: pool})
 	taskMux.Handle(taskPath, taskH)
 	planPath, planH := planv1connect.NewPlanServiceHandler(&handler.Plan{Queries: queries, Pool: pool})
 	taskMux.Handle(planPath, planH)

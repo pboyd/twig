@@ -93,9 +93,13 @@ func BuildTree(tasks []*taskv1.Task) []*TreeNode {
 	return roots
 }
 
-// SortNodes sorts nodes by id ascending, recursively.
+// SortNodes sorts nodes by position ascending then id ascending, recursively.
 func SortNodes(nodes []*TreeNode) {
 	sort.Slice(nodes, func(i, j int) bool {
+		pi, pj := nodes[i].Task.Position, nodes[j].Task.Position
+		if pi != pj {
+			return pi < pj
+		}
 		return nodes[i].Task.Id < nodes[j].Task.Id
 	})
 	for _, n := range nodes {

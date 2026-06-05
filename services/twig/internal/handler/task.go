@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -20,6 +21,7 @@ import (
 
 type Task struct {
 	Queries *db.Queries
+	Pool    *pgxpool.Pool
 }
 
 func dbTaskToProto(t db.Task) *taskv1.Task {
@@ -28,6 +30,7 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 		Name:        t.Name,
 		Description: t.Description,
 		Estimate:    int32(t.Estimate),
+		Position:    int64(t.Position),
 	}
 	if t.Due.Valid {
 		pt.Due = timestamppb.New(t.Due.Time)
@@ -264,6 +267,26 @@ func (t *Task) UpdateTask(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+
+	// When parent_id changed, place the task at the end of the destination group.
+	if req.Msg.ParentId != nil {
+		maxPos, err := t.Queries.GetMaxSiblingPosition(ctx, db.GetMaxSiblingPositionParams{
+			UserID:   userID,
+			ParentID: params.ParentID,
+		})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if err := t.Queries.UpdateTaskPosition(ctx, db.UpdateTaskPositionParams{
+			ID:       row.ID,
+			UserID:   userID,
+			Position: maxPos,
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		row.Position = maxPos
+	}
+
 	return connect.NewResponse(&taskv1.UpdateTaskResponse{Task: dbTaskToProto(row)}), nil
 }
 
@@ -369,4 +392,121 @@ func (t *Task) DeleteTask(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&taskv1.DeleteTaskResponse{}), nil
+}
+
+func (t *Task) ReorderTask(
+	ctx context.Context,
+	req *connect.Request[taskv1.ReorderTaskRequest],
+) (*connect.Response[taskv1.ReorderTaskResponse], error) {
+	userID := auth.UserID(ctx)
+
+	taskID := req.Msg.TaskId
+	var anchorID int64
+	var insertBefore bool
+
+	switch a := req.Msg.Anchor.(type) {
+	case *taskv1.ReorderTaskRequest_BeforeTaskId:
+		anchorID = a.BeforeTaskId
+		insertBefore = true
+	case *taskv1.ReorderTaskRequest_AfterTaskId:
+		anchorID = a.AfterTaskId
+		insertBefore = false
+	case nil:
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("exactly one of before_task_id or after_task_id must be set"))
+	}
+
+	if anchorID == taskID {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("anchor must be a different task than the one being moved"))
+	}
+
+	if t.Pool == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("pool not configured"))
+	}
+
+	tx, err := t.Pool.Begin(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := t.Queries.WithTx(tx)
+
+	task, err := q.GetTask(ctx, db.GetTaskParams{ID: taskID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	anchor, err := q.GetTask(ctx, db.GetTaskParams{ID: anchorID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("anchor task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Anchor must be a sibling: same user, same parent_id.
+	if task.ParentID != anchor.ParentID {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("anchor must be in the same sibling group as the task"))
+	}
+
+	// Read the full sibling group in order (FOR UPDATE acquired by ListSiblingGroup).
+	siblings, err := q.ListSiblingGroup(ctx, db.ListSiblingGroupParams{
+		UserID:   userID,
+		ParentID: task.ParentID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Remove task from its current position in the group.
+	ordered := make([]db.Task, 0, len(siblings))
+	for _, s := range siblings {
+		if s.ID != taskID {
+			ordered = append(ordered, s)
+		}
+	}
+
+	// Find anchor position in the remaining slice and insert.
+	insertIdx := len(ordered) // default: end
+	for i, s := range ordered {
+		if s.ID == anchorID {
+			if insertBefore {
+				insertIdx = i
+			} else {
+				insertIdx = i + 1
+			}
+			break
+		}
+	}
+
+	// Insert task at insertIdx.
+	ordered = append(ordered, db.Task{}) // grow
+	copy(ordered[insertIdx+1:], ordered[insertIdx:])
+	ordered[insertIdx] = task
+
+	// Renumber 0..n-1 and persist.
+	for i, s := range ordered {
+		if err := q.UpdateTaskPosition(ctx, db.UpdateTaskPositionParams{
+			ID:       s.ID,
+			UserID:   userID,
+			Position: int32(i),
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		ordered[i].Position = int32(i)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	proto := make([]*taskv1.Task, len(ordered))
+	for i, s := range ordered {
+		proto[i] = dbTaskToProto(s)
+	}
+
+	return connect.NewResponse(&taskv1.ReorderTaskResponse{Siblings: proto}), nil
 }

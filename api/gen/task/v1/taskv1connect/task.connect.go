@@ -41,6 +41,8 @@ const (
 const (
 	// TaskServiceCreateTaskProcedure is the fully-qualified name of the TaskService's CreateTask RPC.
 	TaskServiceCreateTaskProcedure = "/task.v1.TaskService/CreateTask"
+	// TaskServiceReorderTaskProcedure is the fully-qualified name of the TaskService's ReorderTask RPC.
+	TaskServiceReorderTaskProcedure = "/task.v1.TaskService/ReorderTask"
 	// TaskServiceGetTaskProcedure is the fully-qualified name of the TaskService's GetTask RPC.
 	TaskServiceGetTaskProcedure = "/task.v1.TaskService/GetTask"
 	// TaskServiceListTasksProcedure is the fully-qualified name of the TaskService's ListTasks RPC.
@@ -75,6 +77,10 @@ const (
 type TaskServiceClient interface {
 	// CreateTask stores a new task and returns it with its assigned id.
 	CreateTask(context.Context, *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error)
+	// ReorderTask repositions a task within its current sibling group by placing it
+	// immediately before or after a sibling anchor. It never changes the task's
+	// parent. The whole sibling group is renumbered to a contiguous order.
+	ReorderTask(context.Context, *connect.Request[v1.ReorderTaskRequest]) (*connect.Response[v1.ReorderTaskResponse], error)
 	// GetTask returns a single task by id.
 	GetTask(context.Context, *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.GetTaskResponse], error)
 	// ListTasks returns every stored task, ordered by id ascending.
@@ -129,6 +135,12 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+TaskServiceCreateTaskProcedure,
 			connect.WithSchema(taskServiceMethods.ByName("CreateTask")),
+			connect.WithClientOptions(opts...),
+		),
+		reorderTask: connect.NewClient[v1.ReorderTaskRequest, v1.ReorderTaskResponse](
+			httpClient,
+			baseURL+TaskServiceReorderTaskProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("ReorderTask")),
 			connect.WithClientOptions(opts...),
 		),
 		getTask: connect.NewClient[v1.GetTaskRequest, v1.GetTaskResponse](
@@ -203,6 +215,7 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 // taskServiceClient implements TaskServiceClient.
 type taskServiceClient struct {
 	createTask        *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	reorderTask       *connect.Client[v1.ReorderTaskRequest, v1.ReorderTaskResponse]
 	getTask           *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
 	listTasks         *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
 	updateTask        *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
@@ -219,6 +232,11 @@ type taskServiceClient struct {
 // CreateTask calls task.v1.TaskService.CreateTask.
 func (c *taskServiceClient) CreateTask(ctx context.Context, req *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error) {
 	return c.createTask.CallUnary(ctx, req)
+}
+
+// ReorderTask calls task.v1.TaskService.ReorderTask.
+func (c *taskServiceClient) ReorderTask(ctx context.Context, req *connect.Request[v1.ReorderTaskRequest]) (*connect.Response[v1.ReorderTaskResponse], error) {
+	return c.reorderTask.CallUnary(ctx, req)
 }
 
 // GetTask calls task.v1.TaskService.GetTask.
@@ -280,6 +298,10 @@ func (c *taskServiceClient) GetActivePomodoro(ctx context.Context, req *connect.
 type TaskServiceHandler interface {
 	// CreateTask stores a new task and returns it with its assigned id.
 	CreateTask(context.Context, *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error)
+	// ReorderTask repositions a task within its current sibling group by placing it
+	// immediately before or after a sibling anchor. It never changes the task's
+	// parent. The whole sibling group is renumbered to a contiguous order.
+	ReorderTask(context.Context, *connect.Request[v1.ReorderTaskRequest]) (*connect.Response[v1.ReorderTaskResponse], error)
 	// GetTask returns a single task by id.
 	GetTask(context.Context, *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.GetTaskResponse], error)
 	// ListTasks returns every stored task, ordered by id ascending.
@@ -330,6 +352,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		TaskServiceCreateTaskProcedure,
 		svc.CreateTask,
 		connect.WithSchema(taskServiceMethods.ByName("CreateTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	taskServiceReorderTaskHandler := connect.NewUnaryHandler(
+		TaskServiceReorderTaskProcedure,
+		svc.ReorderTask,
+		connect.WithSchema(taskServiceMethods.ByName("ReorderTask")),
 		connect.WithHandlerOptions(opts...),
 	)
 	taskServiceGetTaskHandler := connect.NewUnaryHandler(
@@ -402,6 +430,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		switch r.URL.Path {
 		case TaskServiceCreateTaskProcedure:
 			taskServiceCreateTaskHandler.ServeHTTP(w, r)
+		case TaskServiceReorderTaskProcedure:
+			taskServiceReorderTaskHandler.ServeHTTP(w, r)
 		case TaskServiceGetTaskProcedure:
 			taskServiceGetTaskHandler.ServeHTTP(w, r)
 		case TaskServiceListTasksProcedure:
@@ -435,6 +465,10 @@ type UnimplementedTaskServiceHandler struct{}
 
 func (UnimplementedTaskServiceHandler) CreateTask(context.Context, *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.CreateTask is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) ReorderTask(context.Context, *connect.Request[v1.ReorderTaskRequest]) (*connect.Response[v1.ReorderTaskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.ReorderTask is not implemented"))
 }
 
 func (UnimplementedTaskServiceHandler) GetTask(context.Context, *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.GetTaskResponse], error) {

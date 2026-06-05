@@ -459,3 +459,57 @@ func TestRenderEstimateStyledCompleted(t *testing.T) {
 		t.Errorf("estimate (2) must be inside styled region; got: %q", out)
 	}
 }
+
+// --- SortNodes position ordering tests ---
+
+func TestSortNodes_ByPosition(t *testing.T) {
+	// Tasks with explicit positions should sort position-first.
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "A", Position: 2},
+		{Id: 2, Name: "B", Position: 0},
+		{Id: 3, Name: "C", Position: 1},
+	}
+	roots := BuildTree(tasks)
+	wantNames := []string{"B", "C", "A"}
+	for i, n := range roots {
+		if n.Task.Name != wantNames[i] {
+			t.Errorf("roots[%d].Name = %q, want %q", i, n.Task.Name, wantNames[i])
+		}
+	}
+}
+
+func TestSortNodes_PositionThenID(t *testing.T) {
+	// When positions are equal, fall back to id ascending.
+	tasks := []*taskv1.Task{
+		{Id: 10, Name: "X", Position: 0},
+		{Id: 5, Name: "Y", Position: 0},
+	}
+	roots := BuildTree(tasks)
+	if roots[0].Task.Id != 5 {
+		t.Errorf("expected id=5 first (id tiebreaker), got id=%d", roots[0].Task.Id)
+	}
+}
+
+func TestSortNodes_Children(t *testing.T) {
+	// Child positions are independent of root positions.
+	parentID := int64(1)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "root", Position: 0},
+		{Id: 3, Name: "child-last", Position: 1, ParentId: &parentID},
+		{Id: 2, Name: "child-first", Position: 0, ParentId: &parentID},
+	}
+	roots := BuildTree(tasks)
+	if len(roots) != 1 {
+		t.Fatalf("expected 1 root, got %d", len(roots))
+	}
+	children := roots[0].Children
+	if len(children) != 2 {
+		t.Fatalf("expected 2 children, got %d", len(children))
+	}
+	if children[0].Task.Name != "child-first" {
+		t.Errorf("children[0] = %q, want child-first", children[0].Task.Name)
+	}
+	if children[1].Task.Name != "child-last" {
+		t.Errorf("children[1] = %q, want child-last", children[1].Task.Name)
+	}
+}

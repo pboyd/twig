@@ -35,8 +35,11 @@ type KeyMap struct {
 	PlanPrevDay  key.Binding
 	PlanNextDay  key.Binding
 	PlanToday    key.Binding
+	// Rank ordering (Tasks tab)
+	RankUp   key.Binding
+	RankDown key.Binding
 	// Send-to-plan shortcuts (Tasks tab)
-	PlanSendToday  key.Binding
+	PlanSendToday   key.Binding
 	PlanSendPickDay key.Binding
 	// Edit-form keys
 	Save     key.Binding
@@ -157,6 +160,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("."),
 			key.WithHelp(".", "today"),
 		),
+		RankUp: key.NewBinding(
+			key.WithKeys("{"),
+			key.WithHelp("{", "rank higher"),
+		),
+		RankDown: key.NewBinding(
+			key.WithKeys("}"),
+			key.WithHelp("}", "rank lower"),
+		),
 		PlanSendToday: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "send to today's plan"),
@@ -210,7 +221,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Collapse, k.Expand},
 		{k.Edit, k.NewSub, k.NewRoot, k.Delete},
 		{k.Complete, k.PomStart, k.PomCancel, k.Move},
-		{k.PlanSendToday, k.PlanSendPickDay, k.Filter, k.Refresh},
-		{k.Help, k.Quit},
+		{k.RankUp, k.RankDown, k.PlanSendToday, k.PlanSendPickDay},
+		{k.Filter, k.Refresh, k.Help, k.Quit},
 	}
 }

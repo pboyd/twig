@@ -26,8 +26,8 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 **Purpose**: Define the ordering contract before any implementation (Constitution Principle II).
 
-- [ ] T001 Edit `api/proto/task/v1/task.proto`: add `int64 position = 9;` to the `Task` message and add the `ReorderTask` rpc plus `ReorderTaskRequest` (with `oneof anchor { before_task_id, after_task_id }`) and `ReorderTaskResponse` (repeated `Task siblings`), exactly as specified in `specs/037-task-ordering/contracts/reorder-task.md`.
-- [ ] T002 Run `make proto` from repo root to regenerate Go stubs in `api/gen/task/v1/` (do not hand-edit generated output).
+- [X] T001 Edit `api/proto/task/v1/task.proto`: add `int64 position = 9;` to the `Task` message and add the `ReorderTask` rpc plus `ReorderTaskRequest` (with `oneof anchor { before_task_id, after_task_id }`) and `ReorderTaskResponse` (repeated `Task siblings`), exactly as specified in `specs/037-task-ordering/contracts/reorder-task.md`.
+- [X] T002 Run `make proto` from repo root to regenerate Go stubs in `api/gen/task/v1/` (do not hand-edit generated output).
 
 **Checkpoint**: Contract committed and Go stubs available for the server and CLI/TUI.
 
@@ -39,14 +39,14 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Create migration `services/twig/db/migrations/000008_task_position.up.sql` (add `position INTEGER NOT NULL DEFAULT 0`; backfill with `ROW_NUMBER() OVER (PARTITION BY user_id, parent_id ORDER BY id) - 1`; create `tasks_user_parent_position_idx ON tasks (user_id, parent_id, position)`) and `000008_task_position.down.sql` (drop index, drop column), per `data-model.md`.
-- [ ] T004 Update `services/twig/db/queries/task.sql`: set `position` to end-of-group on `CreateTask`; add a query for the max sibling position in a `(user_id, parent_id)` group; add an ordered sibling-list query (`ORDER BY position, id`, `FOR UPDATE`) and a per-task position-update query for renumbering; then run `sqlc generate` (from `services/twig/`) to refresh `internal/db/`.
-- [ ] T005 In `services/twig/internal/handler/task.go`, populate `position` in `dbTaskToProto` so every returned `Task` carries its position. (depends on T004)
-- [ ] T006 In `services/twig/internal/handler/task.go`, assign end-of-group `position` on `CreateTask`, and when `UpdateTask` changes `parent_id` assign the moved task the end position of the destination group (FR-012/FR-013). (same file as T005 — sequential)
-- [ ] T007 In `services/twig/internal/handler/task.go`, implement the `ReorderTask` handler: validate exactly one anchor set, anchor ≠ task, anchor is a sibling (same `parent_id`/user) → `InvalidArgument`; missing task/anchor → `NotFound`; then, in a transaction, read the sibling group, remove the task, reinsert before/after the anchor, renumber to `0..n-1`, and return the updated siblings (FR-004/FR-015). Add pgx pool/`WithTx` access to the handler if not already present. (same file as T005/T006 — sequential)
-- [ ] T008 [P] Change `internal/cli/render.go` `SortNodes` to order siblings by `position` ascending then `id` ascending (replaces id-only sort); this is inherited by both the CLI and the TUI via `cli.BuildTree`.
-- [ ] T009 Add server handler tests in `services/twig/internal/handler/task_test.go`: `ReorderTask` before/after moves, anchor validation errors, full-group renumber/no-loss, end-position on `CreateTask` and on `UpdateTask` reparent, and that completing/uncompleting a task leaves its `position` and the sibling group's relative order unchanged (FR-014). (depends on T005–T007)
-- [ ] T010 [P] Add `internal/cli/render_test.go` coverage asserting `SortNodes`/`BuildTree` orders siblings by `position` then `id`.
+- [X] T003 Create migration `services/twig/db/migrations/000008_task_position.up.sql` (add `position INTEGER NOT NULL DEFAULT 0`; backfill with `ROW_NUMBER() OVER (PARTITION BY user_id, parent_id ORDER BY id) - 1`; create `tasks_user_parent_position_idx ON tasks (user_id, parent_id, position)`) and `000008_task_position.down.sql` (drop index, drop column), per `data-model.md`.
+- [X] T004 Update `services/twig/db/queries/task.sql`: set `position` to end-of-group on `CreateTask`; add a query for the max sibling position in a `(user_id, parent_id)` group; add an ordered sibling-list query (`ORDER BY position, id`, `FOR UPDATE`) and a per-task position-update query for renumbering; then run `sqlc generate` (from `services/twig/`) to refresh `internal/db/`.
+- [X] T005 In `services/twig/internal/handler/task.go`, populate `position` in `dbTaskToProto` so every returned `Task` carries its position. (depends on T004)
+- [X] T006 In `services/twig/internal/handler/task.go`, assign end-of-group `position` on `CreateTask`, and when `UpdateTask` changes `parent_id` assign the moved task the end position of the destination group (FR-012/FR-013). (same file as T005 — sequential)
+- [X] T007 In `services/twig/internal/handler/task.go`, implement the `ReorderTask` handler: validate exactly one anchor set, anchor ≠ task, anchor is a sibling (same `parent_id`/user) → `InvalidArgument`; missing task/anchor → `NotFound`; then, in a transaction, read the sibling group, remove the task, reinsert before/after the anchor, renumber to `0..n-1`, and return the updated siblings (FR-004/FR-015). Add pgx pool/`WithTx` access to the handler if not already present. (same file as T005/T006 — sequential)
+- [X] T008 [P] Change `internal/cli/render.go` `SortNodes` to order siblings by `position` ascending then `id` ascending (replaces id-only sort); this is inherited by both the CLI and the TUI via `cli.BuildTree`.
+- [X] T009 Add server handler tests in `services/twig/internal/handler/task_test.go`: `ReorderTask` before/after moves, anchor validation errors, full-group renumber/no-loss, end-position on `CreateTask` and on `UpdateTask` reparent, and that completing/uncompleting a task leaves its `position` and the sibling group's relative order unchanged (FR-014). (depends on T005–T007)
+- [X] T010 [P] Add `internal/cli/render_test.go` coverage asserting `SortNodes`/`BuildTree` orders siblings by `position` then `id`.
 
 **Checkpoint**: Order persists and is served via the API; CLI/TUI builders sort by position. User stories can now proceed.
 
@@ -58,11 +58,11 @@ Full-stack layout per plan.md: shared proto `api/proto/`, server `services/twig/
 
 **Independent Test**: In the TUI, press `{`/`}` on a highlighted task → it moves one visible position and stays highlighted; boundaries are silent no-ops; relaunch shows the new order.
 
-- [ ] T011 [US1] Add `RankUp` (`{`) and `RankDown` (`}`) bindings to `internal/tui/keymap.go` and surface them in `FullHelp` (Tasks-mode group), consistent with the shared keymap/help (Principle III).
-- [ ] T012 [P] [US1] Add a pure helper in `internal/tui/tree.go` that, given the current `tree`, `showCompleted`, and a task id, returns its visible siblings and the previous/next visible sibling id (or none at a boundary) — used to compute the reorder anchor (skips hidden tasks per FR-005).
-- [ ] T013 [US1] Add `reorderTaskCmd` in `internal/tui/update.go` that calls `ReorderTask` (before/after anchor) and uses the returned `ReorderTaskResponse.siblings` to patch the affected group's positions in the in-memory model and rebuild the tree locally — no follow-up `ListTasks` round-trip — preserving the moved task's highlight (FR-006). (depends on T002)
-- [ ] T014 [US1] Handle `RankUp`/`RankDown` in `handleListKey` (`internal/tui/update.go`): use the T012 helper to find the visible anchor, no-op at boundaries (FR-007), otherwise dispatch `reorderTaskCmd` (before previous-visible for `{`, after next-visible for `}`). (same file as T013 — sequential)
-- [ ] T015 [US1] Add TUI tests in `internal/tui/update_test.go` (and `tree_test.go` for the helper): `{`/`}` swap order, boundary no-ops, hidden-sibling skip with completed filter on, and highlight preserved after reorder.
+- [X] T011 [US1] Add `RankUp` (`{`) and `RankDown` (`}`) bindings to `internal/tui/keymap.go` and surface them in `FullHelp` (Tasks-mode group), consistent with the shared keymap/help (Principle III).
+- [X] T012 [P] [US1] Add a pure helper in `internal/tui/tree.go` that, given the current `tree`, `showCompleted`, and a task id, returns its visible siblings and the previous/next visible sibling id (or none at a boundary) — used to compute the reorder anchor (skips hidden tasks per FR-005).
+- [X] T013 [US1] Add `reorderTaskCmd` in `internal/tui/update.go` that calls `ReorderTask` (before/after anchor) and uses the returned `ReorderTaskResponse.siblings` to patch the affected group's positions in the in-memory model and rebuild the tree locally — no follow-up `ListTasks` round-trip — preserving the moved task's highlight (FR-006). (depends on T002)
+- [X] T014 [US1] Handle `RankUp`/`RankDown` in `handleListKey` (`internal/tui/update.go`): use the T012 helper to find the visible anchor, no-op at boundaries (FR-007), otherwise dispatch `reorderTaskCmd` (before previous-visible for `{`, after next-visible for `}`). (same file as T013 — sequential)
+- [X] T015 [US1] Add TUI tests in `internal/tui/update_test.go` (and `tree_test.go` for the helper): `{`/`}` swap order, boundary no-ops, hidden-sibling skip with completed filter on, and highlight preserved after reorder.
 
 **Checkpoint**: TUI ranking fully functional and independently testable — this is the MVP.
 
