@@ -355,8 +355,13 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 //
 // m.plan.entries is never modified. When no form is active, both slices equal timedEntries.
 func (m Model) buildTimedSliceWithPreview(timedEntries []*planv1.PlanEntry) (timedOthers, renderTimed []*planv1.PlanEntry) {
-	// Exclude the edit target from timedOthers (self-exclusion for planEdit).
-	editTarget := m.plan.form.entryID // 0 when no edit form open
+	// Exclude the edit target from timedOthers only while the edit form is open.
+	// form.entryID is never cleared when the form closes, so reading it
+	// unconditionally would permanently hide the entry after editing.
+	editTarget := int32(0)
+	if m.plan.mode == planEdit {
+		editTarget = m.plan.form.entryID
+	}
 	timedOthers = make([]*planv1.PlanEntry, 0, len(timedEntries))
 	for _, e := range timedEntries {
 		if editTarget != 0 && e.Id == editTarget {

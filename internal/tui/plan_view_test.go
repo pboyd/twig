@@ -1016,3 +1016,62 @@ func TestPreviewLifecycle_EntriesUnchangedAfterFormOpenCancel(t *testing.T) {
 		t.Errorf("after cancel (planList): entries length changed: want %d, got %d", origLen, len(m.plan.entries))
 	}
 }
+
+// TestPreviewLifecycle_EditedEntryStillRenderedAfterClose is a regression test
+// for the bug where a timed entry disappeared from the planning grid after its
+// edit form was closed. The root cause: buildTimedSliceWithPreview read
+// form.entryID unconditionally, but that field is never cleared when the form
+// closes, so the edited entry stayed excluded even with no preview to replace it.
+func TestPreviewLifecycle_EditedEntryStillRenderedAfterClose(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC)
+
+	newModel := func() Model {
+		m := ExportNewModel(nil, nil)
+		m.width = 80
+		m.height = 45
+		m.activeTab = tabPlanning
+		m.plan.day = today
+		m.plan.loaded = true
+		m.plan.entries = []*planv1.PlanEntry{
+			{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30},
+		}
+		return m
+	}
+
+	t.Run("styled after submit", func(t *testing.T) {
+		m := newModel()
+		m.styled = true
+		m.initEditForm() // sets form.entryID=1, mode=planEdit
+		// Simulate successful submit: mode returns to planList, form not cleared.
+		m.plan.mode = planList
+		out := m.renderPlanGrid(80, 40, now)
+		if !strings.Contains(out, "Standup") {
+			t.Errorf("entry 'Standup' missing from styled grid after edit form closed; got:\n%s", out)
+		}
+	})
+
+	t.Run("plain after submit", func(t *testing.T) {
+		m := newModel()
+		m.styled = false
+		m.initEditForm()
+		m.plan.mode = planList
+		out := m.renderPlanGridContent(80, 40, now)
+		if !strings.Contains(out, "Standup") {
+			t.Errorf("entry 'Standup' missing from plain grid after edit form closed; got:\n%s", out)
+		}
+	})
+
+	t.Run("styled after cancel", func(t *testing.T) {
+		m := newModel()
+		m.styled = true
+		m.initEditForm()
+		// Simulate Esc-cancel: same path — mode=planList, form not cleared.
+		m.plan.mode = planList
+		m.plan.err = nil
+		out := m.renderPlanGrid(80, 40, now)
+		if !strings.Contains(out, "Standup") {
+			t.Errorf("entry 'Standup' missing from styled grid after edit cancelled; got:\n%s", out)
+		}
+	})
+}
