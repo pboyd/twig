@@ -414,6 +414,9 @@ func (m Model) renderList(width int) string {
 		if row.node.Task.GetCompletedAt() != nil {
 			name = cli.Strike(name, m.styled)
 		}
+		if taskIsSnoozed(row.node.Task, time.Now().Local()) {
+			name += " 💤"
+		}
 
 		line := prefix + name
 

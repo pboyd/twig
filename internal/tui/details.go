@@ -40,6 +40,11 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 			fmt.Fprintf(&sb, "\nCompleted: %s\n", cat)
 		}
 
+		if task.SnoozeUntil != nil {
+			snoozeDay := task.SnoozeUntil.AsTime().UTC().Format("2006-01-02")
+			fmt.Fprintf(&sb, "Snooze:   %s 💤\n", snoozeDay)
+		}
+
 		return sb.String()
 	}
 
@@ -72,6 +77,11 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 
 	if cat := cli.FormatCompletedAt(task.CompletedAt); cat != "" {
 		fmt.Fprintf(&sb, "\n%s %s\n", labelStyle.Render("Completed:"), completedStyle.Render(cat))
+	}
+
+	if task.SnoozeUntil != nil {
+		snoozeDay := task.SnoozeUntil.AsTime().UTC().Format("2006-01-02")
+		fmt.Fprintf(&sb, "%s %s 💤\n", labelStyle.Render("Snooze:  "), snoozeDay)
 	}
 
 	return sb.String()

@@ -23,8 +23,8 @@ func TestRenderList_StrikethroughOnCompletedRow(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
 	// Show completed tasks so the completed row is in m.visible.
-	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.showAll = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 
@@ -53,8 +53,8 @@ func TestRenderList_NoStrikethroughWhenUnstyled(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, false)
-	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.showAll = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 
@@ -101,7 +101,7 @@ func TestViewList_PaneWidths(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.width = 80
 	m.height = 24
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.viewList()
 	lines := strings.Split(out, "\n")
@@ -143,7 +143,7 @@ func TestViewList_BorderRunes(t *testing.T) {
 	ms := ExportNewStyledModel(nil, tree, true)
 	ms.width = 80
 	ms.height = 24
-	ms.visible = buildVisible(ms.tree, ms.expanded, ms.showCompleted, ms.pendingComplete, time.Now().Local())
+	ms.visible = buildVisible(ms.tree, ms.expanded, ms.showAll, ms.pendingComplete, time.Now().Local())
 	outStyled := ms.viewList()
 	if !strings.ContainsAny(outStyled, "╭╰╮╯│─") {
 		t.Errorf("styled viewList: expected border runes (╭╰╮╯│─) in output; got:\n%q", outStyled[:min(len(outStyled), 200)])
@@ -153,7 +153,7 @@ func TestViewList_BorderRunes(t *testing.T) {
 	mu := ExportNewStyledModel(nil, tree, false)
 	mu.width = 80
 	mu.height = 24
-	mu.visible = buildVisible(mu.tree, mu.expanded, mu.showCompleted, mu.pendingComplete, time.Now().Local())
+	mu.visible = buildVisible(mu.tree, mu.expanded, mu.showAll, mu.pendingComplete, time.Now().Local())
 	outUnstyled := mu.viewList()
 	for _, r := range []string{"╭", "╰", "╮", "╯", "│", "─"} {
 		if strings.Contains(outUnstyled, r) {
@@ -169,6 +169,42 @@ func min(a, b int) int {
 	return b
 }
 
+// TestRenderList_SnoozedIndicator asserts that a snoozed task shown via show-all
+// carries the 💤 indicator, and that it is absent when show-all is off.
+func TestRenderList_SnoozedIndicator(t *testing.T) {
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "active"},
+		{Id: 2, Name: "sleepy", SnoozeUntil: timestamppb.New(tomorrow)},
+	}
+	tree := cli.BuildTree(tasks)
+
+	// show-all = true: snoozed task appears with 💤
+	m := ExportNewStyledModel(nil, tree, true)
+	m.showAll = true
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, today)
+	out := m.renderList(80)
+	if !strings.Contains(out, "💤") {
+		t.Errorf("show-all=true: expected 💤 indicator for snoozed task; got:\n%q", out)
+	}
+	if !strings.Contains(out, "sleepy") {
+		t.Errorf("show-all=true: expected snoozed task name in output; got:\n%q", out)
+	}
+
+	// show-all = false: snoozed task hidden (no 💤)
+	m2 := ExportNewStyledModel(nil, tree, true)
+	m2.showAll = false
+	m2.visible = buildVisible(m2.tree, m2.expanded, m2.showAll, m2.pendingComplete, today)
+	out2 := m2.renderList(80)
+	if strings.Contains(out2, "💤") {
+		t.Errorf("show-all=false: 💤 must not appear; got:\n%q", out2)
+	}
+	if strings.Contains(out2, "sleepy") {
+		t.Errorf("show-all=false: snoozed task must not appear; got:\n%q", out2)
+	}
+}
+
 // TestRenderList_ChevronIffExpandable (T012) asserts styled-path: chevron iff expandable, checkbox on every row.
 func TestRenderList_ChevronIffExpandable(t *testing.T) {
 	now := timestamppb.New(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -180,9 +216,9 @@ func TestRenderList_ChevronIffExpandable(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
-	m.showCompleted = true
+	m.showAll = true
 	m.expanded[1] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -224,9 +260,9 @@ func TestRenderList_NoGlyphsWhenUnstyled(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, false)
-	m.showCompleted = true
+	m.showAll = true
 	m.expanded[1] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	for _, r := range []string{"▾", "▸", "☐", "☑"} {
@@ -246,7 +282,7 @@ func TestRenderList_CollapsedExpandableChevron(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
 	// expandable but not expanded
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -267,9 +303,9 @@ func TestRenderList_NoChevronWhenAllChildrenCompleted(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
-	m.showCompleted = false
+	m.showAll = false
 	m.expanded[1] = true // user "expanded" the task
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -299,12 +335,12 @@ func TestRenderList_StrikethroughAtMultipleDepths(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
 	// Show completed so all rows are visible.
-	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.showAll = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 	// Expand all to see nested rows.
 	m.expanded[1] = true
 	m.expanded[2] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(120)
 
@@ -343,9 +379,9 @@ func TestRenderList_CursorHighlight(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
-	m.showCompleted = true
+	m.showAll = true
 	m.cursor = 0
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -370,7 +406,7 @@ func TestViewList_NoRedundantTasksTitle(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.width = 80
 	m.height = 24
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	out := m.viewList()
 
@@ -390,7 +426,7 @@ func TestRenderStatus_FooterAndError(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task"}}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	// No error: status should return the help view (non-empty).
 	status := m.renderStatus()

@@ -185,11 +185,29 @@ func renderRoots(w io.Writer, roots []*TreeNode, styled bool) {
 	}
 }
 
-// pruneIncomplete returns nodes where the node itself or any descendant is incomplete.
-func pruneIncomplete(roots []*TreeNode) []*TreeNode {
+// taskIsSnoozed reports whether the task should be hidden on the given local day.
+// A task is snoozed when snooze_until is set and its UTC calendar date is strictly
+// after today (the client's local calendar date).
+func taskIsSnoozed(task *taskv1.Task, today time.Time) bool {
+	if task.SnoozeUntil == nil {
+		return false
+	}
+	snoozeUTC := task.SnoozeUntil.AsTime().UTC()
+	snoozeDay := time.Date(snoozeUTC.Year(), snoozeUTC.Month(), snoozeUTC.Day(), 0, 0, 0, 0, time.UTC)
+	todayUTC := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	return snoozeDay.After(todayUTC)
+}
+
+// pruneIncomplete returns nodes where the node itself or any descendant is
+// actionable (incomplete and not future-snoozed on today). A snoozed node
+// hides its entire subtree — no children are promoted.
+func pruneIncomplete(roots []*TreeNode, today time.Time) []*TreeNode {
 	var result []*TreeNode
 	for _, node := range roots {
-		prunedChildren := pruneIncomplete(node.Children)
+		if taskIsSnoozed(node.Task, today) {
+			continue
+		}
+		prunedChildren := pruneIncomplete(node.Children, today)
 		incomplete := node.Task.GetCompletedAt() == nil
 		if incomplete || len(prunedChildren) > 0 {
 			kept := &TreeNode{Task: node.Task, Children: prunedChildren}

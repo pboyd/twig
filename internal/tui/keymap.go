@@ -111,7 +111,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		Filter: key.NewBinding(
 			key.WithKeys("c"),
-			key.WithHelp("c", "toggle completed"),
+			key.WithHelp("c", "toggle show all"),
 		),
 		Refresh: key.NewBinding(
 			key.WithKeys("ctrl+r"),

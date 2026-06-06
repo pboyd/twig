@@ -152,7 +152,7 @@ export default function TaskTreePage() {
               onClick={() => setShowCompleted((v) => { const next = !v; writeShowCompleted(next); return next; })}
               className="text-sm px-3"
             >
-              {showCompleted ? "Hide completed" : "Show completed"}
+              {showCompleted ? "Show only pending" : "Show all"}
             </Button>
             <Button onClick={() => setShowAddForm((v) => !v)} className="text-sm px-3">
               + Add task
@@ -197,13 +197,13 @@ export default function TaskTreePage() {
 
         {!isLoading && !isError && tasks.length > 0 && filteredTree.length === 0 && (
           <div className="mx-4 mt-8 text-center text-gray-500 dark:text-gray-400">
-            <p>{messages.allCompletedHidden}</p>
+            <p>{messages.allHidden}</p>
             <Button
               variant="secondary"
               onClick={() => { writeShowCompleted(true); setShowCompleted(true); }}
               className="mt-3 text-sm px-3"
             >
-              Show completed
+              Show all
             </Button>
           </div>
         )}

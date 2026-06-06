@@ -195,7 +195,7 @@ func TestPruneIncomplete(t *testing.T) {
 		now := timestamppb.New(time.Now())
 		tasks := []*taskv1.Task{{Id: 1, Name: "done", CompletedAt: now}}
 		roots := BuildTree(tasks)
-		pruned := pruneIncomplete(roots)
+		pruned := pruneIncomplete(roots, time.Now().Local())
 		if len(pruned) != 0 {
 			t.Errorf("expected 0 roots after pruning complete leaf, got %d", len(pruned))
 		}
@@ -204,7 +204,7 @@ func TestPruneIncomplete(t *testing.T) {
 	t.Run("incomplete leaf is kept", func(t *testing.T) {
 		tasks := []*taskv1.Task{{Id: 1, Name: "todo"}}
 		roots := BuildTree(tasks)
-		pruned := pruneIncomplete(roots)
+		pruned := pruneIncomplete(roots, time.Now().Local())
 		if len(pruned) != 1 {
 			t.Errorf("expected 1 root after pruning, got %d", len(pruned))
 		}
@@ -218,7 +218,7 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 3, Name: "todo child", ParentId: ptr(1)},
 		}
 		roots := BuildTree(tasks)
-		pruned := pruneIncomplete(roots)
+		pruned := pruneIncomplete(roots, time.Now().Local())
 		if len(pruned) != 1 {
 			t.Fatalf("expected 1 root, got %d", len(pruned))
 		}
@@ -237,7 +237,7 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 2, Name: "child", ParentId: ptr(1), CompletedAt: now},
 		}
 		roots := BuildTree(tasks)
-		pruned := pruneIncomplete(roots)
+		pruned := pruneIncomplete(roots, time.Now().Local())
 		if len(pruned) != 0 {
 			t.Errorf("expected 0 roots for fully complete subtree, got %d", len(pruned))
 		}
@@ -252,7 +252,7 @@ func TestPruneIncomplete(t *testing.T) {
 			{Id: 5, Name: "todo-b", ParentId: ptr(1)},
 		}
 		roots := BuildTree(tasks)
-		pruned := pruneIncomplete(roots)
+		pruned := pruneIncomplete(roots, time.Now().Local())
 		if len(pruned[0].Children) != 2 {
 			t.Fatalf("expected 2 kept children, got %d", len(pruned[0].Children))
 		}
@@ -511,5 +511,77 @@ func TestSortNodes_Children(t *testing.T) {
 	}
 	if children[1].Task.Name != "child-last" {
 		t.Errorf("children[1] = %q, want child-last", children[1].Task.Name)
+	}
+}
+
+// --- Snooze filtering tests (T020) ---
+
+func TestTaskIsSnoozed_NilSnoozeUntil(t *testing.T) {
+	today := time.Date(2026, 6, 6, 12, 0, 0, 0, time.Local)
+	task := &taskv1.Task{Id: 1, Name: "task"}
+	if taskIsSnoozed(task, today) {
+		t.Error("expected not snoozed when snooze_until is nil")
+	}
+}
+
+func TestTaskIsSnoozed_FutureDay(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: timestamppb.New(tomorrow)}
+	if !taskIsSnoozed(task, today) {
+		t.Error("expected snoozed when snooze_until is tomorrow")
+	}
+}
+
+func TestTaskIsSnoozed_TodayNotSnoozed(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	todayUTC := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: timestamppb.New(todayUTC)}
+	if taskIsSnoozed(task, today) {
+		t.Error("expected not snoozed when snooze_until equals today")
+	}
+}
+
+func TestPruneIncomplete_FutureSnoozedDropped(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "active"},
+		{Id: 2, Name: "snoozed", SnoozeUntil: timestamppb.New(tomorrow)},
+	}
+	roots := BuildTree(tasks)
+	pruned := pruneIncomplete(roots, today)
+	if len(pruned) != 1 {
+		t.Fatalf("expected 1 root (snoozed dropped), got %d", len(pruned))
+	}
+	if pruned[0].Task.Id != 1 {
+		t.Errorf("expected active task id=1, got id=%d", pruned[0].Task.Id)
+	}
+}
+
+func TestPruneIncomplete_TodaySnoozedKept(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	todayUTC := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "wakes-today", SnoozeUntil: timestamppb.New(todayUTC)},
+	}
+	roots := BuildTree(tasks)
+	pruned := pruneIncomplete(roots, today)
+	if len(pruned) != 1 {
+		t.Fatalf("expected 1 root (today-snoozed kept), got %d", len(pruned))
+	}
+}
+
+func TestPruneIncomplete_SnoozedParentHidesSubtree(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "snoozed-parent", SnoozeUntil: timestamppb.New(tomorrow)},
+		{Id: 2, Name: "child", ParentId: ptr(1)},
+	}
+	roots := BuildTree(tasks)
+	pruned := pruneIncomplete(roots, today)
+	if len(pruned) != 0 {
+		t.Fatalf("expected 0 roots (parent+child hidden), got %d", len(pruned))
 	}
 }

@@ -90,7 +90,7 @@ type Model struct {
 	expanded          map[int64]bool
 	statePath         string
 	activeProfile     string
-	showCompleted     bool
+	showAll           bool
 	pendingComplete   *int64
 	mode              viewMode
 	edit              editFormModel

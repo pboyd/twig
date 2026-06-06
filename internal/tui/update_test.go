@@ -368,7 +368,7 @@ func TestNavigation_DownAfterLingeringComplete(t *testing.T) {
 	// Simulate task 1 just completed and lingering at cursor 0.
 	id := int64(1)
 	m.pendingComplete = &id
-	m.visible = ExportBuildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = ExportBuildVisible(tree, m.expanded, m.showAll, m.pendingComplete)
 	m.cursor = 0
 
 	m = pressKey(m, "j")
@@ -571,7 +571,7 @@ func TestHighlight_FilterTogglePreservesTask(t *testing.T) {
 	if m.cursor != 1 {
 		t.Errorf("filter toggle: cursor should stay on task 2, got %d", m.cursor)
 	}
-	if !m.showCompleted {
+	if !m.showAll {
 		t.Errorf("showCompleted should be toggled on")
 	}
 }
@@ -589,8 +589,8 @@ func TestHighlight_FilterToggleFallsBackToFirst(t *testing.T) {
 	m := ExportNewModel(nil, tree)
 
 	// Show completed, move cursor to task 2.
-	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, nil, time.Now().Local())
+	m.showAll = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, nil, time.Now().Local())
 	m.cursor = findCursor(m.visible, 2)
 	if m.cursor != 1 {
 		t.Fatalf("setup: cursor should be 1 (task 2), got %d", m.cursor)
@@ -598,7 +598,7 @@ func TestHighlight_FilterToggleFallsBackToFirst(t *testing.T) {
 
 	// Toggle C to hide completed: task 2 disappears.
 	m = pressKey(m, "c")
-	if m.showCompleted {
+	if m.showAll {
 		t.Errorf("showCompleted should be toggled off")
 	}
 	// Task 2 gone, fall back to first visible row (task 1 at index 0).
@@ -1092,8 +1092,8 @@ func TestUncomplete_SpaceOnCompletedTaskDoesNotSetPendingComplete(t *testing.T) 
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewModel(nil, tree)
-	m.showCompleted = true
-	m.visible = buildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.showAll = true
+	m.visible = buildVisible(tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 
 	m.cursor = 0 // task id=1, already completed
 
@@ -1595,8 +1595,8 @@ func TestRankUp_SkipsHiddenCompleted(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewModel(nil, tree)
-	m.showCompleted = false
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.showAll = false
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 	m.cursor = findCursor(m.visible, 3) // cursor on C
 
 	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})

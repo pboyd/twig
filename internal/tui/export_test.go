@@ -24,20 +24,20 @@ func TestMain(m *testing.M) {
 func pint32(v int32) *int32 { return &v }
 
 // ExportBuildVisible exposes buildVisible for tests.
-func ExportBuildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64) []*visibleRow {
-	return buildVisible(tree, expanded, showCompleted, pendingComplete, time.Now().Local())
+func ExportBuildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64) []*visibleRow {
+	return buildVisible(tree, expanded, showAll, pendingComplete, time.Now().Local())
 }
 
 // ExportBuildVisibleOn exposes buildVisible with an injected reference date.
-func ExportBuildVisibleOn(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64, today time.Time) []*visibleRow {
-	return buildVisible(tree, expanded, showCompleted, pendingComplete, today)
+func ExportBuildVisibleOn(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, today time.Time) []*visibleRow {
+	return buildVisible(tree, expanded, showAll, pendingComplete, today)
 }
 
 // ExportNewModel creates a Model with a fake tree for unit tests.
 func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode) Model {
 	m := newModel(client, nil, "", config.PomodoroConfig{}, false, nil)
 	m.tree = tree
-	m.visible = buildVisible(tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
+	m.visible = buildVisible(tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 	return m
 }
 
@@ -134,8 +134,8 @@ func ExportSplitPlanEntries(entries []*planv1.PlanEntry) (untimed, timed []*plan
 }
 
 // ExportVisibleSiblings exposes visibleSiblings for tree tests.
-func ExportVisibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, taskID int64) (prev, next int64) {
-	return visibleSiblings(tree, expanded, showCompleted, taskID)
+func ExportVisibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, taskID int64) (prev, next int64) {
+	return visibleSiblings(tree, expanded, showAll, taskID)
 }
 
 // ExportReorderResultMsg exposes reorderResultMsg for update tests.

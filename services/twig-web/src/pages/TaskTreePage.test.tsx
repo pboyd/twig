@@ -105,7 +105,7 @@ describe("TaskTreePage — hide completed by default (US1)", () => {
 
     renderPage();
 
-    expect(screen.getByText(/all done/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing pending right now/i)).toBeInTheDocument();
     expect(screen.queryByText(/your future self is grateful/i)).not.toBeInTheDocument();
   });
 });
@@ -126,7 +126,7 @@ describe("TaskTreePage — toggle reveals completed tasks (US2)", () => {
 
     expect(screen.queryByText("Task 2")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /show completed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show all/i }));
 
     expect(screen.getByText("Task 2")).toBeInTheDocument();
   });
@@ -144,10 +144,10 @@ describe("TaskTreePage — toggle reveals completed tasks (US2)", () => {
 
     renderPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /show completed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show all/i }));
     expect(screen.getByText("Task 2")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /hide completed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show only pending/i }));
     expect(screen.queryByText("Task 2")).not.toBeInTheDocument();
   });
 });

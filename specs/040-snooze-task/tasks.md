@@ -77,10 +77,10 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Broaden the toggle's meaning and labels: in `internal/tui/model.go` and the toggle handler in `internal/tui/update.go` (~line 921), treat the flag as "show all" (completed **and** snoozed); render the state label as "Show all" / "Show only pending" wherever it appears in `internal/tui/view.go` (optionally rename `showCompleted` → `showAll` across the package for clarity)
-- [ ] T015 [US2] Update the help text in `internal/tui/keymap.go`: change the `Filter` binding help from `"toggle completed"` to broadened wording (e.g. `"toggle show all"`), keeping the `c` key
-- [ ] T016 [US2] Add a 💤 indicator to snoozed rows when shown in `internal/tui/view.go` (and the detail pane `internal/tui/details.go` if it surfaces status), drawn from the shared theme and not clashing with the completed indicator
-- [ ] T017 [P] [US2] Tests in `internal/tui/view_test.go`: with show-all on, a snoozed task appears and renders the 💤 indicator; with show-all off it is absent
+- [X] T014 [US2] Broaden the toggle's meaning and labels: in `internal/tui/model.go` and the toggle handler in `internal/tui/update.go` (~line 921), treat the flag as "show all" (completed **and** snoozed); render the state label as "Show all" / "Show only pending" wherever it appears in `internal/tui/view.go` (optionally rename `showCompleted` → `showAll` across the package for clarity)
+- [X] T015 [US2] Update the help text in `internal/tui/keymap.go`: change the `Filter` binding help from `"toggle completed"` to broadened wording (e.g. `"toggle show all"`), keeping the `c` key
+- [X] T016 [US2] Add a 💤 indicator to snoozed rows when shown in `internal/tui/view.go` (and the detail pane `internal/tui/details.go` if it surfaces status), drawn from the shared theme and not clashing with the completed indicator
+- [X] T017 [P] [US2] Tests in `internal/tui/view_test.go`: with show-all on, a snoozed task appears and renders the 💤 indicator; with show-all off it is absent
 
 **Checkpoint**: Users can reveal and visually identify snoozed tasks in the TUI.
 
@@ -96,12 +96,12 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Regenerate web proto types: run `npm run gen` in `services/twig-web/` so `snoozeUntil` appears on the `Task` type in `services/twig-web/src/gen/`
-- [ ] T019 [US3] CLI default view hides future-snoozed: in `internal/cli/render.go` add an `isSnoozed(task, today)` helper and extend `pruneIncomplete`'s "actionable" test to `incomplete && !snoozed` (inject `today`); confirm `--all` still shows snoozed and `--completed` is unaffected in `internal/cli/task.go`
-- [ ] T020 [P] [US3] CLI tests in `internal/cli/task_test.go` / `internal/cli/render_test.go`: default list prunes future-snoozed (and its subtree), `--all` keeps them, with today/tomorrow/yesterday boundary cases via injected `today`
-- [ ] T021 [US3] Web default view hides future-snoozed: in `services/twig-web/src/lib/filterTree.ts` extend `keep()`'s predicate to `!completed && !snoozed`, where snoozed = UTC calendar date of `snoozeUntil` strictly after local today; accept an optional reference-date arg for testability (depends on T018)
-- [ ] T022 [P] [US3] Web visuals/copy: add a 💤 indicator to snoozed rows in `services/twig-web/src/components/TreeRow.tsx`, and make the empty-state copy snooze-aware in `services/twig-web/src/theme/messages.ts` / `services/twig-web/src/pages/TaskTreePage.tsx` (depends on T018)
-- [ ] T023 [P] [US3] Web tests in `services/twig-web/src/lib/filterTree.test.ts` (+ a `TreeRow` test): `filterTree` hides future-snoozed with an injected reference date and keeps the subtree together; `TreeRow` renders 💤 for a snoozed task (depends on T018)
+- [X] T018 [US3] Regenerate web proto types: run `npm run gen` in `services/twig-web/` so `snoozeUntil` appears on the `Task` type in `services/twig-web/src/gen/`
+- [X] T019 [US3] CLI default view hides future-snoozed: in `internal/cli/render.go` add an `isSnoozed(task, today)` helper and extend `pruneIncomplete`'s "actionable" test to `incomplete && !snoozed` (inject `today`); confirm `--all` still shows snoozed and `--completed` is unaffected in `internal/cli/task.go`
+- [X] T020 [P] [US3] CLI tests in `internal/cli/task_test.go` / `internal/cli/render_test.go`: default list prunes future-snoozed (and its subtree), `--all` keeps them, with today/tomorrow/yesterday boundary cases via injected `today`
+- [X] T021 [US3] Web default view hides future-snoozed: in `services/twig-web/src/lib/filterTree.ts` extend `keep()`'s predicate to `!completed && !snoozed`, where snoozed = UTC calendar date of `snoozeUntil` strictly after local today; accept an optional reference-date arg for testability (depends on T018)
+- [X] T022 [P] [US3] Web visuals/copy: add a 💤 indicator to snoozed rows in `services/twig-web/src/components/TreeRow.tsx`, and make the empty-state copy snooze-aware in `services/twig-web/src/theme/messages.ts` / `services/twig-web/src/pages/TaskTreePage.tsx` (depends on T018)
+- [X] T023 [P] [US3] Web tests in `services/twig-web/src/lib/filterTree.test.ts` (+ a `TreeRow` test): `filterTree` hides future-snoozed with an injected reference date and keeps the subtree together; `TreeRow` renders 💤 for a snoozed task (depends on T018)
 
 **Checkpoint**: All three clients honor the snooze; the deferral is consistent everywhere.
 
@@ -111,10 +111,10 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 **Purpose**: Tone, full-suite verification, and docs across all stories.
 
-- [ ] T024 [P] Tone review of all new user-facing copy for warmth per Constitution Principle IV: TUI labels/help in `internal/tui/view.go` + `internal/tui/keymap.go`, and web copy in `services/twig-web/src/theme/messages.ts` + `services/twig-web/src/pages/TaskTreePage.tsx`
-- [ ] T025 Run the full suite green: `go build -o twig ./cmd/twig`, `go test ./...`, `(cd services/twig && go test ./...)`, `(cd services/twig-web && npm test)`
+- [X] T024 [P] Tone review of all new user-facing copy for warmth per Constitution Principle IV: TUI labels/help in `internal/tui/view.go` + `internal/tui/keymap.go`, and web copy in `services/twig-web/src/theme/messages.ts` + `services/twig-web/src/pages/TaskTreePage.tsx`
+- [X] T025 Run the full suite green: `go build -o twig ./cmd/twig`, `go test ./...`, `(cd services/twig && go test ./...)`, `(cd services/twig-web && npm test)`
 - [ ] T026 Execute `quickstart.md` end-to-end across TUI, CLI, and web (snooze, auto-wake, reveal, subtree-hide, empty-state)
-- [ ] T027 [P] Update docs if needed (e.g., note the Snooze form field / broadened filter wording) in `CLAUDE.md` or relevant readme
+- [X] T027 [P] Update docs if needed (e.g., note the Snooze form field / broadened filter wording) in `CLAUDE.md` or relevant readme
 
 ---
 

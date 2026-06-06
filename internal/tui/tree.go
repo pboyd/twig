@@ -25,8 +25,8 @@ func taskIsSnoozed(task *taskv1.Task, today time.Time) bool {
 // id of the previous visible sibling (0 if none) and the next visible sibling
 // (0 if none). A sibling is visible when it would appear in the visible row
 // list under current filter settings.
-func visibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, taskID int64) (prev, next int64) {
-	rows := buildVisible(tree, expanded, showCompleted, nil, time.Now().Local())
+func visibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, taskID int64) (prev, next int64) {
+	rows := buildVisible(tree, expanded, showAll, nil, time.Now().Local())
 
 	targetIdx := -1
 	for i, r := range rows {
@@ -93,11 +93,11 @@ type visibleRow struct {
 // completed-task / snooze filtering. Matches the spec's view-model.md
 // "Visible-row flattening" algorithm. today is the client's local calendar day
 // used to evaluate the snooze predicate.
-func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64, today time.Time) []*visibleRow {
+func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, today time.Time) []*visibleRow {
 	var rows []*visibleRow
 	for i, root := range tree {
 		last := i == len(tree)-1
-		emitNode(root, 0, "", last, expanded, showCompleted, pendingComplete, today, &rows)
+		emitNode(root, 0, "", last, expanded, showAll, pendingComplete, today, &rows)
 	}
 	return rows
 }
@@ -108,7 +108,7 @@ func emitNode(
 	parentPrefix string,
 	isLast bool,
 	expanded map[int64]bool,
-	showCompleted bool,
+	showAll bool,
 	pendingComplete *int64,
 	today time.Time,
 	rows *[]*visibleRow,
@@ -120,7 +120,7 @@ func emitNode(
 	// Skip completed or future-snoozed tasks unless "show all" is on, or this
 	// task is pendingComplete.
 	isPending := pendingComplete != nil && *pendingComplete == id
-	if (completed || snoozed) && !showCompleted && !isPending {
+	if (completed || snoozed) && !showAll && !isPending {
 		return
 	}
 
@@ -137,7 +137,7 @@ func emitNode(
 			childCompleted := child.Task.GetCompletedAt() != nil
 			childSnoozed := taskIsSnoozed(child.Task, today)
 			childIsPending := pendingComplete != nil && *pendingComplete == child.Task.Id
-			if (!childCompleted && !childSnoozed) || showCompleted || childIsPending {
+			if (!childCompleted && !childSnoozed) || showAll || childIsPending {
 				hasVisibleChildren = true
 				break
 			}
@@ -178,7 +178,7 @@ func emitNode(
 	if hasChildren && isExpanded {
 		for i, child := range node.Children {
 			lastChild := i == len(node.Children)-1
-			emitNode(child, depth+1, childPrefix, lastChild, expanded, showCompleted, pendingComplete, today, rows)
+			emitNode(child, depth+1, childPrefix, lastChild, expanded, showAll, pendingComplete, today, rows)
 		}
 	}
 }

@@ -83,6 +83,14 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
 
   const indentRem = depth * 1;
   const isComplete = !!task.completedAt;
+  const isSnoozed = (() => {
+    if (!task.snoozeUntil) return false;
+    const snooze = new Date(Number(task.snoozeUntil.seconds) * 1000);
+    const today = new Date();
+    if (snooze.getUTCFullYear() !== today.getFullYear()) return snooze.getUTCFullYear() > today.getFullYear();
+    if (snooze.getUTCMonth() !== today.getMonth()) return snooze.getUTCMonth() > today.getMonth();
+    return snooze.getUTCDate() > today.getDate();
+  })();
   const hasChildren = children.length > 0;
   const isExpanded = expandedIds.has(task.id);
   const isToggling = isCompleting || isUncompleting;
@@ -145,6 +153,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
           <span className={isComplete ? "line-through text-gray-400 dark:text-gray-500" : ""}>
             {task.name}
           </span>
+          {isSnoozed && <span className="ml-1 text-base" aria-label="snoozed">💤</span>}
         </button>
 
         {/* Expand/collapse chevron — only for nodes with children */}

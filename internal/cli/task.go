@@ -42,7 +42,7 @@ func runList(client taskv1connect.TaskServiceClient, addr string, args []string)
 	case showAll:
 		// no filtering
 	default:
-		roots = pruneIncomplete(roots)
+		roots = pruneIncomplete(roots, time.Now().Local())
 	}
 
 	if len(roots) == 0 {
