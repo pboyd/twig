@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Glyphs used in the pomodoro progress row. Text-presentation characters from

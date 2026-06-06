@@ -5,7 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/pomodoro"
@@ -14,26 +15,33 @@ import (
 // tabBarHeight is the number of lines consumed by the tab bar.
 const tabBarHeight = 1
 
-// View renders the current model state to a string.
-func (m Model) View() string {
+// View renders the current model state. Alt-screen is declared here so it is
+// always active — no WithAltScreen option is needed on tea.NewProgram.
+func (m Model) View() tea.View {
+	var body string
 	if m.activeTab == tabPlanning {
 		if m.mode == modeHelp {
-			return m.viewHelp()
+			body = m.viewHelp()
+		} else {
+			body = m.viewPlanning()
 		}
-		return m.viewPlanning()
+	} else {
+		switch m.mode {
+		case modeHelp:
+			body = m.viewHelp()
+		case modeEdit, modeNewSubtask, modeNewRoot:
+			body = m.viewWithForm()
+		case modeMove:
+			body = m.viewWithMove()
+		case modeDatePrompt:
+			body = m.viewWithDatePrompt()
+		default:
+			body = m.viewList()
+		}
 	}
-	switch m.mode {
-	case modeHelp:
-		return m.viewHelp()
-	case modeEdit, modeNewSubtask, modeNewRoot:
-		return m.viewWithForm()
-	case modeMove:
-		return m.viewWithMove()
-	case modeDatePrompt:
-		return m.viewWithDatePrompt()
-	default:
-		return m.viewList()
-	}
+	v := tea.NewView(body)
+	v.AltScreen = true
+	return v
 }
 
 func (m Model) viewPlanning() string {
@@ -469,8 +477,10 @@ func (m Model) renderStatus() string {
 		lines = append(lines, errorStyle.Render("error: "+cli.UserMessage(activeErr)))
 	} else if m.notice != "" {
 		lines = append(lines, m.notice)
-	} else {
+	} else if m.styled {
 		lines = append(lines, m.help.View(m.keys))
+	} else {
+		lines = append(lines, m.plainHelp.View(m.keys))
 	}
 
 	return strings.Join(lines, "\n")
@@ -498,11 +508,15 @@ func paneBox(content string, outerWidth, innerHeight int, title string, focused 
 		borderColor = borderActive
 	}
 
+	// In lipgloss v2, Width and Height are total dimensions including the border
+	// (v1 treated them as content dimensions, with the border added outside).
+	// Pass outerWidth and innerHeight+2 so the content area is outerWidth-2 wide
+	// and innerHeight rows tall — matching what callers render content to.
 	rendered := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Width(innerW).
-		Height(innerHeight).
+		Width(outerWidth).
+		Height(innerHeight + 2).
 		Render(content)
 
 	if title == "" {

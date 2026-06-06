@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/pboyd/twig/internal/config"
 )
 
@@ -33,7 +33,8 @@ func Run(_ context.Context, profile string) error {
 
 	// Detect terminal background before entering raw mode — OSC 11 queries
 	// don't work once bubbletea owns stdin.
-	hasDarkBg := lipgloss.NewRenderer(os.Stdout).HasDarkBackground()
+	hasDarkBg := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	initPalette(hasDarkBg)
 
 	statePath, err := treeStatePath()
 	if err != nil {
@@ -47,7 +48,7 @@ func Run(_ context.Context, profile string) error {
 	m := newModel(taskClient, planClient, addr, cfg.Pomodoro, hasDarkBg, expanded)
 	m.statePath = statePath
 	m.activeProfile = pKey
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	_, err = p.Run()
 	return err
 }

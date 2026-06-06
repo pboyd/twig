@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
@@ -28,19 +28,31 @@ func buildTestModel() Model {
 }
 
 func pressKey(m Model, k string) Model {
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
-	if k == "up" {
-		msg = tea.KeyMsg{Type: tea.KeyUp}
-	} else if k == "down" {
-		msg = tea.KeyMsg{Type: tea.KeyDown}
-	} else if k == "left" {
-		msg = tea.KeyMsg{Type: tea.KeyLeft}
-	} else if k == "right" {
-		msg = tea.KeyMsg{Type: tea.KeyRight}
-	} else if k == "home" {
-		msg = tea.KeyMsg{Type: tea.KeyHome}
-	} else if k == "end" {
-		msg = tea.KeyMsg{Type: tea.KeyEnd}
+	var msg tea.KeyPressMsg
+	switch k {
+	case "up":
+		msg = tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		msg = tea.KeyPressMsg{Code: tea.KeyDown}
+	case "left":
+		msg = tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		msg = tea.KeyPressMsg{Code: tea.KeyRight}
+	case "home":
+		msg = tea.KeyPressMsg{Code: tea.KeyHome}
+	case "end":
+		msg = tea.KeyPressMsg{Code: tea.KeyEnd}
+	case "enter":
+		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "esc":
+		msg = tea.KeyPressMsg{Code: tea.KeyEsc}
+	case "tab":
+		msg = tea.KeyPressMsg{Code: tea.KeyTab}
+	default:
+		runes := []rune(k)
+		if len(runes) == 1 {
+			msg = tea.KeyPressMsg{Code: runes[0], Text: k}
+		}
 	}
 	next, _ := m.Update(msg)
 	return next.(Model)
@@ -415,7 +427,7 @@ func (e errForTest) Error() string { return string(e) }
 func TestHighlight_EditOpensModeEdit(t *testing.T) {
 	m := buildTestModel()
 	m.cursor = 1
-	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	msg := tea.KeyPressMsg{Code: tea.KeyEnter}
 	next, _ := m.Update(msg)
 	m = next.(Model)
 	if m.mode != modeEdit {
@@ -439,7 +451,7 @@ func TestEdit_EKeyInertOnTasksTab(t *testing.T) {
 // TestEdit_EnterOnEmptyListIsInert checks that Enter on an empty task list is inert (US2/T009).
 func TestEdit_EnterOnEmptyListIsInert(t *testing.T) {
 	m := ExportNewModel(nil, nil) // empty tree
-	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	msg := tea.KeyPressMsg{Code: tea.KeyEnter}
 	next, _ := m.Update(msg)
 	m = next.(Model)
 	if m.mode != modeList {
@@ -506,7 +518,7 @@ func TestHighlight_NewRootKey(t *testing.T) {
 	m := buildTestModel()
 	m.cursor = 1
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl})
 	nm := next.(Model)
 	if nm.mode != modeNewRoot {
 		t.Errorf("expected modeNewRoot, got %v", nm.mode)
@@ -600,7 +612,7 @@ func TestHighlight_DigitKeyNotPanicWithEmptyList(t *testing.T) {
 	m := buildTestModel()
 	m.visible = nil
 	// Should not panic with empty visible list.
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'5'}})
+	next, _ := m.Update(tea.KeyPressMsg{Code: '5', Text: "5"})
 	nm := next.(Model)
 	// mode unchanged, no panic
 	if nm.mode != modeList {
@@ -615,7 +627,7 @@ func TestHighlight_DigitKeyNotPanicWithEmptyList(t *testing.T) {
 // TestRefresh_CtrlRDispatchesListTasks verifies that Ctrl-R returns a non-nil Cmd.
 func TestRefresh_CtrlRDispatchesListTasks(t *testing.T) {
 	m := buildTestModel()
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("expected Ctrl-R to return a Cmd, got nil")
 	}
@@ -667,7 +679,7 @@ func TestPomodoro_SKeyDispatchesStartPomCmd(t *testing.T) {
 	m := buildTestModel()
 	m.cursor = 0 // task id=1
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
 	if cmd == nil {
 		t.Fatal("expected a Cmd from S key, got nil")
 	}
@@ -938,7 +950,7 @@ func buildLingeringModel(t *testing.T) Model {
 	m.cursor = 1 // task id=2
 
 	// Press space (Complete key).
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyPressMsg{Code: tea.KeySpace}
 	next, _ := m.Update(spaceMsg)
 	m = next.(Model)
 
@@ -1029,11 +1041,11 @@ func TestComplete_LingerNotClearedByOtherKeys(t *testing.T) {
 		name string
 		msg  tea.Msg
 	}{
-		{"Expand", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")}},
-		{"Collapse", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")}},
-		{"Edit", tea.KeyMsg{Type: tea.KeyEnter}},
-		{"Help", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}},
-		{"Filter", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")}},
+		{"Expand", tea.KeyPressMsg{Code: 'l', Text: "l"}},
+		{"Collapse", tea.KeyPressMsg{Code: 'h', Text: "h"}},
+		{"Edit", tea.KeyPressMsg{Code: tea.KeyEnter}},
+		{"Help", tea.KeyPressMsg{Code: '?', Text: "?"}},
+		{"Filter", tea.KeyPressMsg{Code: 'c', Text: "c"}},
 	}
 	for _, tc := range keys {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1061,7 +1073,7 @@ func TestComplete_LingerNotClearedByOtherKeys(t *testing.T) {
 func TestComplete_RefreshClearsPendingComplete(t *testing.T) {
 	m := buildLingeringModel(t)
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	m = next.(Model)
 
 	if m.pendingComplete != nil {
@@ -1085,7 +1097,7 @@ func TestUncomplete_SpaceOnCompletedTaskDoesNotSetPendingComplete(t *testing.T) 
 
 	m.cursor = 0 // task id=1, already completed
 
-	spaceMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	spaceMsg := tea.KeyPressMsg{Code: tea.KeySpace}
 	next, cmd := m.Update(spaceMsg)
 	m = next.(Model)
 
@@ -1136,11 +1148,11 @@ func TestHelp_AnyKeyDismisses(t *testing.T) {
 		name string
 		msg  tea.KeyMsg
 	}{
-		{"letter x", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}},
-		{"question mark", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")}},
-		{"escape", tea.KeyMsg{Type: tea.KeyEsc}},
-		{"arrow up", tea.KeyMsg{Type: tea.KeyUp}},
-		{"space", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")}},
+		{"letter x", tea.KeyPressMsg{Code: 'x', Text: "x"}},
+		{"question mark", tea.KeyPressMsg{Code: '?', Text: "?"}},
+		{"escape", tea.KeyPressMsg{Code: tea.KeyEsc}},
+		{"arrow up", tea.KeyPressMsg{Code: tea.KeyUp}},
+		{"space", tea.KeyPressMsg{Code: tea.KeySpace}},
 	}
 	for _, tc := range keys {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1193,7 +1205,7 @@ func TestQuitConfirm_OnPlanning_Esc(t *testing.T) {
 	m := buildPlanTestModel(fc)
 	m.confirmingQuit = true
 
-	m2, _ := pressSpecialKey(m, tea.KeyEsc)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 
 	if m2.confirmingQuit {
 		t.Error("esc while confirmingQuit on Planning: should clear confirmingQuit")
@@ -1388,7 +1400,7 @@ func TestPlanSendPickDay_CtrlP_OpenPrompt(t *testing.T) {
 	m := buildTasksModelWithPlan(fc)
 	m.cursor = 0
 
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 
 	if m2.(Model).mode != modeDatePrompt {
 		t.Errorf("ctrl+p: expected modeDatePrompt, got %v", m2.(Model).mode)
@@ -1401,7 +1413,7 @@ func TestPlanSendPickDay_CtrlP_EmptyListIsNoOp(t *testing.T) {
 	m := buildTasksModelWithPlan(fc)
 	m.visible = nil
 
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 
 	if m2.(Model).mode != modeList {
 		t.Errorf("ctrl+p with empty list: expected modeList, got %v", m2.(Model).mode)
@@ -1415,7 +1427,7 @@ func TestDatePrompt_Accept_AddsToPlan(t *testing.T) {
 	m := buildTasksModelWithPlan(fc)
 	m.cursor = 0
 	// Open the prompt
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	nm := m2.(Model)
 	if nm.mode != modeDatePrompt {
 		t.Fatalf("setup: expected modeDatePrompt, got %v", nm.mode)
@@ -1423,7 +1435,7 @@ func TestDatePrompt_Accept_AddsToPlan(t *testing.T) {
 	// Set the date input to a specific date
 	nm.datePromptInput.SetValue("2026-06-15")
 
-	_, cmd := nm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := nm.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if cmd == nil {
 		t.Fatal("date prompt submit: expected addPlanTaskCmd, got nil")
@@ -1446,11 +1458,11 @@ func TestDatePrompt_InvalidDate_SetsError(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildTasksModelWithPlan(fc)
 	m.cursor = 0
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	nm := m2.(Model)
 	nm.datePromptInput.SetValue("not-a-date")
 
-	nm2, cmd := nm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	nm2, cmd := nm.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	result := nm2.(Model)
 
 	if result.mode != modeDatePrompt {
@@ -1470,11 +1482,11 @@ func TestDatePrompt_Esc_Cancels(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildTasksModelWithPlan(fc)
 	m.cursor = 0
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	nm := m2.(Model)
 	nm.datePromptInput.SetValue("2026-06-15")
 
-	nm2, _ := nm.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	result := nm2.(Model)
 
 	if result.mode != modeList {
@@ -1539,7 +1551,7 @@ func TestHandleReorderResult_UpdatesTree(t *testing.T) {
 func TestRankUp_AtBoundary_IsNoOp(t *testing.T) {
 	// A is already first; pressing { should not dispatch a command.
 	m := buildReorderModel(1) // cursor on A (position 0)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
 	if cmd != nil {
 		t.Error("rank-up at first sibling should be a no-op (nil cmd), but got a cmd")
 	}
@@ -1548,7 +1560,7 @@ func TestRankUp_AtBoundary_IsNoOp(t *testing.T) {
 func TestRankDown_AtBoundary_IsNoOp(t *testing.T) {
 	// C is already last; pressing } should not dispatch a command.
 	m := buildReorderModel(3) // cursor on C (position 2)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("}")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
 	if cmd != nil {
 		t.Error("rank-down at last sibling should be a no-op (nil cmd), but got a cmd")
 	}
@@ -1557,7 +1569,7 @@ func TestRankDown_AtBoundary_IsNoOp(t *testing.T) {
 func TestRankUp_Middle_DispatchesCmd(t *testing.T) {
 	// B is in the middle; pressing { should return a cmd.
 	m := buildReorderModel(2) // cursor on B
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
 	if cmd == nil {
 		t.Error("rank-up on middle sibling should dispatch a cmd")
 	}
@@ -1566,7 +1578,7 @@ func TestRankUp_Middle_DispatchesCmd(t *testing.T) {
 func TestRankDown_Middle_DispatchesCmd(t *testing.T) {
 	// B is in the middle; pressing } should return a cmd.
 	m := buildReorderModel(2) // cursor on B
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("}")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
 	if cmd == nil {
 		t.Error("rank-down on middle sibling should dispatch a cmd")
 	}
@@ -1587,7 +1599,7 @@ func TestRankUp_SkipsHiddenCompleted(t *testing.T) {
 	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
 	m.cursor = findCursor(m.visible, 3) // cursor on C
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("{")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
 	// C's only visible prev sibling is A (B is hidden) — so cmd should be dispatched.
 	if cmd == nil {
 		t.Error("rank-up on C with hidden B should dispatch a cmd (prev is A)")

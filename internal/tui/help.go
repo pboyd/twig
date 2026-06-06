@@ -1,27 +1,19 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/lipgloss/v2"
 )
 
 // newHelpModel returns a bubbles help.Model with a slightly lighter dark-mode
 // palette than the default, so the help bar is easier to read on dark terminals.
-func newHelpModel() help.Model {
+func newHelpModel(hasDark bool) help.Model {
 	m := help.New()
 
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#909090",
-		Dark:  "#9A9A9A",
-	})
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#B2B2B2",
-		Dark:  "#7A7A7A",
-	})
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#DDDADA",
-		Dark:  "#5A5A5A",
-	})
+	ld := lipgloss.LightDark(hasDark)
+	keyStyle := lipgloss.NewStyle().Foreground(ld(lipgloss.Color("#909090"), lipgloss.Color("#9A9A9A")))
+	descStyle := lipgloss.NewStyle().Foreground(ld(lipgloss.Color("#B2B2B2"), lipgloss.Color("#7A7A7A")))
+	sepStyle := lipgloss.NewStyle().Foreground(ld(lipgloss.Color("#DDDADA"), lipgloss.Color("#5A5A5A")))
 
 	m.Styles = help.Styles{
 		ShortKey:       keyStyle,
@@ -33,5 +25,13 @@ func newHelpModel() help.Model {
 		FullSeparator:  sepStyle,
 	}
 
+	return m
+}
+
+// newPlainHelpModel returns a help.Model with empty styles so View() produces
+// plain text without ANSI escape codes — used when m.styled == false.
+func newPlainHelpModel() help.Model {
+	m := help.New()
+	m.Styles = help.Styles{} // empty styles → no ANSI codes
 	return m
 }

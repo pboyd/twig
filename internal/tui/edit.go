@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
@@ -109,7 +109,7 @@ func newBlankForm(originalCursor int) editFormModel {
 
 // Update handles messages for the edit form.
 func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd) {
-	keyMsg, isKey := msg.(tea.KeyMsg)
+	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
 		return f.updateFocusedField(msg)
 	}
@@ -145,7 +145,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	}
 
 	// Enter on Save/Cancel buttons.
-	if keyMsg.Type == tea.KeyEnter {
+	if keyMsg.Code == tea.KeyEnter {
 		switch f.focusIndex {
 		case focusSave:
 			return f, func() tea.Msg {

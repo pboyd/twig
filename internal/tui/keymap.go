@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 // KeyMap holds all keybindings for the TUI.
 // PlanningMode controls which bindings appear in ShortHelp/FullHelp.
@@ -94,7 +94,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+d", "delete task"),
 		),
 		Complete: key.NewBinding(
-			key.WithKeys(" "),
+			key.WithKeys("space"),
 			key.WithHelp("space", "toggle complete"),
 		),
 		PomStart: key.NewBinding(

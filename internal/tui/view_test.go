@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -64,6 +63,36 @@ func TestRenderList_NoStrikethroughWhenUnstyled(t *testing.T) {
 	}
 }
 
+// TestPaneBox_WidthAndHeight asserts that paneBox produces a box whose every line is
+// exactly outerWidth columns wide and whose total line count is innerHeight+2 (two
+// border rows).  This is the direct regression test for the lipgloss v2 Width/Height
+// semantics change: in v1 Width/Height were content dimensions; in v2 they are total
+// dimensions including the border.
+func TestPaneBox_WidthAndHeight(t *testing.T) {
+	const outerWidth = 40
+	const innerH = 3
+
+	for _, title := range []string{"", "Details"} {
+		t.Run("title="+title, func(t *testing.T) {
+			// Content is outerWidth-2 wide — exactly what callers pass after
+			// subtracting 2 for the border columns.
+			content := strings.Repeat("X", outerWidth-2)
+			out := paneBox(content, outerWidth, innerH, title, false)
+			lines := strings.Split(out, "\n")
+
+			wantLines := innerH + 2 // top border + innerH content rows + bottom border
+			if len(lines) != wantLines {
+				t.Errorf("line count: got %d, want %d\noutput:\n%s", len(lines), wantLines, out)
+			}
+			for i, line := range lines {
+				if w := lipgloss.Width(line); w != outerWidth {
+					t.Errorf("line %d: visual width %d, want %d; %q", i, w, outerWidth, line)
+				}
+			}
+		})
+	}
+}
+
 // TestViewList_PaneWidths (T004) asserts that each content line of viewList output
 // has visual width == m.width (C4.1/C4.2): both panes together fill the terminal width.
 func TestViewList_PaneWidths(t *testing.T) {
@@ -76,14 +105,27 @@ func TestViewList_PaneWidths(t *testing.T) {
 
 	out := m.viewList()
 	lines := strings.Split(out, "\n")
-	// The status line is the last non-empty line; pane lines precede it.
-	// Check the first line (top border) has exactly m.width visual columns.
 	if len(lines) == 0 {
 		t.Fatal("viewList returned empty output")
 	}
-	if w := lipgloss.Width(lines[0]); w != 80 {
-		t.Errorf("top border line: visual width %d, want 80; line: %q", w, lines[0])
+
+	// Find the first pane border line (starts with ╭) and assert it fills m.width.
+	// The old test checked lines[0] which is the tab bar — always full width and not
+	// sensitive to the pane-width bug.  The border line is the real sentinel.
+	paneBorderIdx := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, "╭") || strings.HasPrefix(strings.TrimLeft(line, "\x1b[0123456789;m"), "╭") {
+			paneBorderIdx = i
+			break
+		}
 	}
+	if paneBorderIdx == -1 {
+		t.Fatal("could not find pane top-border line (╭) in viewList output")
+	}
+	if w := lipgloss.Width(lines[paneBorderIdx]); w != 80 {
+		t.Errorf("pane top-border line: visual width %d, want 80; line: %q", w, lines[paneBorderIdx])
+	}
+
 	// No line should exceed m.width.
 	for i, line := range lines {
 		if w := lipgloss.Width(line); w > 80 {
@@ -368,9 +410,6 @@ func TestRenderStatus_FooterAndError(t *testing.T) {
 // status line carries pomodoroDone bold styling when styled==true, and the plain fallback
 // is unchanged (no ANSI codes).
 func TestRenderStatus_ActivePomodoroGlyph(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
-
 	m := ExportNewStyledModel(nil, nil, true)
 	m.pom = &activePom{
 		taskName: "my task",

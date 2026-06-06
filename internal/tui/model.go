@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/textinput"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/textinput"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
@@ -96,7 +96,8 @@ type Model struct {
 	edit              editFormModel
 	move              *moveState
 	originalCursor    int
-	help              help.Model
+	help              help.Model // styled help (used when m.styled == true)
+	plainHelp         help.Model // unstyled help (used when m.styled == false)
 	keys              KeyMap
 	err               error
 	width             int
@@ -125,7 +126,8 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		pomConfig:         pomConfig,
 		expanded:          expanded,
 		keys:              DefaultKeyMap(),
-		help:              newHelpModel(),
+		help:              newHelpModel(hasDarkBg),
+		plainHelp:         newPlainHelpModel(),
 		styled:            cli.WantStyled(os.Stdout),
 		hasDarkBackground: hasDarkBg,
 		plan: planState{

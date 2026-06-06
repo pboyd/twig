@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 )
@@ -101,7 +101,7 @@ func newMoveState(m *Model, taskID int64) *moveState {
 // Update handles key events for the move dialog.
 // Returns (cmd, keepOpen): keepOpen=false means the caller should close the dialog.
 func (s *moveState) Update(msg tea.Msg, m *Model) (tea.Cmd, bool) {
-	keyMsg, ok := msg.(tea.KeyMsg)
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil, true
 	}
@@ -117,7 +117,7 @@ func (s *moveState) Update(msg tea.Msg, m *Model) (tea.Cmd, bool) {
 			s.cursor++
 		}
 
-	case keyMsg.Type == tea.KeyEnter:
+	case keyMsg.Code == tea.KeyEnter:
 		chosen := s.candidates[s.cursor]
 		var newParentID *int64
 		if chosen.taskID != 0 {

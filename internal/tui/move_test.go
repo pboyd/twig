@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -147,13 +147,18 @@ func TestNewMoveState_ReturnsNilForMissingTask(t *testing.T) {
 // ── moveState.Update navigation ───────────────────────────────────────────────
 
 func moveMsgKey(k string) tea.Msg {
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
-	if k == "up" {
-		msg = tea.KeyMsg{Type: tea.KeyUp}
-	} else if k == "down" {
-		msg = tea.KeyMsg{Type: tea.KeyDown}
+	switch k {
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	default:
+		runes := []rune(k)
+		if len(runes) == 1 {
+			return tea.KeyPressMsg{Code: runes[0], Text: k}
+		}
+		return tea.KeyPressMsg{}
 	}
-	return msg
 }
 
 func TestMoveState_DownMovesCursor(t *testing.T) {
@@ -219,7 +224,7 @@ func TestMoveState_EscClosesDialog(t *testing.T) {
 	if ms == nil {
 		t.Fatal("newMoveState returned nil")
 	}
-	cmd, keepOpen := ms.Update(tea.KeyMsg{Type: tea.KeyEsc}, &m)
+	cmd, keepOpen := ms.Update(tea.KeyPressMsg{Code: tea.KeyEsc}, &m)
 	if keepOpen {
 		t.Error("Esc should close the dialog (keepOpen=false)")
 	}
@@ -241,7 +246,7 @@ func TestMoveState_EnterReturnsCmd(t *testing.T) {
 	if ms == nil {
 		t.Fatal("newMoveState returned nil")
 	}
-	cmd, keepOpen := ms.Update(tea.KeyMsg{Type: tea.KeyEnter}, &m)
+	cmd, keepOpen := ms.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, &m)
 	if !keepOpen {
 		t.Error("Enter should keep dialog open while RPC runs")
 	}
@@ -278,7 +283,7 @@ func TestMoveState_EnterWithSentinelSendsNilParentID(t *testing.T) {
 	ms := newMoveState(&m, 2) // move child; cursor starts on parent (root=1)
 	ms.cursor = 0             // move cursor to sentinel "(no parent)"
 
-	cmd, _ := ms.Update(tea.KeyMsg{Type: tea.KeyEnter}, &m)
+	cmd, _ := ms.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, &m)
 	if cmd == nil {
 		t.Fatal("Enter should return a Cmd")
 	}
@@ -340,7 +345,7 @@ func TestMoveState_SentinelEnterClearsParentID(t *testing.T) {
 	ms := newMoveState(&m, 2)
 	ms.cursor = 0 // sentinel
 
-	cmd, _ := ms.Update(tea.KeyMsg{Type: tea.KeyEnter}, &m)
+	cmd, _ := ms.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, &m)
 	if cmd == nil {
 		t.Fatal("expected a cmd")
 	}

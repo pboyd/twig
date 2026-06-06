@@ -1,47 +1,58 @@
 package tui
 
 import (
+	"image/color"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
-func TestTheme_PaletteColorsAreAdaptive(t *testing.T) {
-	tests := []struct {
-		name  string
-		color lipgloss.AdaptiveColor
-	}{
-		{"accent", accent},
-		{"border", border},
-		{"borderActive", borderActive},
-		{"dim", dim},
-		{"completed", completed},
-		{"errorColor", errorColor},
-		{"cursorBar", cursorBar},
-		{"cursorBg", cursorBg},
+func TestTheme_PaletteColorsAreNonNil(t *testing.T) {
+	// initPalette is called via TestMain. Verify each exported palette var is set.
+	colors := map[string]color.Color{
+		"accent":       accent,
+		"border":       border,
+		"borderActive": borderActive,
+		"dim":          dim,
+		"completed":    completed,
+		"errorColor":   errorColor,
+		"cursorBar":    cursorBar,
+		"cursorBg":     cursorBg,
+		"pomodoroDone": pomodoroDone,
+		"pomodoroOver": pomodoroOver,
 	}
-	for _, tc := range tests {
-		if tc.color.Light == "" {
-			t.Errorf("palette color %s: Light must not be empty", tc.name)
+	for name, c := range colors {
+		if c == nil {
+			t.Errorf("palette color %s is nil after initPalette", name)
 		}
-		if tc.color.Dark == "" {
-			t.Errorf("palette color %s: Dark must not be empty", tc.name)
-		}
+	}
+}
+
+func TestTheme_PaletteAdaptsToBackground(t *testing.T) {
+	// Verify light and dark backgrounds produce different cursorBg values.
+	initPalette(false)
+	lightCursorBg := cursorBg
+
+	initPalette(true)
+	darkCursorBg := cursorBg
+
+	// Restore for other tests.
+	initPalette(false)
+
+	if lightCursorBg == darkCursorBg {
+		t.Error("cursorBg should differ between light and dark backgrounds")
 	}
 }
 
 func TestTheme_StylesFromPalette(t *testing.T) {
 	fg := errorStyle.GetForeground()
-	if ac, ok := fg.(lipgloss.AdaptiveColor); !ok {
-		t.Error("errorStyle foreground must be an AdaptiveColor")
-	} else if ac.Light == "" || ac.Dark == "" {
-		t.Error("errorStyle foreground AdaptiveColor must have non-empty Light and Dark")
+	if fg == nil {
+		t.Error("errorStyle foreground must not be nil")
 	}
 
 	bg := highlightStyle.GetBackground()
-	if ac, ok := bg.(lipgloss.AdaptiveColor); !ok {
-		t.Error("highlightStyle background must be an AdaptiveColor")
-	} else if ac.Light == "" || ac.Dark == "" {
-		t.Error("highlightStyle background AdaptiveColor must have non-empty Light and Dark")
+	if bg == nil {
+		t.Error("highlightStyle background must not be nil")
 	}
+	_ = lipgloss.NewStyle() // confirm import is used
 }

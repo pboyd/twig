@@ -1,7 +1,10 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"os"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -9,6 +12,13 @@ import (
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/config"
 )
+
+// TestMain initialises the theme palette before any test runs.
+// Without this, the package-level color vars remain nil and styled tests fail.
+func TestMain(m *testing.M) {
+	initPalette(false) // light background default for tests
+	os.Exit(m.Run())
+}
 
 func pint32(v int32) *int32 { return &v }
 

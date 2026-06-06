@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
@@ -260,7 +260,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.help.Width = msg.Width
+		m.help.SetWidth(msg.Width)
+		m.plainHelp.SetWidth(msg.Width)
 		return m, nil
 
 	case listTasksResultMsg:
@@ -443,13 +444,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.notice = "" // clear transient notice on every user action
 	if m.activeTab == tabPlanning {
 		return m.handlePlanningKey(msg)
@@ -470,7 +471,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handlePlanningKey handles all key events while the Planning tab is active.
-func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Dismiss help overlay — any key closes it, mirroring handleHelpKey.
 	if m.mode == modeHelp {
 		m.mode = modeList
@@ -626,7 +627,7 @@ func (m Model) handlePlanningKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handlePlanModalKey handles keys when a planning modal is open.
-func (m Model) handlePlanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handlePlanModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.plan.mode {
 	case planPickTask:
 		return m.handlePickerKey(msg)
@@ -637,7 +638,7 @@ func (m Model) handlePlanModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handlePickerKey handles key events in the task picker.
-func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		m.plan.mode = planList
@@ -650,7 +651,7 @@ func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.plan.picker.cursor < len(m.plan.picker.visible)-1 {
 			m.plan.picker.cursor++
 		}
-	case msg.Type == tea.KeyEnter:
+	case msg.Code == tea.KeyEnter:
 		if len(m.plan.picker.visible) > 0 {
 			row := m.plan.picker.visible[m.plan.picker.cursor]
 			taskID := row.node.Task.Id
@@ -663,7 +664,7 @@ func (m Model) handlePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handlePlanFormKey handles key events in a planning text-input form.
-func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handlePlanFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		m.plan.mode = planList
@@ -672,7 +673,7 @@ func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Save):
 		cmd := m.submitPlanForm()
 		return m, cmd
-	case msg.Type == tea.KeyEnter:
+	case msg.Code == tea.KeyEnter:
 		if planFocusSave(m.plan.form) {
 			cmd := m.submitPlanForm()
 			return m, cmd
@@ -701,7 +702,7 @@ func (m Model) handlePlanFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle quit confirmation overlay.
 	if m.confirmingQuit {
 		switch msg.String() {
@@ -930,14 +931,11 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	default:
 		// Digit keys 0-9 set the pomodoro estimate.
-		if len(msg.Runes) == 1 {
-			r := msg.Runes[0]
-			if r >= '0' && r <= '9' && len(m.visible) > 0 {
-				id := m.visible[m.cursor].node.Task.Id
-				est := int32(r - '0')
-				m.err = nil
-				return m, setEstimateCmd(m.client, id, est)
-			}
+		if len(msg.Text) == 1 && msg.Text[0] >= '0' && msg.Text[0] <= '9' && len(m.visible) > 0 {
+			id := m.visible[m.cursor].node.Task.Id
+			est := int32(msg.Text[0] - '0')
+			m.err = nil
+			return m, setEstimateCmd(m.client, id, est)
 		}
 	}
 
@@ -945,13 +943,13 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleDatePromptKey handles key events while the Tasks-tab date prompt is open.
-func (m Model) handleDatePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleDatePromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		m.mode = modeList
 		m.err = nil
 		return m, nil
-	case key.Matches(msg, m.keys.Save) || msg.Type == tea.KeyEnter:
+	case key.Matches(msg, m.keys.Save) || msg.Code == tea.KeyEnter:
 		dateStr := strings.TrimSpace(m.datePromptInput.Value())
 		if _, err := time.Parse("2006-01-02", dateStr); err != nil {
 			m.err = fmt.Errorf("hmm, that date didn't parse — try YYYY-MM-DD (e.g. 2026-06-15)")
@@ -967,13 +965,13 @@ func (m Model) handleDatePromptKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	newEdit, cmd := m.edit.Update(msg, m.keys)
 	m.edit = newEdit
 	return m, cmd
 }
 
-func (m Model) handleHelpKey(_ tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleHelpKey(_ tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.mode = modeList
 	return m, nil
 }
@@ -1016,7 +1014,7 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 	return m, createTaskCmd(m.client, msg)
 }
 
-func (m Model) handleMoveKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleMoveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.move == nil {
 		m.mode = modeList
 		return m, nil

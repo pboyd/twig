@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
@@ -78,14 +78,14 @@ func TestEditFormTabCyclesFocus(t *testing.T) {
 	}
 
 	for i := 1; i < focusCount; i++ {
-		f, _ = f.Update(tea.KeyMsg{Type: tea.KeyTab}, keys)
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
 		if f.focusIndex != i {
 			t.Errorf("after %d tab(s): want %d, got %d", i, i, f.focusIndex)
 		}
 	}
 
 	// One more Tab wraps to 0.
-	f, _ = f.Update(tea.KeyMsg{Type: tea.KeyTab}, keys)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
 	if f.focusIndex != focusName {
 		t.Errorf("after wrap: want focusName(%d), got %d", focusName, f.focusIndex)
 	}
@@ -97,7 +97,7 @@ func TestEditFormShiftTabGoesBack(t *testing.T) {
 	keys := DefaultKeyMap()
 
 	// Shift-Tab from focusName wraps to focusCancel.
-	f, _ = f.Update(tea.KeyMsg{Type: tea.KeyShiftTab}, keys)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, keys)
 	if f.focusIndex != focusCancel {
 		t.Errorf("shift-tab from 0: want focusCancel(%d), got %d", focusCancel, f.focusIndex)
 	}
@@ -108,7 +108,7 @@ func TestEditFormEscCancels(t *testing.T) {
 	f := NewRootForm(5)
 	keys := DefaultKeyMap()
 
-	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyEscape}, keys)
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
 	if cmd == nil {
 		t.Fatal("expected Cmd from Esc, got nil")
 	}
@@ -128,7 +128,7 @@ func TestEditFormCtrlSSaves(t *testing.T) {
 	f := NewEditForm(task, 2)
 	keys := DefaultKeyMap()
 
-	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyCtrlS}, keys)
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
 	if cmd == nil {
 		t.Fatal("expected Cmd from Ctrl+S, got nil")
 	}
@@ -156,7 +156,7 @@ func TestEditFormEscFromAnyField(t *testing.T) {
 		f := NewRootForm(0)
 		f.focusIndex = fi
 
-		_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyEscape}, keys)
+		_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
 		if cmd == nil {
 			t.Errorf("focusIndex=%d: expected Cmd from Esc", fi)
 			continue
@@ -174,7 +174,7 @@ func TestEditFormSaveButtonEnter(t *testing.T) {
 	f.focusIndex = focusSave
 	keys := DefaultKeyMap()
 
-	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyEnter}, keys)
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, keys)
 	if cmd == nil {
 		t.Fatal("expected Cmd from Enter on Save")
 	}
@@ -189,7 +189,7 @@ func TestEditFormCancelButtonEnter(t *testing.T) {
 	f.focusIndex = focusCancel
 	keys := DefaultKeyMap()
 
-	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyEnter}, keys)
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, keys)
 	if cmd == nil {
 		t.Fatal("expected Cmd from Enter on Cancel")
 	}
@@ -206,12 +206,12 @@ func TestEditForm_CtrlG_DescriptionFocused(t *testing.T) {
 	keys := DefaultKeyMap()
 
 	// Advance focus to Description.
-	f, _ = f.Update(tea.KeyMsg{Type: tea.KeyTab}, keys) // focusDescription
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys) // focusDescription
 	if f.focusIndex != focusDescription {
 		t.Fatalf("setup: focusIndex = %d, want focusDescription (%d)", f.focusIndex, focusDescription)
 	}
 
-	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyCtrlG}, keys)
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
 	if cmd == nil {
 		t.Fatal("ctrl+g on Description: expected non-nil Cmd, got nil")
 	}
@@ -235,7 +235,7 @@ func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 			f := NewRootForm(0)
 			f.focusIndex = tc.focus
 
-			_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyCtrlG}, keys)
+			_, cmd := f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
 			// Must not return an editor command — either nil or something else.
 			// We verify it does not return an editorFinishedMsg producer by checking
 			// the form does NOT immediately produce an editorFinishedMsg.

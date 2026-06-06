@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -93,16 +93,19 @@ func buildPlanTestModel(fc *fakePlanClient) Model {
 	return m
 }
 
-// pressKeyStr sends a key string to the model.
+// pressKeyStr sends a single-character key string to the model.
 func pressKeyStr(m Model, k string) (Model, tea.Cmd) {
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+	runes := []rune(k)
+	var msg tea.KeyPressMsg
+	if len(runes) == 1 {
+		msg = tea.KeyPressMsg{Code: runes[0], Text: k}
+	}
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd
 }
 
-// pressSpecialKey sends a special key (tab, shift+tab, etc.) to the model.
-func pressSpecialKey(m Model, typ tea.KeyType) (Model, tea.Cmd) {
-	msg := tea.KeyMsg{Type: typ}
+// pressSpecialKey sends a pre-built key press message to the model.
+func pressSpecialKey(m Model, msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd
 }
@@ -117,7 +120,7 @@ func TestTabSwitch_TasksToPlanning(t *testing.T) {
 	// Start on tasks tab
 	m.activeTab = tabTasks
 
-	m2, cmd := pressSpecialKey(m, tea.KeyTab)
+	m2, cmd := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
 	if m2.activeTab != tabPlanning {
 		t.Errorf("after Tab: expected tabPlanning, got %d", m2.activeTab)
@@ -133,7 +136,7 @@ func TestTabSwitch_PlanningToTasks(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc) // starts in tabPlanning
 
-	m2, _ := pressSpecialKey(m, tea.KeyTab)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
 	if m2.activeTab != tabTasks {
 		t.Errorf("after Tab on Planning: expected tabTasks, got %d", m2.activeTab)
@@ -146,7 +149,7 @@ func TestTabSwitch_ShiftTabPlanningToTasks(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc) // tabPlanning
 
-	m2, _ := pressSpecialKey(m, tea.KeyShiftTab)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 
 	if m2.activeTab != tabTasks {
 		t.Errorf("after Shift+Tab on Planning: expected tabTasks, got %d", m2.activeTab)
@@ -163,9 +166,9 @@ func TestTabSwitch_BackPreservesTasksCursor(t *testing.T) {
 	m.visible = []*visibleRow{{}, {}, {}}
 
 	// Switch to planning
-	m, _ = pressSpecialKey(m, tea.KeyTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	// Switch back to tasks
-	m, _ = pressSpecialKey(m, tea.KeyTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
 	if m.cursor != 2 {
 		t.Errorf("switching back to Tasks: cursor should be preserved (2), got %d", m.cursor)
@@ -179,7 +182,7 @@ func TestTabSwitch_BlockedWhileModal(t *testing.T) {
 	m := buildPlanTestModel(fc) // tabPlanning
 	m.plan.mode = planEventForm // a modal is open
 
-	m2, _ := pressSpecialKey(m, tea.KeyTab)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
 	if m2.activeTab != tabPlanning {
 		t.Errorf("Tab while modal open: activeTab should stay tabPlanning, got %d", m2.activeTab)
@@ -341,7 +344,7 @@ func TestAddTask_EscCancels(t *testing.T) {
 	m := buildPlanTestModel(fc)
 	m.plan.mode = planPickTask
 
-	m2, _ := pressSpecialKey(m, tea.KeyEscape)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if m2.plan.mode != planList {
 		t.Errorf("esc from picker: expected planList, got %d", m2.plan.mode)
@@ -371,7 +374,7 @@ func TestAddEvent_EscCancels(t *testing.T) {
 	m.plan.mode = planEventForm
 	m.initAddEventForm()
 
-	m2, _ := pressSpecialKey(m, tea.KeyEscape)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if m2.plan.mode != planList {
 		t.Errorf("esc from event form: expected planList, got %d", m2.plan.mode)
@@ -390,7 +393,7 @@ func TestAddEvent_InvalidTimeSetsError(t *testing.T) {
 	m.plan.form.fields[1].SetValue("not-a-time")
 
 	// Submit with Ctrl+S
-	msg := tea.KeyMsg{Type: tea.KeyCtrlS}
+	msg := tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
 	next, _ := m.Update(msg)
 	nm := next.(Model)
 
@@ -409,7 +412,7 @@ func TestTabSwitch_BlockedWhilePlannerForm(t *testing.T) {
 	m := buildPlanTestModel(fc)
 	m.plan.mode = planEdit
 
-	m2, _ := pressSpecialKey(m, tea.KeyTab)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
 	if m2.activeTab != tabPlanning {
 		t.Errorf("Tab while form open: should not switch tabs, got tab=%d", m2.activeTab)
@@ -427,7 +430,7 @@ func TestEdit_FormOpensOnEnter(t *testing.T) {
 	m.plan.entries = []*planv1.PlanEntry{{Id: 1, Name: "Standup", StartMinute: pint32(540)}}
 	m.plan.cursor = 0
 
-	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if m2.plan.mode != planEdit {
 		t.Errorf("Enter with entry: expected planEdit, got %d", m2.plan.mode)
@@ -450,7 +453,7 @@ func TestEdit_InertOnEmptyGrid(t *testing.T) {
 	m.plan.loaded = true
 	m.plan.entries = nil
 
-	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if m2.plan.mode != planList {
 		t.Errorf("Enter with no entries: mode should stay planList, got %d", m2.plan.mode)
@@ -576,7 +579,7 @@ func TestRemove_IssuesRPCOnCtrlD(t *testing.T) {
 	m.plan.entries = []*planv1.PlanEntry{{Id: 3, Name: "Review", StartMinute: pint32(600)}}
 	m.plan.cursor = 0
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Error("ctrl+d: expected removePlanCmd, got nil")
@@ -705,7 +708,7 @@ func TestDayNav_RefreshCtrlR(t *testing.T) {
 	m.plan.day = "2026-05-27"
 	m.plan.loaded = true
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Error("ctrl+r: expected reload command, got nil")
@@ -1130,23 +1133,23 @@ func TestPlanForm_TabCyclesThroughButtons(t *testing.T) {
 
 	// Tab through all fields
 	for i := 1; i < nFields; i++ {
-		m, _ = pressSpecialKey(m, tea.KeyTab)
+		m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 		if m.plan.form.focus != i {
 			t.Errorf("after Tab x%d: expected focus=%d, got %d", i, i, m.plan.form.focus)
 		}
 	}
 	// Next Tab lands on Save slot
-	m, _ = pressSpecialKey(m, tea.KeyTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if !planFocusSave(m.plan.form) {
 		t.Errorf("Tab to Save: expected planFocusSave=true, focus=%d", m.plan.form.focus)
 	}
 	// Next Tab lands on Cancel slot
-	m, _ = pressSpecialKey(m, tea.KeyTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if !planFocusCancel(m.plan.form) {
 		t.Errorf("Tab to Cancel: expected planFocusCancel=true, focus=%d", m.plan.form.focus)
 	}
 	// Wrap back to 0
-	m, _ = pressSpecialKey(m, tea.KeyTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if m.plan.form.focus != 0 {
 		t.Errorf("Tab wrap: expected focus=0, got %d", m.plan.form.focus)
 	}
@@ -1162,7 +1165,7 @@ func TestPlanForm_ShiftTabCyclesBackward(t *testing.T) {
 	m.initEditForm() // focus at 0
 
 	// Shift+Tab from 0 should wrap to Cancel slot (len(fields)+1)
-	m, _ = pressSpecialKey(m, tea.KeyShiftTab)
+	m, _ = pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	if !planFocusCancel(m.plan.form) {
 		t.Errorf("Shift+Tab from 0: expected Cancel slot, focus=%d", m.plan.form.focus)
 	}
@@ -1191,7 +1194,7 @@ func TestPlanForm_EnterInTextField_DoesNotSubmit(t *testing.T) {
 		}
 		initialMode := m.plan.mode
 
-		m2, _ := pressSpecialKey(m, tea.KeyEnter)
+		m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 		if m2.plan.mode != initialMode {
 			t.Errorf("mode %d: Enter in text field should not submit; mode changed from %d to %d",
@@ -1215,7 +1218,7 @@ func TestPlanForm_EnterOnSaveButton_Submits(t *testing.T) {
 		m.cyclePlanFormFocus(1)
 	}
 
-	_, cmd := pressSpecialKey(m, tea.KeyEnter)
+	_, cmd := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	// A no-op save (unchanged form) should close the form and return nil cmd.
 	// But we just care that Enter on Save does NOT silently do nothing —
 	// either cmd is non-nil (RPC) or the mode closed (no-op).
@@ -1242,7 +1245,7 @@ func TestPlanForm_EnterOnCancelButton_Closes(t *testing.T) {
 		m.cyclePlanFormFocus(1)
 	}
 
-	m2, cmd := pressSpecialKey(m, tea.KeyEnter)
+	m2, cmd := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m2.plan.mode != planList {
 		t.Errorf("Enter on Cancel: expected planList, got %d", m2.plan.mode)
 	}
@@ -1529,7 +1532,7 @@ func TestScheduleTaskForm_EnterInFieldDoesNotSubmit(t *testing.T) {
 	m.plan.loaded = true
 	m.initTaskTimeForm(5)
 
-	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if m2.plan.mode != planTaskTime {
 		t.Errorf("schedule form: Enter in text field should not submit; mode=%d", m2.plan.mode)
@@ -1544,7 +1547,7 @@ func TestAddEventForm_EnterInFieldDoesNotSubmit(t *testing.T) {
 	m.plan.loaded = true
 	m.initAddEventForm()
 
-	m2, _ := pressSpecialKey(m, tea.KeyEnter)
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if m2.plan.mode != planEventForm {
 		t.Errorf("add-event form: Enter in text field should not submit; mode=%d", m2.plan.mode)
@@ -1560,7 +1563,7 @@ func TestScheduleTaskForm_CtrlSSubmits(t *testing.T) {
 	m.initTaskTimeForm(5)
 	// Leave fields blank (untimed submission)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 
 	if cmd == nil {
 		t.Error("schedule form: Ctrl+S should submit (cmd non-nil)")
@@ -1641,7 +1644,7 @@ func TestPlanSendPickDay_SetsSuccessNoticeWithDate(t *testing.T) {
 	m := buildTasksTabModel(fc, "Write docs")
 
 	// Open date prompt via ctrl+p.
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	// Manually simulate the state that ctrl+p creates.
 	m.datePromptTaskID = 1
 	m.datePromptTaskName = "Write docs"
@@ -1650,7 +1653,7 @@ func TestPlanSendPickDay_SetsSuccessNoticeWithDate(t *testing.T) {
 	m.datePromptInput.SetValue("2026-07-04")
 	m.datePromptInput.Focus()
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("ctrl+p confirm: expected addPlanTaskCmd, got nil")
 	}

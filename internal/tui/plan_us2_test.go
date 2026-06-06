@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 )
 
@@ -405,7 +405,7 @@ func TestTaskTimeForm_EscCancels(t *testing.T) {
 	m := buildPlanTestModel(fc)
 	m.initTaskTimeForm(5)
 
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if m2.(Model).plan.mode != planList {
 		t.Errorf("esc from task-time form: expected planList, got %d", m2.(Model).plan.mode)

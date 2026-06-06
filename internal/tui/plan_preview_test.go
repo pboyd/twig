@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"charm.land/bubbles/v2/textinput"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 )
 

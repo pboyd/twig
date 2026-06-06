@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
@@ -545,7 +545,7 @@ func TestBannerClearsOnKeypress(t *testing.T) {
 	}
 	m.cursor = 0
 	// Press 'j' (down) — should clear banner AND move cursor.
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
 	nm := next.(Model)
 	if nm.pom != nil {
 		t.Error("pom should be nil after banner-clearing keypress")
@@ -629,7 +629,7 @@ func TestPomActiveMsg_NilPomLeavesIdle(t *testing.T) {
 func TestQuitGuard_ActivePomSetsConfirmingQuit(t *testing.T) {
 	m := buildPomTestModel(nil)
 	m.pom = &activePom{taskID: 1, taskName: "task-one", startAt: time.Now()}
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	nm := next.(Model)
 	if !nm.confirmingQuit {
 		t.Error("expected confirmingQuit to be set when pom is active")
@@ -644,7 +644,7 @@ func TestQuitGuard_YQuitsWhenConfirming(t *testing.T) {
 	m := buildPomTestModel(nil)
 	m.pom = &activePom{taskID: 1, taskName: "task-one", startAt: time.Now()}
 	m.confirmingQuit = true
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	mustQuit(t, cmd)
 }
 
@@ -653,7 +653,7 @@ func TestQuitGuard_NClearsConfirmingQuit(t *testing.T) {
 	m := buildPomTestModel(nil)
 	m.pom = &activePom{taskID: 1, taskName: "task-one", startAt: time.Now()}
 	m.confirmingQuit = true
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
 	nm := next.(Model)
 	if nm.confirmingQuit {
 		t.Error("confirmingQuit should be cleared after 'n'")
@@ -668,7 +668,7 @@ func TestQuitGuard_EscClearsConfirmingQuit(t *testing.T) {
 	m := buildPomTestModel(nil)
 	m.pom = &activePom{taskID: 1, taskName: "task-one", startAt: time.Now()}
 	m.confirmingQuit = true
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	nm := next.(Model)
 	if nm.confirmingQuit {
 		t.Error("confirmingQuit should be cleared after esc")
@@ -681,7 +681,7 @@ func TestQuitGuard_EscClearsConfirmingQuit(t *testing.T) {
 // TestQuitGuard_NoPomQuitsImmediately checks that q with no pom quits immediately.
 func TestQuitGuard_NoPomQuitsImmediately(t *testing.T) {
 	m := buildPomTestModel(nil)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	mustQuit(t, cmd)
 }
 
@@ -695,7 +695,7 @@ func TestQuitGuard_CompletedPomQuitsImmediately(t *testing.T) {
 		completed: true,
 		banner:    "done",
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	mustQuit(t, cmd)
 }
 

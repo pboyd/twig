@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -212,7 +210,7 @@ func TestPlanningHelp_ShowsPlanningBindings(t *testing.T) {
 	m.keys.PlanningMode = true
 	m.mode = modeHelp
 
-	out := m.View()
+	out := m.View().Content
 
 	// Planning FullHelp includes PlanAddTask ("add task"), navigation, etc.
 	if !strings.Contains(out, "add task") {
@@ -732,9 +730,6 @@ func TestSeparator_AbsentWhenNoUntimedEntries(t *testing.T) {
 // TestPlanGridOptions_CursorBgOnLightBg verifies that with hasDarkBackground=false
 // the SelectionStyle uses the light cursorBg color (#DDEEFF = rgb(221,238,255)).
 func TestPlanGridOptions_CursorBgOnLightBg(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
-
 	today := "2026-05-29"
 	m := ExportNewPlanModel(nil, nil, today)
 	m.styled = true
@@ -756,9 +751,6 @@ func TestPlanGridOptions_CursorBgOnLightBg(t *testing.T) {
 // TestPlanGridOptions_CursorBgOnDarkBg verifies that with hasDarkBackground=true
 // the SelectionStyle uses the dark cursorBg color (#1A2A3A = rgb(26,42,58)).
 func TestPlanGridOptions_CursorBgOnDarkBg(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
-
 	today := "2026-05-29"
 	m := ExportNewPlanModel(nil, nil, today)
 	m.styled = true

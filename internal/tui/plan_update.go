@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"

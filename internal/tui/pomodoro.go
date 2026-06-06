@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"

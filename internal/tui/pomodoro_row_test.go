@@ -4,8 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
 )
 
 // countPomodoroGlyphs counts the total number of pomodoro row glyphs
@@ -15,8 +14,6 @@ func countPomodoroGlyphs(s string) int {
 }
 
 func TestRenderPomodoroRow(t *testing.T) {
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
 	tests := []struct {
 		name       string
 		estimate   int

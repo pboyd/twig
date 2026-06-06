@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	"github.com/pboyd/twig/internal/cli"
 )
@@ -15,11 +15,9 @@ func (m Model) planGridOptions() cli.GridOptions {
 	opts := cli.GridOptions{HideID: true, Styled: m.styled}
 	if len(m.plan.entries) > 0 && m.plan.cursor < len(m.plan.entries) {
 		opts.SelectedID = m.plan.entries[m.plan.cursor].Id
-		bgColor := cursorBg.Light
-		if m.hasDarkBackground {
-			bgColor = cursorBg.Dark
-		}
-		hs := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(bgColor))
+		ld := lipgloss.LightDark(m.hasDarkBackground)
+		bg := ld(lipgloss.Color("#DDEEFF"), lipgloss.Color("#1A2A3A"))
+		hs := lipgloss.NewStyle().Bold(true).Background(bg)
 		opts.SelectionStyle = func(s string) string { return hs.Render(s) }
 	}
 
