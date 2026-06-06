@@ -129,7 +129,7 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 		}
 	}
 	// Glyph row must appear for estimate=3, completed=0.
-	if strings.Count(out, "🍅") != 3 {
+	if countPomodoroGlyphs(out) != 3 {
 		t.Errorf("renderDetails styled: want 3 glyphs for estimate=3; got:\n%q", out)
 	}
 	// Unstyled path: no ANSI codes on name (this checks styled=false, not styled=true).
@@ -164,7 +164,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 			}
 			// Styled path.
 			out := renderDetails(task, 60, true)
-			n := strings.Count(out, "🍅")
+			n := countPomodoroGlyphs(out)
 			if n != tc.wantN {
 				t.Errorf("styled: glyph count=%d, want %d; %q", n, tc.wantN, out)
 			}
@@ -174,7 +174,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 			}
 			// Plain path.
 			plain := renderDetails(task, 60, false)
-			np := strings.Count(plain, "🍅")
+			np := countPomodoroGlyphs(plain)
 			if np != tc.wantN {
 				t.Errorf("plain: glyph count=%d, want %d; %q", np, tc.wantN, plain)
 			}

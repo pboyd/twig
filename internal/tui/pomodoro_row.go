@@ -6,10 +6,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// renderPomodoroRow renders a row of tomato glyphs representing pomodoro progress.
+// Glyphs used in the pomodoro progress row. Text-presentation characters from
+// the Geometric Shapes block are used instead of emoji so that all terminal
+// emulators draw them from the text font and respect ANSI color/bold styling.
+const (
+	glyphDone   = "●" // completed within estimate   (bold red)
+	glyphRemain = "○" // estimated but not yet done   (dim)
+	glyphOver   = "◆" // completed beyond estimate    (bold yellow)
+)
+
+// renderPomodoroRow renders a row of progress glyphs representing pomodoro
+// progress: ● done, ○ remaining, ◆ over-estimate.
 // estimate == 0 && completed == 0 returns "" (caller omits the line entirely).
 // When styled, segments are colored: bold-red (done), dim (remaining), bold-yellow (over).
-// When not styled, emits n plain glyphs with no ANSI codes.
+// When not styled, emits plain glyphs with no ANSI codes; distinct shapes make
+// state readable even without color.
 func renderPomodoroRow(estimate, completed int, styled bool) string {
 	n := estimate
 	if completed > n {
@@ -30,7 +41,17 @@ func renderPomodoroRow(estimate, completed int, styled bool) string {
 	}
 
 	if !styled {
-		return strings.Repeat("🍅", n)
+		var sb strings.Builder
+		for i := 0; i < done; i++ {
+			sb.WriteString(glyphDone)
+		}
+		for i := 0; i < remain; i++ {
+			sb.WriteString(glyphRemain)
+		}
+		for i := 0; i < over; i++ {
+			sb.WriteString(glyphOver)
+		}
+		return sb.String()
 	}
 
 	doneStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroDone)
@@ -39,13 +60,13 @@ func renderPomodoroRow(estimate, completed int, styled bool) string {
 
 	var sb strings.Builder
 	for i := 0; i < done; i++ {
-		sb.WriteString(doneStyle.Render("🍅"))
+		sb.WriteString(doneStyle.Render(glyphDone))
 	}
 	for i := 0; i < remain; i++ {
-		sb.WriteString(dimStyle.Render("🍅"))
+		sb.WriteString(dimStyle.Render(glyphRemain))
 	}
 	for i := 0; i < over; i++ {
-		sb.WriteString(overStyle.Render("🍅"))
+		sb.WriteString(overStyle.Render(glyphOver))
 	}
 	return sb.String()
 }

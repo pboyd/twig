@@ -795,7 +795,7 @@ func TestRenderPlanDetail_GlyphRowLinkedTask(t *testing.T) {
 
 	// Plain mode.
 	plain := renderPlanDetail(entry, task, 60, false)
-	n := strings.Count(plain, "🍅")
+	n := countPomodoroGlyphs(plain)
 	if n != 3 {
 		t.Errorf("plain: want 3 glyphs for estimate=3; got %d; %q", n, plain)
 	}
@@ -805,7 +805,7 @@ func TestRenderPlanDetail_GlyphRowLinkedTask(t *testing.T) {
 
 	// Styled mode.
 	styled := renderPlanDetail(entry, task, 60, true)
-	ns := strings.Count(styled, "🍅")
+	ns := countPomodoroGlyphs(styled)
 	if ns != 3 {
 		t.Errorf("styled: want 3 glyphs for estimate=3; got %d; %q", ns, styled)
 	}
@@ -820,7 +820,7 @@ func TestRenderPlanDetail_GlyphRowEventEntry(t *testing.T) {
 		TaskId:         0,
 	}
 	out := renderPlanDetail(entry, nil, 60, false)
-	if strings.Contains(out, "🍅") {
+	if countPomodoroGlyphs(out) != 0 {
 		t.Errorf("event entry must not show glyph row; got %q", out)
 	}
 }
@@ -839,7 +839,7 @@ func TestRenderPlanDetail_GlyphRowNoPomodoros(t *testing.T) {
 		CompletedPomodoroCount: 0,
 	}
 	out := renderPlanDetail(entry, task, 60, false)
-	if strings.Contains(out, "🍅") {
+	if countPomodoroGlyphs(out) != 0 {
 		t.Errorf("task with 0 estimate and 0 completed must not show glyph row; got %q", out)
 	}
 }

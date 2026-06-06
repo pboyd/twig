@@ -8,18 +8,24 @@ import (
 	"github.com/muesli/termenv"
 )
 
+// countPomodoroGlyphs counts the total number of pomodoro row glyphs
+// (done ●, remaining ○, over ◆) in s, regardless of state.
+func countPomodoroGlyphs(s string) int {
+	return strings.Count(s, "●") + strings.Count(s, "○") + strings.Count(s, "◆")
+}
+
 func TestRenderPomodoroRow(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(termenv.Ascii) })
 	tests := []struct {
-		name      string
-		estimate  int
-		completed int
-		styled    bool
-		wantEmpty bool
-		wantN     int // total glyph count (each 🍅 counts as 1)
-		wantRed   int // bold-red (pomodoroDone) segments
-		wantDim   int // dim segments
+		name       string
+		estimate   int
+		completed  int
+		styled     bool
+		wantEmpty  bool
+		wantN      int // total glyph count (● ○ ◆ each count as 1)
+		wantRed    int // bold-red (pomodoroDone) segments
+		wantDim    int // dim segments
 		wantYellow int // bold-yellow (pomodoroOver) segments
 	}{
 		{name: "empty state", estimate: 0, completed: 0, styled: true, wantEmpty: true},
@@ -36,9 +42,9 @@ func TestRenderPomodoroRow(t *testing.T) {
 	dimStyle := lipgloss.NewStyle().Foreground(dim)
 	overStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroOver)
 
-	doneRendered := doneStyle.Render("🍅")
-	dimRendered := dimStyle.Render("🍅")
-	overRendered := overStyle.Render("🍅")
+	doneRendered := doneStyle.Render("●")
+	dimRendered := dimStyle.Render("○")
+	overRendered := overStyle.Render("◆")
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -56,7 +62,7 @@ func TestRenderPomodoroRow(t *testing.T) {
 			}
 
 			// Count glyphs.
-			n := strings.Count(got, "🍅")
+			n := countPomodoroGlyphs(got)
 			if n != tc.wantN {
 				t.Errorf("glyph count: got %d, want %d; output: %q", n, tc.wantN, got)
 			}
