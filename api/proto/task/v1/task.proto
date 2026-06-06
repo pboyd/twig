@@ -95,6 +95,11 @@ message Task {
   // parent_id, or the root group for parentless tasks). Lower sorts first.
   // Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
   int64 position = 9;
+  // Optional day before which this task is hidden from default ("pending")
+  // views. Pinned to midnight UTC of the chosen calendar day. Unset when the
+  // task is not snoozed. Clients hide the task while this day is strictly after
+  // the client's local current day; on/after that day the task is shown.
+  google.protobuf.Timestamp snooze_until = 10;
 }
 
 message Pomodoro {
@@ -129,6 +134,8 @@ message CreateTaskRequest {
   string description = 2;
   google.protobuf.Timestamp due = 3;
   optional int64 parent_id = 4;
+  // Optional snooze day (midnight UTC). Unset = not snoozed.
+  google.protobuf.Timestamp snooze_until = 5;
 }
 
 message CreateTaskResponse {
@@ -160,6 +167,8 @@ message UpdateTaskRequest {
   google.protobuf.Timestamp due = 4;
   // Unset clears the parent, making the task top-level.
   optional int64 parent_id = 5;
+  // Full-replace: present sets/overwrites; absent clears (un-snoozes the task).
+  google.protobuf.Timestamp snooze_until = 6;
 }
 
 message UpdateTaskResponse {

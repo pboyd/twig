@@ -52,6 +52,7 @@ type Task struct {
 	CompletedAt pgtype.Timestamptz
 	Estimate    int16
 	Position    int32
+	SnoozeUntil pgtype.Timestamptz
 }
 
 type User struct {

@@ -20,6 +20,7 @@ import (
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
 	"github.com/pboyd/twig/services/twig/internal/handler"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var testUserCounter int64
@@ -1401,5 +1402,100 @@ func TestCompleteTask_PositionUnchanged(t *testing.T) {
 	if posMap[bID] != 2 {
 		t.Errorf("B position = %d, want 2", posMap[bID])
 	}
+}
+
+// ---- Unit tests: snooze_until field ----
+
+func TestDbTaskToProto_SnoozeUntil(t *testing.T) {
+	t.Run("snooze_until unset when Valid false", func(t *testing.T) {
+		row := db.Task{ID: 1, Name: "task"}
+		pt := handler.ExportDbTaskToProto(row)
+		if pt.SnoozeUntil != nil {
+			t.Errorf("expected nil snooze_until, got %v", pt.SnoozeUntil)
+		}
+	})
+
+	t.Run("snooze_until set when Valid true", func(t *testing.T) {
+		ts := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+		row := db.Task{
+			ID:          1,
+			Name:        "task",
+			SnoozeUntil: pgtype.Timestamptz{Time: ts, Valid: true},
+		}
+		pt := handler.ExportDbTaskToProto(row)
+		if pt.SnoozeUntil == nil {
+			t.Fatal("expected non-nil snooze_until")
+		}
+		if !pt.SnoozeUntil.AsTime().Equal(ts) {
+			t.Errorf("snooze_until = %v, want %v", pt.SnoozeUntil.AsTime(), ts)
+		}
+	})
+}
+
+func TestCreateTask_SnoozeUntil_Integration(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	snoozeTime := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	snoozeTS := timestamppb.New(snoozeTime)
+
+	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+		Name:        "snoozed task",
+		SnoozeUntil: snoozeTS,
+	}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if resp.Msg.Task.SnoozeUntil == nil {
+		t.Fatal("expected snooze_until to be set")
+	}
+	if !resp.Msg.Task.SnoozeUntil.AsTime().Equal(snoozeTime) {
+		t.Errorf("snooze_until = %v, want %v", resp.Msg.Task.SnoozeUntil.AsTime(), snoozeTime)
+	}
+}
+
+func TestUpdateTask_SnoozeUntil_Integration(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Create task without snooze.
+	createResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	id := createResp.Msg.Task.Id
+
+	snoozeTime := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("set snooze_until", func(t *testing.T) {
+		resp, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+			Id:          id,
+			Name:        "task",
+			SnoozeUntil: timestamppb.New(snoozeTime),
+		}))
+		if err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+		if resp.Msg.Task.SnoozeUntil == nil {
+			t.Fatal("expected snooze_until to be set after update")
+		}
+		if !resp.Msg.Task.SnoozeUntil.AsTime().Equal(snoozeTime) {
+			t.Errorf("snooze_until = %v, want %v", resp.Msg.Task.SnoozeUntil.AsTime(), snoozeTime)
+		}
+	})
+
+	t.Run("clear snooze_until (full-replace)", func(t *testing.T) {
+		resp, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+			Id:   id,
+			Name: "task",
+			// SnoozeUntil intentionally omitted — should clear it.
+		}))
+		if err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+		if resp.Msg.Task.SnoozeUntil != nil {
+			t.Errorf("expected nil snooze_until after clear, got %v", resp.Msg.Task.SnoozeUntil)
+		}
+	})
 }
 

@@ -42,6 +42,9 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 	if t.CompletedAt.Valid {
 		pt.CompletedAt = timestamppb.New(t.CompletedAt.Time)
 	}
+	if t.SnoozeUntil.Valid {
+		pt.SnoozeUntil = timestamppb.New(t.SnoozeUntil.Time)
+	}
 	return pt
 }
 
@@ -94,6 +97,9 @@ func (t *Task) CreateTask(
 	}
 	if req.Msg.Due != nil {
 		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
+	}
+	if req.Msg.SnoozeUntil != nil {
+		params.SnoozeUntil = pgtype.Timestamptz{Time: req.Msg.SnoozeUntil.AsTime(), Valid: true}
 	}
 	if req.Msg.ParentId != nil {
 		exists, err := t.Queries.TaskExists(ctx, db.TaskExistsParams{ID: *req.Msg.ParentId, UserID: userID})
@@ -232,6 +238,9 @@ func (t *Task) UpdateTask(
 	}
 	if req.Msg.Due != nil {
 		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
+	}
+	if req.Msg.SnoozeUntil != nil {
+		params.SnoozeUntil = pgtype.Timestamptz{Time: req.Msg.SnoozeUntil.AsTime(), Valid: true}
 	}
 	if req.Msg.ParentId != nil {
 		newParentID := *req.Msg.ParentId

@@ -27,7 +27,7 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 **Purpose**: Prepare codegen toolchain and create empty files the foundational phase fills in.
 
-- [ ] T001 Verify codegen toolchain is available (`buf`, `sqlc`) and create empty migration files `services/twig/db/migrations/000009_task_snooze.up.sql` and `services/twig/db/migrations/000009_task_snooze.down.sql`
+- [X] T001 Verify codegen toolchain is available (`buf`, `sqlc`) and create empty migration files `services/twig/db/migrations/000009_task_snooze.up.sql` and `services/twig/db/migrations/000009_task_snooze.down.sql`
 
 ---
 
@@ -37,13 +37,13 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Add `snooze_until` to `Task` (field 10), `CreateTaskRequest` (field 5), and `UpdateTaskRequest` (field 6) in `api/proto/task/v1/task.proto`, per `contracts/task-api.md`
-- [ ] T003 [P] Write the column migration: `ALTER TABLE tasks ADD COLUMN snooze_until TIMESTAMPTZ;` in `services/twig/db/migrations/000009_task_snooze.up.sql` and `ALTER TABLE tasks DROP COLUMN snooze_until;` in the `.down.sql`
-- [ ] T004 [P] Add `snooze_until` to the `CreateTask` (column list + values) and `UpdateTask` (`SET` clause) queries in `services/twig/db/queries/task.sql`
-- [ ] T005 Run `make proto` from repo root to regenerate Go stubs in `api/gen/` (depends on T002)
-- [ ] T006 Run `sqlc generate` in `services/twig/` to regenerate `services/twig/internal/db/` (depends on T003, T004)
-- [ ] T007 Map the field in `services/twig/internal/handler/task.go`: in `dbTaskToProto` set `pt.SnoozeUntil` when `t.SnoozeUntil.Valid`; in `CreateTask` and `UpdateTask` set `params.SnoozeUntil` from `req.Msg.SnoozeUntil` (mirror the existing `due` handling) (depends on T005, T006)
-- [ ] T008 [P] Add handler tests in `services/twig/internal/handler/task_test.go`: `dbTaskToProto` maps `snooze_until` (set + unset); `CreateTask`/`UpdateTask` round-trip the value; `UpdateTask` with no `snooze_until` clears it (full-replace) (depends on T007)
+- [X] T002 [P] Add `snooze_until` to `Task` (field 10), `CreateTaskRequest` (field 5), and `UpdateTaskRequest` (field 6) in `api/proto/task/v1/task.proto`, per `contracts/task-api.md`
+- [X] T003 [P] Write the column migration: `ALTER TABLE tasks ADD COLUMN snooze_until TIMESTAMPTZ;` in `services/twig/db/migrations/000009_task_snooze.up.sql` and `ALTER TABLE tasks DROP COLUMN snooze_until;` in the `.down.sql`
+- [X] T004 [P] Add `snooze_until` to the `CreateTask` (column list + values) and `UpdateTask` (`SET` clause) queries in `services/twig/db/queries/task.sql`
+- [X] T005 Run `make proto` from repo root to regenerate Go stubs in `api/gen/` (depends on T002)
+- [X] T006 Run `sqlc generate` in `services/twig/` to regenerate `services/twig/internal/db/` (depends on T003, T004)
+- [X] T007 Map the field in `services/twig/internal/handler/task.go`: in `dbTaskToProto` set `pt.SnoozeUntil` when `t.SnoozeUntil.Valid`; in `CreateTask` and `UpdateTask` set `params.SnoozeUntil` from `req.Msg.SnoozeUntil` (mirror the existing `due` handling) (depends on T005, T006)
+- [X] T008 [P] Add handler tests in `services/twig/internal/handler/task_test.go`: `dbTaskToProto` maps `snooze_until` (set + unset); `CreateTask`/`UpdateTask` round-trip the value; `UpdateTask` with no `snooze_until` clears it (full-replace) (depends on T007)
 
 **Checkpoint**: The API now persists and returns `snooze_until`. Client work can begin (US1/US2 in sequence; US3 in parallel).
 
@@ -57,11 +57,11 @@ Multi-module repo (per plan.md): proto in `api/`, server in `services/twig/`, CL
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add the Snooze field to the edit form in `internal/tui/edit.go`: introduce `focusSnooze`, add a `snooze textinput.Model` to `editFormModel`, shift `focusSave`/`focusCancel`/`focusCount`, add a blank-form input (placeholder e.g. `"YYYY-MM-DD (optional)"`), prefill it in `NewEditForm` from `task.SnoozeUntil` formatted as a **bare day** `2006-01-02` (not RFC3339), and render its label/field in `View`, `cycleFocus`, and `updateFocusedField`
-- [ ] T010 [US1] Add `snoozeStr` to `editSavedMsg` and populate it from the snooze input on both the Ctrl+S and Enter-on-Save paths in `internal/tui/edit.go`
-- [ ] T011 [US1] In `internal/tui/update.go`, parse `msg.snoozeStr` via `cli.ParseDue` and set `req.SnoozeUntil` in both `createTaskCmd` and `updateTaskCmd`; leave it unset when the string is empty so `UpdateTask`'s full-replace clears the snooze (un-snooze)
-- [ ] T012 [US1] Hide future-snoozed tasks (and their whole subtree) from the default view in `internal/tui/tree.go`: add an `isSnoozed(task, today)` helper (UTC date of `snooze_until` strictly after local `today`), include it in `emitNode`'s skip condition and the `hasVisibleChildren` check, and thread a `today` value through `buildVisible`/`emitNode`/`visibleSiblings` (default `time.Now().Local()`), gated by the existing show-all flag
-- [ ] T013 [P] [US1] Update `internal/tui/export_test.go` shim and add tests (`internal/tui/edit_test.go`, `internal/tui/tree_test.go`): form save emits `snoozeStr`; `buildVisible` with an injected `today` hides a future-snoozed node **and its descendants** in the pending view, and keeps tasks snoozed for today/past visible
+- [X] T009 [US1] Add the Snooze field to the edit form in `internal/tui/edit.go`: introduce `focusSnooze`, add a `snooze textinput.Model` to `editFormModel`, shift `focusSave`/`focusCancel`/`focusCount`, add a blank-form input (placeholder e.g. `"YYYY-MM-DD (optional)"`), prefill it in `NewEditForm` from `task.SnoozeUntil` formatted as a **bare day** `2006-01-02` (not RFC3339), and render its label/field in `View`, `cycleFocus`, and `updateFocusedField`
+- [X] T010 [US1] Add `snoozeStr` to `editSavedMsg` and populate it from the snooze input on both the Ctrl+S and Enter-on-Save paths in `internal/tui/edit.go`
+- [X] T011 [US1] In `internal/tui/update.go`, parse `msg.snoozeStr` via `cli.ParseDue` and set `req.SnoozeUntil` in both `createTaskCmd` and `updateTaskCmd`; leave it unset when the string is empty so `UpdateTask`'s full-replace clears the snooze (un-snooze)
+- [X] T012 [US1] Hide future-snoozed tasks (and their whole subtree) from the default view in `internal/tui/tree.go`: add an `isSnoozed(task, today)` helper (UTC date of `snooze_until` strictly after local `today`), include it in `emitNode`'s skip condition and the `hasVisibleChildren` check, and thread a `today` value through `buildVisible`/`emitNode`/`visibleSiblings` (default `time.Now().Local()`), gated by the existing show-all flag
+- [X] T013 [P] [US1] Update `internal/tui/export_test.go` shim and add tests (`internal/tui/edit_test.go`, `internal/tui/tree_test.go`): form save emits `snoozeStr`; `buildVisible` with an injected `today` hides a future-snoozed node **and its descendants** in the pending view, and keeps tasks snoozed for today/past visible
 
 **Checkpoint**: Snoozing from the TUI works end-to-end; the pending view honors it. This is the MVP.
 

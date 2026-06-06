@@ -1,6 +1,6 @@
 -- name: CreateTask :one
-INSERT INTO tasks (name, description, due, parent_id, user_id, position)
-VALUES ($1, $2, $3, $4, $5,
+INSERT INTO tasks (name, description, due, parent_id, user_id, snooze_until, position)
+VALUES ($1, $2, $3, $4, $5, $6,
   COALESCE((SELECT MAX(position) + 1 FROM tasks WHERE user_id = $5 AND parent_id IS NOT DISTINCT FROM $4), 0))
 RETURNING *;
 
@@ -12,7 +12,7 @@ SELECT * FROM tasks WHERE user_id = $1 ORDER BY id;
 
 -- name: UpdateTask :one
 UPDATE tasks
-SET name = $2, description = $3, due = $4, parent_id = $5
+SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7
 WHERE id = $1 AND user_id = $6
 RETURNING *;
 

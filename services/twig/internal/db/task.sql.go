@@ -15,7 +15,7 @@ const completeTask = `-- name: CompleteTask :one
 UPDATE tasks
 SET completed_at = COALESCE(completed_at, NOW())
 WHERE id = $1 AND user_id = $2
-RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until
 `
 
 type CompleteTaskParams struct {
@@ -36,15 +36,16 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (name, description, due, parent_id, user_id, position)
-VALUES ($1, $2, $3, $4, $5,
+INSERT INTO tasks (name, description, due, parent_id, user_id, snooze_until, position)
+VALUES ($1, $2, $3, $4, $5, $6,
   COALESCE((SELECT MAX(position) + 1 FROM tasks WHERE user_id = $5 AND parent_id IS NOT DISTINCT FROM $4), 0))
-RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until
 `
 
 type CreateTaskParams struct {
@@ -53,6 +54,7 @@ type CreateTaskParams struct {
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
 	UserID      int64
+	SnoozeUntil pgtype.Timestamptz
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -62,6 +64,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.Due,
 		arg.ParentID,
 		arg.UserID,
+		arg.SnoozeUntil,
 	)
 	var i Task
 	err := row.Scan(
@@ -74,6 +77,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }
@@ -130,7 +134,7 @@ func (q *Queries) GetParentCompletion(ctx context.Context, arg GetParentCompleti
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position FROM tasks WHERE id = $1 AND user_id = $2
+SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until FROM tasks WHERE id = $1 AND user_id = $2
 `
 
 type GetTaskParams struct {
@@ -151,6 +155,7 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (Task, error) 
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }
@@ -223,7 +228,7 @@ func (q *Queries) ListIncompleteDescendantIds(ctx context.Context, arg ListIncom
 }
 
 const listSiblingGroup = `-- name: ListSiblingGroup :many
-SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position FROM tasks
+SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until FROM tasks
 WHERE user_id = $1 AND parent_id IS NOT DISTINCT FROM $2
 ORDER BY position, id
 FOR UPDATE
@@ -253,6 +258,7 @@ func (q *Queries) ListSiblingGroup(ctx context.Context, arg ListSiblingGroupPara
 			&i.CompletedAt,
 			&i.Estimate,
 			&i.Position,
+			&i.SnoozeUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -265,7 +271,7 @@ func (q *Queries) ListSiblingGroup(ctx context.Context, arg ListSiblingGroupPara
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position FROM tasks WHERE user_id = $1 ORDER BY id
+SELECT id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until FROM tasks WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
@@ -287,6 +293,7 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 			&i.CompletedAt,
 			&i.Estimate,
 			&i.Position,
+			&i.SnoozeUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -299,7 +306,7 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 }
 
 const setTaskEstimate = `-- name: SetTaskEstimate :one
-UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position
+UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until
 `
 
 type SetTaskEstimateParams struct {
@@ -321,6 +328,7 @@ func (q *Queries) SetTaskEstimate(ctx context.Context, arg SetTaskEstimateParams
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }
@@ -345,7 +353,7 @@ const uncompleteTask = `-- name: UncompleteTask :one
 UPDATE tasks
 SET completed_at = NULL
 WHERE id = $1 AND user_id = $2
-RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until
 `
 
 type UncompleteTaskParams struct {
@@ -366,15 +374,16 @@ func (q *Queries) UncompleteTask(ctx context.Context, arg UncompleteTaskParams) 
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }
 
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
-SET name = $2, description = $3, due = $4, parent_id = $5
+SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7
 WHERE id = $1 AND user_id = $6
-RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position
+RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until
 `
 
 type UpdateTaskParams struct {
@@ -384,6 +393,7 @@ type UpdateTaskParams struct {
 	Due         pgtype.Timestamptz
 	ParentID    pgtype.Int8
 	UserID      int64
+	SnoozeUntil pgtype.Timestamptz
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
@@ -394,6 +404,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.Due,
 		arg.ParentID,
 		arg.UserID,
+		arg.SnoozeUntil,
 	)
 	var i Task
 	err := row.Scan(
@@ -406,6 +417,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.CompletedAt,
 		&i.Estimate,
 		&i.Position,
+		&i.SnoozeUntil,
 	)
 	return i, err
 }

@@ -16,9 +16,10 @@ const (
 	focusDescription = 1
 	focusDue         = 2
 	focusEstimate    = 3
-	focusSave        = 4
-	focusCancel      = 5
-	focusCount       = 6
+	focusSnooze      = 4
+	focusSave        = 5
+	focusCancel      = 6
+	focusCount       = 7
 )
 
 // editFormModel holds the state of the task edit/create form.
@@ -29,6 +30,7 @@ type editFormModel struct {
 	description      textarea.Model
 	due              textinput.Model
 	pomodoroEstimate textinput.Model
+	snooze           textinput.Model
 	focusIndex       int
 	originalCursor   int
 }
@@ -41,6 +43,7 @@ type editSavedMsg struct {
 	description    string
 	dueStr         string
 	estimateStr    string
+	snoozeStr      string
 	originalCursor int
 }
 
@@ -64,6 +67,9 @@ func NewEditForm(task *taskv1.Task, originalCursor int) editFormModel {
 	}
 	if task.GetEstimate() > 0 {
 		f.pomodoroEstimate.SetValue(fmt.Sprintf("%d", task.GetEstimate()))
+	}
+	if task.SnoozeUntil != nil {
+		f.snooze.SetValue(task.SnoozeUntil.AsTime().UTC().Format("2006-01-02"))
 	}
 	return f
 }
@@ -97,11 +103,15 @@ func newBlankForm(originalCursor int) editFormModel {
 	est.Placeholder = "Pomodoro estimate (optional)"
 	est.CharLimit = 3
 
+	snooze := textinput.New()
+	snooze.Placeholder = "YYYY-MM-DD (optional)"
+
 	return editFormModel{
 		name:             name,
 		description:      desc,
 		due:              due,
 		pomodoroEstimate: est,
+		snooze:           snooze,
 		focusIndex:       focusName,
 		originalCursor:   originalCursor,
 	}
@@ -128,6 +138,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 				description:    f.description.Value(),
 				dueStr:         f.due.Value(),
 				estimateStr:    f.pomodoroEstimate.Value(),
+				snoozeStr:      f.snooze.Value(),
 				originalCursor: f.originalCursor,
 			}
 		}
@@ -156,13 +167,14 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 					description:    f.description.Value(),
 					dueStr:         f.due.Value(),
 					estimateStr:    f.pomodoroEstimate.Value(),
+					snoozeStr:      f.snooze.Value(),
 					originalCursor: f.originalCursor,
 				}
 			}
 		case focusCancel:
 			return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
 		// Enter on single-line fields advances focus.
-		case focusName, focusDue, focusEstimate:
+		case focusName, focusDue, focusEstimate, focusSnooze:
 			f = f.cycleFocus(1)
 			return f, nil
 		}
@@ -179,6 +191,7 @@ func (f editFormModel) cycleFocus(delta int) editFormModel {
 	f.description.Blur()
 	f.due.Blur()
 	f.pomodoroEstimate.Blur()
+	f.snooze.Blur()
 	switch f.focusIndex {
 	case focusName:
 		f.name.Focus()
@@ -188,6 +201,8 @@ func (f editFormModel) cycleFocus(delta int) editFormModel {
 		f.due.Focus()
 	case focusEstimate:
 		f.pomodoroEstimate.Focus()
+	case focusSnooze:
+		f.snooze.Focus()
 	}
 	return f
 }
@@ -204,12 +219,25 @@ func (f editFormModel) updateFocusedField(msg tea.Msg) (editFormModel, tea.Cmd) 
 		f.due, cmd = f.due.Update(msg)
 	case focusEstimate:
 		f.pomodoroEstimate, cmd = f.pomodoroEstimate.Update(msg)
+	case focusSnooze:
+		f.snooze, cmd = f.snooze.Update(msg)
 	}
 	return f, cmd
 }
 
 // View renders the edit form.
 func (f editFormModel) View(width int) string {
+	// fieldWidth is the usable width for text inputs: total width minus the
+	// label prefix ("  Label: " is ~12 chars at most, use 14 for safety).
+	fieldWidth := width - 14
+	if fieldWidth < 20 {
+		fieldWidth = 20
+	}
+	f.name.SetWidth(fieldWidth)
+	f.due.SetWidth(fieldWidth)
+	f.pomodoroEstimate.SetWidth(fieldWidth)
+	f.snooze.SetWidth(fieldWidth)
+
 	var sb strings.Builder
 
 	title := "New Task"
@@ -235,6 +263,9 @@ func (f editFormModel) View(width int) string {
 
 	sb.WriteString(fieldLabel("Estimate", f.focusIndex == focusEstimate))
 	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
+
+	sb.WriteString(fieldLabel("Snooze until", f.focusIndex == focusSnooze))
+	sb.WriteString(f.snooze.View() + "\n\n")
 
 	saveStyle := "[ Save ]"
 	cancelStyle := "[ Cancel ]"

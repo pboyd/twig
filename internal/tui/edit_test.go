@@ -2,9 +2,11 @@ package tui
 
 import (
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func makeTask(id int64, name string) *taskv1.Task {
@@ -214,6 +216,52 @@ func TestEditForm_CtrlG_DescriptionFocused(t *testing.T) {
 	_, cmd := f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
 	if cmd == nil {
 		t.Fatal("ctrl+g on Description: expected non-nil Cmd, got nil")
+	}
+}
+
+// TestEditFormSnooze_PreFill verifies NewEditForm prefills snooze from task.SnoozeUntil.
+func TestEditFormSnooze_PreFill(t *testing.T) {
+	snoozeTime := timestamppb.New(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: snoozeTime}
+	f := NewEditForm(task, 0)
+	if f.snooze.Value() != "2026-09-01" {
+		t.Errorf("snooze prefill: want %q, got %q", "2026-09-01", f.snooze.Value())
+	}
+}
+
+// TestEditFormSnooze_SaveEmitsSnoozeStr verifies Ctrl+S emits snoozeStr.
+func TestEditFormSnooze_SaveEmitsSnoozeStr(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0)
+	keys := DefaultKeyMap()
+
+	// Set the snooze value directly.
+	f.snooze.SetValue("2026-09-01")
+
+	// Ctrl+S saves.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.snoozeStr != "2026-09-01" {
+		t.Errorf("snoozeStr: want %q, got %q", "2026-09-01", saved.snoozeStr)
+	}
+}
+
+// TestEditFormSnooze_BlankSnoozeIsEmpty verifies snoozeStr is empty when snooze field is blank.
+func TestEditFormSnooze_BlankSnoozeIsEmpty(t *testing.T) {
+	task := makeTask(2, "no snooze")
+	f := NewEditForm(task, 0)
+	keys := DefaultKeyMap()
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	saved := cmd().(editSavedMsg)
+	if saved.snoozeStr != "" {
+		t.Errorf("expected empty snoozeStr, got %q", saved.snoozeStr)
 	}
 }
 

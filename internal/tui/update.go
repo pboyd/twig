@@ -111,6 +111,13 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			}
 			req.Due = ts
 		}
+		if msg.snoozeStr != "" {
+			ts, err := cli.ParseDue(msg.snoozeStr)
+			if err != nil {
+				return refreshedMsg{err: err}
+			}
+			req.SnoozeUntil = ts
+		}
 
 		_, err := client.UpdateTask(context.Background(), connect.NewRequest(req))
 		if err != nil {
@@ -135,6 +142,13 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 				return refreshedMsg{err: err}
 			}
 			req.Due = ts
+		}
+		if msg.snoozeStr != "" {
+			ts, err := cli.ParseDue(msg.snoozeStr)
+			if err != nil {
+				return refreshedMsg{err: err}
+			}
+			req.SnoozeUntil = ts
 		}
 
 		resp, err := client.CreateTask(context.Background(), connect.NewRequest(req))
@@ -275,7 +289,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			curID = m.visible[m.cursor].node.Task.Id
 		}
 		m.tree = msg.tree
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		if curID != 0 {
 			m.cursor = findCursor(m.visible, curID)
 		} else {
@@ -293,13 +307,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tree = msg.tree
 		m.err = nil
 		m.mode = modeList
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		if msg.highlightID != 0 {
 			m.cursor = findCursor(m.visible, msg.highlightID)
 			// If it's a subtask, ensure parent is expanded.
 			if msg.highlightID != 0 {
 				m.ensureVisible(msg.highlightID)
-				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 				m.cursor = findCursor(m.visible, msg.highlightID)
 			}
 		} else {
@@ -415,7 +429,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		expanded := allTaskIDs(msg.tree)
 		m.plan.picker = pickerState{
 			tree:     msg.tree,
-			visible:  buildVisible(msg.tree, expanded, false, nil),
+			visible:  buildVisible(msg.tree, expanded, false, nil, time.Now().Local()),
 			cursor:   0,
 			expanded: expanded,
 		}
@@ -576,7 +590,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.PlanningMode = false
 		m.plan.err = nil
 		m.ensureVisible(entry.TaskId)
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, entry.TaskId)
 		return m, nil
 
@@ -740,7 +754,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		if m.cursor > 0 {
 			m.cursor--
 		}
@@ -752,7 +766,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			targetID = m.visible[m.cursor+1].node.Task.Id
 		}
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		if targetID != 0 {
 			m.cursor = findCursor(m.visible, targetID)
 		} else {
@@ -761,12 +775,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.First):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		m.cursor = clampCursor(0, len(m.visible))
 
 	case key.Matches(msg, m.keys.Last):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		m.cursor = clampCursor(len(m.visible)-1, len(m.visible))
 
 	case key.Matches(msg, m.keys.Collapse):
@@ -780,11 +794,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				// Task is a leaf or already collapsed — collapse the parent and
 				// move the cursor up to it.
 				m.expanded[parent.Task.Id] = false
-				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+				m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 				m.cursor = findCursor(m.visible, parent.Task.Id)
 				return m, m.persistTreeStateCmd()
 			}
-			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 			return m, m.persistTreeStateCmd()
 		}
 
@@ -792,7 +806,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.visible) > 0 {
 			id := m.visible[m.cursor].node.Task.Id
 			m.expanded[id] = true
-			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+			m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 			// Move to first child if it is visible immediately after the cursor.
 			// Works whether the subtree was just expanded or was already open.
 			if next := m.cursor + 1; next < len(m.visible) {
@@ -923,7 +937,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.visible) > 0 {
 			curID = m.visible[m.cursor].node.Task.Id
 		}
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, curID)
 
 	case key.Matches(msg, m.keys.Help):
@@ -1001,6 +1015,13 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if msg.snoozeStr != "" {
+		if _, err := cli.ParseDue(msg.snoozeStr); err != nil {
+			m.err = fmt.Errorf("snooze: %w", err)
+			return m, nil
+		}
+	}
+
 	m.err = nil
 
 	if msg.taskID != nil {
@@ -1038,10 +1059,10 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 	m.move = nil
 	m.err = nil
 	m.tree = msg.tree
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 	if msg.taskID != 0 {
 		m.ensureVisible(msg.taskID)
-		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+		m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, msg.taskID)
 	} else {
 		m.cursor = clampCursor(m.cursor, len(m.visible))
@@ -1065,7 +1086,7 @@ func (m Model) handleReorderResult(msg reorderResultMsg) (Model, tea.Cmd) {
 	}
 	m.tree = cli.BuildTree(flattenTree(m.tree))
 	m.err = nil
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 	m.cursor = findCursor(m.visible, msg.taskID)
 	return m, nil
 }

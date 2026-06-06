@@ -2,6 +2,7 @@ package tui
 
 import (
 	"testing"
+	"time"
 
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -23,7 +24,7 @@ func makeTree() []*cli.TreeNode {
 func TestBuildVisible_RootOnly(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "root"}}
 	tree := cli.BuildTree(tasks)
-	rows := buildVisible(tree, nil, false, nil)
+	rows := buildVisible(tree, nil, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -35,7 +36,7 @@ func TestBuildVisible_RootOnly(t *testing.T) {
 func TestBuildVisible_CollapsedSubtreeSkipped(t *testing.T) {
 	tree := makeTree()
 	// expanded is empty — children should not appear
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 root row (collapsed), got %d", len(rows))
 	}
@@ -46,7 +47,7 @@ func TestBuildVisible_CollapsedSubtreeSkipped(t *testing.T) {
 
 func TestBuildVisible_ExpandedShowsChildren(t *testing.T) {
 	tree := makeTree()
-	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil, time.Now().Local())
 	// root + 2 children
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
@@ -64,7 +65,7 @@ func TestBuildVisible_CompletedFilteredByDefault(t *testing.T) {
 		{Id: 2, Name: "done", CompletedAt: now},
 	}
 	tree := cli.BuildTree(tasks)
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row (completed hidden), got %d", len(rows))
 	}
@@ -80,7 +81,7 @@ func TestBuildVisible_ShowCompletedIncludesDone(t *testing.T) {
 		{Id: 2, Name: "done", CompletedAt: now},
 	}
 	tree := cli.BuildTree(tasks)
-	rows := buildVisible(tree, map[int64]bool{}, true, nil)
+	rows := buildVisible(tree, map[int64]bool{}, true, nil, time.Now().Local())
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
@@ -94,7 +95,7 @@ func TestBuildVisible_PendingCompleteStaysVisible(t *testing.T) {
 	}
 	tree := cli.BuildTree(tasks)
 	pendingID := int64(2)
-	rows := buildVisible(tree, map[int64]bool{}, false, &pendingID)
+	rows := buildVisible(tree, map[int64]bool{}, false, &pendingID, time.Now().Local())
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows (pending stays visible), got %d", len(rows))
 	}
@@ -102,7 +103,7 @@ func TestBuildVisible_PendingCompleteStaysVisible(t *testing.T) {
 
 func TestBuildVisible_ExpandableCollapsed(t *testing.T) {
 	tree := makeTree()
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	// root is collapsed and has visible children → expandable=true, expanded=false
 	if !rows[0].expandable {
 		t.Errorf("expected expandable=true for collapsed node with children")
@@ -114,7 +115,7 @@ func TestBuildVisible_ExpandableCollapsed(t *testing.T) {
 
 func TestBuildVisible_ExpandedNode(t *testing.T) {
 	tree := makeTree()
-	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil, time.Now().Local())
 	// root is expanded → expandable=true, expanded=true
 	if !rows[0].expandable {
 		t.Errorf("expected expandable=true for node with visible children")
@@ -127,7 +128,7 @@ func TestBuildVisible_ExpandedNode(t *testing.T) {
 func TestBuildVisible_LeafNode(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "leaf"}}
 	tree := cli.BuildTree(tasks)
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	// leaf node (no children) → expandable=false
 	if rows[0].expandable {
 		t.Errorf("expected expandable=false for leaf node")
@@ -136,7 +137,7 @@ func TestBuildVisible_LeafNode(t *testing.T) {
 
 func TestBuildVisible_DepthValues(t *testing.T) {
 	tree := makeTree()
-	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil, time.Now().Local())
 	if rows[0].depth != 0 {
 		t.Errorf("root depth: want 0, got %d", rows[0].depth)
 	}
@@ -150,7 +151,7 @@ func TestBuildVisible_DepthValues(t *testing.T) {
 func TestBuildVisible_CollapseParentKeepsParentVisible(t *testing.T) {
 	tree := makeTree()
 	// Start expanded, then simulate collapse of root
-	rows := buildVisible(tree, map[int64]bool{1: false}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{1: false}, false, nil, time.Now().Local())
 	// Only root should appear (children hidden)
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row after collapse, got %d", len(rows))
@@ -167,14 +168,14 @@ func TestExpandCollapse_SetExpanded(t *testing.T) {
 
 	// Expand root (L)
 	expanded[1] = true
-	rows := buildVisible(tree, expanded, false, nil)
+	rows := buildVisible(tree, expanded, false, nil, time.Now().Local())
 	if len(rows) != 3 {
 		t.Fatalf("after expand: expected 3 rows, got %d", len(rows))
 	}
 
 	// Collapse root (H)
 	expanded[1] = false
-	rows = buildVisible(tree, expanded, false, nil)
+	rows = buildVisible(tree, expanded, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("after collapse: expected 1 row, got %d", len(rows))
 	}
@@ -193,7 +194,7 @@ func TestMarker_AllChildrenCompletedNotExpandable(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 
 	// showCompleted=false: child is hidden, so root should not be expandable.
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 visible row (completed child filtered), got %d", len(rows))
 	}
@@ -208,7 +209,7 @@ func TestMarker_AllChildrenCompletedNotExpandable(t *testing.T) {
 func TestBuildVisible_UnseededTaskDefaultsCollapsed(t *testing.T) {
 	tree := makeTree()
 	// nil expanded map: root has children but no entry → renders collapsed.
-	rows := buildVisible(tree, nil, false, nil)
+	rows := buildVisible(tree, nil, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row (collapsed root), got %d", len(rows))
 	}
@@ -227,7 +228,7 @@ func TestMarker_SomeChildrenCompletedIsExpandable(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 
 	// showCompleted=false: one incomplete child still visible → root should be expandable.
-	rows := buildVisible(tree, map[int64]bool{}, false, nil)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, time.Now().Local())
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 visible row (root only, collapsed), got %d", len(rows))
 	}
@@ -316,5 +317,101 @@ func TestVisibleSiblings_HiddenCompleted(t *testing.T) {
 	prev, _ = visibleSiblings(tree, expanded, false, 3)
 	if prev != 1 {
 		t.Errorf("prev of C (completed B hidden) = %d, want 1 (A)", prev)
+	}
+}
+
+// --- snooze tests ---
+
+func TestTaskIsSnoozed_NilSnoozeUntil(t *testing.T) {
+	today := time.Date(2026, 6, 6, 12, 0, 0, 0, time.Local)
+	task := &taskv1.Task{Id: 1, Name: "task"}
+	if taskIsSnoozed(task, today) {
+		t.Error("expected not snoozed when snooze_until is nil")
+	}
+}
+
+func TestTaskIsSnoozed_FutureDay(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: timestamppb.New(tomorrow)}
+	if !taskIsSnoozed(task, today) {
+		t.Error("expected snoozed when snooze_until is tomorrow")
+	}
+}
+
+func TestTaskIsSnoozed_TodayIsNotSnoozed(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	todayUTC := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: timestamppb.New(todayUTC)}
+	if taskIsSnoozed(task, today) {
+		t.Error("expected not snoozed when snooze_until equals today")
+	}
+}
+
+func TestTaskIsSnoozed_PastDayIsNotSnoozed(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	yesterday := time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC)
+	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: timestamppb.New(yesterday)}
+	if taskIsSnoozed(task, today) {
+		t.Error("expected not snoozed when snooze_until is in the past")
+	}
+}
+
+func TestBuildVisible_FutureSnoozedHiddenByDefault(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "active"},
+		{Id: 2, Name: "snoozed", SnoozeUntil: timestamppb.New(tomorrow)},
+	}
+	tree := cli.BuildTree(tasks)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, today)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row (snoozed hidden), got %d", len(rows))
+	}
+	if rows[0].node.Task.Id != 1 {
+		t.Errorf("expected active task, got id=%d", rows[0].node.Task.Id)
+	}
+}
+
+func TestBuildVisible_FutureSnoozedShownWhenShowAll(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "active"},
+		{Id: 2, Name: "snoozed", SnoozeUntil: timestamppb.New(tomorrow)},
+	}
+	tree := cli.BuildTree(tasks)
+	rows := buildVisible(tree, map[int64]bool{}, true, nil, today)
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows (show-all), got %d", len(rows))
+	}
+}
+
+func TestBuildVisible_TodaySnoozedIsVisible(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	todayUTC := time.Date(2026, 6, 6, 0, 0, 0, 0, time.UTC)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "wakes-today", SnoozeUntil: timestamppb.New(todayUTC)},
+	}
+	tree := cli.BuildTree(tasks)
+	rows := buildVisible(tree, map[int64]bool{}, false, nil, today)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row (snoozed today is visible), got %d", len(rows))
+	}
+}
+
+func TestBuildVisible_SnoozedParentHidesSubtree(t *testing.T) {
+	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
+	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	// Parent snoozed; child not snoozed. Child should be hidden along with parent.
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "snoozed-parent", SnoozeUntil: timestamppb.New(tomorrow)},
+		{Id: 2, Name: "child", ParentId: ptr64(1)},
+	}
+	tree := cli.BuildTree(tasks)
+	rows := buildVisible(tree, map[int64]bool{1: true}, false, nil, today)
+	if len(rows) != 0 {
+		t.Fatalf("expected 0 rows (parent + child hidden), got %d", len(rows))
 	}
 }

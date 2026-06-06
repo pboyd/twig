@@ -1,8 +1,24 @@
 package tui
 
 import (
+	"time"
+
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 )
+
+// taskIsSnoozed reports whether the task should be hidden on the given local
+// day. A task is snoozed when snooze_until is set and its UTC calendar date is
+// strictly after today (the client's local calendar date).
+func taskIsSnoozed(task *taskv1.Task, today time.Time) bool {
+	if task.SnoozeUntil == nil {
+		return false
+	}
+	snoozeUTC := task.SnoozeUntil.AsTime().UTC()
+	snoozeDay := time.Date(snoozeUTC.Year(), snoozeUTC.Month(), snoozeUTC.Day(), 0, 0, 0, 0, time.UTC)
+	todayUTC := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
+	return snoozeDay.After(todayUTC)
+}
 
 // visibleSiblings returns the visible siblings of the task at taskID, given
 // the current tree, expansion state, and completed-task filter. It returns the
@@ -10,7 +26,7 @@ import (
 // (0 if none). A sibling is visible when it would appear in the visible row
 // list under current filter settings.
 func visibleSiblings(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, taskID int64) (prev, next int64) {
-	rows := buildVisible(tree, expanded, showCompleted, nil)
+	rows := buildVisible(tree, expanded, showCompleted, nil, time.Now().Local())
 
 	targetIdx := -1
 	for i, r := range rows {
@@ -74,13 +90,14 @@ type visibleRow struct {
 }
 
 // buildVisible flattens the tree into visible rows applying expansion state and
-// completed-task filtering. Matches the spec's view-model.md "Visible-row
-// flattening" algorithm.
-func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64) []*visibleRow {
+// completed-task / snooze filtering. Matches the spec's view-model.md
+// "Visible-row flattening" algorithm. today is the client's local calendar day
+// used to evaluate the snooze predicate.
+func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showCompleted bool, pendingComplete *int64, today time.Time) []*visibleRow {
 	var rows []*visibleRow
 	for i, root := range tree {
 		last := i == len(tree)-1
-		emitNode(root, 0, "", last, expanded, showCompleted, pendingComplete, &rows)
+		emitNode(root, 0, "", last, expanded, showCompleted, pendingComplete, today, &rows)
 	}
 	return rows
 }
@@ -93,14 +110,17 @@ func emitNode(
 	expanded map[int64]bool,
 	showCompleted bool,
 	pendingComplete *int64,
+	today time.Time,
 	rows *[]*visibleRow,
 ) {
 	id := node.Task.Id
 	completed := node.Task.GetCompletedAt() != nil
+	snoozed := taskIsSnoozed(node.Task, today)
 
-	// Skip completed tasks unless filter is on or this task is pendingComplete.
+	// Skip completed or future-snoozed tasks unless "show all" is on, or this
+	// task is pendingComplete.
 	isPending := pendingComplete != nil && *pendingComplete == id
-	if completed && !showCompleted && !isPending {
+	if (completed || snoozed) && !showCompleted && !isPending {
 		return
 	}
 
@@ -110,13 +130,14 @@ func emitNode(
 	// hasVisibleChildren: at least one child would appear given current filter
 	// settings. Computed unconditionally (regardless of expanded state) so that
 	// the expandable/expanded flags are always driven by visible children, not
-	// all children (which may include hidden completed ones).
+	// all children (which may include hidden completed/snoozed ones).
 	hasVisibleChildren := false
 	if hasChildren {
 		for _, child := range node.Children {
 			childCompleted := child.Task.GetCompletedAt() != nil
+			childSnoozed := taskIsSnoozed(child.Task, today)
 			childIsPending := pendingComplete != nil && *pendingComplete == child.Task.Id
-			if !childCompleted || showCompleted || childIsPending {
+			if (!childCompleted && !childSnoozed) || showCompleted || childIsPending {
 				hasVisibleChildren = true
 				break
 			}
@@ -157,7 +178,7 @@ func emitNode(
 	if hasChildren && isExpanded {
 		for i, child := range node.Children {
 			lastChild := i == len(node.Children)-1
-			emitNode(child, depth+1, childPrefix, lastChild, expanded, showCompleted, pendingComplete, rows)
+			emitNode(child, depth+1, childPrefix, lastChild, expanded, showCompleted, pendingComplete, today, rows)
 		}
 	}
 }

@@ -54,7 +54,12 @@ type Task struct {
 	// Order of this task within its sibling group (tasks sharing the same
 	// parent_id, or the root group for parentless tasks). Lower sorts first.
 	// Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
-	Position      int64 `protobuf:"varint,9,opt,name=position,proto3" json:"position,omitempty"`
+	Position int64 `protobuf:"varint,9,opt,name=position,proto3" json:"position,omitempty"`
+	// Optional day before which this task is hidden from default ("pending")
+	// views. Pinned to midnight UTC of the chosen calendar day. Unset when the
+	// task is not snoozed. Clients hide the task while this day is strictly after
+	// the client's local current day; on/after that day the task is shown.
+	SnoozeUntil   *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=snooze_until,json=snoozeUntil,proto3" json:"snooze_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,6 +155,13 @@ func (x *Task) GetPosition() int64 {
 		return x.Position
 	}
 	return 0
+}
+
+func (x *Task) GetSnoozeUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SnoozeUntil
+	}
+	return nil
 }
 
 type Pomodoro struct {
@@ -408,11 +420,13 @@ func (x *UncompleteTaskResponse) GetTask() *Task {
 }
 
 type CreateTaskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	Due           *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=due,proto3" json:"due,omitempty"`
-	ParentId      *int64                 `protobuf:"varint,4,opt,name=parent_id,json=parentId,proto3,oneof" json:"parent_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Due         *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=due,proto3" json:"due,omitempty"`
+	ParentId    *int64                 `protobuf:"varint,4,opt,name=parent_id,json=parentId,proto3,oneof" json:"parent_id,omitempty"`
+	// Optional snooze day (midnight UTC). Unset = not snoozed.
+	SnoozeUntil   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=snooze_until,json=snoozeUntil,proto3" json:"snooze_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -473,6 +487,13 @@ func (x *CreateTaskRequest) GetParentId() int64 {
 		return *x.ParentId
 	}
 	return 0
+}
+
+func (x *CreateTaskRequest) GetSnoozeUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SnoozeUntil
+	}
+	return nil
 }
 
 type CreateTaskResponse struct {
@@ -712,7 +733,9 @@ type UpdateTaskRequest struct {
 	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 	Due         *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=due,proto3" json:"due,omitempty"`
 	// Unset clears the parent, making the task top-level.
-	ParentId      *int64 `protobuf:"varint,5,opt,name=parent_id,json=parentId,proto3,oneof" json:"parent_id,omitempty"`
+	ParentId *int64 `protobuf:"varint,5,opt,name=parent_id,json=parentId,proto3,oneof" json:"parent_id,omitempty"`
+	// Full-replace: present sets/overwrites; absent clears (un-snoozes the task).
+	SnoozeUntil   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=snooze_until,json=snoozeUntil,proto3" json:"snooze_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -780,6 +803,13 @@ func (x *UpdateTaskRequest) GetParentId() int64 {
 		return *x.ParentId
 	}
 	return 0
+}
+
+func (x *UpdateTaskRequest) GetSnoozeUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SnoozeUntil
+	}
+	return nil
 }
 
 type UpdateTaskResponse struct {
@@ -1475,7 +1505,7 @@ var File_task_v1_task_proto protoreflect.FileDescriptor
 
 const file_task_v1_task_proto_rawDesc = "" +
 	"\n" +
-	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdb\x02\n" +
+	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1485,7 +1515,9 @@ const file_task_v1_task_proto_rawDesc = "" +
 	"\fcompleted_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12\x1a\n" +
 	"\bestimate\x18\a \x01(\x05R\bestimate\x128\n" +
 	"\x18completed_pomodoro_count\x18\b \x01(\x05R\x16completedPomodoroCount\x12\x1a\n" +
-	"\bposition\x18\t \x01(\x03R\bpositionB\f\n" +
+	"\bposition\x18\t \x01(\x03R\bposition\x12=\n" +
+	"\fsnooze_until\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vsnoozeUntilB\f\n" +
 	"\n" +
 	"_parent_id\"\xb9\x01\n" +
 	"\bPomodoro\x12\x0e\n" +
@@ -1501,12 +1533,13 @@ const file_task_v1_task_proto_rawDesc = "" +
 	"\x15UncompleteTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\";\n" +
 	"\x16UncompleteTaskResponse\x12!\n" +
-	"\x04task\x18\x01 \x01(\v2\r.task.v1.TaskR\x04task\"\xa7\x01\n" +
+	"\x04task\x18\x01 \x01(\v2\r.task.v1.TaskR\x04task\"\xe6\x01\n" +
 	"\x11CreateTaskRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12,\n" +
 	"\x03due\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x03due\x12 \n" +
-	"\tparent_id\x18\x04 \x01(\x03H\x00R\bparentId\x88\x01\x01B\f\n" +
+	"\tparent_id\x18\x04 \x01(\x03H\x00R\bparentId\x88\x01\x01\x12=\n" +
+	"\fsnooze_until\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vsnoozeUntilB\f\n" +
 	"\n" +
 	"_parent_id\"7\n" +
 	"\x12CreateTaskResponse\x12!\n" +
@@ -1519,13 +1552,14 @@ const file_task_v1_task_proto_rawDesc = "" +
 	"\tpomodoros\x18\x03 \x03(\v2\x11.task.v1.PomodoroR\tpomodoros\"\x12\n" +
 	"\x10ListTasksRequest\"8\n" +
 	"\x11ListTasksResponse\x12#\n" +
-	"\x05tasks\x18\x01 \x03(\v2\r.task.v1.TaskR\x05tasks\"\xb7\x01\n" +
+	"\x05tasks\x18\x01 \x03(\v2\r.task.v1.TaskR\x05tasks\"\xf6\x01\n" +
 	"\x11UpdateTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12,\n" +
 	"\x03due\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x03due\x12 \n" +
-	"\tparent_id\x18\x05 \x01(\x03H\x00R\bparentId\x88\x01\x01B\f\n" +
+	"\tparent_id\x18\x05 \x01(\x03H\x00R\bparentId\x88\x01\x01\x12=\n" +
+	"\fsnooze_until\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vsnoozeUntilB\f\n" +
 	"\n" +
 	"_parent_id\"7\n" +
 	"\x12UpdateTaskResponse\x12!\n" +
@@ -1623,54 +1657,57 @@ var file_task_v1_task_proto_goTypes = []any{
 var file_task_v1_task_proto_depIdxs = []int32{
 	28, // 0: task.v1.Task.due:type_name -> google.protobuf.Timestamp
 	28, // 1: task.v1.Task.completed_at:type_name -> google.protobuf.Timestamp
-	28, // 2: task.v1.Pomodoro.start_at:type_name -> google.protobuf.Timestamp
-	28, // 3: task.v1.Pomodoro.end_at:type_name -> google.protobuf.Timestamp
-	0,  // 4: task.v1.CompleteTaskResponse.task:type_name -> task.v1.Task
-	0,  // 5: task.v1.UncompleteTaskResponse.task:type_name -> task.v1.Task
-	28, // 6: task.v1.CreateTaskRequest.due:type_name -> google.protobuf.Timestamp
-	0,  // 7: task.v1.CreateTaskResponse.task:type_name -> task.v1.Task
-	0,  // 8: task.v1.GetTaskResponse.task:type_name -> task.v1.Task
-	1,  // 9: task.v1.GetTaskResponse.pomodoros:type_name -> task.v1.Pomodoro
-	0,  // 10: task.v1.ListTasksResponse.tasks:type_name -> task.v1.Task
-	28, // 11: task.v1.UpdateTaskRequest.due:type_name -> google.protobuf.Timestamp
-	0,  // 12: task.v1.UpdateTaskResponse.task:type_name -> task.v1.Task
-	0,  // 13: task.v1.SetEstimateResponse.task:type_name -> task.v1.Task
-	1,  // 14: task.v1.StartPomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
-	1,  // 15: task.v1.CancelPomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
-	1,  // 16: task.v1.CompletePomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
-	1,  // 17: task.v1.GetActivePomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
-	0,  // 18: task.v1.ReorderTaskResponse.siblings:type_name -> task.v1.Task
-	6,  // 19: task.v1.TaskService.CreateTask:input_type -> task.v1.CreateTaskRequest
-	26, // 20: task.v1.TaskService.ReorderTask:input_type -> task.v1.ReorderTaskRequest
-	8,  // 21: task.v1.TaskService.GetTask:input_type -> task.v1.GetTaskRequest
-	10, // 22: task.v1.TaskService.ListTasks:input_type -> task.v1.ListTasksRequest
-	12, // 23: task.v1.TaskService.UpdateTask:input_type -> task.v1.UpdateTaskRequest
-	14, // 24: task.v1.TaskService.DeleteTask:input_type -> task.v1.DeleteTaskRequest
-	2,  // 25: task.v1.TaskService.CompleteTask:input_type -> task.v1.CompleteTaskRequest
-	4,  // 26: task.v1.TaskService.UncompleteTask:input_type -> task.v1.UncompleteTaskRequest
-	16, // 27: task.v1.TaskService.SetEstimate:input_type -> task.v1.SetEstimateRequest
-	18, // 28: task.v1.TaskService.StartPomodoro:input_type -> task.v1.StartPomodoroRequest
-	20, // 29: task.v1.TaskService.CancelPomodoro:input_type -> task.v1.CancelPomodoroRequest
-	22, // 30: task.v1.TaskService.CompletePomodoro:input_type -> task.v1.CompletePomodoroRequest
-	24, // 31: task.v1.TaskService.GetActivePomodoro:input_type -> task.v1.GetActivePomodoroRequest
-	7,  // 32: task.v1.TaskService.CreateTask:output_type -> task.v1.CreateTaskResponse
-	27, // 33: task.v1.TaskService.ReorderTask:output_type -> task.v1.ReorderTaskResponse
-	9,  // 34: task.v1.TaskService.GetTask:output_type -> task.v1.GetTaskResponse
-	11, // 35: task.v1.TaskService.ListTasks:output_type -> task.v1.ListTasksResponse
-	13, // 36: task.v1.TaskService.UpdateTask:output_type -> task.v1.UpdateTaskResponse
-	15, // 37: task.v1.TaskService.DeleteTask:output_type -> task.v1.DeleteTaskResponse
-	3,  // 38: task.v1.TaskService.CompleteTask:output_type -> task.v1.CompleteTaskResponse
-	5,  // 39: task.v1.TaskService.UncompleteTask:output_type -> task.v1.UncompleteTaskResponse
-	17, // 40: task.v1.TaskService.SetEstimate:output_type -> task.v1.SetEstimateResponse
-	19, // 41: task.v1.TaskService.StartPomodoro:output_type -> task.v1.StartPomodoroResponse
-	21, // 42: task.v1.TaskService.CancelPomodoro:output_type -> task.v1.CancelPomodoroResponse
-	23, // 43: task.v1.TaskService.CompletePomodoro:output_type -> task.v1.CompletePomodoroResponse
-	25, // 44: task.v1.TaskService.GetActivePomodoro:output_type -> task.v1.GetActivePomodoroResponse
-	32, // [32:45] is the sub-list for method output_type
-	19, // [19:32] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	28, // 2: task.v1.Task.snooze_until:type_name -> google.protobuf.Timestamp
+	28, // 3: task.v1.Pomodoro.start_at:type_name -> google.protobuf.Timestamp
+	28, // 4: task.v1.Pomodoro.end_at:type_name -> google.protobuf.Timestamp
+	0,  // 5: task.v1.CompleteTaskResponse.task:type_name -> task.v1.Task
+	0,  // 6: task.v1.UncompleteTaskResponse.task:type_name -> task.v1.Task
+	28, // 7: task.v1.CreateTaskRequest.due:type_name -> google.protobuf.Timestamp
+	28, // 8: task.v1.CreateTaskRequest.snooze_until:type_name -> google.protobuf.Timestamp
+	0,  // 9: task.v1.CreateTaskResponse.task:type_name -> task.v1.Task
+	0,  // 10: task.v1.GetTaskResponse.task:type_name -> task.v1.Task
+	1,  // 11: task.v1.GetTaskResponse.pomodoros:type_name -> task.v1.Pomodoro
+	0,  // 12: task.v1.ListTasksResponse.tasks:type_name -> task.v1.Task
+	28, // 13: task.v1.UpdateTaskRequest.due:type_name -> google.protobuf.Timestamp
+	28, // 14: task.v1.UpdateTaskRequest.snooze_until:type_name -> google.protobuf.Timestamp
+	0,  // 15: task.v1.UpdateTaskResponse.task:type_name -> task.v1.Task
+	0,  // 16: task.v1.SetEstimateResponse.task:type_name -> task.v1.Task
+	1,  // 17: task.v1.StartPomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
+	1,  // 18: task.v1.CancelPomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
+	1,  // 19: task.v1.CompletePomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
+	1,  // 20: task.v1.GetActivePomodoroResponse.pomodoro:type_name -> task.v1.Pomodoro
+	0,  // 21: task.v1.ReorderTaskResponse.siblings:type_name -> task.v1.Task
+	6,  // 22: task.v1.TaskService.CreateTask:input_type -> task.v1.CreateTaskRequest
+	26, // 23: task.v1.TaskService.ReorderTask:input_type -> task.v1.ReorderTaskRequest
+	8,  // 24: task.v1.TaskService.GetTask:input_type -> task.v1.GetTaskRequest
+	10, // 25: task.v1.TaskService.ListTasks:input_type -> task.v1.ListTasksRequest
+	12, // 26: task.v1.TaskService.UpdateTask:input_type -> task.v1.UpdateTaskRequest
+	14, // 27: task.v1.TaskService.DeleteTask:input_type -> task.v1.DeleteTaskRequest
+	2,  // 28: task.v1.TaskService.CompleteTask:input_type -> task.v1.CompleteTaskRequest
+	4,  // 29: task.v1.TaskService.UncompleteTask:input_type -> task.v1.UncompleteTaskRequest
+	16, // 30: task.v1.TaskService.SetEstimate:input_type -> task.v1.SetEstimateRequest
+	18, // 31: task.v1.TaskService.StartPomodoro:input_type -> task.v1.StartPomodoroRequest
+	20, // 32: task.v1.TaskService.CancelPomodoro:input_type -> task.v1.CancelPomodoroRequest
+	22, // 33: task.v1.TaskService.CompletePomodoro:input_type -> task.v1.CompletePomodoroRequest
+	24, // 34: task.v1.TaskService.GetActivePomodoro:input_type -> task.v1.GetActivePomodoroRequest
+	7,  // 35: task.v1.TaskService.CreateTask:output_type -> task.v1.CreateTaskResponse
+	27, // 36: task.v1.TaskService.ReorderTask:output_type -> task.v1.ReorderTaskResponse
+	9,  // 37: task.v1.TaskService.GetTask:output_type -> task.v1.GetTaskResponse
+	11, // 38: task.v1.TaskService.ListTasks:output_type -> task.v1.ListTasksResponse
+	13, // 39: task.v1.TaskService.UpdateTask:output_type -> task.v1.UpdateTaskResponse
+	15, // 40: task.v1.TaskService.DeleteTask:output_type -> task.v1.DeleteTaskResponse
+	3,  // 41: task.v1.TaskService.CompleteTask:output_type -> task.v1.CompleteTaskResponse
+	5,  // 42: task.v1.TaskService.UncompleteTask:output_type -> task.v1.UncompleteTaskResponse
+	17, // 43: task.v1.TaskService.SetEstimate:output_type -> task.v1.SetEstimateResponse
+	19, // 44: task.v1.TaskService.StartPomodoro:output_type -> task.v1.StartPomodoroResponse
+	21, // 45: task.v1.TaskService.CancelPomodoro:output_type -> task.v1.CancelPomodoroResponse
+	23, // 46: task.v1.TaskService.CompletePomodoro:output_type -> task.v1.CompletePomodoroResponse
+	25, // 47: task.v1.TaskService.GetActivePomodoro:output_type -> task.v1.GetActivePomodoroResponse
+	35, // [35:48] is the sub-list for method output_type
+	22, // [22:35] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_task_v1_task_proto_init() }

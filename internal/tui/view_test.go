@@ -24,7 +24,7 @@ func TestRenderList_StrikethroughOnCompletedRow(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	// Show completed tasks so the completed row is in m.visible.
 	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 
@@ -54,7 +54,7 @@ func TestRenderList_NoStrikethroughWhenUnstyled(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, false)
 	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 
@@ -101,7 +101,7 @@ func TestViewList_PaneWidths(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.width = 80
 	m.height = 24
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.viewList()
 	lines := strings.Split(out, "\n")
@@ -143,7 +143,7 @@ func TestViewList_BorderRunes(t *testing.T) {
 	ms := ExportNewStyledModel(nil, tree, true)
 	ms.width = 80
 	ms.height = 24
-	ms.visible = buildVisible(ms.tree, ms.expanded, ms.showCompleted, ms.pendingComplete)
+	ms.visible = buildVisible(ms.tree, ms.expanded, ms.showCompleted, ms.pendingComplete, time.Now().Local())
 	outStyled := ms.viewList()
 	if !strings.ContainsAny(outStyled, "╭╰╮╯│─") {
 		t.Errorf("styled viewList: expected border runes (╭╰╮╯│─) in output; got:\n%q", outStyled[:min(len(outStyled), 200)])
@@ -153,7 +153,7 @@ func TestViewList_BorderRunes(t *testing.T) {
 	mu := ExportNewStyledModel(nil, tree, false)
 	mu.width = 80
 	mu.height = 24
-	mu.visible = buildVisible(mu.tree, mu.expanded, mu.showCompleted, mu.pendingComplete)
+	mu.visible = buildVisible(mu.tree, mu.expanded, mu.showCompleted, mu.pendingComplete, time.Now().Local())
 	outUnstyled := mu.viewList()
 	for _, r := range []string{"╭", "╰", "╮", "╯", "│", "─"} {
 		if strings.Contains(outUnstyled, r) {
@@ -182,7 +182,7 @@ func TestRenderList_ChevronIffExpandable(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.showCompleted = true
 	m.expanded[1] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -226,7 +226,7 @@ func TestRenderList_NoGlyphsWhenUnstyled(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, false)
 	m.showCompleted = true
 	m.expanded[1] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	for _, r := range []string{"▾", "▸", "☐", "☑"} {
@@ -246,7 +246,7 @@ func TestRenderList_CollapsedExpandableChevron(t *testing.T) {
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
 	// expandable but not expanded
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -269,7 +269,7 @@ func TestRenderList_NoChevronWhenAllChildrenCompleted(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.showCompleted = false
 	m.expanded[1] = true // user "expanded" the task
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -300,11 +300,11 @@ func TestRenderList_StrikethroughAtMultipleDepths(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	// Show completed so all rows are visible.
 	m.showCompleted = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 	// Expand all to see nested rows.
 	m.expanded[1] = true
 	m.expanded[2] = true
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(120)
 
@@ -345,7 +345,7 @@ func TestRenderList_CursorHighlight(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.showCompleted = true
 	m.cursor = 0
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.renderList(80)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
@@ -370,7 +370,7 @@ func TestViewList_NoRedundantTasksTitle(t *testing.T) {
 	m := ExportNewStyledModel(nil, tree, true)
 	m.width = 80
 	m.height = 24
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	out := m.viewList()
 
@@ -390,7 +390,7 @@ func TestRenderStatus_FooterAndError(t *testing.T) {
 	tasks := []*taskv1.Task{{Id: 1, Name: "task"}}
 	tree := cli.BuildTree(tasks)
 	m := ExportNewStyledModel(nil, tree, true)
-	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete)
+	m.visible = buildVisible(m.tree, m.expanded, m.showCompleted, m.pendingComplete, time.Now().Local())
 
 	// No error: status should return the help view (non-empty).
 	status := m.renderStatus()
