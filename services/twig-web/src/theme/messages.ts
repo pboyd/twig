@@ -13,4 +13,6 @@ export const messages = {
   allHidden: "Nothing pending right now — some tasks are snoozed or done. Reveal them below.",
   dragHandleLabel: "Drag to reorder",
   reorderError: "Couldn't move that — give it another try?",
+  planEmpty: "Nothing planned here yet — a blank slate full of potential.",
+  planError: "Couldn't load the plan. Want to try again?",
 } as const;

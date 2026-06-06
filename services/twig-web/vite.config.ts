@@ -9,6 +9,7 @@ export default defineConfig({
       "/auth": "http://localhost:8080",
       "/task.v1": "http://localhost:8080",
       "/health.v1": "http://localhost:8080",
+      "/plan.v1": "http://localhost:8080",
     },
   },
 });

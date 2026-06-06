@@ -28,8 +28,8 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 **Purpose**: Wiring needed before the view can talk to the server or render copy.
 
-- [ ] T001 Add `"/plan.v1": "http://localhost:8080"` to the `server.proxy` map in `services/twig-web/vite.config.ts` (mirrors existing `/task.v1`, `/health.v1` entries) so the same-origin session cookie reaches `PlanService` in dev.
-- [ ] T002 [P] Add `planEmpty` (no plan for the viewed day) and `planError` (plan failed to load) copy in `services/twig-web/src/theme/messages.ts`, matching the existing warm/playful tone (Principle IV).
+- [X] T001 Add `"/plan.v1": "http://localhost:8080"` to the `server.proxy` map in `services/twig-web/vite.config.ts` (mirrors existing `/task.v1`, `/health.v1` entries) so the same-origin session cookie reaches `PlanService` in dev.
+- [X] T002 [P] Add `planEmpty` (no plan for the viewed day) and `planError` (plan failed to load) copy in `services/twig-web/src/theme/messages.ts`, matching the existing warm/playful tone (Principle IV).
 
 ---
 
@@ -39,8 +39,8 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Write unit tests in `services/twig-web/src/lib/planView.test.ts` for: `todayString()`, `addDays(day, delta)` (incl. month/year rollover), `isToday(day)`, `formatDayLabel(day)`, `formatMinute(min)` (boundaries: 0→"12:00 am", 720→"12:00 pm", 1439→"11:59 pm"), `formatTimeRange(start, duration)`, `resolveEntries(entries, taskNameById)` (name override → task name → "Untitled entry" fallback; sets `kind`, `completed`, `timed`, time fields), `groupPlan(resolved)` (timed/untimed split, `isEmpty`). Write FIRST; ensure they fail.
-- [ ] T004 Implement the pure helpers in `services/twig-web/src/lib/planView.ts` (types `ResolvedEntry`, `GroupedPlan` per data-model.md) so T003 passes. No React, no network, no `Date`-based timezone conversion (wall-clock from `start_minute`, FR-020).
+- [X] T003 [P] Write unit tests in `services/twig-web/src/lib/planView.test.ts` for: `todayString()`, `addDays(day, delta)` (incl. month/year rollover), `isToday(day)`, `formatDayLabel(day)`, `formatMinute(min)` (boundaries: 0→"12:00 am", 720→"12:00 pm", 1439→"11:59 pm"), `formatTimeRange(start, duration)`, `resolveEntries(entries, taskNameById)` (name override → task name → "Untitled entry" fallback; sets `kind`, `completed`, `timed`, time fields), `groupPlan(resolved)` (timed/untimed split, `isEmpty`). Write FIRST; ensure they fail.
+- [X] T004 Implement the pure helpers in `services/twig-web/src/lib/planView.ts` (types `ResolvedEntry`, `GroupedPlan` per data-model.md) so T003 passes. No React, no network, no `Date`-based timezone conversion (wall-clock from `start_minute`, FR-020).
 
 **Checkpoint**: `npm test` green for `planView.test.ts`; helpers ready for all stories.
 
@@ -54,14 +54,14 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 ### Tests for User Story 1
 
-- [ ] T005 [US1] Write interaction tests in `services/twig-web/src/pages/PlanPage.test.tsx` (US1 slice): mocks `listPlanEntries`/`listTasks`; asserts timed entries render in order with time labels; task-linked name shows (incl. fallback to task name and to generic label); event is visually distinguishable; loading spinner, error banner + retry, and empty state (`messages.planEmpty`) each render. Write FIRST; ensure they fail.
+- [X] T005 [US1] Write interaction tests in `services/twig-web/src/pages/PlanPage.test.tsx` (US1 slice): mocks `listPlanEntries`/`listTasks`; asserts timed entries render in order with time labels; task-linked name shows (incl. fallback to task name and to generic label); event is visually distinguishable; loading spinner, error banner + retry, and empty state (`messages.planEmpty`) each render. Write FIRST; ensure they fail.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [P] [US1] Create `services/twig-web/src/components/PlanEntryRow.tsx` — renders one `ResolvedEntry` (display-only for now): time-range label for timed entries, display name, and a visual distinction between task entries and events (FR-005, FR-006, FR-007, FR-019). Uses Tailwind tokens/spacing consistent with existing components (Principle III).
-- [ ] T007 [US1] Create `services/twig-web/src/pages/PlanPage.tsx` — defaults the viewed day to `planView.todayString()`; `useQuery(listPlanEntries, { day })` + `useQuery(listTasks, {})`; builds `taskNameById`, runs `resolveEntries` + `groupPlan`; renders the timed list via `PlanEntryRow`; uses `Spinner` (loading), `ErrorBanner` + `refetch` (FR-017), inline empty state with `messages.planEmpty` (FR-012); wraps in `AppHeader`. (Depends on T004, T006.)
-- [ ] T008 [US1] Add `<Route path="/plan" element={<PlanPage />} />` in `services/twig-web/src/App.tsx`, keeping `/tasks` as the default landing route. (Depends on T007.)
-- [ ] T009 [P] [US1] Add Tasks ↔ Plan navigation links in `services/twig-web/src/components/AppHeader.tsx` (reachable from primary nav, FR-002) using `react-router` navigation, consistent across pages.
+- [X] T006 [P] [US1] Create `services/twig-web/src/components/PlanEntryRow.tsx` — renders one `ResolvedEntry` (display-only for now): time-range label for timed entries, display name, and a visual distinction between task entries and events (FR-005, FR-006, FR-007, FR-019). Uses Tailwind tokens/spacing consistent with existing components (Principle III).
+- [X] T007 [US1] Create `services/twig-web/src/pages/PlanPage.tsx` — defaults the viewed day to `planView.todayString()`; `useQuery(listPlanEntries, { day })` + `useQuery(listTasks, {})`; builds `taskNameById`, runs `resolveEntries` + `groupPlan`; renders the timed list via `PlanEntryRow`; uses `Spinner` (loading), `ErrorBanner` + `refetch` (FR-017), inline empty state with `messages.planEmpty` (FR-012); wraps in `AppHeader`. (Depends on T004, T006.)
+- [X] T008 [US1] Add `<Route path="/plan" element={<PlanPage />} />` in `services/twig-web/src/App.tsx`, keeping `/tasks` as the default landing route. (Depends on T007.)
+- [X] T009 [P] [US1] Add Tasks ↔ Plan navigation links in `services/twig-web/src/components/AppHeader.tsx` (reachable from primary nav, FR-002) using `react-router` navigation, consistent across pages.
 
 **Checkpoint**: Navigate to `/plan`, see today's plan render with correct times/names/states. US1 is independently demoable (MVP).
 
@@ -75,12 +75,12 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 ### Tests for User Story 2
 
-- [ ] T010 [US2] Extend `services/twig-web/src/pages/PlanPage.test.tsx` (US2 slice): untimed entries render in a separate section from timed (FR-009); a completed task entry is marked done (FR-008); a task entry navigates to `/tasks/:taskId` on activation (FR-011); an event entry is non-interactive (FR-021); a gap between timed entries is apparent (FR-010). Write FIRST; ensure they fail.
+- [X] T010 [US2] Extend `services/twig-web/src/pages/PlanPage.test.tsx` (US2 slice): untimed entries render in a separate section from timed (FR-009); a completed task entry is marked done (FR-008); a task entry navigates to `/tasks/:taskId` on activation (FR-011); an event entry is non-interactive (FR-021); a gap between timed entries is apparent (FR-010). Write FIRST; ensure they fail.
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Enhance `services/twig-web/src/components/PlanEntryRow.tsx`: render a completed marker when `completed` (FR-008); render task entries as an activatable link/button to `/tasks/:taskId` and keep event entries display-only/non-interactive (FR-011, FR-021).
-- [ ] T012 [P] [US2] Update `services/twig-web/src/pages/PlanPage.tsx` to render the `groupPlan` untimed list in a clearly separated section below the timed schedule (FR-009), with timed entries showing start–end so gaps are visible (FR-010).
+- [X] T011 [US2] Enhance `services/twig-web/src/components/PlanEntryRow.tsx`: render a completed marker when `completed` (FR-008); render task entries as an activatable link/button to `/tasks/:taskId` and keep event entries display-only/non-interactive (FR-011, FR-021).
+- [X] T012 [P] [US2] Update `services/twig-web/src/pages/PlanPage.tsx` to render the `groupPlan` untimed list in a clearly separated section below the timed schedule (FR-009), with timed entries showing start–end so gaps are visible (FR-010).
 
 **Checkpoint**: US1 + US2 both work; entries are fully informative and task entries are navigable.
 
@@ -94,11 +94,11 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 ### Tests for User Story 3
 
-- [ ] T013 [US3] Extend `services/twig-web/src/pages/PlanPage.test.tsx` (US3 slice): prev/next controls change the day passed to `listPlanEntries` and update the displayed date label; "Today" control restores today; a navigated day with no entries shows the empty state for that date (FR-018, FR-012). Write FIRST; ensure they fail.
+- [X] T013 [US3] Extend `services/twig-web/src/pages/PlanPage.test.tsx` (US3 slice): prev/next controls change the day passed to `listPlanEntries` and update the displayed date label; "Today" control restores today; a navigated day with no entries shows the empty state for that date (FR-018, FR-012). Write FIRST; ensure they fail.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Add day navigation to `services/twig-web/src/pages/PlanPage.tsx`: hold the viewed day in state (default today), add previous/next-day and "Today" controls using `planView.addDays`/`isToday`/`formatDayLabel`, and show the current date label. The plan query re-runs when the day changes; no arbitrary date picker (FR-018).
+- [X] T014 [US3] Add day navigation to `services/twig-web/src/pages/PlanPage.tsx`: hold the viewed day in state (default today), add previous/next-day and "Today" controls using `planView.addDays`/`isToday`/`formatDayLabel`, and show the current date label. The plan query re-runs when the day changes; no arbitrary date picker (FR-018).
 
 **Checkpoint**: All three user stories independently functional.
 
@@ -108,10 +108,10 @@ All files live under `services/twig-web/`. Run all `npm` commands from that dire
 
 **Purpose**: Verification and consistency across the feature.
 
-- [ ] T015 [P] Run `npm test` in `services/twig-web` and resolve any failures across `planView.test.ts` and `PlanPage.test.tsx`.
-- [ ] T016 [P] Run `npm run build` in `services/twig-web` (type-check + production build) and fix any type errors.
+- [X] T015 [P] Run `npm test` in `services/twig-web` and resolve any failures across `planView.test.ts` and `PlanPage.test.tsx`.
+- [X] T016 [P] Run `npm run build` in `services/twig-web` (type-check + production build) and fix any type errors.
 - [ ] T017 Execute the `quickstart.md` manual verification (all 10 checks) against `make dev` + `npm run dev` on a mobile-sized viewport.
-- [ ] T018 Read-only & tone review: confirm the plan view calls **only** `ListPlanEntries` (no `PlanService` mutations) and exposes no add/edit/move/delete affordances (FR-013, SC-006), and that new user-facing copy is consistent with Principle IV.
+- [X] T018 Read-only & tone review: confirm the plan view calls **only** `ListPlanEntries` (no `PlanService` mutations) and exposes no add/edit/move/delete affordances (FR-013, SC-006), and that new user-facing copy is consistent with Principle IV.
 
 ---
 
