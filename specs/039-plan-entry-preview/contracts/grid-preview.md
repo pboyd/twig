@@ -42,9 +42,11 @@ type GridOptions struct {
 2. **Dashed rune substitution** for the preview box:
    | Solid (saved) | Dashed (preview) |
    |---|---|
-   | `━` horizontal | `┅` |
-   | `┃` vertical | `┇` |
-   | `┏ ┓ ┗ ┛ ┣ ┫` corners/junctions | unchanged |
+   | `━` horizontal fill | `╍` (heavy double-dash) |
+   | `┃` vertical wall | `╏` (heavy double-dash) |
+   | `┏ ┓ ┗ ┛` corners | unchanged (heavy square) |
+   | `┣ ┫` single-row end-caps | unchanged (fill becomes `╍`) |
+   | `┣ ┫` shared divider when preview abuts saved | `├ ┤` (light tees) |
 3. **Conflict styling scope**: conflict styling/markers apply **only** to the preview
    entry's rows. Saved/existing entries are never restyled by overlap (FR-005, clarified).
 4. **Conflict rows**: a preview row at slot-start minute `t` is conflicting iff

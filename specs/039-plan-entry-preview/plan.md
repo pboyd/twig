@@ -36,7 +36,7 @@ While any of the three timed planning forms is open (Edit entry, Schedule task, 
 |-----------|--------|-------|
 | I. Simplicity / YAGNI | ✅ | Extends existing `GridOptions`/`RenderGrid` with a few fields; reuses the existing two-pane layout and `timeparse`. Duplicates the one-line interval-overlap check in the root module (the server's `plan.Overlap` lives in a separate module and can't be imported) — three lines beat a shared-module dependency. No new abstractions or packages. |
 | II. API-First Design | ✅ | The only contract is the internal Go API surface (`GridOptions` additions + `RenderGrid` preview behavior). Documented in `contracts/grid-preview.md` before implementation. No proto/HTTP contract changes. |
-| III. UI/UX Consistency | ✅ | Preview color = shared `dim`; conflict color = shared `errorColor`; both from `internal/tui/theme.go`. Dashed runes are a structural cue reused across styled + plain modes. No ad-hoc colors. |
+| III. UI/UX Consistency | ✅ | Preview color = shared `dim` (faint+italic in styled mode); conflict color = shared `errorColor` (faint+italic); both from `internal/tui/theme.go`. Heavy double-dash runes (`╍`/`╏`) are a structural cue reused across styled + plain modes. No ad-hoc colors. |
 | IV. Playful User Messages | ✅ | Feature is visual; introduces no new prose. If a one-line hint is added, it follows the existing warm planning-tab tone. |
 
 ## Project Structure
@@ -78,7 +78,7 @@ internal/
 See [research.md](./research.md). Key decisions resolved:
 
 1. **Preview entry representation** — a synthetic `*planv1.PlanEntry` with a sentinel `Id` (negative, e.g. `-1`) built at render time from the form's current Start/Duration (and Name/picked-task) values. Only built when Start parses to a valid time (untimed → no timed preview, per FR-009).
-2. **Distinct preview styling** — swap the entry's solid box runes (`━ ┃ ┏ ┓ ┗ ┛`) for **dashed** equivalents (`┅` horizontal, `┇` vertical, corners retained) so the preview reads as unsaved in both styled and plain modes (FR-004). In styled mode the preview also takes the `dim` foreground.
+2. **Distinct preview styling** — swap the entry's solid box runes (`━ ┃`) for **heavy double-dash** equivalents (`╍` horizontal, `╏` vertical; corners `┏┓┗┛` and single-row end-caps `┣┫` retained at heavy weight). When the preview box abuts another timed entry at a shared divider, the divider uses light tees (`├╍…╍┤`) instead of heavy (`┣╍…╍┫`) to reinforce the tentative feel. In styled mode the preview also takes the `dim` foreground with `Faint` + `Italic` modifiers so the label text visibly recedes. This structural cue works in both styled and plain modes (FR-004).
 3. **Overlap detection location** — computed in the TUI layer against the real timed entries (reusing a local one-line interval check), producing the set of 15-min slot-times where the preview overlaps another entry; passed to `RenderGrid` so it can color those preview rows. Self-overlap excluded by removing the edit target from the comparison set (FR-006).
 4. **Conflict marking** — styled mode colors the overlapping preview rows with `errorColor` (red), satisfying the preferred "overlapping portion in red." Plain mode uses an unambiguous fallback marker in the gutter marker-column for conflicting rows (FR-005 simpler-indicator clause).
 5. **Window inclusion** — the preview entry is included when computing the grid window so the window expands to keep the preview visible; it must never render at a wrong position (FR-009 / edge case).

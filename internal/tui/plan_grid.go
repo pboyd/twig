@@ -28,9 +28,9 @@ func (m Model) planGridOptions() cli.GridOptions {
 	case planTaskTime, planEventForm, planEdit:
 		opts.PreviewID = previewID
 		if m.styled {
-			dimStyle := lipgloss.NewStyle().Foreground(dim)
+			dimStyle := lipgloss.NewStyle().Foreground(dim).Faint(true).Italic(true)
 			opts.PreviewStyle = func(s string) string { return dimStyle.Render(s) }
-			errStyle := lipgloss.NewStyle().Foreground(errorColor)
+			errStyle := lipgloss.NewStyle().Foreground(errorColor).Faint(true).Italic(true)
 			opts.ConflictStyle = func(s string) string { return errStyle.Render(s) }
 		}
 	}

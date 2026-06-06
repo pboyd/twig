@@ -158,7 +158,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 
 	hLight := strings.Repeat("─", boxWidth+2)   // fills inner region for empty hour rows
 	hHeavy := strings.Repeat("━", contentWidth) // fills between heavy box corners
-	hDash := strings.Repeat("┅", contentWidth)  // dashed fill for preview entry borders
+	hDash := strings.Repeat("╍", contentWidth)  // dashed fill for preview entry borders
 
 	// isPreviewEntry reports whether e is the transient preview entry.
 	isPreviewEntry := func(e *planv1.PlanEntry) bool {
@@ -176,7 +176,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 	// previewBoxV returns the vertical border rune string: dashed for preview, solid otherwise.
 	previewBoxV := func(e *planv1.PlanEntry) string {
 		if isPreviewEntry(e) {
-			return "┇"
+			return "╏"
 		}
 		return "┃"
 	}
@@ -308,7 +308,13 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			if isSelected && opts.SelectionStyle != nil {
 				line = gutter + leftRail + padChar + opts.SelectionStyle("┣"+hFill+"┫") + padChar + rightRail
 			} else {
-				inner := "┣" + hFill + "┫"
+				// When the preview box meets the shared divider, use light tees (├/┤)
+				// so the boundary reads as tentative; heavy (┣/┫) when both are saved.
+				leftTee, rightTee := "┣", "┫"
+				if previewE != nil {
+					leftTee, rightTee = "├", "┤"
+				}
+				inner := leftTee + hFill + rightTee
 				if previewE != nil {
 					inner = applyPreviewStyle(inner, previewE, t)
 				}
@@ -323,7 +329,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			isPreviewSingle := isPreviewEntry(single.e)
 			padRune := "━"
 			if isPreviewSingle {
-				padRune = "┅"
+				padRune = "╍"
 			}
 			label := singleLabelContentPad(single.labelRows, contentWidth, padRune)
 			label = applyCompletion(label, single.e, isTTY)
@@ -371,7 +377,7 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			isPreviewSingle := isPreviewEntry(single.e)
 			padRune := "━"
 			if isPreviewSingle {
-				padRune = "┅"
+				padRune = "╍"
 			}
 			label := singleLabelContentPad(single.labelRows, contentWidth, padRune)
 			label = applyCompletion(label, single.e, isTTY)

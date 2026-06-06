@@ -1360,7 +1360,7 @@ func TestRenderUntimed_BackwardCompat_PreviewZero(t *testing.T) {
 // ── T005: Dashed-rune rendering tests ────────────────────────────────────────
 
 // TestRenderGrid_PreviewEntry_DashedRunes verifies that an entry with Id == PreviewID
-// renders with dashed runes (┅/┇) while saved entries keep solid runes (━/┃).
+// renders with heavy double-dash runes (╍/╏) while saved entries keep solid runes (━/┃).
 func TestRenderGrid_PreviewEntry_DashedRunes(t *testing.T) {
 	const previewID int32 = -1
 	entries := []*planv1.PlanEntry{
@@ -1373,13 +1373,13 @@ func TestRenderGrid_PreviewEntry_DashedRunes(t *testing.T) {
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
 
-	// Preview entry must use dashed horizontal rune ┅.
-	if !strings.Contains(out, "┅") {
-		t.Errorf("preview entry: expected dashed horizontal rune ┅ in output:\n%s", out)
+	// Preview entry must use heavy double-dash horizontal rune ╍.
+	if !strings.Contains(out, "╍") {
+		t.Errorf("preview entry: expected heavy double-dash horizontal rune ╍ in output:\n%s", out)
 	}
-	// Preview entry must use dashed vertical rune ┇.
-	if !strings.Contains(out, "┇") {
-		t.Errorf("preview entry: expected dashed vertical rune ┇ in output:\n%s", out)
+	// Preview entry must use heavy double-dash vertical rune ╏.
+	if !strings.Contains(out, "╏") {
+		t.Errorf("preview entry: expected heavy double-dash vertical rune ╏ in output:\n%s", out)
 	}
 	// Saved entry must still use solid horizontal rune ━.
 	if !strings.Contains(out, "━") {
@@ -1391,7 +1391,7 @@ func TestRenderGrid_PreviewEntry_DashedRunes(t *testing.T) {
 	}
 }
 
-// TestRenderGrid_PreviewEntry_SingleRow verifies single-row preview uses dashed rune.
+// TestRenderGrid_PreviewEntry_SingleRow verifies single-row preview uses heavy double-dash rune.
 func TestRenderGrid_PreviewEntry_SingleRow(t *testing.T) {
 	const previewID int32 = -1
 	entries := []*planv1.PlanEntry{
@@ -1403,8 +1403,8 @@ func TestRenderGrid_PreviewEntry_SingleRow(t *testing.T) {
 	}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(7, 0), 80, false, opts)
 
-	if !strings.Contains(out, "┅") {
-		t.Errorf("single-row preview: expected dashed rune ┅:\n%s", out)
+	if !strings.Contains(out, "╍") {
+		t.Errorf("single-row preview: expected heavy double-dash rune ╍:\n%s", out)
 	}
 }
 
@@ -1522,8 +1522,8 @@ func TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow(t *testing.T) {
 		t.Errorf("row 4 (09:00, preview topLine = conflict slot): expected ConflictStyle markers; got: %q", row4)
 	}
 	// It must use dashed runes (preview top border) not solid (Coffee interior).
-	if !strings.Contains(row4, "┅") {
-		t.Errorf("row 4: expected dashed rune ┅ for preview top border; got: %q", row4)
+	if !strings.Contains(row4, "╍") {
+		t.Errorf("row 4: expected heavy double-dash rune ╍ for preview top border; got: %q", row4)
 	}
 }
 
@@ -1575,12 +1575,12 @@ func TestRenderGrid_GapVisibility_PreviewWithGap(t *testing.T) {
 		t.Fatalf("not enough rows in output: %d", len(lines))
 	}
 	gapRow := lines[9]
-	if strings.ContainsAny(gapRow, "┏┓┗┛┣┫┃┅┇") {
+	if strings.ContainsAny(gapRow, "┏┓┗┛┣┫┃╍╏") {
 		t.Errorf("gap row (10:15) should be an empty grid row, but has entry runes: %q", gapRow)
 	}
 	// Row 10 (10:30) must be the top of the preview box.
 	previewRow := lines[10]
-	if !strings.Contains(previewRow, "┅") && !strings.Contains(previewRow, "┏") {
+	if !strings.Contains(previewRow, "╍") && !strings.Contains(previewRow, "┏") {
 		t.Errorf("preview top row (10:30): expected preview or box border rune: %q", previewRow)
 	}
 }
@@ -1603,7 +1603,7 @@ func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {
 		t.Fatalf("not enough rows in output: %d", len(lines))
 	}
 	sharedRow := lines[8]
-	if !strings.ContainsAny(sharedRow, "┣┗┅┏") {
+	if !strings.ContainsAny(sharedRow, "┣┗╍┏├") {
 		t.Errorf("flush preview: expected entry boundary at row 8 (10:00), got: %q", sharedRow)
 	}
 }
