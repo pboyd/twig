@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 # Copy the api module (shared dependency) first for layer caching
 COPY api/go.mod api/go.sum ./api/
