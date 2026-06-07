@@ -34,3 +34,11 @@ DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 
 
 -- name: TrimPlanEntryDuration :one
 UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING *;
+
+-- name: ListScheduledDaysForTasks :many
+SELECT DISTINCT task_id, day
+FROM plan_entries
+WHERE user_id = $1
+  AND task_id IS NOT NULL
+  AND day >= $2
+ORDER BY task_id, day;

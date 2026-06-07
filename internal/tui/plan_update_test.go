@@ -17,16 +17,19 @@ import (
 // fakePlanClient is a minimal PlanServiceClient for unit tests.
 type fakePlanClient struct {
 	planv1connect.PlanServiceClient
-	entries     []*planv1.PlanEntry
-	lastListDay string
-	listErr     error
-	addTaskReq  *planv1.AddPlanTaskRequest
-	addEventReq *planv1.AddPlanEventRequest
-	renameReq   *planv1.RenamePlanEntryRequest
-	moveReq     *planv1.MovePlanEntryRequest
-	removeReq   *planv1.RemovePlanEntryRequest
-	clearReq    *planv1.ClearPlanRequest
-	mutateErr   error
+	entries              []*planv1.PlanEntry
+	lastListDay          string
+	listErr              error
+	addTaskReq           *planv1.AddPlanTaskRequest
+	addEventReq          *planv1.AddPlanEventRequest
+	renameReq            *planv1.RenamePlanEntryRequest
+	moveReq              *planv1.MovePlanEntryRequest
+	removeReq            *planv1.RemovePlanEntryRequest
+	clearReq             *planv1.ClearPlanRequest
+	mutateErr            error
+	scheduledDaysReq     *planv1.ListScheduledDaysRequest
+	scheduledDaysResp    []*planv1.ScheduledDay
+	scheduledDaysErr     error
 }
 
 func (f *fakePlanClient) ListPlanEntries(_ context.Context, req *connect.Request[planv1.ListPlanEntriesRequest]) (*connect.Response[planv1.ListPlanEntriesResponse], error) {
@@ -83,6 +86,14 @@ func (f *fakePlanClient) ClearPlan(_ context.Context, req *connect.Request[planv
 		return nil, f.mutateErr
 	}
 	return connect.NewResponse(&planv1.ClearPlanResponse{}), nil
+}
+
+func (f *fakePlanClient) ListScheduledDays(_ context.Context, req *connect.Request[planv1.ListScheduledDaysRequest]) (*connect.Response[planv1.ListScheduledDaysResponse], error) {
+	f.scheduledDaysReq = req.Msg
+	if f.scheduledDaysErr != nil {
+		return nil, f.scheduledDaysErr
+	}
+	return connect.NewResponse(&planv1.ListScheduledDaysResponse{Days: f.scheduledDaysResp}), nil
 }
 
 // buildPlanTestModel creates a model ready for planning tab tests.

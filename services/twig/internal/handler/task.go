@@ -289,11 +289,11 @@ func (t *Task) UpdateTask(
 		if err := t.Queries.UpdateTaskPosition(ctx, db.UpdateTaskPositionParams{
 			ID:       row.ID,
 			UserID:   userID,
-			Position: maxPos,
+			Position: maxPos + 1,
 		}); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		row.Position = maxPos
+		row.Position = maxPos + 1
 	}
 
 	return connect.NewResponse(&taskv1.UpdateTaskResponse{Task: dbTaskToProto(row)}), nil

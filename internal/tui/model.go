@@ -110,6 +110,9 @@ type Model struct {
 	datePromptInput    textinput.Model
 	datePromptTaskID   int64
 	datePromptTaskName string
+	// scheduledDays maps task id → ascending YYYY-MM-DD days (today-or-future).
+	// Populated by listScheduledDaysCmd; read synchronously by renderDetails.
+	scheduledDays map[int64][]string
 	// notice is a transient info message shown in the status bar (distinct from err).
 	// It is cleared on the next user action.
 	notice string
@@ -130,6 +133,7 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		plainHelp:         newPlainHelpModel(),
 		styled:            cli.WantStyled(os.Stdout),
 		hasDarkBackground: hasDarkBg,
+		scheduledDays:     make(map[int64][]string),
 		plan: planState{
 			day: time.Now().Format("2006-01-02"),
 		},

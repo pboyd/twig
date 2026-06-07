@@ -490,6 +490,35 @@ func (p *Plan) MovePlanEntry(
 	return connect.NewResponse(&planv1.MovePlanEntryResponse{Entry: dbPlanEntryToProto(row)}), nil
 }
 
+func (p *Plan) ListScheduledDays(
+	ctx context.Context,
+	req *connect.Request[planv1.ListScheduledDaysRequest],
+) (*connect.Response[planv1.ListScheduledDaysResponse], error) {
+	userID := auth.UserID(ctx)
+
+	fromDay, err := parseDay(req.Msg.FromDay)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := p.Queries.ListScheduledDaysForTasks(ctx, db.ListScheduledDaysForTasksParams{
+		UserID: userID,
+		Day:    fromDay,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	days := make([]*planv1.ScheduledDay, len(rows))
+	for i, r := range rows {
+		days[i] = &planv1.ScheduledDay{
+			TaskId: r.TaskID.Int64,
+			Day:    r.Day.Time.Format("2006-01-02"),
+		}
+	}
+	return connect.NewResponse(&planv1.ListScheduledDaysResponse{Days: days}), nil
+}
+
 func (p *Plan) ClearPlan(
 	ctx context.Context,
 	req *connect.Request[planv1.ClearPlanRequest],

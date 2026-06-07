@@ -1605,3 +1605,46 @@ func TestRankUp_SkipsHiddenCompleted(t *testing.T) {
 		t.Error("rank-up on C with hidden B should dispatch a cmd (prev is A)")
 	}
 }
+
+// ── listScheduledDaysCmd wiring tests (T013/US1) ──────────────────────────────
+
+// TestScheduledDays_CmdFromDayIsLocalToday (T013): listScheduledDaysCmd sends local today as from_day.
+func TestScheduledDays_CmdFromDayIsLocalToday(t *testing.T) {
+	fc := &fakePlanClient{}
+
+	cmd := listScheduledDaysCmd(fc)
+	if cmd == nil {
+		t.Fatal("listScheduledDaysCmd returned nil")
+	}
+	cmd() // execute — calls fc.ListScheduledDays
+
+	if fc.scheduledDaysReq == nil {
+		t.Fatal("ListScheduledDays was not called")
+	}
+	today := time.Now().Format("2006-01-02")
+	if fc.scheduledDaysReq.FromDay != today {
+		t.Errorf("from_day = %q, want local today %q", fc.scheduledDaysReq.FromDay, today)
+	}
+}
+
+// TestScheduledDays_ResultStoredOnModel: scheduledDaysResultMsg populates m.scheduledDays.
+func TestScheduledDays_ResultStoredOnModel(t *testing.T) {
+	fc := &fakePlanClient{
+		scheduledDaysResp: []*planv1.ScheduledDay{
+			{TaskId: 1, Day: "2026-06-10"},
+			{TaskId: 1, Day: "2026-06-11"},
+		},
+	}
+	m := newModel(nil, fc, "", config.PomodoroConfig{}, false, nil)
+
+	cmd := listScheduledDaysCmd(fc)
+	msg := cmd()
+	m2, _ := m.Update(msg)
+	got := m2.(Model).scheduledDays
+	if len(got[1]) != 2 {
+		t.Errorf("scheduledDays[1]: got %v, want [2026-06-10 2026-06-11]", got[1])
+	}
+	if got[1][0] != "2026-06-10" || got[1][1] != "2026-06-11" {
+		t.Errorf("scheduledDays[1]: got %v, want [2026-06-10 2026-06-11]", got[1])
+	}
+}

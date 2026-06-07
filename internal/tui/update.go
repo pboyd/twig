@@ -10,6 +10,8 @@ import (
 	"connectrpc.com/connect"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
+	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
@@ -43,6 +45,12 @@ type moveTaskResultMsg struct {
 	taskID int64
 	tree   []*cli.TreeNode
 	err    error
+}
+
+// scheduledDaysResultMsg carries the result of a ListScheduledDays RPC.
+type scheduledDaysResultMsg struct {
+	days map[int64][]string
+	err  error
 }
 
 // ── command factories ───────────────────────────────────────────────────────
@@ -80,6 +88,23 @@ func (m Model) saveAndQuitCmd() tea.Cmd {
 			_ = saveTreeState(path, key, expanded, live)
 		}
 		return tea.QuitMsg{}
+	}
+}
+
+func listScheduledDaysCmd(client planv1connect.PlanServiceClient) tea.Cmd {
+	fromDay := time.Now().Format("2006-01-02")
+	return func() tea.Msg {
+		resp, err := client.ListScheduledDays(context.Background(), connect.NewRequest(&planv1.ListScheduledDaysRequest{
+			FromDay: fromDay,
+		}))
+		if err != nil {
+			return scheduledDaysResultMsg{err: err}
+		}
+		m := make(map[int64][]string)
+		for _, sd := range resp.Msg.Days {
+			m[sd.TaskId] = append(m[sd.TaskId], sd.Day)
+		}
+		return scheduledDaysResultMsg{days: m}
 	}
 }
 
@@ -264,7 +289,7 @@ func pomodoroRemaining(startAt time.Time, now time.Time) time.Duration {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listTasksCmd(m.client), getActivePomCmd(m.client, m.tree))
+	return tea.Batch(listTasksCmd(m.client), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient))
 }
 
 // ── Update ─────────────────────────────────────────────────────────────────
@@ -389,6 +414,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case scheduledDaysResultMsg:
+		if msg.err == nil {
+			m.scheduledDays = msg.days
+		}
+		return m, nil
+
 	case reorderResultMsg:
 		return m.handleReorderResult(msg)
 
@@ -450,7 +481,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.notice != "" {
 			m.notice = msg.notice
 		}
-		return m, listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID)
+		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID), listScheduledDaysCmd(m.planClient))
 
 	case planTickMsg:
 		if m.activeTab == tabPlanning && planIsToday(m.plan.day) {
@@ -522,7 +553,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabTasks
 		m.keys.PlanningMode = false
 		m.plan.err = nil
-		return m, nil
+		return m, listScheduledDaysCmd(m.planClient)
 	}
 
 	// Navigation.
@@ -929,7 +960,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Refresh):
 		m.pendingComplete = nil
 		m.err = nil
-		return m, listTasksCmd(m.client)
+		return m, tea.Batch(listTasksCmd(m.client), listScheduledDaysCmd(m.planClient))
 
 	case key.Matches(msg, m.keys.Filter):
 		m.showAll = !m.showAll

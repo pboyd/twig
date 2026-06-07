@@ -439,7 +439,7 @@ func (m Model) renderDetailPane(width int) string {
 		return ""
 	}
 	task := m.visible[m.cursor].node.Task
-	return renderDetails(task, width, m.styled)
+	return renderDetails(task, width, m.styled, m.scheduledDays[task.Id])
 }
 
 func (m Model) renderStatus() string {

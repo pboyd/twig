@@ -172,17 +172,21 @@ func min(a, b int) int {
 // TestRenderList_SnoozedIndicator asserts that a snoozed task shown via show-all
 // carries the 💤 indicator, and that it is absent when show-all is off.
 func TestRenderList_SnoozedIndicator(t *testing.T) {
-	tomorrow := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
+	// Use a far-future snooze so the test doesn't break as time passes.
+	// renderList checks taskIsSnoozed against time.Now(), so the snooze must
+	// be strictly after the real current date as well as the injected test today.
+	farFuture := time.Date(2099, 12, 31, 0, 0, 0, 0, time.UTC)
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "active"},
-		{Id: 2, Name: "sleepy", SnoozeUntil: timestamppb.New(tomorrow)},
+		{Id: 2, Name: "sleepy", SnoozeUntil: timestamppb.New(farFuture)},
 	}
 	tree := cli.BuildTree(tasks)
+
+	today := time.Now().Local()
 
 	// show-all = true: snoozed task appears with 💤
 	m := ExportNewStyledModel(nil, tree, true)
 	m.showAll = true
-	today := time.Date(2026, 6, 6, 0, 0, 0, 0, time.Local)
 	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, today)
 	out := m.renderList(80)
 	if !strings.Contains(out, "💤") {

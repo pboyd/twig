@@ -52,6 +52,9 @@ const (
 	PlanServiceMovePlanEntryProcedure = "/plan.v1.PlanService/MovePlanEntry"
 	// PlanServiceClearPlanProcedure is the fully-qualified name of the PlanService's ClearPlan RPC.
 	PlanServiceClearPlanProcedure = "/plan.v1.PlanService/ClearPlan"
+	// PlanServiceListScheduledDaysProcedure is the fully-qualified name of the PlanService's
+	// ListScheduledDays RPC.
+	PlanServiceListScheduledDaysProcedure = "/plan.v1.PlanService/ListScheduledDays"
 )
 
 // PlanServiceClient is a client for the plan.v1.PlanService service.
@@ -71,6 +74,11 @@ type PlanServiceClient interface {
 	// ClearPlan removes every entry starting at or after start_minute on day; if an
 	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
 	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
+	// ListScheduledDays returns, for every task the caller has scheduled, each
+	// distinct day on or after from_day on which a plan entry links that task.
+	// Untimed entries count. Results are ordered by task_id then day ascending,
+	// with no duplicate (task_id, day) pairs.
+	ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error)
 }
 
 // NewPlanServiceClient constructs a client for the plan.v1.PlanService service. By default, it uses
@@ -126,18 +134,25 @@ func NewPlanServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
 			connect.WithClientOptions(opts...),
 		),
+		listScheduledDays: connect.NewClient[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse](
+			httpClient,
+			baseURL+PlanServiceListScheduledDaysProcedure,
+			connect.WithSchema(planServiceMethods.ByName("ListScheduledDays")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // planServiceClient implements PlanServiceClient.
 type planServiceClient struct {
-	listPlanEntries *connect.Client[v1.ListPlanEntriesRequest, v1.ListPlanEntriesResponse]
-	addPlanTask     *connect.Client[v1.AddPlanTaskRequest, v1.AddPlanTaskResponse]
-	addPlanEvent    *connect.Client[v1.AddPlanEventRequest, v1.AddPlanEventResponse]
-	removePlanEntry *connect.Client[v1.RemovePlanEntryRequest, v1.RemovePlanEntryResponse]
-	renamePlanEntry *connect.Client[v1.RenamePlanEntryRequest, v1.RenamePlanEntryResponse]
-	movePlanEntry   *connect.Client[v1.MovePlanEntryRequest, v1.MovePlanEntryResponse]
-	clearPlan       *connect.Client[v1.ClearPlanRequest, v1.ClearPlanResponse]
+	listPlanEntries   *connect.Client[v1.ListPlanEntriesRequest, v1.ListPlanEntriesResponse]
+	addPlanTask       *connect.Client[v1.AddPlanTaskRequest, v1.AddPlanTaskResponse]
+	addPlanEvent      *connect.Client[v1.AddPlanEventRequest, v1.AddPlanEventResponse]
+	removePlanEntry   *connect.Client[v1.RemovePlanEntryRequest, v1.RemovePlanEntryResponse]
+	renamePlanEntry   *connect.Client[v1.RenamePlanEntryRequest, v1.RenamePlanEntryResponse]
+	movePlanEntry     *connect.Client[v1.MovePlanEntryRequest, v1.MovePlanEntryResponse]
+	clearPlan         *connect.Client[v1.ClearPlanRequest, v1.ClearPlanResponse]
+	listScheduledDays *connect.Client[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse]
 }
 
 // ListPlanEntries calls plan.v1.PlanService.ListPlanEntries.
@@ -175,6 +190,11 @@ func (c *planServiceClient) ClearPlan(ctx context.Context, req *connect.Request[
 	return c.clearPlan.CallUnary(ctx, req)
 }
 
+// ListScheduledDays calls plan.v1.PlanService.ListScheduledDays.
+func (c *planServiceClient) ListScheduledDays(ctx context.Context, req *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error) {
+	return c.listScheduledDays.CallUnary(ctx, req)
+}
+
 // PlanServiceHandler is an implementation of the plan.v1.PlanService service.
 type PlanServiceHandler interface {
 	// ListPlanEntries returns every entry on the given day, ordered by start_minute ascending.
@@ -192,6 +212,11 @@ type PlanServiceHandler interface {
 	// ClearPlan removes every entry starting at or after start_minute on day; if an
 	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
 	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
+	// ListScheduledDays returns, for every task the caller has scheduled, each
+	// distinct day on or after from_day on which a plan entry links that task.
+	// Untimed entries count. Results are ordered by task_id then day ascending,
+	// with no duplicate (task_id, day) pairs.
+	ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error)
 }
 
 // NewPlanServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -243,6 +268,12 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
 		connect.WithHandlerOptions(opts...),
 	)
+	planServiceListScheduledDaysHandler := connect.NewUnaryHandler(
+		PlanServiceListScheduledDaysProcedure,
+		svc.ListScheduledDays,
+		connect.WithSchema(planServiceMethods.ByName("ListScheduledDays")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/plan.v1.PlanService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PlanServiceListPlanEntriesProcedure:
@@ -259,6 +290,8 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 			planServiceMovePlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceClearPlanProcedure:
 			planServiceClearPlanHandler.ServeHTTP(w, r)
+		case PlanServiceListScheduledDaysProcedure:
+			planServiceListScheduledDaysHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -294,4 +327,8 @@ func (UnimplementedPlanServiceHandler) MovePlanEntry(context.Context, *connect.R
 
 func (UnimplementedPlanServiceHandler) ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ClearPlan is not implemented"))
+}
+
+func (UnimplementedPlanServiceHandler) ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ListScheduledDays is not implemented"))
 }

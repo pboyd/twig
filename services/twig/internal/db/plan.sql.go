@@ -164,6 +164,45 @@ func (q *Queries) ListPlanEntriesForDay(ctx context.Context, arg ListPlanEntries
 	return items, nil
 }
 
+const listScheduledDaysForTasks = `-- name: ListScheduledDaysForTasks :many
+SELECT DISTINCT task_id, day
+FROM plan_entries
+WHERE user_id = $1
+  AND task_id IS NOT NULL
+  AND day >= $2
+ORDER BY task_id, day
+`
+
+type ListScheduledDaysForTasksParams struct {
+	UserID int64
+	Day    pgtype.Date
+}
+
+type ListScheduledDaysForTasksRow struct {
+	TaskID pgtype.Int8
+	Day    pgtype.Date
+}
+
+func (q *Queries) ListScheduledDaysForTasks(ctx context.Context, arg ListScheduledDaysForTasksParams) ([]ListScheduledDaysForTasksRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledDaysForTasks, arg.UserID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScheduledDaysForTasksRow
+	for rows.Next() {
+		var i ListScheduledDaysForTasksRow
+		if err := rows.Scan(&i.TaskID, &i.Day); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPlanEntriesForDay = `-- name: LockPlanEntriesForDay :many
 SELECT user_id, day, id, task_id, name, start_minute, duration_minute FROM plan_entries WHERE user_id = $1 AND day = $2 FOR UPDATE
 `

@@ -1247,3 +1247,164 @@ func TestMovePlanEntry_ClearStartAllowedWhenNoOtherUntimed(t *testing.T) {
 		t.Errorf("clear-start with no other untimed: expected success, got %v", err)
 	}
 }
+
+// ── ListScheduledDays tests (T012/US1, T015/US3, T019/US2) ────────────────────
+
+// TestListScheduledDays_SingleFutureDay (T012a): one task scheduled on a single future day is returned.
+func TestListScheduledDays_SingleFutureDay(t *testing.T) {
+	planH, taskH, userID, _ := newTestPlanPool(t)
+	ctx := ctxWithUser(userID)
+
+	task, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "sched task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := task.Msg.Task.Id
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	insertPlanEntry(t, planH.Queries, userID, tomorrow, taskID, "", 600, 30)
+
+	fromDay := time.Now().Format("2006-01-02")
+	resp, err := planH.ListScheduledDays(ctx, connect.NewRequest(&planv1.ListScheduledDaysRequest{FromDay: fromDay}))
+	if err != nil {
+		t.Fatalf("ListScheduledDays: %v", err)
+	}
+	if len(resp.Msg.Days) != 1 {
+		t.Fatalf("expected 1 day, got %d: %v", len(resp.Msg.Days), resp.Msg.Days)
+	}
+	if resp.Msg.Days[0].TaskId != taskID {
+		t.Errorf("task_id: got %d, want %d", resp.Msg.Days[0].TaskId, taskID)
+	}
+	if resp.Msg.Days[0].Day != tomorrow {
+		t.Errorf("day: got %q, want %q", resp.Msg.Days[0].Day, tomorrow)
+	}
+}
+
+// TestListScheduledDays_Isolation (T012b): a second user's entries are not returned.
+func TestListScheduledDays_Isolation(t *testing.T) {
+	planH, _, userID, _ := newTestPlanPool(t)
+	ctx := ctxWithUser(userID)
+	taskH2, userID2 := newTestHandler(t)
+	pool2 := testPool(t)
+	planH2 := &handler.Plan{Queries: taskH2.Queries, Pool: pool2}
+	t.Cleanup(func() {
+		pool2.Exec(context.Background(), "DELETE FROM plan_entries WHERE user_id = $1", userID2)
+	})
+	ctx2 := ctxWithUser(userID2)
+
+	task2, err := taskH2.CreateTask(ctx2, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "other user task"}))
+	if err != nil {
+		t.Fatalf("CreateTask user2: %v", err)
+	}
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	insertPlanEntry(t, planH2.Queries, userID2, tomorrow, task2.Msg.Task.Id, "", 600, 30)
+
+	fromDay := time.Now().Format("2006-01-02")
+	resp, err := planH.ListScheduledDays(ctx, connect.NewRequest(&planv1.ListScheduledDaysRequest{FromDay: fromDay}))
+	if err != nil {
+		t.Fatalf("ListScheduledDays user1: %v", err)
+	}
+	if len(resp.Msg.Days) != 0 {
+		t.Errorf("expected 0 days for user1, got %d: %v", len(resp.Msg.Days), resp.Msg.Days)
+	}
+}
+
+// TestListScheduledDays_EmptyResult (T012c): a user with no scheduled tasks gets an empty list.
+func TestListScheduledDays_EmptyResult(t *testing.T) {
+	planH, _, userID, _ := newTestPlanPool(t)
+	ctx := ctxWithUser(userID)
+
+	fromDay := time.Now().Format("2006-01-02")
+	resp, err := planH.ListScheduledDays(ctx, connect.NewRequest(&planv1.ListScheduledDaysRequest{FromDay: fromDay}))
+	if err != nil {
+		t.Fatalf("ListScheduledDays empty: %v", err)
+	}
+	if len(resp.Msg.Days) != 0 {
+		t.Errorf("expected empty result, got %d days", len(resp.Msg.Days))
+	}
+}
+
+// TestListScheduledDays_PastFiltered (T015/US3): past days are excluded; today and future included.
+func TestListScheduledDays_PastFiltered(t *testing.T) {
+	planH, taskH, userID, _ := newTestPlanPool(t)
+	ctx := ctxWithUser(userID)
+
+	task, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "filtered task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := task.Msg.Task.Id
+
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	today := time.Now().Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	insertPlanEntry(t, planH.Queries, userID, yesterday, taskID, "", 600, 30)
+	insertPlanEntry(t, planH.Queries, userID, today, taskID, "", 600, 30)
+	insertPlanEntry(t, planH.Queries, userID, tomorrow, taskID, "", 600, 30)
+
+	resp, err := planH.ListScheduledDays(ctx, connect.NewRequest(&planv1.ListScheduledDaysRequest{FromDay: today}))
+	if err != nil {
+		t.Fatalf("ListScheduledDays: %v", err)
+	}
+
+	days := make([]string, 0, len(resp.Msg.Days))
+	for _, sd := range resp.Msg.Days {
+		days = append(days, sd.Day)
+	}
+
+	for _, d := range days {
+		if d == yesterday {
+			t.Errorf("yesterday must be excluded; got days: %v", days)
+		}
+	}
+	found := func(target string) bool {
+		for _, d := range days {
+			if d == target {
+				return true
+			}
+		}
+		return false
+	}
+	if !found(today) {
+		t.Errorf("today must be included; got days: %v", days)
+	}
+	if !found(tomorrow) {
+		t.Errorf("tomorrow must be included; got days: %v", days)
+	}
+}
+
+// TestListScheduledDays_Distinct (T019/US2): duplicate entries for same day produce one row; ordering is ascending.
+func TestListScheduledDays_Distinct(t *testing.T) {
+	planH, taskH, userID, _ := newTestPlanPool(t)
+	ctx := ctxWithUser(userID)
+
+	task, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "dedup task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := task.Msg.Task.Id
+
+	day1 := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	day2 := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+
+	// Two timed entries on day1 — DISTINCT should collapse them.
+	insertPlanEntry(t, planH.Queries, userID, day1, taskID, "", 600, 30)
+	insertPlanEntry(t, planH.Queries, userID, day1, taskID, "", 700, 30)
+	// One untimed entry on day2.
+	insertPlanEntryUntimed(t, planH.Queries, userID, day2, taskID, "", 30)
+
+	fromDay := time.Now().Format("2006-01-02")
+	resp, err := planH.ListScheduledDays(ctx, connect.NewRequest(&planv1.ListScheduledDaysRequest{FromDay: fromDay}))
+	if err != nil {
+		t.Fatalf("ListScheduledDays: %v", err)
+	}
+
+	if len(resp.Msg.Days) != 2 {
+		t.Fatalf("expected 2 distinct days, got %d: %v", len(resp.Msg.Days), resp.Msg.Days)
+	}
+	if resp.Msg.Days[0].Day != day1 || resp.Msg.Days[1].Day != day2 {
+		t.Errorf("expected ascending order [%s, %s], got [%s, %s]",
+			day1, day2, resp.Msg.Days[0].Day, resp.Msg.Days[1].Day)
+	}
+}

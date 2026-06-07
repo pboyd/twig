@@ -20,7 +20,7 @@ func TestRenderDetails_CompletedTaskNoStrikethrough(t *testing.T) {
 		CompletedAt: timestamppb.New(now),
 	}
 
-	out := renderDetails(task, 80, false)
+	out := renderDetails(task, 80, false, nil)
 
 	if strings.Contains(out, "\x1b[9m") {
 		t.Errorf("renderDetails: name must not have strikethrough (\\x1b[9m); got:\n%q", out)
@@ -116,7 +116,7 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 		CompletedAt: timestamppb.New(now),
 	}
 
-	out := renderDetails(task, 60, true)
+	out := renderDetails(task, 60, true, nil)
 
 	// Name must appear.
 	if !strings.Contains(out, "my task") {
@@ -133,9 +133,70 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 		t.Errorf("renderDetails styled: want 3 glyphs for estimate=3; got:\n%q", out)
 	}
 	// Unstyled path: no ANSI codes on name (this checks styled=false, not styled=true).
-	plain := renderDetails(task, 60, false)
+	plain := renderDetails(task, 60, false, nil)
 	if strings.Contains(plain, "\x1b[") {
 		t.Errorf("renderDetails unstyled: must not emit ANSI codes; got:\n%q", plain)
+	}
+}
+
+// ── Scheduled-days render tests (T011/US1, T016/US3, T018/US2) ──────────────
+
+// TestRenderDetails_ScheduledOneFutureDay (T011a): a single future day appears in both paths.
+func TestRenderDetails_ScheduledOneFutureDay(t *testing.T) {
+	task := &taskv1.Task{Id: 1, Name: "work item"}
+	days := []string{"2026-06-10"}
+
+	styled := renderDetails(task, 80, true, days)
+	if !strings.Contains(styled, "Scheduled for:") {
+		t.Errorf("styled: expected 'Scheduled for:' line; got:\n%q", styled)
+	}
+	if !strings.Contains(styled, "2026-06-10") {
+		t.Errorf("styled: expected date in output; got:\n%q", styled)
+	}
+
+	plain := renderDetails(task, 80, false, days)
+	if !strings.Contains(plain, "Scheduled for:") {
+		t.Errorf("plain: expected 'Scheduled for:' line; got:\n%q", plain)
+	}
+	if !strings.Contains(plain, "2026-06-10") {
+		t.Errorf("plain: expected date in output; got:\n%q", plain)
+	}
+}
+
+// TestRenderDetails_UnscheduledNoLine (T011b): unscheduled task has no 'Scheduled for:' line.
+func TestRenderDetails_UnscheduledNoLine(t *testing.T) {
+	task := &taskv1.Task{Id: 2, Name: "todo"}
+
+	for _, styled := range []bool{true, false} {
+		out := renderDetails(task, 80, styled, nil)
+		if strings.Contains(out, "Scheduled for:") {
+			t.Errorf("styled=%v: unexpected 'Scheduled for:' line for unscheduled task; got:\n%q", styled, out)
+		}
+	}
+}
+
+// TestRenderDetails_EmptySliceNoLine (T016): empty scheduledDays slice produces no line.
+func TestRenderDetails_EmptySliceNoLine(t *testing.T) {
+	task := &taskv1.Task{Id: 3, Name: "past task"}
+
+	for _, styled := range []bool{true, false} {
+		out := renderDetails(task, 80, styled, []string{})
+		if strings.Contains(out, "Scheduled for:") {
+			t.Errorf("styled=%v: unexpected 'Scheduled for:' for empty slice; got:\n%q", styled, out)
+		}
+	}
+}
+
+// TestRenderDetails_MultiDayCommaSep (T018): two days render ascending comma-space joined.
+func TestRenderDetails_MultiDayCommaSep(t *testing.T) {
+	task := &taskv1.Task{Id: 4, Name: "big task"}
+	days := []string{"2026-06-07", "2026-06-08"}
+
+	for _, styled := range []bool{true, false} {
+		out := renderDetails(task, 80, styled, days)
+		if !strings.Contains(out, "2026-06-07, 2026-06-08") {
+			t.Errorf("styled=%v: expected '2026-06-07, 2026-06-08'; got:\n%q", styled, out)
+		}
 	}
 }
 
@@ -163,7 +224,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 				CompletedPomodoroCount: tc.completed,
 			}
 			// Styled path.
-			out := renderDetails(task, 60, true)
+			out := renderDetails(task, 60, true, nil)
 			n := countPomodoroGlyphs(out)
 			if n != tc.wantN {
 				t.Errorf("styled: glyph count=%d, want %d; %q", n, tc.wantN, out)
@@ -173,7 +234,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 				t.Errorf("styled: must not contain 'Est:' label; got %q", out)
 			}
 			// Plain path.
-			plain := renderDetails(task, 60, false)
+			plain := renderDetails(task, 60, false, nil)
 			np := countPomodoroGlyphs(plain)
 			if np != tc.wantN {
 				t.Errorf("plain: glyph count=%d, want %d; %q", np, tc.wantN, plain)

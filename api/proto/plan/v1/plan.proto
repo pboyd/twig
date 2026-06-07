@@ -27,6 +27,12 @@ service PlanService {
   // ClearPlan removes every entry starting at or after start_minute on day; if an
   // entry straddles start_minute, its duration is shortened so it ends at start_minute.
   rpc ClearPlan(ClearPlanRequest) returns (ClearPlanResponse);
+
+  // ListScheduledDays returns, for every task the caller has scheduled, each
+  // distinct day on or after from_day on which a plan entry links that task.
+  // Untimed entries count. Results are ordered by task_id then day ascending,
+  // with no duplicate (task_id, day) pairs.
+  rpc ListScheduledDays(ListScheduledDaysRequest) returns (ListScheduledDaysResponse);
 }
 
 // PlanEntry is a single scheduled segment of one day. Identity within a user's
@@ -95,4 +101,22 @@ message ClearPlanResponse {
   int32 deleted_count = 1;
   // True iff exactly one entry was shortened to end at start_minute.
   bool trimmed_straddling_entry = 2;
+}
+
+message ListScheduledDaysRequest {
+  // The caller's local current day, YYYY-MM-DD. Only days >= from_day are
+  // returned, so callers using their local date get a local "past" cutoff.
+  string from_day = 1;
+}
+
+message ListScheduledDaysResponse {
+  // Flat list of scheduled (task, day) pairs, sorted by task_id then day asc.
+  repeated ScheduledDay days = 1;
+}
+
+message ScheduledDay {
+  // The scheduled task. Always non-zero (entries without a task are excluded).
+  int64 task_id = 1;
+  // The scheduled day, YYYY-MM-DD.
+  string day = 2;
 }

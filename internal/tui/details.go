@@ -11,8 +11,9 @@ import (
 
 // renderDetails formats the details pane for the given task, wrapping text to
 // the given width. When styled, the name is rendered as a bold accent header
-// and labels are dim and column-aligned.
-func renderDetails(task *taskv1.Task, width int, styled bool) string {
+// and labels are dim and column-aligned. scheduledDays is the task's scheduled
+// days slice (ascending YYYY-MM-DD, today-or-future); nil or empty omits the line.
+func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []string) string {
 	if task == nil {
 		return ""
 	}
@@ -24,6 +25,10 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 
 		if due := cli.FormatDue(task.Due); due != "" {
 			fmt.Fprintf(&sb, "Due:  %s\n", due)
+		}
+
+		if len(scheduledDays) > 0 {
+			fmt.Fprintf(&sb, "Scheduled for: %s\n", strings.Join(scheduledDays, ", "))
 		}
 
 		if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), false); row != "" {
@@ -63,6 +68,10 @@ func renderDetails(task *taskv1.Task, width int, styled bool) string {
 
 	if due := cli.FormatDue(task.Due); due != "" {
 		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Due: "), due)
+	}
+
+	if len(scheduledDays) > 0 {
+		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Scheduled for:"), strings.Join(scheduledDays, ", "))
 	}
 
 	if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), true); row != "" {
