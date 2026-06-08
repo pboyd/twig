@@ -146,3 +146,14 @@ func ExportHandleReorderResult(m Model, msg reorderResultMsg) Model {
 	result, _ := m.handleReorderResult(msg)
 	return result
 }
+
+// ExportSetNowFunc injects a time source into the model for deterministic
+// auto-schedule floor tests (FR-003).
+func ExportSetNowFunc(m *Model, f func() time.Time) {
+	m.nowFunc = f
+}
+
+// ExportNotice returns the model's current transient notice string.
+func ExportNotice(m Model) string {
+	return m.notice
+}

@@ -1585,6 +1585,134 @@ func TestRenderGrid_GapVisibility_PreviewWithGap(t *testing.T) {
 	}
 }
 
+// ── AutoScheduleSlot unit tests ────────────────────────────────────────────
+
+func makeTimedEntry(id int32, startMin, durMin int) *planv1.PlanEntry {
+	sm := int32(startMin)
+	return &planv1.PlanEntry{Id: id, StartMinute: &sm, DurationMinute: int32(durMin)}
+}
+
+func TestAutoScheduleSlot_EmptyDay(t *testing.T) {
+	start, ok := cli.AutoScheduleSlot(nil, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true on empty day")
+	}
+	if start != 480 {
+		t.Errorf("empty day: expected start=480, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_GapAfterBlock(t *testing.T) {
+	// 08:00–09:00 blocked; 30-min task should land at 09:00 (540).
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 480, 60)}
+	start, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 540 {
+		t.Errorf("gap after block: expected start=540, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_TooSmallGapSkipped(t *testing.T) {
+	// 08:00–09:00 and 09:15–10:00 blocked; 30-min task skips 15-min gap, lands at 600.
+	timed := []*planv1.PlanEntry{
+		makeTimedEntry(1, 480, 60),
+		makeTimedEntry(2, 555, 45),
+	}
+	start, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 600 {
+		t.Errorf("too-small gap: expected start=600, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_FloorRespected(t *testing.T) {
+	// floor=600 (10:00) on an empty day; should not start before 600.
+	start, ok := cli.AutoScheduleSlot(nil, 30, 600, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 600 {
+		t.Errorf("floor: expected start=600, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_ZeroDurationUsesThirtyMin(t *testing.T) {
+	// 08:00–09:00 blocked; zero-duration task needs 30-min block, lands at 540.
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 480, 60)}
+	start, ok := cli.AutoScheduleSlot(timed, 0, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 540 {
+		t.Errorf("zero-duration: expected start=540, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_BlockMustEndBy1440(t *testing.T) {
+	// floor=1410 (23:30): only 30 min remain before midnight, not enough for 60 min.
+	_, ok := cli.AutoScheduleSlot(nil, 60, 1410, 0)
+	if ok {
+		t.Error("expected ok=false when 60-min block cannot fit before midnight")
+	}
+}
+
+func TestAutoScheduleSlot_BlockMustEndBy1440_Fits(t *testing.T) {
+	// 23:00 (1380) + 30 min = 1410 ≤ 1440: should fit.
+	start, ok := cli.AutoScheduleSlot(nil, 30, 1380, 0)
+	if !ok {
+		t.Fatal("expected ok=true at 23:00")
+	}
+	if start != 1380 {
+		t.Errorf("end-of-day: expected start=1380, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_ExcludeID(t *testing.T) {
+	// Entry 1 at 08:00–09:00; entry 2 at 09:00–10:00.
+	// Asking to schedule entry 1 (excludeID=1) should ignore its own block,
+	// placing it at 08:00 even though entry 2 starts at 09:00.
+	timed := []*planv1.PlanEntry{
+		makeTimedEntry(1, 480, 60),
+		makeTimedEntry(2, 540, 60),
+	}
+	start, ok := cli.AutoScheduleSlot(timed, 60, 480, 1)
+	if !ok {
+		t.Fatal("expected ok=true with excludeID")
+	}
+	if start != 480 {
+		t.Errorf("excludeID: expected start=480 (self excluded), got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_OverlappingObstacles(t *testing.T) {
+	// Two overlapping entries: 08:00–09:30 and 09:00–10:00 → union 08:00–10:00.
+	// 30-min task should land at 600 (10:00).
+	timed := []*planv1.PlanEntry{
+		makeTimedEntry(1, 480, 90),
+		makeTimedEntry(2, 540, 60),
+	}
+	start, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 600 {
+		t.Errorf("overlapping obstacles: expected start=600, got %d", start)
+	}
+}
+
+func TestAutoScheduleSlot_NoFit(t *testing.T) {
+	// Day is full from floor to midnight.
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 480, 960)} // 08:00–24:00
+	_, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if ok {
+		t.Error("expected ok=false on a full day")
+	}
+}
+
 // TestRenderGrid_GapVisibility_PreviewFlush verifies that a preview starting at 10:00
 // is flush with an entry ending at 10:00 (shared border, no empty row between them).
 func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {

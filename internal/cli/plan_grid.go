@@ -652,6 +652,73 @@ func truncateRunes(s string, width int) string {
 	return string(runes[:width])
 }
 
+// AutoScheduleSlot returns the earliest start minute (minute-of-day) at or
+// after floorMin where a block of the needed length fits within a single day
+// (ending at 1440) without overlapping any timed entry.
+//
+// Entries with Id == excludeID are ignored (the entry being moved).
+// When durationMin <= 0 a 30-minute block is used for fitting.
+// Returns ok == false when no qualifying slot exists before 1440.
+func AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excludeID int32) (startMin int, ok bool) {
+	needed := durationMin
+	if needed <= 0 {
+		needed = 30
+	}
+
+	// Build sorted list of obstacle intervals as [start, end) pairs, unioning overlaps.
+	type interval struct{ s, e int }
+	var obs []interval
+	for _, e := range timed {
+		if excludeID != 0 && e.Id == excludeID {
+			continue
+		}
+		if e.StartMinute == nil {
+			continue
+		}
+		s := int(e.GetStartMinute())
+		end := s + int(e.DurationMinute)
+		obs = append(obs, interval{s, end})
+	}
+	// Sort by start.
+	for i := 1; i < len(obs); i++ {
+		for j := i; j > 0 && obs[j].s < obs[j-1].s; j-- {
+			obs[j], obs[j-1] = obs[j-1], obs[j]
+		}
+	}
+	// Merge overlapping/adjacent intervals.
+	var merged []interval
+	for _, iv := range obs {
+		if len(merged) > 0 && iv.s < merged[len(merged)-1].e {
+			if iv.e > merged[len(merged)-1].e {
+				merged[len(merged)-1].e = iv.e
+			}
+		} else {
+			merged = append(merged, iv)
+		}
+	}
+
+	// Scan free intervals from floorMin to 1440.
+	freeStart := floorMin
+	for _, iv := range merged {
+		if iv.e <= freeStart {
+			continue // obstacle ends before our search window
+		}
+		gapStart := freeStart
+		gapEnd := iv.s
+		if gapEnd > gapStart && gapEnd-gapStart >= needed {
+			return gapStart, true
+		}
+		if iv.e > freeStart {
+			freeStart = iv.e
+		}
+	}
+	// Check tail after all obstacles.
+	if 1440-freeStart >= needed {
+		return freeStart, true
+	}
+	return 0, false
+}
+
 // snapDown15 rounds min down to the nearest 15-minute boundary.
 func snapDown15(min int) int {
 	return (min / 15) * 15

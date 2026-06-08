@@ -1761,3 +1761,212 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// ── US1: auto-schedule (task, empty day / gaps / today-floor) ──────────────
+
+// TestAutoSchedule_EmptyDay_PlacesAt0800 verifies that pressing 'a' on an untimed
+// task on an empty day dispatches movePlanCmd with start_minute=480.
+func TestAutoSchedule_EmptyDay_PlacesAt0800(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Write tests", DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute == nil {
+		t.Fatal("expected timed=true (StartMinute set)")
+	}
+	if *fc.moveReq.StartMinute != 480 {
+		t.Errorf("expected start_minute=480, got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_GapAfterBlock_PlacesAtEndOfBlock verifies placement after an
+// existing block.
+func TestAutoSchedule_GapAfterBlock_PlacesAtEndOfBlock(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	sm := int32(480)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 0, Name: "Stand-up", StartMinute: &sm, DurationMinute: 60}, // event 08:00–09:00
+		{Id: 2, TaskId: 5, Name: "Write tests", DurationMinute: 30},                // untimed task
+	}, 1) // cursor on task
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil {
+		t.Fatal("MovePlanEntry was not called")
+	}
+	if fc.moveReq.StartMinute == nil || *fc.moveReq.StartMinute != 540 {
+		t.Errorf("expected start=540 (after block), got %v", fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_TooSmallGap_Skips verifies that a gap smaller than the task
+// duration is skipped.
+func TestAutoSchedule_TooSmallGap_Skips(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	sm1, sm2 := int32(480), int32(555)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 0, Name: "Block1", StartMinute: &sm1, DurationMinute: 60},
+		{Id: 2, TaskId: 0, Name: "Block2", StartMinute: &sm2, DurationMinute: 45},
+		{Id: 3, TaskId: 7, Name: "Task", DurationMinute: 30},
+	}, 2)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil || *fc.moveReq.StartMinute != 600 {
+		t.Errorf("expected start=600 (skip 15-min gap), got %v", fc.moveReq.GetStartMinute())
+	}
+}
+
+// TestAutoSchedule_TodayFloor_UsesCurrentMinute verifies that on today's plan
+// the floor is raised to the current minute (FR-003).
+func TestAutoSchedule_TodayFloor_UsesCurrentMinute(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	// Inject a fixed "now" at 2026-01-01 14:00 (840 min) and set plan day to match.
+	fixedNow := time.Date(2026, 1, 1, 14, 0, 0, 0, time.Local)
+	ExportSetNowFunc(&m, func() time.Time { return fixedNow })
+	ExportSetPlanDay(&m, "2026-01-01")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil {
+		t.Fatal("MovePlanEntry was not called or start not set")
+	}
+	if *fc.moveReq.StartMinute < 840 {
+		t.Errorf("today-floor: start_minute should be >= 840 (14:00), got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_NoFit_SetsNotice verifies that when no slot fits a playful
+// notice is set and no command is dispatched.
+func TestAutoSchedule_NoFit_SetsNotice(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	// Fill the day from 08:00 to midnight.
+	sm := int32(480)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 0, Name: "Block", StartMinute: &sm, DurationMinute: 960},
+		{Id: 2, TaskId: 5, Name: "Task", DurationMinute: 30},
+	}, 1)
+
+	m2, cmd := pressKeyStr(m, "a")
+
+	if cmd != nil {
+		t.Error("expected no command on a full day")
+	}
+	notice := ExportNotice(m2)
+	if notice == "" {
+		t.Error("expected a playful notice, got empty string")
+	}
+}
+
+// ── US2: re-home / no-op ───────────────────────────────────────────────────
+
+// TestAutoSchedule_ReHome_MovesEarlier verifies that pressing 'a' on a task
+// already timed at 14:00 with 08:00 free moves it to 08:00.
+func TestAutoSchedule_ReHome_MovesEarlier(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	sm := int32(840) // 14:00
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", StartMinute: &sm, DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil {
+		t.Fatal("MovePlanEntry was not called")
+	}
+	if *fc.moveReq.StartMinute != 480 {
+		t.Errorf("re-home: expected start=480, got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_AlreadyInPlace_NoOp verifies that pressing 'a' on a task
+// already at the earliest fitting slot produces no command (FR-011 / US2.3).
+func TestAutoSchedule_AlreadyInPlace_NoOp(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	sm := int32(480) // already at 08:00
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", StartMinute: &sm, DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd != nil {
+		t.Error("already in place: expected no command (no-op), got a command")
+	}
+	if fc.moveReq != nil {
+		t.Error("already in place: MovePlanEntry should not be called")
+	}
+}
+
+// ── US3: event guard / empty plan ─────────────────────────────────────────
+
+// TestAutoSchedule_EventHighlighted_SetsNoticeNoMove verifies that pressing 'a'
+// on an event sets a playful notice and dispatches no command.
+func TestAutoSchedule_EventHighlighted_SetsNoticeNoMove(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	sm := int32(480)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 0, Name: "Stand-up", StartMinute: &sm, DurationMinute: 30},
+	}, 0)
+
+	m2, cmd := pressKeyStr(m, "a")
+
+	if cmd != nil {
+		t.Error("event: expected no command, got one")
+	}
+	notice := ExportNotice(m2)
+	if notice == "" {
+		t.Error("event: expected a playful notice, got empty string")
+	}
+}
+
+// TestAutoSchedule_EmptyPlan_NoError verifies that pressing 'a' on an empty plan
+// is a silent no-op (no command, no panic).
+func TestAutoSchedule_EmptyPlan_NoError(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd != nil {
+		t.Error("empty plan: expected nil command, got one")
+	}
+}

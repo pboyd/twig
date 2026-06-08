@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -656,6 +656,35 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, startPomCmd(m.client, entry.TaskId, entry.Name)
 		}
 
+	// Auto-schedule: place/re-home the highlighted task in the earliest free slot.
+	case key.Matches(msg, m.keys.PlanAutoSchedule):
+		if len(m.plan.entries) == 0 {
+			return m, nil
+		}
+		entry := m.plan.entries[m.plan.cursor]
+		if entry.TaskId == 0 {
+			m.notice = "Auto-schedule is for tasks only — events are already right where they belong."
+			return m, nil
+		}
+		_, timed := splitPlanEntries(m.plan.entries)
+		floorMin := 480
+		now := m.nowOrDefault()
+		if m.plan.day == now.Format("2006-01-02") {
+			nowMin := now.Hour()*60 + now.Minute()
+			if nowMin > floorMin {
+				floorMin = nowMin
+			}
+		}
+		startMin, ok := cli.AutoScheduleSlot(timed, int(entry.DurationMinute), floorMin, entry.Id)
+		if !ok {
+			m.notice = "Day's packed — no room left to squeeze this one in."
+			return m, nil
+		}
+		if entry.StartMinute != nil && int(*entry.StartMinute) == startMin {
+			return m, nil
+		}
+		return m, movePlanCmd(m.planClient, m.plan.day, entry.Id, startMin, int(entry.DurationMinute), true)
+
 	// Pomodoro cancel — mirrors the Tasks tab handler.
 	case key.Matches(msg, m.keys.PomCancel):
 		if m.pom != nil && !m.pom.completed {
@@ -1206,4 +1235,12 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// nowOrDefault returns the model's injected time source (for tests) or time.Now().Local().
+func (m Model) nowOrDefault() time.Time {
+	if m.nowFunc != nil {
+		return m.nowFunc()
+	}
+	return time.Now().Local()
 }

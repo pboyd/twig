@@ -116,6 +116,9 @@ type Model struct {
 	// notice is a transient info message shown in the status bar (distinct from err).
 	// It is cleared on the next user action.
 	notice string
+	// nowFunc, when non-nil, overrides time.Now().Local() for the auto-schedule floor.
+	// Set only in tests via export_test.go shim.
+	nowFunc func() time.Time
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {

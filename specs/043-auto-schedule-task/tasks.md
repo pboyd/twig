@@ -34,7 +34,7 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **Purpose**: Register the key binding that exposes the feature; shared by all three stories.
 
-- [ ] T001 [P] Add a `PlanAutoSchedule` `key.Binding` bound to `"a"` (help: `"a"`, `"auto-schedule"`) to the `KeyMap` struct and its initializer in `internal/tui/keymap.go`, and include it in the planning-mode `ShortHelp`/`FullHelp` listings alongside `PlanAddTask`/`PlanAddEvent`/`PlanEdit`.
+- [X] T001 [P] Add a `PlanAutoSchedule` `key.Binding` bound to `"a"` (help: `"a"`, `"auto-schedule"`) to the `KeyMap` struct and its initializer in `internal/tui/keymap.go`, and include it in the planning-mode `ShortHelp`/`FullHelp` listings alongside `PlanAddTask`/`PlanAddEvent`/`PlanEdit`.
 
 **Checkpoint**: `a` is a recognized planning-tab binding and shows in help (handler is wired in later phases).
 
@@ -46,8 +46,8 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **⚠️ CRITICAL**: User Story 1 and User Story 2 cannot function until `AutoScheduleSlot` exists.
 
-- [ ] T002 [P] Write table-driven unit tests for `AutoScheduleSlot` in `internal/cli/plan_grid_test.go` covering: empty day → 480; gap immediately after a blocking entry (08:00–09:00 → 30-min task at 540); too-small interior gap skipped (08:00–09:00 & 09:15–10:00 → 30-min task at 600); `floorMin` respected (no start < floor); zero-duration task fitted as a 30-minute block; block must end by 1440 (no overflow past midnight); `excludeID` removes the named entry from obstacles; overlapping obstacles treated as a union; no-fit returns `ok == false`. Ensure tests fail before T003.
-- [ ] T003 Implement `AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excludeID int32) (startMin int, ok bool)` in `internal/cli/plan_grid.go` per `contracts/auto-schedule.md` §2: union timed obstacles (skipping `excludeID`) clipped to `[floorMin, 1440)`, scan free intervals ascending, return the earliest whose length ≥ `max(durationMin, 30 when durationMin<=0)`; pure, no input mutation. Make T002 pass.
+- [X] T002 [P] Write table-driven unit tests for `AutoScheduleSlot` in `internal/cli/plan_grid_test.go` covering: empty day → 480; gap immediately after a blocking entry (08:00–09:00 → 30-min task at 540); too-small interior gap skipped (08:00–09:00 & 09:15–10:00 → 30-min task at 600); `floorMin` respected (no start < floor); zero-duration task fitted as a 30-minute block; block must end by 1440 (no overflow past midnight); `excludeID` removes the named entry from obstacles; overlapping obstacles treated as a union; no-fit returns `ok == false`. Ensure tests fail before T003.
+- [X] T003 Implement `AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excludeID int32) (startMin int, ok bool)` in `internal/cli/plan_grid.go` per `contracts/auto-schedule.md` §2: union timed obstacles (skipping `excludeID`) clipped to `[floorMin, 1440)`, scan free intervals ascending, return the earliest whose length ≥ `max(durationMin, 30 when durationMin<=0)`; pure, no input mutation. Make T002 pass.
 
 **Checkpoint**: The placement engine is correct and unit-tested in isolation.
 
@@ -59,9 +59,9 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **Independent Test**: In the planning tab, highlight a task with a duration on a day with gaps and press `a`; confirm it becomes a timed entry at the earliest fitting start ≥ floor and stays selected. On a full day, confirm a playful "no room" notice and no change.
 
-- [ ] T004 [US1] Ensure handler tests can drive planning key presses: confirm an entry point for `handlePlanKey` exists for tests; if not, add a thin exported shim in `internal/tui/export_test.go` (mirroring existing shims).
-- [ ] T005 [US1] Write handler tests in `internal/tui/update_test.go` for pressing `a` on a task: (a) empty day places at 08:00 via a `MovePlanEntry`/`movePlanCmd` with `start_minute=480`, `timed=true`, duration unchanged; (b) gap-after-block places at end of the blocking entry; (c) too-small gap is skipped; (d) **today after 08:00** uses a floor of the current local minute, never 08:00 (FR-003) — inject/control "now" so the test is deterministic; (e) no fitting slot → `m.notice` set (playful), no command dispatched, entries unchanged. Tests fail before T006.
-- [ ] T006 [US1] Implement the `case key.Matches(msg, m.keys.PlanAutoSchedule)` branch in `handlePlanKey` in `internal/tui/update.go`: guard on `len(m.plan.entries) > 0` and highlighted `entry.TaskId != 0`; compute `floorMin = 480`, raised to the current local minute-of-day when `m.plan.day == time.Now().Local().Format("2006-01-02")` and that minute > 480; split timed entries (reuse `splitPlanEntries`); call `cli.AutoScheduleSlot(timed, int(entry.DurationMinute), floorMin, entry.Id)`; on `ok`, dispatch `movePlanCmd(m.planClient, m.plan.day, entry.Id, startMin, int(entry.DurationMinute), true)`; on `!ok`, set a playful `m.notice` and return without a command. Make T005 pass.
+- [X] T004 [US1] Ensure handler tests can drive planning key presses: confirm an entry point for `handlePlanKey` exists for tests; if not, add a thin exported shim in `internal/tui/export_test.go` (mirroring existing shims).
+- [X] T005 [US1] Write handler tests in `internal/tui/update_test.go` for pressing `a` on a task: (a) empty day places at 08:00 via a `MovePlanEntry`/`movePlanCmd` with `start_minute=480`, `timed=true`, duration unchanged; (b) gap-after-block places at end of the blocking entry; (c) too-small gap is skipped; (d) **today after 08:00** uses a floor of the current local minute, never 08:00 (FR-003) — inject/control "now" so the test is deterministic; (e) no fitting slot → `m.notice` set (playful), no command dispatched, entries unchanged. Tests fail before T006.
+- [X] T006 [US1] Implement the `case key.Matches(msg, m.keys.PlanAutoSchedule)` branch in `handlePlanKey` in `internal/tui/update.go`: guard on `len(m.plan.entries) > 0` and highlighted `entry.TaskId != 0`; compute `floorMin = 480`, raised to the current local minute-of-day when `m.plan.day == time.Now().Local().Format("2006-01-02")` and that minute > 480; split timed entries (reuse `splitPlanEntries`); call `cli.AutoScheduleSlot(timed, int(entry.DurationMinute), floorMin, entry.Id)`; on `ok`, dispatch `movePlanCmd(m.planClient, m.plan.day, entry.Id, startMin, int(entry.DurationMinute), true)`; on `!ok`, set a playful `m.notice` and return without a command. Make T005 pass.
 
 **Checkpoint**: US1 is a usable MVP — tasks auto-place into the next open slot (today-aware) with a graceful full-day message; highlight follows via the reused `movePlanCmd`.
 
@@ -73,8 +73,8 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **Independent Test**: Place a task at 14:00 with 08:00 free; press `a`; confirm it moves to 08:00. With a task already at the earliest fitting slot, press `a`; confirm no change and no spurious write.
 
-- [ ] T007 [US2] Write handler tests in `internal/tui/update_test.go`: (a) a task timed at 14:00 with an open 08:00 slot moves to 08:00 (the task does not block itself — relies on `excludeID`); (b) a task already at the earliest fitting start produces **no** dispatched command and no change (FR-011 / US2.3). Tests fail before T008.
-- [ ] T008 [US2] In the `handlePlanKey` auto-schedule branch (`internal/tui/update.go`), add the no-op guard: when the highlighted task is already timed (`entry.StartMinute != nil`) and `int(*entry.StartMinute) == startMin`, return without dispatching `movePlanCmd` (and without a notice). The re-home/exclude-self path already works through `entry.Id` as `excludeID` from T006. Make T007 pass.
+- [X] T007 [US2] Write handler tests in `internal/tui/update_test.go`: (a) a task timed at 14:00 with an open 08:00 slot moves to 08:00 (the task does not block itself — relies on `excludeID`); (b) a task already at the earliest fitting start produces **no** dispatched command and no change (FR-011 / US2.3). Tests fail before T008.
+- [X] T008 [US2] In the `handlePlanKey` auto-schedule branch (`internal/tui/update.go`), add the no-op guard: when the highlighted task is already timed (`entry.StartMinute != nil`) and `int(*entry.StartMinute) == startMin`, return without dispatching `movePlanCmd` (and without a notice). The re-home/exclude-self path already works through `entry.Id` as `excludeID` from T006. Make T007 pass.
 
 **Checkpoint**: Re-homing and already-in-place no-op both verified; US1 behavior remains green.
 
@@ -86,8 +86,8 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **Independent Test**: Highlight an event, press `a`; confirm no entry moves and a playful notice explains auto-schedule is task-only. Press `a` on an empty day; confirm nothing happens and no error.
 
-- [ ] T009 [US3] Write handler tests in `internal/tui/update_test.go`: (a) highlighted event (`TaskId == 0`) → no command dispatched, plan unchanged, `m.notice` set to a playful task-only message; (b) empty `m.plan.entries` → no command, no error, no panic. Tests fail before T010.
-- [ ] T010 [US3] Extend the auto-schedule branch in `internal/tui/update.go` with the event/empty guards (mirroring the existing Complete/PomStart event guards): when `entry.TaskId == 0`, set a playful `m.notice` and return; when no entries/no highlight, return silently. Make T009 pass.
+- [X] T009 [US3] Write handler tests in `internal/tui/update_test.go`: (a) highlighted event (`TaskId == 0`) → no command dispatched, plan unchanged, `m.notice` set to a playful task-only message; (b) empty `m.plan.entries` → no command, no error, no panic. Tests fail before T010.
+- [X] T010 [US3] Extend the auto-schedule branch in `internal/tui/update.go` with the event/empty guards (mirroring the existing Complete/PomStart event guards): when `entry.TaskId == 0`, set a playful `m.notice` and return; when no entries/no highlight, return silently. Make T009 pass.
 
 **Checkpoint**: All three stories complete; guards prevent any unwanted mutation.
 
@@ -97,9 +97,9 @@ No `services/twig`, `api/`, or `services/twig-web` changes.
 
 **Purpose**: Tone, consistency, and verification across the whole feature.
 
-- [ ] T011 [P] Review all new `m.notice` strings (no-fit, event-only) for Principle IV tone and Principle III consistency with surrounding planning messages in `internal/tui/update.go`; refine wording (warm, accurate, actionable).
-- [ ] T012 [P] Confirm the `a` binding renders correctly in the planning help overlay and does not collide with any existing planning binding (`internal/tui/keymap.go` / help view).
-- [ ] T013 Run `gofmt`/`go vet ./...` and the full suite `go test ./...` from repo root; ensure `internal/cli` and `internal/tui` tests pass.
+- [X] T011 [P] Review all new `m.notice` strings (no-fit, event-only) for Principle IV tone and Principle III consistency with surrounding planning messages in `internal/tui/update.go`; refine wording (warm, accurate, actionable).
+- [X] T012 [P] Confirm the `a` binding renders correctly in the planning help overlay and does not collide with any existing planning binding (`internal/tui/keymap.go` / help view).
+- [X] T013 Run `gofmt`/`go vet ./...` and the full suite `go test ./...` from repo root; ensure `internal/cli` and `internal/tui` tests pass.
 - [ ] T014 Walk through `specs/043-auto-schedule-task/quickstart.md` against a running TUI (`go build -o twig ./cmd/twig && ./twig`) to manually verify the acceptance scenarios (empty day, gap, too-small gap, re-home, already-in-place, event guard, today-afternoon, full day).
 
 ---
