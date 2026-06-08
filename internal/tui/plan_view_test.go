@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -645,6 +646,25 @@ func TestPlanFormView_FocusedCancelButton(t *testing.T) {
 	}
 	if strings.Contains(out, "[>Save<]") {
 		t.Errorf("focused Cancel button: Save should not be focused; got:\n%s", out)
+	}
+}
+
+// stripANSI removes ANSI escape sequences so plain text assertions work on
+// styled textinput output.
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string { return ansiEscapeRe.ReplaceAllString(s, "") }
+
+// TestPlanFormView_PlaceholdersFullyRendered guards against the Width==0 bug
+// where textinput.placeholderView truncates to a single character.
+func TestPlanFormView_PlaceholdersFullyRendered(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.initAddEventForm()
+	out := stripANSI(m.renderPlanFormView(80))
+	for _, want := range []string{"Event name", "Start time", "Duration"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("placeholder %q not found in form output:\n%s", want, out)
+		}
 	}
 }
 

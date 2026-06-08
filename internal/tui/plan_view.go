@@ -150,9 +150,14 @@ func (m Model) renderPlanPickerView(width int) string {
 // renderPlanFormView renders the current planning prompt form.
 func (m Model) renderPlanFormView(width int) string {
 	var sb strings.Builder
-	_ = width
+
+	fieldWidth := width - 25
+	if fieldWidth < 20 {
+		fieldWidth = 20
+	}
 
 	for i, field := range m.plan.form.fields {
+		field.SetWidth(fieldWidth)
 		label := planFieldLabel(m.plan.mode, i)
 		if m.plan.form.focus == i {
 			sb.WriteString(fmt.Sprintf("  > %s: %s\n", label, field.View()))
