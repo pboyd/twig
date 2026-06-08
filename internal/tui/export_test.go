@@ -111,6 +111,16 @@ func ExportUpdateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMs
 	return updateTaskCmd(client, msg)
 }
 
+// ExportCreateTaskCmd exposes createTaskCmd for unit tests.
+func ExportCreateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea.Cmd {
+	return createTaskCmd(client, msg)
+}
+
+// ExportEditSavedMsg constructs an editSavedMsg for unit tests.
+func ExportEditSavedMsg(name string, parentID *int64) editSavedMsg {
+	return editSavedMsg{name: name, parentID: parentID}
+}
+
 // ExportNewStyledModel creates a Model with the styled flag set for rendering tests.
 func ExportNewStyledModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode, styled bool) Model {
 	m := ExportNewModel(client, tree)

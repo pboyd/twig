@@ -709,16 +709,70 @@ func TestUpdateTaskCmd_PreservesParentID(t *testing.T) {
 	}
 }
 
+// TestCreateTaskCmd_SubtaskHighlightsParent checks that after creating a subtask
+// the refreshedMsg targets the parent ID, not the new child ID.
+func TestCreateTaskCmd_SubtaskHighlightsParent(t *testing.T) {
+	parentID := int64(1)
+	newChildID := int64(42)
+	fc := &fakeTaskClient{
+		createTaskID: newChildID,
+		listTasksResp: []*taskv1.Task{
+			{Id: 1, Name: "parent"},
+			{Id: 42, Name: "child", ParentId: &parentID},
+		},
+	}
+	msg := ExportEditSavedMsg("child", &parentID)
+	cmd := ExportCreateTaskCmd(fc, msg)
+	result := cmd()
+
+	rm, ok := result.(refreshedMsg)
+	if !ok {
+		t.Fatalf("expected refreshedMsg, got %T", result)
+	}
+	if rm.highlightID != parentID {
+		t.Errorf("subtask create: highlightID want %d (parent), got %d", parentID, rm.highlightID)
+	}
+}
+
+// TestCreateTaskCmd_RootTaskHighlightsNewTask checks that creating a top-level
+// task (no parentID) highlights the newly created task, not the parent.
+func TestCreateTaskCmd_RootTaskHighlightsNewTask(t *testing.T) {
+	newTaskID := int64(55)
+	fc := &fakeTaskClient{
+		createTaskID: newTaskID,
+		listTasksResp: []*taskv1.Task{
+			{Id: 1, Name: "existing"},
+			{Id: 55, Name: "new root"},
+		},
+	}
+	msg := ExportEditSavedMsg("new root", nil)
+	cmd := ExportCreateTaskCmd(fc, msg)
+	result := cmd()
+
+	rm, ok := result.(refreshedMsg)
+	if !ok {
+		t.Fatalf("expected refreshedMsg, got %T", result)
+	}
+	if rm.highlightID != newTaskID {
+		t.Errorf("root task create: highlightID want %d (new task), got %d", newTaskID, rm.highlightID)
+	}
+}
+
 // fakeTaskClient is a minimal TaskServiceClient for unit tests.
 type fakeTaskClient struct {
 	taskv1connect.TaskServiceClient
 	lastUpdateReq     *taskv1.UpdateTaskRequest
-	lastCompleteID   int64
-	lastUncompleteID int64
-	lastPomTaskID    int64
-	completeErr      error
-	uncompleteErr    error
-	pomErr           error
+	lastCreateReq     *taskv1.CreateTaskRequest
+	lastCompleteID    int64
+	lastUncompleteID  int64
+	lastPomTaskID     int64
+	completeErr       error
+	uncompleteErr     error
+	pomErr            error
+	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
+	listTasksResp []*taskv1.Task
+	// createTaskID is the ID returned for the newly created task.
+	createTaskID int64
 }
 
 func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[taskv1.UpdateTaskRequest]) (*connect.Response[taskv1.UpdateTaskResponse], error) {
@@ -727,7 +781,16 @@ func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[task
 }
 
 func (f *fakeTaskClient) ListTasks(_ context.Context, _ *connect.Request[taskv1.ListTasksRequest]) (*connect.Response[taskv1.ListTasksResponse], error) {
-	return connect.NewResponse(&taskv1.ListTasksResponse{}), nil
+	return connect.NewResponse(&taskv1.ListTasksResponse{Tasks: f.listTasksResp}), nil
+}
+
+func (f *fakeTaskClient) CreateTask(_ context.Context, req *connect.Request[taskv1.CreateTaskRequest]) (*connect.Response[taskv1.CreateTaskResponse], error) {
+	f.lastCreateReq = req.Msg
+	id := f.createTaskID
+	if id == 0 {
+		id = 99
+	}
+	return connect.NewResponse(&taskv1.CreateTaskResponse{Task: &taskv1.Task{Id: id}}), nil
 }
 
 func (f *fakeTaskClient) CompleteTask(_ context.Context, req *connect.Request[taskv1.CompleteTaskRequest]) (*connect.Response[taskv1.CompleteTaskResponse], error) {

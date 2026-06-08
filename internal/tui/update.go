@@ -181,6 +181,11 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			return refreshedMsg{err: err}
 		}
 		newID := resp.Msg.Task.Id
+		// For subtasks, keep the parent highlighted so the user can
+		// immediately press 'n' again to add another sibling.
+		if msg.parentID != nil {
+			return fetchAfterMutation(client, *msg.parentID)
+		}
 		return fetchAfterMutation(client, newID)
 	}
 }
