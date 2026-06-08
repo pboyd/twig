@@ -494,8 +494,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.PasteMsg:
+		return m.handlePaste(msg)
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	}
+	return m, nil
+}
+
+// handlePaste routes bracketed-paste text (tea.PasteMsg, new in bubbletea v2)
+// to the currently focused text input. Without this the message is dropped
+// because PasteMsg is no longer a tea.KeyPressMsg.
+func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if m.activeTab == tabPlanning {
+		switch m.plan.mode {
+		case planTaskTime, planEventForm, planEdit:
+			if m.plan.form.focus < len(m.plan.form.fields) {
+				var cmd tea.Cmd
+				m.plan.form.fields[m.plan.form.focus], cmd =
+					m.plan.form.fields[m.plan.form.focus].Update(msg)
+				return m, cmd
+			}
+		}
+		return m, nil
+	}
+
+	switch m.mode {
+	case modeEdit, modeNewSubtask, modeNewRoot:
+		newEdit, cmd := m.edit.Update(msg, m.keys)
+		m.edit = newEdit
+		return m, cmd
+	case modeDatePrompt:
+		var cmd tea.Cmd
+		m.datePromptInput, cmd = m.datePromptInput.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }

@@ -1711,3 +1711,79 @@ func TestScheduledDays_ResultStoredOnModel(t *testing.T) {
 		t.Errorf("scheduledDays[1]: got %v, want [2026-06-10 2026-06-11]", got[1])
 	}
 }
+
+// ── Paste (tea.PasteMsg) regression tests ──────────────────────────────────
+// In bubbletea v2, bracketed-paste is delivered as tea.PasteMsg, not as a
+// tea.KeyPressMsg. Model.Update must route it to the focused field; without
+// the explicit case the message falls through and paste text is silently dropped.
+
+// TestPaste_EditForm_NameField verifies that pasting while the name field is
+// focused inserts text into that field.
+func TestPaste_EditForm_NameField(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeNewRoot
+	m.edit = newBlankForm(0) // focusName is default
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "hello paste"})
+	got := m2.(Model).edit.name.Value()
+	if got != "hello paste" {
+		t.Errorf("name field after paste: want %q, got %q", "hello paste", got)
+	}
+}
+
+// TestPaste_EditForm_DescriptionField verifies that pasting while the
+// description textarea is focused inserts text there.
+func TestPaste_EditForm_DescriptionField(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = newBlankForm(0)
+	m.edit = m.edit.cycleFocus(focusDescription) // move to description
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "pasted description"})
+	got := m2.(Model).edit.description.Value()
+	if got != "pasted description" {
+		t.Errorf("description field after paste: want %q, got %q", "pasted description", got)
+	}
+}
+
+// TestPaste_DatePrompt verifies that pasting a date string into the date prompt
+// inserts it into the text input.
+func TestPaste_DatePrompt(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeDatePrompt
+	m.datePromptInput = newPlanInput("YYYY-MM-DD")
+	m.datePromptInput.Focus()
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "2026-12-25"})
+	got := m2.(Model).datePromptInput.Value()
+	if got != "2026-12-25" {
+		t.Errorf("date prompt after paste: want %q, got %q", "2026-12-25", got)
+	}
+}
+
+// TestPaste_PlanningForm verifies that pasting while a planning form is open
+// inserts text into the focused field.
+func TestPaste_PlanningForm(t *testing.T) {
+	m := newModel(nil, nil, "", config.PomodoroConfig{}, false, nil)
+	m.activeTab = tabPlanning
+	m.initAddEventForm() // opens planEventForm with focus on field 0 (name)
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "stand-up"})
+	got := m2.(Model).plan.form.fields[0].Value()
+	if got != "stand-up" {
+		t.Errorf("plan form field[0] after paste: want %q, got %q", "stand-up", got)
+	}
+}
+
+// TestPaste_ListMode_IsNoOp verifies that pasting while in normal list mode
+// neither panics nor mutates the task list cursor.
+func TestPaste_ListMode_IsNoOp(t *testing.T) {
+	m := buildTestModel()
+	before := m.cursor
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "anything"})
+	after := m2.(Model).cursor
+	if after != before {
+		t.Errorf("cursor changed in list mode on paste: before=%d after=%d", before, after)
+	}
+}
