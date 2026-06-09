@@ -15,4 +15,9 @@ export const messages = {
   reorderError: "Couldn't move that — give it another try?",
   planEmpty: "Nothing planned here yet — a blank slate full of potential.",
   planError: "Couldn't load the plan. Want to try again?",
-} as const;
+  addedToToday: "On today's plan! Go get it. 🎉",
+  addedToDay: (label: string) => `Added to ${label} — marked and ready.`,
+  alreadyOnPlan: "It's already waiting there — no need to add it twice.",
+  entryRemoved: "Gone from the plan. A little lighter now.",
+  addFailed: "Couldn't add that — give it another try?",
+};

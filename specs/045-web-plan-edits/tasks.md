@@ -27,7 +27,7 @@ All paths are relative to `services/twig-web/`.
 
 **Purpose**: Shared copy used by multiple stories, added once to avoid cross-story edits to the same file.
 
-- [ ] T001 [P] Add new playful user-facing copy to `src/theme/messages.ts`: `addedToToday`, `addedToDay` (a `(label: string) => string` builder), `alreadyOnPlan` (duplicate confirmation), `entryRemoved`, and an `addFailed`/reuse of `connectivityError` for failures. Keep the warm/playful tone (Principle IV); leave existing `completeBlockedBySubtasks`/`connectivityError` in place for reuse.
+- [X] T001 [P] Add new playful user-facing copy to `src/theme/messages.ts`: `addedToToday`, `addedToDay` (a `(label: string) => string` builder), `alreadyOnPlan` (duplicate confirmation), `entryRemoved`, and an `addFailed`/reuse of `connectivityError` for failures. Keep the warm/playful tone (Principle IV); leave existing `completeBlockedBySubtasks`/`connectivityError` in place for reuse.
 
 ---
 
@@ -37,10 +37,10 @@ All paths are relative to `services/twig-web/`.
 
 **⚠️ CRITICAL**: US1 and US3 depend on this phase. US2 and US4 do not import the toast and may proceed in parallel with it.
 
-- [ ] T002 Create `src/components/Toast.tsx` — presentational, auto-dismissing toast styled only from `src/theme/tokens.ts` (success/error tone), tap-to-dismiss, accessible (`role="status"`).
-- [ ] T003 Create `src/context/ToastProvider.tsx` — `ToastProvider` (holds a small queue) + `useToast()` hook exposing `show(message, tone?)`; each toast auto-removes after ~3s; renders a fixed overlay of `Toast` items.
-- [ ] T004 Wrap the router in `src/App.tsx` with `<ToastProvider>` so `useToast()` is available on every page.
-- [ ] T005 [P] Create `src/context/ToastProvider.test.tsx` — `show()` renders the message and it auto-dismisses; multiple toasts stack.
+- [X] T002 Create `src/components/Toast.tsx` — presentational, auto-dismissing toast styled only from `src/theme/tokens.ts` (success/error tone), tap-to-dismiss, accessible (`role="status"`).
+- [X] T003 Create `src/context/ToastProvider.tsx` — `ToastProvider` (holds a small queue) + `useToast()` hook exposing `show(message, tone?)`; each toast auto-removes after ~3s; renders a fixed overlay of `Toast` items.
+- [X] T004 Wrap the router in `src/App.tsx` with `<ToastProvider>` so `useToast()` is available on every page.
+- [X] T005 [P] Create `src/context/ToastProvider.test.tsx` — `show()` renders the message and it auto-dismisses; multiple toasts stack.
 
 **Checkpoint**: `useToast()` available app-wide; toast verified in isolation.
 
@@ -52,11 +52,11 @@ All paths are relative to `services/twig-web/`.
 
 **Independent Test**: On the Tasks tab, tap a task's add-to-today control → toast confirms → the task shows in today's Untimed group on the Plan tab; a second tap reports it's already on today's plan with no duplicate.
 
-- [ ] T006 [P] [US1] Create `src/lib/planDays.ts` with `todayIso()` (local `YYYY-MM-DD`, reusing/extending `planView.todayString`) and `dayPickerLabel(iso)` ("Today" / else `formatDayLabel`).
-- [ ] T007 [P] [US1] Create `src/lib/planDays.test.ts` covering `todayIso()` format and `dayPickerLabel()` for today vs other days.
-- [ ] T008 [US1] Create `src/components/AddToPlanControl.tsx` (today path only): a primary icon button that calls `addPlanTask({ day: todayIso(), taskId, durationMinute: 0 })` (no `startMinute`), shows `messages.addedToToday` via `useToast` on success, maps `ConnectError` `Code.FailedPrecondition` → `messages.alreadyOnPlan` toast, other errors → `messages.connectivityError` toast; on success `invalidateQueries` for `listPlanEntries` keyed to `todayIso()`. Accept `taskId: bigint` as a prop. (depends on T001, T003, T006)
-- [ ] T009 [US1] Mount `<AddToPlanControl taskId={task.id} />` in the `TreeRow.tsx` action cluster (next to add-sub-task), with a 44px touch target consistent with sibling buttons. (depends on T008)
-- [ ] T010 [US1] Update `src/pages/TaskTreePage.test.tsx` (and/or a new `src/components/AddToPlanControl.test.tsx`): add-to-today success shows toast + fires `addPlanTask` with `day=today` and no `startMinute`; `FailedPrecondition` shows "already on plan" copy; transport error shows failure copy and leaves the list unchanged.
+- [X] T006 [P] [US1] Create `src/lib/planDays.ts` with `todayIso()` (local `YYYY-MM-DD`, reusing/extending `planView.todayString`) and `dayPickerLabel(iso)` ("Today" / else `formatDayLabel`).
+- [X] T007 [P] [US1] Create `src/lib/planDays.test.ts` covering `todayIso()` format and `dayPickerLabel()` for today vs other days.
+- [X] T008 [US1] Create `src/components/AddToPlanControl.tsx` (today path only): a primary icon button that calls `addPlanTask({ day: todayIso(), taskId, durationMinute: 0 })` (no `startMinute`), shows `messages.addedToToday` via `useToast` on success, maps `ConnectError` `Code.FailedPrecondition` → `messages.alreadyOnPlan` toast, other errors → `messages.connectivityError` toast; on success `invalidateQueries` for `listPlanEntries` keyed to `todayIso()`. Accept `taskId: bigint` as a prop. (depends on T001, T003, T006)
+- [X] T009 [US1] Mount `<AddToPlanControl taskId={task.id} />` in the `TreeRow.tsx` action cluster (next to add-sub-task), with a 44px touch target consistent with sibling buttons. (depends on T008)
+- [X] T010 [US1] Update `src/pages/TaskTreePage.test.tsx` (and/or a new `src/components/AddToPlanControl.test.tsx`): add-to-today success shows toast + fires `addPlanTask` with `day=today` and no `startMinute`; `FailedPrecondition` shows "already on plan" copy; transport error shows failure copy and leaves the list unchanged.
 
 **Checkpoint**: US1 fully functional — adding a task to today from the list works and is independently testable.
 
@@ -68,9 +68,9 @@ All paths are relative to `services/twig-web/`.
 
 **Independent Test**: On the Plan tab, tap a task entry's complete control → untimed entry disappears (044) or timed entry shows done; the task reads complete on the Tasks tab; an entry whose task has incomplete sub-tasks shows an inline block message; events expose no complete control.
 
-- [ ] T011 [P] [US2] Edit `src/components/PlanEntryRow.tsx` to render a **complete** control only when `entry.kind === "task" && entry.taskId !== undefined && !entry.completed`; add `onComplete(entry)`, `completing?: boolean`, and `actionError?: string` props; render `actionError` inline (amber style as in `TreeRow`). No control for events.
-- [ ] T012 [US2] In `src/pages/PlanPage.tsx`, wire `useMutation(completeTask)` and a `handleComplete(entry)` that calls `completeTask({ id: entry.taskId })`, then `invalidateQueries` for `listPlanEntries` (current `day`) and `listTasks`; map `Code.FailedPrecondition` → `messages.completeBlockedBySubtasks`, else `messages.connectivityError`, surfaced via the row's `actionError`; pass handler + per-entry pending/error into `PlanEntryRow`. (depends on T011)
-- [ ] T013 [US2] Update `src/pages/PlanPage.test.tsx`: completing a task fires `completeTask` and invalidates plan + tasks queries; blocked-by-subtasks shows the inline message and leaves the entry; event rows render no complete control.
+- [X] T011 [P] [US2] Edit `src/components/PlanEntryRow.tsx` to render a **complete** control only when `entry.kind === "task" && entry.taskId !== undefined && !entry.completed`; add `onComplete(entry)`, `completing?: boolean`, and `actionError?: string` props; render `actionError` inline (amber style as in `TreeRow`). No control for events.
+- [X] T012 [US2] In `src/pages/PlanPage.tsx`, wire `useMutation(completeTask)` and a `handleComplete(entry)` that calls `completeTask({ id: entry.taskId })`, then `invalidateQueries` for `listPlanEntries` (current `day`) and `listTasks`; map `Code.FailedPrecondition` → `messages.completeBlockedBySubtasks`, else `messages.connectivityError`, surfaced via the row's `actionError`; pass handler + per-entry pending/error into `PlanEntryRow`. (depends on T011)
+- [X] T013 [US2] Update `src/pages/PlanPage.test.tsx`: completing a task fires `completeTask` and invalidates plan + tasks queries; blocked-by-subtasks shows the inline message and leaves the entry; event rows render no complete control.
 
 **Checkpoint**: US1 and US2 both work independently.
 
@@ -82,9 +82,9 @@ All paths are relative to `services/twig-web/`.
 
 **Independent Test**: From a task's other-day picker, choose Tomorrow or an arbitrary date, confirm Add (≤3 actions) → toast names the day → the task appears in that day's Untimed group; a past date still adds.
 
-- [ ] T014 [P] [US3] Extend `src/lib/planDays.ts` with `tomorrowIso()` (`addDays(todayIso(),1)`) and extend `dayPickerLabel` to return "Tomorrow"; update `src/lib/planDays.test.ts` accordingly. (depends on T006)
-- [ ] T015 [US3] Extend `src/components/AddToPlanControl.tsx` with a popover affordance: a **Tomorrow** quick preset and a native `<input type="date">` + an **Add** confirm (disabled until a date is chosen); each calls `addPlanTask({ day: <iso>, taskId, durationMinute: 0 })`, shows `messages.addedToDay(dayPickerLabel(iso))` on success and `invalidateQueries` for `listPlanEntries` keyed to that day; past dates allowed (no lower bound). Reuse `Field`/`Button` styling. (depends on T008, T014)
-- [ ] T016 [US3] Update `src/pages/TaskTreePage.test.tsx`/`AddToPlanControl.test.tsx`: Tomorrow preset and an arbitrary picked date each fire `addPlanTask` with the right `day`; toast names the day; a past date is accepted (not blocked).
+- [X] T014 [P] [US3] Extend `src/lib/planDays.ts` with `tomorrowIso()` (`addDays(todayIso(),1)`) and extend `dayPickerLabel` to return "Tomorrow"; update `src/lib/planDays.test.ts` accordingly. (depends on T006)
+- [X] T015 [US3] Extend `src/components/AddToPlanControl.tsx` with a popover affordance: a **Tomorrow** quick preset and a native `<input type="date">` + an **Add** confirm (disabled until a date is chosen); each calls `addPlanTask({ day: <iso>, taskId, durationMinute: 0 })`, shows `messages.addedToDay(dayPickerLabel(iso))` on success and `invalidateQueries` for `listPlanEntries` keyed to that day; past dates allowed (no lower bound). Reuse `Field`/`Button` styling. (depends on T008, T014)
+- [X] T016 [US3] Update `src/pages/TaskTreePage.test.tsx`/`AddToPlanControl.test.tsx`: Tomorrow preset and an arbitrary picked date each fire `addPlanTask` with the right `day`; toast names the day; a past date is accepted (not blocked).
 
 **Checkpoint**: US1–US3 independently functional.
 
@@ -96,9 +96,9 @@ All paths are relative to `services/twig-web/`.
 
 **Independent Test**: On the Plan tab, remove an entry (≤2 actions) → it disappears from the day; the linked task still exists on the Tasks tab; removal works for untimed, timed, and event entries.
 
-- [ ] T017 [US4] Edit `src/components/PlanEntryRow.tsx` to add a **remove** control for **all** entry kinds; add `onRemove(entry)`, `removing?: boolean` props and reuse the inline `actionError` slot from T011 for failures. (sequential after T011 — same file)
-- [ ] T018 [US4] In `src/pages/PlanPage.tsx`, wire `useMutation(removePlanEntry)` and `handleRemove(entry)` calling `removePlanEntry({ day, id: entry.id })`, then `invalidateQueries` for `listPlanEntries` (current `day`); on error surface `messages.connectivityError` via the row's `actionError`; optionally show `messages.entryRemoved` toast. (sequential after T012 — same file)
-- [ ] T019 [US4] Update `src/pages/PlanPage.test.tsx`: removing an untimed/timed/event entry fires `removePlanEntry` and invalidates the day's plan; a failed remove leaves the entry and shows the inline error.
+- [X] T017 [US4] Edit `src/components/PlanEntryRow.tsx` to add a **remove** control for **all** entry kinds; add `onRemove(entry)`, `removing?: boolean` props and reuse the inline `actionError` slot from T011 for failures. (sequential after T011 — same file)
+- [X] T018 [US4] In `src/pages/PlanPage.tsx`, wire `useMutation(removePlanEntry)` and `handleRemove(entry)` calling `removePlanEntry({ day, id: entry.id })`, then `invalidateQueries` for `listPlanEntries` (current `day`); on error surface `messages.connectivityError` via the row's `actionError`; optionally show `messages.entryRemoved` toast. (sequential after T012 — same file)
+- [X] T019 [US4] Update `src/pages/PlanPage.test.tsx`: removing an untimed/timed/event entry fires `removePlanEntry` and invalidates the day's plan; a failed remove leaves the entry and shows the inline error.
 
 **Checkpoint**: All four user stories independently functional.
 
@@ -106,7 +106,7 @@ All paths are relative to `services/twig-web/`.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T020 [P] Run `npm run build` (type-check) and `npm test` in `services/twig-web/`; fix any type or test fallout.
+- [X] T020 [P] Run `npm run build` (type-check) and `npm test` in `services/twig-web/`; fix any type or test fallout.
 - [ ] T021 [P] Review all new copy in `src/theme/messages.ts` for Principle IV tone and verify the new controls + toast use only `theme/tokens.ts` styling for Principle III consistency.
 - [ ] T022 Run the `quickstart.md` manual verification for US1–US4 against `make dev` + `npm run dev`.
 

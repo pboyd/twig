@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { useQuery } from "@connectrpc/connect-query";
-import { listPlanEntries } from "../gen/plan/v1/plan-PlanService_connectquery";
-import { listTasks } from "../gen/task/v1/task-TaskService_connectquery";
+import { useQuery, useMutation } from "@connectrpc/connect-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { createConnectQueryKey } from "@connectrpc/connect-query";
+import { ConnectError, Code } from "@connectrpc/connect";
+import { listPlanEntries, removePlanEntry } from "../gen/plan/v1/plan-PlanService_connectquery";
+import { listTasks, completeTask } from "../gen/task/v1/task-TaskService_connectquery";
 import { AppHeader } from "../components/AppHeader";
 import { Spinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -15,13 +18,26 @@ import {
   resolveEntries,
   groupPlan,
 } from "../lib/planView";
+import type { ResolvedEntry } from "../lib/planView";
 import { Button } from "../components/Button";
+import { useToast } from "../context/ToastProvider";
 
 export default function PlanPage() {
   const [day, setDay] = useState(todayString);
+  const [entryErrors, setEntryErrors] = useState<Map<number, string>>(new Map());
+  const [completingIds, setCompletingIds] = useState<Set<number>>(new Set());
+  const [removingIds, setRemovingIds] = useState<Set<number>>(new Set());
+  const { show } = useToast();
+  const queryClient = useQueryClient();
 
   const planQuery = useQuery(listPlanEntries, { day });
   const tasksQuery = useQuery(listTasks, {});
+
+  const { mutateAsync: doComplete } = useMutation(completeTask);
+  const { mutateAsync: doRemove } = useMutation(removePlanEntry);
+
+  const planQueryKey = createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" });
+  const tasksQueryKey = createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" });
 
   const taskNameById = new Map<bigint, string>(
     (tasksQuery.data?.tasks ?? []).map((t) => [t.id, t.name])
@@ -33,6 +49,55 @@ export default function PlanPage() {
 
   const isLoading = planQuery.isLoading;
   const isError = planQuery.isError;
+
+  function clearEntryError(id: number) {
+    setEntryErrors((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  async function handleComplete(entry: ResolvedEntry) {
+    if (entry.taskId === undefined) return;
+    clearEntryError(entry.id);
+    setCompletingIds((prev) => new Set(prev).add(entry.id));
+    try {
+      await doComplete({ id: entry.taskId });
+      await queryClient.invalidateQueries({ queryKey: planQueryKey });
+      await queryClient.invalidateQueries({ queryKey: tasksQueryKey });
+    } catch (err) {
+      const msg =
+        err instanceof ConnectError && err.code === Code.FailedPrecondition
+          ? messages.completeBlockedBySubtasks
+          : messages.connectivityError;
+      setEntryErrors((prev) => new Map(prev).set(entry.id, msg));
+    } finally {
+      setCompletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleRemove(entry: ResolvedEntry) {
+    clearEntryError(entry.id);
+    setRemovingIds((prev) => new Set(prev).add(entry.id));
+    try {
+      await doRemove({ day, id: entry.id });
+      await queryClient.invalidateQueries({ queryKey: planQueryKey });
+      show(messages.entryRemoved, "success");
+    } catch {
+      setEntryErrors((prev) => new Map(prev).set(entry.id, messages.connectivityError));
+    } finally {
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
+    }
+  }
 
   return (
     <div className="flex min-h-svh flex-col bg-gray-50 dark:bg-gray-900">
@@ -99,7 +164,14 @@ export default function PlanPage() {
                 <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
                   {grouped.timed.map((entry) => (
                     <li key={entry.id}>
-                      <PlanEntryRow entry={entry} />
+                      <PlanEntryRow
+                        entry={entry}
+                        onComplete={handleComplete}
+                        onRemove={handleRemove}
+                        completing={completingIds.has(entry.id)}
+                        removing={removingIds.has(entry.id)}
+                        actionError={entryErrors.get(entry.id)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -114,7 +186,14 @@ export default function PlanPage() {
                 <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
                   {grouped.untimed.map((entry) => (
                     <li key={entry.id}>
-                      <PlanEntryRow entry={entry} />
+                      <PlanEntryRow
+                        entry={entry}
+                        onComplete={handleComplete}
+                        onRemove={handleRemove}
+                        completing={completingIds.has(entry.id)}
+                        removing={removingIds.has(entry.id)}
+                        actionError={entryErrors.get(entry.id)}
+                      />
                     </li>
                   ))}
                 </ul>

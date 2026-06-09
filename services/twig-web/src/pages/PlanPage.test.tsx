@@ -1,29 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConnectError, Code } from "@connectrpc/connect";
 import PlanPage from "./PlanPage";
+import { ToastProvider } from "../context/ToastProvider";
 
 vi.mock("../gen/plan/v1/plan-PlanService_connectquery", () => ({
   listPlanEntries: "schema:listPlanEntries",
+  removePlanEntry: "schema:removePlanEntry",
 }));
 
 vi.mock("../gen/task/v1/task-TaskService_connectquery", () => ({
   listTasks: "schema:listTasks",
+  completeTask: "schema:completeTask",
 }));
 
 vi.mock("../components/AppHeader", () => ({
   AppHeader: () => <header data-testid="app-header" />,
 }));
 
+const mockInvalidateQueries = vi.fn();
+vi.mock("@tanstack/react-query", async (importActual) => {
+  const actual = await importActual<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQueryClient: vi.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
+  };
+});
+
 let listPlanEntriesResult: ReturnType<typeof vi.fn> = vi.fn();
 let listTasksResult: ReturnType<typeof vi.fn> = vi.fn();
+const mockMutateAsync = vi.fn();
 
 vi.mock("@connectrpc/connect-query", () => ({
   useQuery: vi.fn((schema: string) => {
     if (schema === "schema:listPlanEntries") return listPlanEntriesResult();
     return listTasksResult();
   }),
+  useMutation: vi.fn(() => ({ mutateAsync: mockMutateAsync, isPending: false })),
+  createConnectQueryKey: vi.fn(() => ["mock-key"]),
 }));
 
 function makePlanEntry(overrides: Record<string, unknown> = {}) {
@@ -48,7 +64,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PlanPage />
+        <ToastProvider>
+          <PlanPage />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -56,6 +74,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockMutateAsync.mockResolvedValue({});
   listTasksResult = vi.fn().mockReturnValue({
     data: { tasks: [] },
     isLoading: false,
@@ -293,5 +312,171 @@ describe("PlanPage — US3: day navigation", () => {
     const prevBtn = screen.getByRole("button", { name: /prev|previous|←|‹/i });
     fireEvent.click(prevBtn);
     expect(screen.getByText(/blank slate/i)).toBeTruthy();
+  });
+});
+
+// ─── US4 (this spec): Complete task from planner ──────────────────────────────
+
+describe("PlanPage — complete task from planner (US4-complete)", () => {
+  it("renders a complete button for an incomplete task entry", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [
+          makePlanEntry({ id: 1, taskId: 3n, name: "Do something", startMinute: undefined, completed: false }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId("complete-btn")).toBeTruthy();
+  });
+
+  it("does not render a complete button for event entries (taskId == 0)", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [
+          makePlanEntry({ id: 1, taskId: 0n, name: "Standup", startMinute: 540, durationMinute: 30, completed: false }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.queryByTestId("complete-btn")).toBeNull();
+  });
+
+  it("does not render a complete button for already-completed task entries", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [
+          makePlanEntry({ id: 1, taskId: 3n, name: "Done", startMinute: 540, durationMinute: 30, completed: true }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.queryByTestId("complete-btn")).toBeNull();
+  });
+
+  it("calls completeTask and invalidates plan + tasks queries on success", async () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 5n, name: "My task", startMinute: undefined, completed: false })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId("complete-btn"));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith({ id: 5n }));
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows inline blocked-by-subtasks message on FailedPrecondition", async () => {
+    mockMutateAsync.mockRejectedValue(new ConnectError("blocked", Code.FailedPrecondition));
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 5n, name: "My task", startMinute: undefined, completed: false })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId("complete-btn"));
+    await waitFor(() => expect(screen.getByText(/sub-tasks/i)).toBeTruthy());
+  });
+});
+
+// ─── US5 (this spec): Remove entry from planner ───────────────────────────────
+
+describe("PlanPage — remove entry from planner (US5-remove)", () => {
+  it("renders a remove button for timed task entries", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 3n, name: "Timed", startMinute: 540, durationMinute: 60, completed: false })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId("remove-btn")).toBeTruthy();
+  });
+
+  it("renders a remove button for untimed task entries", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 3n, name: "Untimed", startMinute: undefined, completed: false })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId("remove-btn")).toBeTruthy();
+  });
+
+  it("renders a remove button for event entries", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 0n, name: "Standup", startMinute: 540, durationMinute: 30, completed: false })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId("remove-btn")).toBeTruthy();
+  });
+
+  it("calls removePlanEntry and invalidates the day plan on success", async () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 7, taskId: 0n, name: "Standup", startMinute: 540, durationMinute: 30 })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId("remove-btn"));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 })
+    ));
+    expect(mockInvalidateQueries).toHaveBeenCalled();
+  });
+
+  it("shows inline error on failed remove and leaves entry visible", async () => {
+    mockMutateAsync.mockRejectedValue(new Error("network"));
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 0n, name: "Standup", startMinute: 540, durationMinute: 30 })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByTestId("remove-btn"));
+    await waitFor(() => expect(screen.getByText(/couldn't reach/i)).toBeTruthy());
+    // Entry still rendered
+    expect(screen.getByText("Standup")).toBeTruthy();
   });
 });

@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TaskTreePage from "./TaskTreePage";
+import { ToastProvider } from "../context/ToastProvider";
 
 vi.mock("../gen/task/v1/task-TaskService_connectquery", () => ({
   listTasks: "schema:listTasks",
@@ -46,12 +47,19 @@ function makeTask(id: bigint, completed = false, parentId?: bigint) {
   };
 }
 
+vi.mock("../gen/plan/v1/plan-PlanService_connectquery", () => ({
+  addPlanTask: "schema:addPlanTask",
+  listPlanEntries: "schema:listPlanEntries",
+}));
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <TaskTreePage />
+        <ToastProvider>
+          <TaskTreePage />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );

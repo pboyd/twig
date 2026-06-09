@@ -15,6 +15,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { TaskNode } from "../lib/tree";
 import type { ReorderAnchor } from "../lib/reorderAnchor";
 import { TaskForm } from "./TaskForm";
+import { AddToPlanControl } from "./AddToPlanControl";
 import { messages } from "../theme/messages";
 
 interface TreeRowProps {
@@ -184,13 +185,18 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
         <button
           aria-label="Add sub-task"
           title="Add sub-task"
-          className="flex h-11 w-11 shrink-0 items-center justify-center -mr-2 rounded text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
           onClick={() => setShowSubForm((v) => !v)}
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
           </svg>
         </button>
+
+        {/* Add to plan */}
+        <div className="-mr-2">
+          <AddToPlanControl taskId={task.id} />
+        </div>
       </div>
 
       {toggleError && (
