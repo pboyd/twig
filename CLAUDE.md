@@ -152,5 +152,5 @@ Key frontend source paths:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/043-auto-schedule-task/plan.md`.
+`specs/044-hide-completed-unscheduled/plan.md`.
 <!-- SPECKIT END -->
