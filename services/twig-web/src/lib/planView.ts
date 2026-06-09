@@ -94,6 +94,6 @@ export function resolveEntries(
 
 export function groupPlan(entries: ResolvedEntry[]): GroupedPlan {
   const timed = entries.filter((e) => e.timed);
-  const untimed = entries.filter((e) => !e.timed);
+  const untimed = entries.filter((e) => !e.timed && !e.completed);
   return { timed, untimed, isEmpty: timed.length === 0 && untimed.length === 0 };
 }

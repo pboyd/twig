@@ -232,4 +232,39 @@ describe("groupPlan", () => {
     const grouped = groupPlan(resolveEntries([untimed], new Map()));
     expect(grouped.isEmpty).toBe(false);
   });
+
+  // T005: completed untimed entries should be excluded from the untimed group
+  it("excludes completed untimed entries from untimed group", () => {
+    const completedUntimed = makeEntry({ id: 1, taskId: 1n, completed: true, startMinute: undefined });
+    const incompleteUntimed = makeEntry({ id: 2, taskId: 2n, completed: false, startMinute: undefined });
+    const entries = resolveEntries([completedUntimed, incompleteUntimed], new Map());
+    const grouped = groupPlan(entries);
+    expect(grouped.untimed).toHaveLength(1);
+    expect(grouped.untimed[0].id).toBe(2);
+  });
+
+  it("keeps completed timed entries in timed group", () => {
+    const completedTimed = makeEntry({ id: 1, taskId: 1n, completed: true, startMinute: 540, durationMinute: 60 });
+    const entries = resolveEntries([completedTimed], new Map());
+    const grouped = groupPlan(entries);
+    expect(grouped.timed).toHaveLength(1);
+    expect(grouped.timed[0].id).toBe(1);
+  });
+
+  it("isEmpty is true when the only untimed entries are completed and no timed entries", () => {
+    const completedUntimed = makeEntry({ id: 1, taskId: 1n, completed: true, startMinute: undefined });
+    const entries = resolveEntries([completedUntimed], new Map());
+    const grouped = groupPlan(entries);
+    expect(grouped.untimed).toHaveLength(0);
+    expect(grouped.isEmpty).toBe(true);
+  });
+
+  // T013: reopened (incomplete) untimed entry should be in untimed group
+  it("includes incomplete (reopened) untimed entries in untimed group", () => {
+    const incompleteUntimed = makeEntry({ id: 1, taskId: 1n, completed: false, startMinute: undefined });
+    const entries = resolveEntries([incompleteUntimed], new Map());
+    const grouped = groupPlan(entries);
+    expect(grouped.untimed).toHaveLength(1);
+    expect(grouped.untimed[0].id).toBe(1);
+  });
 });

@@ -449,6 +449,22 @@ func (m *Model) submitEditForm() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// displayedPlanEntries filters the raw entry list for display: drops completed
+// untimed entries unless their id matches pendingComplete (just-completed highlight).
+// Timed entries and events are always kept; incomplete untimed entries are always kept.
+func displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) []*planv1.PlanEntry {
+	result := make([]*planv1.PlanEntry, 0, len(entries))
+	for _, e := range entries {
+		if e.StartMinute == nil && e.Completed {
+			if pendingComplete == nil || e.Id != *pendingComplete {
+				continue
+			}
+		}
+		result = append(result, e)
+	}
+	return result
+}
+
 // ── plan reducer ──────────────────────────────────────────────────────────
 
 // handlePlanEntriesMsg processes a ListPlanEntries response: replaces the
@@ -459,7 +475,7 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 		return m
 	}
 	m.plan.err = nil
-	m.plan.entries = msg.entries
+	m.plan.entries = displayedPlanEntries(msg.entries, m.plan.pendingComplete)
 	m.plan.loaded = true
 
 	if msg.highlightID != 0 {

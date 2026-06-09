@@ -591,6 +591,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabTasks
 		m.keys.PlanningMode = false
 		m.plan.err = nil
+		m.plan.pendingComplete = nil
 		return m, listScheduledDaysCmd(m.planClient)
 	}
 
@@ -600,15 +601,26 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.plan.cursor > 0 {
 			m.plan.cursor--
 		}
+		if m.plan.pendingComplete != nil {
+			m.plan.pendingComplete = nil
+			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
+		}
 	case key.Matches(msg, m.keys.Down):
 		if m.plan.cursor < len(m.plan.entries)-1 {
 			m.plan.cursor++
+		}
+		if m.plan.pendingComplete != nil {
+			m.plan.pendingComplete = nil
+			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 		}
 
 	// Day navigation.
 	case key.Matches(msg, m.keys.PlanPrevDay):
 		t, err := time.Parse("2006-01-02", m.plan.day)
 		if err == nil {
+			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, -1).Format("2006-01-02")
 			m.plan.loaded = false
 			return m, listPlanCmd(m.planClient, m.plan.day)
@@ -616,11 +628,13 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.PlanNextDay):
 		t, err := time.Parse("2006-01-02", m.plan.day)
 		if err == nil {
+			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, 1).Format("2006-01-02")
 			m.plan.loaded = false
 			return m, listPlanCmd(m.planClient, m.plan.day)
 		}
 	case key.Matches(msg, m.keys.PlanToday):
+		m.plan.pendingComplete = nil
 		today := time.Now().Format("2006-01-02")
 		if m.plan.day != today {
 			m.plan.day = today
@@ -658,6 +672,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabTasks
 		m.keys.PlanningMode = false
 		m.plan.err = nil
+		m.plan.pendingComplete = nil
 		m.ensureVisible(entry.TaskId)
 		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, entry.TaskId)
@@ -676,8 +691,12 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			var notice string
 			if complete {
 				notice = "Nice — '" + entry.Name + "' is done and dusted."
+				if entry.StartMinute == nil {
+					m.plan.pendingComplete = &entry.Id
+				}
 			} else {
 				notice = "Marked '" + entry.Name + "' as incomplete."
+				m.plan.pendingComplete = nil
 			}
 			return m, completePlanTaskCmd(m.client, m.plan.day, entry.TaskId, complete, entry.Id, notice)
 		}

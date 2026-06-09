@@ -66,14 +66,15 @@ type planFormState struct {
 }
 
 type planState struct {
-	day     string
-	entries []*planv1.PlanEntry
-	cursor  int
-	loaded  bool
-	mode    planMode
-	picker  pickerState
-	form    planFormState
-	err     error
+	day             string
+	entries         []*planv1.PlanEntry
+	cursor          int
+	loaded          bool
+	mode            planMode
+	picker          pickerState
+	form            planFormState
+	err             error
+	pendingComplete *int32 // entry id of a just-completed untimed entry to retain while highlighted
 }
 
 // Model is the root Bubble Tea model for the TUI.

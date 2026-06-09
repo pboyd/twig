@@ -30,7 +30,7 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 **Purpose**: Establish a clean baseline before any change.
 
-- [ ] T001 Confirm a green baseline: run `go test ./...` at repo root and `npm test` in `services/twig-web/`, noting current pass state before edits.
+- [X] T001 Confirm a green baseline: run `go test ./...` at repo root and `npm test` in `services/twig-web/`, noting current pass state before edits.
 
 ---
 
@@ -40,9 +40,9 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 **⚠️ CRITICAL**: T003–T004 block the TUI portions of US1 and all of US2.
 
-- [ ] T002 Add `pendingComplete *int32` field (entry id of a just-completed untimed entry to retain while highlighted) to the `planState` struct in `internal/tui/model.go`.
-- [ ] T003 [P] Write a failing unit test for a `displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) []*planv1.PlanEntry` helper in `internal/tui/plan_update_test.go`: excludes untimed entries with `Completed==true`, keeps the one whose id equals `*pendingComplete`, never drops timed entries (even completed) or events, keeps incomplete untimed entries, and is order-preserving and idempotent.
-- [ ] T004 Implement the `displayedPlanEntries` helper in `internal/tui/plan_update.go` to satisfy T003 (predicate: drop entry iff `StartMinute == nil && Completed && (pendingComplete == nil || id != *pendingComplete)`).
+- [X] T002 Add `pendingComplete *int32` field (entry id of a just-completed untimed entry to retain while highlighted) to the `planState` struct in `internal/tui/model.go`.
+- [X] T003 [P] Write a failing unit test for a `displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) []*planv1.PlanEntry` helper in `internal/tui/plan_update_test.go`: excludes untimed entries with `Completed==true`, keeps the one whose id equals `*pendingComplete`, never drops timed entries (even completed) or events, keeps incomplete untimed entries, and is order-preserving and idempotent.
+- [X] T004 Implement the `displayedPlanEntries` helper in `internal/tui/plan_update.go` to satisfy T003 (predicate: drop entry iff `StartMinute == nil && Completed && (pendingComplete == nil || id != *pendingComplete)`).
 
 **Checkpoint**: Tested pure filter helper + state field exist; user-story wiring can begin.
 
@@ -56,13 +56,13 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Write failing tests in `services/twig-web/src/lib/planView.test.ts`: `groupPlan` excludes completed entries from `untimed`, keeps completed entries in `timed`, and reports `isEmpty === true` when the only untimed entries are completed and there are no timed entries.
-- [ ] T006 [P] [US1] Write a failing test in `internal/tui/plan_update_test.go`: `handlePlanEntriesMsg` stores a displayed list that omits completed untimed entries (with `pendingComplete == nil`) while retaining timed/completed and event entries.
+- [X] T005 [P] [US1] Write failing tests in `services/twig-web/src/lib/planView.test.ts`: `groupPlan` excludes completed entries from `untimed`, keeps completed entries in `timed`, and reports `isEmpty === true` when the only untimed entries are completed and there are no timed entries.
+- [X] T006 [P] [US1] Write a failing test in `internal/tui/plan_update_test.go`: `handlePlanEntriesMsg` stores a displayed list that omits completed untimed entries (with `pendingComplete == nil`) while retaining timed/completed and event entries.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [P] [US1] In `services/twig-web/src/lib/planView.ts`, exclude completed entries from the untimed group (`entries.filter((e) => !e.timed && !e.completed)`); leave the timed grouping unchanged so `isEmpty` reflects the filtered untimed list.
-- [ ] T008 [US1] In `internal/tui/plan_update.go` `handlePlanEntriesMsg`, set `m.plan.entries = displayedPlanEntries(msg.entries, m.plan.pendingComplete)` before clamping the cursor / applying `highlightID`, so the loaded plan omits completed untimed entries.
+- [X] T007 [P] [US1] In `services/twig-web/src/lib/planView.ts`, exclude completed entries from the untimed group (`entries.filter((e) => !e.timed && !e.completed)`); leave the timed grouping unchanged so `isEmpty` reflects the filtered untimed list.
+- [X] T008 [US1] In `internal/tui/plan_update.go` `handlePlanEntriesMsg`, set `m.plan.entries = displayedPlanEntries(msg.entries, m.plan.pendingComplete)` before clamping the cursor / applying `highlightID`, so the loaded plan omits completed untimed entries.
 
 **Checkpoint**: Completed untimed entries are gone from both surfaces on load. (In the TUI, completing from within the planner hides immediately until US2 adds deferral.) MVP is functional.
 
@@ -76,12 +76,12 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 ### Tests for User Story 2
 
-- [ ] T009 [US2] Write failing tests in `internal/tui/update_test.go` (and/or `plan_update_test.go`): (a) completing the highlighted untimed entry sets `m.plan.pendingComplete` to its id and the entry remains in the displayed/rendered plan after reload (struck via existing `applyCompletion`); (b) cursor Up/Down, prev/next/today day change, tab switch, and go-to-task each clear `pendingComplete` and drop the entry from the displayed plan; (c) completing a *timed* entry never sets `pendingComplete`.
+- [X] T009 [US2] Write failing tests in `internal/tui/update_test.go` (and/or `plan_update_test.go`): (a) completing the highlighted untimed entry sets `m.plan.pendingComplete` to its id and the entry remains in the displayed/rendered plan after reload (struck via existing `applyCompletion`); (b) cursor Up/Down, prev/next/today day change, tab switch, and go-to-task each clear `pendingComplete` and drop the entry from the displayed plan; (c) completing a *timed* entry never sets `pendingComplete`.
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] In `internal/tui/update.go` Complete handler (the `m.keys.Complete` case in the planning branch, ~line 667), when `complete == true` and the highlighted entry is untimed (`entry.StartMinute == nil`) and task-linked, set `m.plan.pendingComplete = &entry.Id` before issuing `completePlanTaskCmd`; do not set it for timed entries.
-- [ ] T011 [US2] In `internal/tui/update.go`, clear `m.plan.pendingComplete = nil` in the navigation handlers — cursor `Up`/`Down`, `PlanPrevDay`/`PlanNextDay`/`PlanToday`, the tab-switch handler, and `PlanGoToTask` — and re-derive the displayed list with `displayedPlanEntries(m.plan.entries, nil)` (clamping the cursor) so the retained entry is removed once the highlight leaves it.
+- [X] T010 [US2] In `internal/tui/update.go` Complete handler (the `m.keys.Complete` case in the planning branch, ~line 667), when `complete == true` and the highlighted entry is untimed (`entry.StartMinute == nil`) and task-linked, set `m.plan.pendingComplete = &entry.Id` before issuing `completePlanTaskCmd`; do not set it for timed entries.
+- [X] T011 [US2] In `internal/tui/update.go`, clear `m.plan.pendingComplete = nil` in the navigation handlers — cursor `Up`/`Down`, `PlanPrevDay`/`PlanNextDay`/`PlanToday`, the tab-switch handler, and `PlanGoToTask` — and re-derive the displayed list with `displayedPlanEntries(m.plan.entries, nil)` (clamping the cursor) so the retained entry is removed once the highlight leaves it.
 
 **Checkpoint**: TUI completion matches the tasks-tab deferred-hide UX. US1 + US2 both pass.
 
@@ -95,12 +95,12 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] Write failing tests in `internal/tui/update_test.go`: after completing then uncompleting an untimed entry, `pendingComplete` is cleared and the entry renders normally (not struck) and remains present.
-- [ ] T013 [P] [US3] Add a test in `services/twig-web/src/lib/planView.test.ts` asserting `groupPlan` includes incomplete (reopened) untimed entries in the `untimed` group.
+- [X] T012 [P] [US3] Write failing tests in `internal/tui/update_test.go`: after completing then uncompleting an untimed entry, `pendingComplete` is cleared and the entry renders normally (not struck) and remains present.
+- [X] T013 [P] [US3] Add a test in `services/twig-web/src/lib/planView.test.ts` asserting `groupPlan` includes incomplete (reopened) untimed entries in the `untimed` group.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] In `internal/tui/update.go` Complete handler, when `complete == false` (uncomplete) set `m.plan.pendingComplete = nil` so the reloaded, now-incomplete entry displays normally (its `Completed == false` already lets it pass `displayedPlanEntries`).
+- [X] T014 [US3] In `internal/tui/update.go` Complete handler, when `complete == false` (uncomplete) set `m.plan.pendingComplete = nil` so the reloaded, now-incomplete entry displays normally (its `Completed == false` already lets it pass `displayedPlanEntries`).
 
 **Checkpoint**: All three user stories pass independently.
 
@@ -110,9 +110,9 @@ description: "Task list for Hide Completed Unscheduled Plan Entries"
 
 **Purpose**: Verify the increment end-to-end and confirm scope boundaries.
 
-- [ ] T015 [P] Run the full suites: `go test ./...` at repo root and `npm test` + `npm run build` in `services/twig-web/`; confirm all green.
-- [ ] T016 [P] Walk through `specs/044-hide-completed-unscheduled/quickstart.md` manual steps for both the TUI and the web planner.
-- [ ] T017 Confirm scope: `git diff --name-only` touches only `internal/tui/` and `services/twig-web/src/lib/` (plus this spec dir) — no changes under `api/`, `services/twig/`, or `internal/cli/` (Constitution II: contract unchanged).
+- [X] T015 [P] Run the full suites: `go test ./...` at repo root and `npm test` + `npm run build` in `services/twig-web/`; confirm all green.
+- [X] T016 [P] Walk through `specs/044-hide-completed-unscheduled/quickstart.md` manual steps for both the TUI and the web planner.
+- [X] T017 Confirm scope: `git diff --name-only` touches only `internal/tui/` and `services/twig-web/src/lib/` (plus this spec dir) — no changes under `api/`, `services/twig/`, or `internal/cli/` (Constitution II: contract unchanged).
 
 ---
 
