@@ -26,6 +26,7 @@ export function AppHeader() {
   return (
     <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
       <div className="flex items-center gap-1">
+        <img src="/logo.svg" alt="" className="h-6 w-6" />
         <span className="text-base font-semibold text-gray-900 dark:text-gray-100 mr-3">
           Twig
         </span>
