@@ -24,6 +24,8 @@ var (
 var (
 	highlightStyle lipgloss.Style
 	errorStyle     lipgloss.Style
+	dimStyle       lipgloss.Style
+	accentStyle    lipgloss.Style
 )
 
 // initPalette resolves all theme colors for the detected terminal background.
@@ -43,4 +45,6 @@ func initPalette(hasDark bool) {
 
 	highlightStyle = lipgloss.NewStyle().Bold(true).Background(accent).Foreground(lipgloss.Color("15"))
 	errorStyle = lipgloss.NewStyle().Foreground(errorColor)
+	dimStyle = lipgloss.NewStyle().Foreground(dim)
+	accentStyle = lipgloss.NewStyle().Foreground(accent)
 }

@@ -265,7 +265,173 @@ func TestEditFormSnooze_BlankSnoozeIsEmpty(t *testing.T) {
 	}
 }
 
-// TestEditForm_CtrlG_OtherFieldsNoOp verifies ctrl+g on non-Description fields does not launch the editor.
+// ── T006: calendar integration tests (US1) ───────────────────────────────────
+
+// TestEditForm_CtrlG_DueOpensCalendar verifies ctrl+g on Due field opens the calendar.
+func TestEditForm_CtrlG_DueOpensCalendar(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	keys := DefaultKeyMap()
+
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Error("ctrl+g on Due: expected calendar to be open (non-nil), got nil")
+	}
+}
+
+// TestEditForm_CtrlG_SnoozeOpensCalendar verifies ctrl+g on Snooze field opens the calendar.
+func TestEditForm_CtrlG_SnoozeOpensCalendar(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusSnooze
+	keys := DefaultKeyMap()
+
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Error("ctrl+g on Snooze: expected calendar to be open (non-nil), got nil")
+	}
+}
+
+// TestEditForm_CtrlG_NameNoCalendar verifies ctrl+g on Name does not open the calendar.
+func TestEditForm_CtrlG_NameNoCalendar(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusName
+	keys := DefaultKeyMap()
+
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar != nil {
+		t.Error("ctrl+g on Name: expected calendar to remain closed, got open")
+	}
+}
+
+// TestEditForm_Calendar_EnterWritesDate verifies open → move → enter writes YYYY-MM-DD into the Due field.
+func TestEditForm_Calendar_EnterWritesDate(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// Move forward 1 day.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+
+	// Remember the expected date.
+	want := f.calendar.confirm()
+
+	// Confirm with Enter.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, keys)
+
+	if f.calendar != nil {
+		t.Error("after enter: expected calendar to close (nil), still open")
+	}
+	if got := f.due.Value(); got != want {
+		t.Errorf("due value: want %q, got %q", want, got)
+	}
+}
+
+// TestEditForm_Calendar_EscLeavesFieldUnchanged verifies open → esc leaves the field byte-for-byte unchanged.
+func TestEditForm_Calendar_EscLeavesFieldUnchanged(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	f.due.SetValue("2026-07-04")
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// Move around.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyDown}, keys)
+
+	// Cancel.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+
+	if f.calendar != nil {
+		t.Error("after esc: expected calendar to close (nil), still open")
+	}
+	if got := f.due.Value(); got != "2026-07-04" {
+		t.Errorf("due value: want %q unchanged, got %q", "2026-07-04", got)
+	}
+}
+
+// TestEditForm_Calendar_SwallowsFormKeys verifies that while the calendar is open,
+// ctrl+s does not immediately save.
+func TestEditForm_Calendar_SwallowsFormKeys(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// ctrl+s while open: must not save.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			if _, ok := msg.(editSavedMsg); ok {
+				t.Error("ctrl+s while calendar open: should be swallowed, but got editSavedMsg")
+			}
+		}
+	}
+}
+
+// TestEditForm_Calendar_PasteSwallowed verifies pasted text (tea.PasteMsg) cannot
+// reach the date field while the calendar is open, so cancel stays lossless.
+func TestEditForm_Calendar_PasteSwallowed(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	f.due.Focus()
+	f.due.SetValue("2026-07-04")
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// Paste while open, then cancel.
+	f, _ = f.Update(tea.PasteMsg{Content: "garbage"}, keys)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+
+	if got := f.due.Value(); got != "2026-07-04" {
+		t.Errorf("due after paste+esc: want %q unchanged, got %q", "2026-07-04", got)
+	}
+}
+
+// TestEditForm_Calendar_TabClosesCalendar verifies tab/shift+tab close the calendar unchanged.
+func TestEditForm_Calendar_TabClosesCalendar(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	f.due.SetValue("2026-07-04")
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// Tab: should close calendar without modifying field.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+	if f.calendar != nil {
+		t.Error("after tab: expected calendar to close (nil), still open")
+	}
+	if got := f.due.Value(); got != "2026-07-04" {
+		t.Errorf("due value after tab: want %q, got %q", "2026-07-04", got)
+	}
+}
+
+// TestEditForm_CtrlG_OtherFieldsNoOp verifies ctrl+g on non-Description, non-date fields does not launch the editor.
 func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 	keys := DefaultKeyMap()
 	otherFields := []struct {
@@ -273,7 +439,6 @@ func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 		focus int
 	}{
 		{"Name", focusName},
-		{"Due", focusDue},
 		{"Estimate", focusEstimate},
 		{"Save", focusSave},
 		{"Cancel", focusCancel},
@@ -297,5 +462,105 @@ func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 				t.Errorf("ctrl+g on %s: focusIndex changed unexpectedly to %d", tc.name, f.focusIndex)
 			}
 		})
+	}
+}
+
+// ── T016: text-path regression tests (US3) ───────────────────────────────────
+
+// TestEditForm_TextPath_DueFieldTyping verifies that typing into the Due field
+// with the calendar closed works exactly as before — no calendar opens uninvited.
+func TestEditForm_TextPath_DueFieldTyping(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	keys := DefaultKeyMap()
+
+	// Type some characters.
+	for _, r := range "2026-08-01" {
+		f, _ = f.Update(tea.KeyPressMsg{Code: r, Text: string(r)}, keys)
+	}
+
+	if f.calendar != nil {
+		t.Error("calendar should not open on typing")
+	}
+}
+
+// TestEditForm_TextPath_SavePreservesTypedValue verifies a typed date flows unchanged to editSavedMsg.
+func TestEditForm_TextPath_SavePreservesTypedValue(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	f.due.SetValue("2026-08-01")
+	keys := DefaultKeyMap()
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.dueStr != "2026-08-01" {
+		t.Errorf("dueStr: want %q, got %q", "2026-08-01", saved.dueStr)
+	}
+}
+
+// ── T018: US4 clearing test ──────────────────────────────────────────────────
+
+// TestEditForm_Calendar_ClearAfterPick verifies that picking a date then clearing
+// the field text results in an empty dueStr in editSavedMsg.
+func TestEditForm_Calendar_ClearAfterPick(t *testing.T) {
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	keys := DefaultKeyMap()
+
+	// Open calendar and pick a date.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, keys)
+	if f.due.Value() == "" {
+		t.Fatal("expected due to have a picked date")
+	}
+
+	// Clear the field value.
+	f.due.SetValue("")
+	if f.due.Value() != "" {
+		t.Fatal("expected due to be cleared")
+	}
+
+	// Save — dueStr should be empty.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.dueStr != "" {
+		t.Errorf("dueStr: want empty, got %q", saved.dueStr)
+	}
+	// Calendar should not linger.
+	if f.calendar != nil {
+		t.Error("calendar state should not linger after confirm")
+	}
+}
+
+// TestEditForm_Calendar_NowFuncInjection verifies that a form with nowFunc uses it for calendar opening.
+func TestEditForm_Calendar_NowFuncInjection(t *testing.T) {
+	fixedNow := time.Date(2030, 1, 15, 0, 0, 0, 0, time.UTC)
+	f := NewRootForm(0)
+	f.focusIndex = focusDue
+	f.nowFunc = func() time.Time { return fixedNow }
+	keys := DefaultKeyMap()
+
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+	wantToday := time.Date(2030, 1, 15, 0, 0, 0, 0, time.UTC)
+	if !f.calendar.today.Equal(wantToday) {
+		t.Errorf("calendar.today: want %v, got %v", wantToday, f.calendar.today)
 	}
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -33,6 +34,8 @@ type editFormModel struct {
 	snooze           textinput.Model
 	focusIndex       int
 	originalCursor   int
+	calendar         *calendarModel
+	nowFunc          func() time.Time
 }
 
 // editSavedMsg is dispatched when the user confirms the edit form.
@@ -117,17 +120,88 @@ func newBlankForm(originalCursor int) editFormModel {
 	}
 }
 
+// now returns the current time, using nowFunc if set.
+func (f editFormModel) now() time.Time {
+	if f.nowFunc != nil {
+		return f.nowFunc()
+	}
+	return time.Now()
+}
+
+// openCalendar creates and attaches a calendarModel for the focused date field.
+func (f editFormModel) openCalendar() editFormModel {
+	var fieldValue string
+	rfc3339Field := false
+	switch f.focusIndex {
+	case focusDue:
+		fieldValue = f.due.Value()
+		rfc3339Field = true
+	case focusSnooze:
+		fieldValue = f.snooze.Value()
+	}
+	f.calendar = newCalendar(fieldValue, f.now(), rfc3339Field)
+	return f
+}
+
 // Update handles messages for the edit form.
 func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd) {
 	keyMsg, isKey := msg.(tea.KeyPressMsg)
 	if !isKey {
+		// While the calendar is open it captures all input: drop pasted text
+		// so the field underneath can't change out from under it.
+		if f.calendar != nil {
+			if _, isPaste := msg.(tea.PasteMsg); isPaste {
+				return f, nil
+			}
+		}
 		return f.updateFocusedField(msg)
+	}
+
+	// When the calendar is open, route all key messages to it first.
+	if f.calendar != nil {
+		switch {
+		case keyMsg.Code == tea.KeyTab:
+			// tab/shift+tab: close calendar without modifying the field, then cycle focus.
+			f.calendar = nil
+			if keyMsg.Mod == tea.ModShift {
+				f = f.cycleFocus(-1)
+			} else {
+				f = f.cycleFocus(1)
+			}
+			return f, nil
+
+		case keyMsg.Code == tea.KeyEscape:
+			// esc: close calendar, field unchanged.
+			f.calendar = nil
+			return f, nil
+
+		case keyMsg.Code == tea.KeyEnter:
+			// enter: confirm — write formatted date to the field, close calendar.
+			dateStr := f.calendar.confirm()
+			switch f.focusIndex {
+			case focusDue:
+				f.due.SetValue(dateStr)
+			case focusSnooze:
+				f.snooze.SetValue(dateStr)
+			}
+			f.calendar = nil
+			return f, nil
+
+		default:
+			// Delegate navigation keys to the calendar model.
+			f.calendar.handleKey(keyMsg)
+			return f, nil
+		}
 	}
 
 	// Global shortcuts take priority over field forwarding.
 	switch {
 	case key.Matches(keyMsg, keys.Editor) && f.focusIndex == focusDescription:
 		return f, openEditorCmd(f.description.Value())
+
+	case key.Matches(keyMsg, keys.Calendar) && (f.focusIndex == focusDue || f.focusIndex == focusSnooze):
+		f = f.openCalendar()
+		return f, nil
 
 	case key.Matches(keyMsg, keys.Save):
 		return f, func() tea.Msg {
@@ -258,14 +332,12 @@ func (f editFormModel) View(width int) string {
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString(fieldLabel("Due", f.focusIndex == focusDue))
-	sb.WriteString(f.due.View() + "\n\n")
+	f.writeDateField(&sb, "Due", f.due, focusDue)
 
 	sb.WriteString(fieldLabel("Estimate", f.focusIndex == focusEstimate))
 	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
 
-	sb.WriteString(fieldLabel("Snooze until", f.focusIndex == focusSnooze))
-	sb.WriteString(f.snooze.View() + "\n\n")
+	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
 
 	saveStyle := "[ Save ]"
 	cancelStyle := "[ Cancel ]"
@@ -279,6 +351,20 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString("\nCtrl+S: save  Esc: cancel  Tab: next field")
 
 	return sb.String()
+}
+
+// writeDateField renders a date field's label and input, followed by the open
+// calendar with its key hints, or a hint on how to summon it when focused.
+func (f editFormModel) writeDateField(sb *strings.Builder, label string, input textinput.Model, focus int) {
+	sb.WriteString(fieldLabel(label, f.focusIndex == focus))
+	sb.WriteString(input.View() + "\n")
+	if f.calendar != nil && f.focusIndex == focus {
+		sb.WriteString(f.calendar.View())
+		sb.WriteString("  enter: pick  esc: never mind  t: today  [/]: month  {/}: year\n")
+	} else if f.focusIndex == focus {
+		sb.WriteString("  ctrl+g: summon the calendar\n")
+	}
+	sb.WriteString("\n")
 }
 
 func fieldLabel(label string, focused bool) string {

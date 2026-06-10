@@ -18,7 +18,7 @@
 
 **Purpose**: Confirm a green baseline on the feature branch — no scaffolding is needed (existing package, no new dependencies)
 
-- [ ] T001 Verify baseline build and tests pass on branch `046-tui-date-picker`: `go test ./internal/tui/...` and `go build ./cmd/twig`
+- [X] T001 Verify baseline build and tests pass on branch `046-tui-date-picker`: `go test ./internal/tui/...` and `go build ./cmd/twig`
 
 ---
 
@@ -28,8 +28,8 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 [P] Add `Calendar` key binding (`ctrl+g`, help "pick a date") to `KeyMap` and `DefaultKeyMap()` in internal/tui/keymap.go
-- [ ] T003 [P] Create `calendarModel` skeleton in internal/tui/calendar.go: struct fields per data-model.md (`selected`, `today`, `keepTime`, `rfc3339Out`), constructor `newCalendar(fieldValue string, now time.Time, rfc3339Field bool)` that parses the field value via `cli.ParseDue` and falls back to today on empty/unparseable input (FR-003)
+- [X] T002 [P] Add `Calendar` key binding (`ctrl+g`, help "pick a date") to `KeyMap` and `DefaultKeyMap()` in internal/tui/keymap.go
+- [X] T003 [P] Create `calendarModel` skeleton in internal/tui/calendar.go: struct fields per data-model.md (`selected`, `today`, `keepTime`, `rfc3339Out`), constructor `newCalendar(fieldValue string, now time.Time, rfc3339Field bool)` that parses the field value via `cli.ParseDue` and falls back to today on empty/unparseable input (FR-003)
 
 **Checkpoint**: Foundation ready — `calendarModel` exists and can be constructed from any field value
 
@@ -45,17 +45,17 @@
 
 > Write these first; they MUST fail before the implementation tasks below
 
-- [ ] T004 [P] [US1] Table-driven constructor tests in internal/tui/calendar_test.go: opens on field's date for `YYYY-MM-DD` and RFC3339 values, opens on today for empty and garbage input (US1 scenario 4, FR-003, spec edge case "malformed text")
-- [ ] T005 [P] [US1] Render tests in internal/tui/calendar_test.go: header shows month+year, weekday row `Su Mo Tu We Th Fr Sa`, selected day wrapped in `highlightStyle`, today marked, out-of-month padding cells dimmed, total width ≈22 columns (contract "Visual contract")
-- [ ] T006 [P] [US1] Form integration tests in internal/tui/edit_test.go: `ctrl+g` on Due/Snooze opens the calendar (and does nothing on Name/Description/Estimate); open → move → `enter` writes `YYYY-MM-DD` into the field; open → `esc` leaves the field byte-for-byte unchanged and the form still open; while open, form keys (`ctrl+s`, text runes) are swallowed; `tab`/`shift+tab` close the calendar unchanged and cycle focus (FR-001, FR-005, FR-006, contract guarantees 2, 3)
+- [X] T004 [P] [US1] Table-driven constructor tests in internal/tui/calendar_test.go: opens on field's date for `YYYY-MM-DD` and RFC3339 values, opens on today for empty and garbage input (US1 scenario 4, FR-003, spec edge case "malformed text")
+- [X] T005 [P] [US1] Render tests in internal/tui/calendar_test.go: header shows month+year, weekday row `Su Mo Tu We Th Fr Sa`, selected day wrapped in `highlightStyle`, today marked, out-of-month padding cells dimmed, total width ≈22 columns (contract "Visual contract")
+- [X] T006 [P] [US1] Form integration tests in internal/tui/edit_test.go: `ctrl+g` on Due/Snooze opens the calendar (and does nothing on Name/Description/Estimate); open → move → `enter` writes `YYYY-MM-DD` into the field; open → `esc` leaves the field byte-for-byte unchanged and the form still open; while open, form keys (`ctrl+s`, text runes) are swallowed; `tab`/`shift+tab` close the calendar unchanged and cycle focus (FR-001, FR-005, FR-006, contract guarantees 2, 3)
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Implement day/week selection movement in internal/tui/calendar.go: `←/h` `→/l` ±1 day, `↑/k` `↓/j` ±7 days, flowing across month boundaries via `time.Time.AddDate` (US1 scenario 2; US2 scenarios 1–2 get month/year jumps later)
-- [ ] T008 [US1] Implement `View()` month grid rendering in internal/tui/calendar.go using only the shared palette from internal/tui/theme.go (`accent`, `dim`, `highlightStyle`) per the contract's visual rules
-- [ ] T009 [US1] Implement confirm/cancel result handling in internal/tui/calendar.go: `enter` yields the formatted date string (`YYYY-MM-DD` for now), `esc` yields cancellation
-- [ ] T010 [US1] Wire the calendar into internal/tui/edit.go: add `calendar *calendarModel` + `calendarFor int` to `editFormModel`; `ctrl+g` on `focusDue`/`focusSnooze` opens it; while open, route every `tea.KeyPressMsg` to the calendar first; on confirm `SetValue` the owning field and close; render the grid directly beneath the owning field in `View(width)`
-- [ ] T011 [US1] Add the contract's copy in internal/tui/edit.go: hint `ctrl+g: summon the calendar` under a focused date field when closed, and the in-calendar key-hint line `enter: pick  esc: never mind` (extended in US2) — tone per Principle IV
+- [X] T007 [US1] Implement day/week selection movement in internal/tui/calendar.go: `←/h` `→/l` ±1 day, `↑/k` `↓/j` ±7 days, flowing across month boundaries via `time.Time.AddDate` (US1 scenario 2; US2 scenarios 1–2 get month/year jumps later)
+- [X] T008 [US1] Implement `View()` month grid rendering in internal/tui/calendar.go using only the shared palette from internal/tui/theme.go (`accent`, `dim`, `highlightStyle`) per the contract's visual rules
+- [X] T009 [US1] Implement confirm/cancel result handling in internal/tui/calendar.go: `enter` yields the formatted date string (`YYYY-MM-DD` for now), `esc` yields cancellation
+- [X] T010 [US1] Wire the calendar into internal/tui/edit.go: add `calendar *calendarModel` + `calendarFor int` to `editFormModel`; `ctrl+g` on `focusDue`/`focusSnooze` opens it; while open, route every `tea.KeyPressMsg` to the calendar first; on confirm `SetValue` the owning field and close; render the grid directly beneath the owning field in `View(width)`
+- [X] T011 [US1] Add the contract's copy in internal/tui/edit.go: hint `ctrl+g: summon the calendar` under a focused date field when closed, and the in-calendar key-hint line `enter: pick  esc: never mind` (extended in US2) — tone per Principle IV
 
 **Checkpoint**: MVP — calendar opens, navigates by day/week, confirms and cancels correctly; `go test ./internal/tui/...` green
 
@@ -69,12 +69,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Table-driven navigation tests in internal/tui/calendar_test.go: `[`/`]` month jumps incl. clamping (Jan 31 → Feb 28, Mar 31 → Apr 30, leap-year Feb 29), `{`/`}` year jumps incl. Feb 29 → Feb 28 clamp, `t` jumps to today, day movement across month/year boundaries (US2 scenarios 1–4, FR-004, FR-010, spec edge cases "February 29" and "month jumps from day 31")
+- [X] T012 [P] [US2] Table-driven navigation tests in internal/tui/calendar_test.go: `[`/`]` month jumps incl. clamping (Jan 31 → Feb 28, Mar 31 → Apr 30, leap-year Feb 29), `{`/`}` year jumps incl. Feb 29 → Feb 28 clamp, `t` jumps to today, day movement across month/year boundaries (US2 scenarios 1–4, FR-004, FR-010, spec edge cases "February 29" and "month jumps from day 31")
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Implement month/year jumps with day clamping and `t` (today) in internal/tui/calendar.go: compute target month length explicitly (no `AddDate` overflow rollover) per data-model.md invariants
-- [ ] T014 [US2] Extend the in-calendar hint line in internal/tui/edit.go to the full contract copy: `enter: pick  esc: never mind  t: today  [/]: month  {/}: year`
+- [X] T013 [US2] Implement month/year jumps with day clamping and `t` (today) in internal/tui/calendar.go: compute target month length explicitly (no `AddDate` overflow rollover) per data-model.md invariants
+- [X] T014 [US2] Extend the in-calendar hint line in internal/tui/edit.go to the full contract copy: `enter: pick  esc: never mind  t: today  [/]: month  {/}: year`
 
 **Checkpoint**: Any date within ±2 years reachable in ≤15 keystrokes (SC-002); all clamping tests green
 
@@ -88,12 +88,12 @@
 
 ### Tests for User Story 3
 
-- [ ] T015 [P] [US3] Output-format tests in internal/tui/calendar_test.go: confirm on a Due field opened from `2026-06-10T15:00:00Z` emits `2026-06-12T15:00:00Z` for June 12 (time preserved, RFC3339 out); confirm from a date-only or empty Due emits `YYYY-MM-DD`; Snooze always emits `YYYY-MM-DD`; round-trip property — every emitted string is accepted by `cli.ParseDue` (FR-005, FR-008, SC-003, contract guarantees 1, 4)
-- [ ] T016 [P] [US3] Text-path regression tests in internal/tui/edit_test.go: with the calendar closed, typing/cursor keys on date fields behave exactly as today and the calendar never opens uninvited; typed values flow into `editSavedMsg` unchanged (US3 scenarios 1, 3; FR-007; contract guarantees 2, 7)
+- [X] T015 [P] [US3] Output-format tests in internal/tui/calendar_test.go: confirm on a Due field opened from `2026-06-10T15:00:00Z` emits `2026-06-12T15:00:00Z` for June 12 (time preserved, RFC3339 out); confirm from a date-only or empty Due emits `YYYY-MM-DD`; Snooze always emits `YYYY-MM-DD`; round-trip property — every emitted string is accepted by `cli.ParseDue` (FR-005, FR-008, SC-003, contract guarantees 1, 4)
+- [X] T016 [P] [US3] Text-path regression tests in internal/tui/edit_test.go: with the calendar closed, typing/cursor keys on date fields behave exactly as today and the calendar never opens uninvited; typed values flow into `editSavedMsg` unchanged (US3 scenarios 1, 3; FR-007; contract guarantees 2, 7)
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Implement `keepTime`/`rfc3339Out` output formatting in internal/tui/calendar.go: capture the clock-time offset and format flag at open time (Due field only), re-apply on confirm so only the date portion changes (FR-008)
+- [X] T017 [US3] Implement `keepTime`/`rfc3339Out` output formatting in internal/tui/calendar.go: capture the clock-time offset and format flag at open time (Due field only), re-apply on confirm so only the date portion changes (FR-008)
 
 **Checkpoint**: All three input flavors (typed date, typed timestamp, picked date) coexist; round-trip property test green
 
@@ -107,7 +107,7 @@
 
 ### Tests for User Story 4
 
-- [ ] T018 [US4] Clearing test in internal/tui/edit_test.go: pick a date via the calendar, then delete the field text and save — `editSavedMsg.dueStr`/`snoozeStr` are empty and the existing save path treats them as unset (US4 scenario 1, FR-009); confirms no calendar state lingers after a clear
+- [X] T018 [US4] Clearing test in internal/tui/edit_test.go: pick a date via the calendar, then delete the field text and save — `editSavedMsg.dueStr`/`snoozeStr` are empty and the existing save path treats them as unset (US4 scenario 1, FR-009); confirms no calendar state lingers after a clear
 
 **Checkpoint**: All four user stories independently verified
 
@@ -117,8 +117,8 @@
 
 **Purpose**: Final verification against the constitution's quality gates and the quickstart checklist
 
-- [ ] T019 [P] Run the full suite and build from repo root: `go test ./...` and `go build -o twig ./cmd/twig`
-- [ ] T020 [P] Review all new user-facing copy in internal/tui/edit.go and internal/tui/calendar.go for Principle IV tone and Principle III consistency (palette-only colors, binding conventions) against contracts/calendar-widget.md
+- [X] T019 [P] Run the full suite and build from repo root: `go test ./...` and `go build -o twig ./cmd/twig`
+- [X] T020 [P] Review all new user-facing copy in internal/tui/edit.go and internal/tui/calendar.go for Principle IV tone and Principle III consistency (palette-only colors, binding conventions) against contracts/calendar-widget.md
 - [ ] T021 Walk the manual scenario table in specs/046-tui-date-picker/quickstart.md against a running server (`make dev`) and record results
 
 ---

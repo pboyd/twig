@@ -36,8 +36,7 @@ open ──(esc | tab | shift+tab)──▶ closed; field unchanged
 
 | Field | Type | Meaning |
 |---|---|---|
-| `calendar` | `*calendarModel` | Nil when closed. Non-nil means the calendar is open and intercepts all key messages. |
-| `calendarFor` | `int` | Focus index the calendar serves (`focusDue` or `focusSnooze`); determines output format rules and which field receives the confirmed value. |
+| `calendar` | `*calendarModel` | Nil when closed. Non-nil means the calendar is open and intercepts all key messages (and swallows pasted text). The calendar always serves the focused field: `focusIndex` cannot change while it is open, since `tab`/`shift+tab` close it before cycling focus. |
 
 All existing fields are unchanged. `editSavedMsg` / `editCancelledMsg` are unchanged — the calendar only mutates the textinput values before save, so the save path (`cli.ParseDue` validation in `update.go`) is untouched.
 

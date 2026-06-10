@@ -49,6 +49,7 @@ type KeyMap struct {
 	Tab      key.Binding
 	ShiftTab key.Binding
 	Editor   key.Binding
+	Calendar key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -205,6 +206,10 @@ func DefaultKeyMap() KeyMap {
 		Editor: key.NewBinding(
 			key.WithKeys("ctrl+g"),
 			key.WithHelp("ctrl+g", "edit in $EDITOR"),
+		),
+		Calendar: key.NewBinding(
+			key.WithKeys("ctrl+g"),
+			key.WithHelp("ctrl+g", "pick a date"),
 		),
 	}
 }
