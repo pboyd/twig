@@ -10,6 +10,7 @@ export default defineConfig({
       "/task.v1": "http://localhost:8080",
       "/health.v1": "http://localhost:8080",
       "/plan.v1": "http://localhost:8080",
+      "/cli": "http://localhost:8080",
     },
   },
 });

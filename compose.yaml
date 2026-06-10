@@ -19,6 +19,8 @@ services:
     build:
       context: .
       dockerfile: services/twig/Dockerfile
+      args:
+        CLI_VERSION: dev
     environment:
       DATABASE_URL: postgres://twig:twig@postgres:5432/twig?sslmode=disable
     ports:

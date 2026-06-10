@@ -91,6 +91,8 @@ func main() {
 	mux.Handle("/auth/login", auth.LoginHandler(queries, sessionLifetime, loginLimiter))
 	mux.Handle("/auth/logout", auth.LogoutHandler(queries))
 
+	cliBinary := handler.NewCLIBinary("/cli")
+
 	taskMux := http.NewServeMux()
 	healthPath, healthH := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
 	taskMux.Handle(healthPath, healthH)
@@ -98,6 +100,8 @@ func main() {
 	taskMux.Handle(taskPath, taskH)
 	planPath, planH := planv1connect.NewPlanServiceHandler(&handler.Plan{Queries: queries, Pool: pool})
 	taskMux.Handle(planPath, planH)
+	taskMux.HandleFunc("GET /cli/download", cliBinary.ServeDownload)
+	taskMux.HandleFunc("GET /cli/info", cliBinary.ServeInfo)
 
 	mux.Handle("/", auth.Middleware(queries)(taskMux))
 

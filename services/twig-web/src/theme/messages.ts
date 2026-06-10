@@ -1,4 +1,14 @@
 export const messages = {
+  downloadHeading: "Grab the twig CLI",
+  downloadHelperText:
+    "Run tasks and timers right from your terminal. Download the binary, mark it executable, and you're off.",
+  downloadButtonLabel: "Download for Linux (x86-64)",
+  downloadPlatformLabel: "Linux (x86-64)",
+  downloadPostHint:
+    "Once it's downloaded: chmod +x twig && ./twig — you're ready to roll.",
+  downloadInfoLoading: "Fetching the latest build details…",
+  downloadInfoError:
+    "Couldn't fetch the download details just now — give it another go?",
   emptyTaskList: "Nothing here yet — your future self is grateful. Add the first task.",
   emptyNameValidation: "A task needs a name to live by.",
   loginFailure: "That didn't match. Mind trying again?",

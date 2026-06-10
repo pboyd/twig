@@ -137,17 +137,22 @@ npm test
 npm run build
 ```
 
-The dev proxy (`vite.config.ts`) keeps the SPA and API on one origin so the `SameSite=Strict` session cookie works. Never call `:8080` cross-origin.
+The dev proxy (`vite.config.ts`) keeps the SPA and API on one origin so the `SameSite=Strict` session cookie works. Never call `:8080` cross-origin. The proxy covers `/auth`, `/task.v1`, `/health.v1`, `/plan.v1`, and `/cli`.
 
 Generated TS lives in `src/gen/` — do not edit by hand; regenerate with `npm run gen`.
 
 Key frontend source paths:
 - `src/lib/tree.ts` — flat `ListTasks` → nested tree builder (unit-tested)
 - `src/lib/updatePayload.ts` — `UpdateTask` full-replace payload builder (unit-tested)
+- `src/lib/cliInfo.ts` — typed `fetchCliInfo()` wrapper for `GET /cli/info`
 - `src/theme/messages.ts` — all user-facing copy (warm/playful tone)
 - `src/theme/tokens.ts` — color/spacing design tokens
 - `src/components/` — Button, Field, Spinner, ErrorBanner, AppHeader, TaskForm, TreeRow, EmptyState
-- `src/pages/` — LoginPage, TaskTreePage, TaskDetailPage
+- `src/pages/` — LoginPage, TaskTreePage, TaskDetailPage, DownloadPage (`/download` route)
+
+The server exposes two plain-HTTP authenticated endpoints consumed by the web app:
+- `GET /cli/info` — JSON metadata (version, size, sha256) for the downloadable binary
+- `GET /cli/download` — streams the `linux/amd64` twig binary as a file attachment
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,

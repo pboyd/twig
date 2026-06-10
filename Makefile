@@ -6,7 +6,7 @@ proto:
 	cd api && buf generate
 
 build:
-	podman build -t twig-server -f services/twig/Dockerfile .
+	podman build -t twig-server --build-arg CLI_VERSION=$(shell git describe --tags --always) -f services/twig/Dockerfile .
 
 cli:
 	go build -o twig ./cmd/twig
