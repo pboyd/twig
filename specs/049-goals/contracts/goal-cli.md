@@ -69,8 +69,9 @@ goal` prints the subcommand usage; `runHelp` gains the `goal` case.
 
 ### Tab bar & startup
 
-`tabGoals` is the first tab; bar reads `Goals · Tasks · Plan · Report`. The
-TUI opens on Goals. `t`/existing tab-cycle bindings include it.
+`tabGoals` is the first tab in the bar, which reads `Goals · Tasks · Plan ·
+Report`. The TUI still opens on the Tasks tab; the existing tab-cycle
+bindings include Goals (one `shift+tab` from startup).
 
 ### Layout
 

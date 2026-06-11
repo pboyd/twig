@@ -16,6 +16,7 @@
 - Q: In the TUI, where can the user manage a task's goal association? → A: Both sides — from the goal detail pane (create a new task attached to the goal, link/unlink existing tasks) and from the task edit views (set or clear the goal).
 - Q: Where should a task's associated goal be visible in the task views? → A: Detail only — the task detail view (TUI detail pane, CLI task show) displays the associated goal's name; task tree/list rows stay unchanged.
 - Q: Where does a goal land in the rank order when created or when it changes state? → A: Bottom of group — new goals append to the bottom of the Incubating group; a goal that changes state appends to the bottom of its new group; existing curated order is never disturbed.
+- Q: Does "Goals is the first tab" make it the startup tab? → A: No — Goals appears first in the tab bar, but the TUI continues to open on the Tasks tab.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -29,7 +30,7 @@ A user has long-term aspirations like "buy a new car" that aren't actionable tod
 
 **Acceptance Scenarios**:
 
-1. **Given** the user opens the TUI, **When** the app loads, **Then** Goals is the first tab and shows a two-pane layout (goal list on one side, selected goal's details on the other), consistent with the Tasks and Plans tabs.
+1. **Given** the user opens the TUI, **When** the app loads, **Then** Goals appears as the first tab in the tab bar (the app still opens on the Tasks tab), and switching to it shows a two-pane layout (goal list on one side, selected goal's details on the other), consistent with the Tasks and Plans tabs.
 2. **Given** the Goals tab is open, **When** the user creates a goal with a name, **Then** the goal appears in the Incubating group with its name, and the user can later add a description and due date.
 3. **Given** an Incubating goal, **When** the user changes its state to Committed, **Then** the goal moves to the Committed group immediately.
 4. **Given** a Committed goal, **When** the user marks it Completed (or Archived), **Then** the goal disappears from the default goal list.
@@ -113,7 +114,7 @@ A user with several goals in a state group puts the most important ones first. I
 - **FR-006a**: Associating a task with a goal MUST include its entire subtree: descendants implicitly belong to the same goal, cannot be associated with a different goal, and the goal's detail view shows the full subtree.
 - **FR-007**: Deleting a goal MUST remove its task associations without deleting or otherwise modifying the tasks. Completing or archiving a goal MUST NOT change its associated tasks.
 - **FR-008**: Goals MUST be scoped to the owning user; a user can only see and modify their own goals.
-- **FR-009**: The TUI MUST present Goals as the first tab, using a two-pane layout (goal list + detail of the selected goal) consistent with the Tasks and Plans tabs.
+- **FR-009**: The TUI MUST present Goals as the first tab in the tab bar (the TUI continues to open on the Tasks tab), using a two-pane layout (goal list + detail of the selected goal) consistent with the Tasks and Plans tabs.
 - **FR-010**: The TUI goal list MUST group goals by state, ordered Committed first, then Incubating, then (when shown) Completed, then Archived.
 - **FR-011**: Completed and Archived goals MUST be hidden by default in the TUI and CLI listings, with an explicit control (TUI toggle, CLI option) to show them.
 - **FR-012**: The goal detail view MUST show the goal's name, description, due date, state, and its associated tasks.

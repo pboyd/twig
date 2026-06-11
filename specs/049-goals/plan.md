@@ -16,9 +16,9 @@ shapes), one migration adding a `goals` table and a nullable
 `tasks.goal_id` FK (`ON DELETE SET NULL`), and a dedicated
 `TaskService.SetTaskGoal` RPC so the full-replace `UpdateTask` path — and the
 untouched web app — can never clobber associations. TUI gains a Goals tab,
-first in the tab bar and the startup tab, with the established two-pane
-layout; CLI gains `twig goal` mirroring `twig task` conventions. Web app
-explicitly unchanged.
+first in the tab bar (startup remains the Tasks tab), with the established
+two-pane layout; CLI gains `twig goal` mirroring `twig task` conventions.
+Web app explicitly unchanged.
 
 ## Technical Context
 

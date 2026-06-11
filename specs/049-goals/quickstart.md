@@ -49,12 +49,13 @@ export TWIG_ADDR=http://localhost:8080
 ## 3. TUI (US1, US2, US4)
 
 ```bash
-./twig                                     # opens on the Goals tab (first tab)
+./twig                                     # opens on the Tasks tab, as today
 ```
 
 Verify:
 
-- Tab bar order: Goals · Tasks · Plan · Report; two-pane layout; shared theme.
+- Tab bar order: Goals · Tasks · Plan · Report; startup tab is Tasks; one
+  `shift+tab` lands on Goals with a two-pane layout in the shared theme.
 - `n` creates a goal → appears at bottom of Incubating.
 - `o`/`d`/`v`/`i` move it between state groups; completed/archived vanish; `c` reveals them.
 - Three goals in one group: `}`/`{` reorder; restart the TUI → order kept; `twig goal` shows same order.

@@ -107,10 +107,11 @@ effect. All 4×3 transitions are accepted.
 validation; mixing them into a full-replace update invites accidental
 transitions. Precedent: Complete/UncompleteTask are separate from UpdateTask.
 
-## D7: TUI surface — `tabGoals` is first in the tab cycle and is the startup tab
+## D7: TUI surface — `tabGoals` is first in the tab bar; startup stays on Tasks
 
 **Decision**: Add `tabGoals` as the first `tab` constant; tab bar order becomes
-Goals · Tasks · Plan · Report, and the TUI opens on Goals. Two-pane layout
+Goals · Tasks · Plan · Report. The TUI continues to open on the Tasks tab
+(user decision, 2026-06-11). Two-pane layout
 (list left, detail right) using the shared theme and existing pane-rendering
 patterns from the Plan/Tasks tabs. List groups: Committed, then Incubating;
 `c` (the Tasks tab's "toggle show all" binding) reveals Completed and Archived
@@ -121,14 +122,14 @@ subtrees (computed client-side per D4). From the detail pane: create a new task
 attached to the goal, and link/unlink existing tasks via the existing task
 picker component (`pickerState`, reused from the Plan tab's add-task flow).
 
-**Rationale**: The spec makes Goals the first tab; opening on it follows
-directly (acceptance scenario: "When the app loads, Then Goals is the first
-tab and shows a two-pane layout"). Reusing the picker, theme, and key
-conventions is mandated by Principle III.
+**Rationale**: The spec makes Goals the first tab in the bar; day-to-day work
+still lives in Tasks, so the app keeps opening there — goals are one
+`shift+tab` away. Reusing the picker, theme, and key conventions is mandated
+by Principle III.
 
-**Alternatives considered**: Keeping Tasks as the startup tab with Goals merely
-listed first — rejected: the natural reading of "first tab" is what you land
-on; users who live in Tasks are one `tab` keypress away.
+**Alternatives considered**: Opening on Goals because it is first in the bar —
+rejected by the user: it would put a long-horizon view in front of the daily
+workflow every launch.
 
 ## D8: CLI surface — `twig goal` mirrors `twig task` conventions
 
