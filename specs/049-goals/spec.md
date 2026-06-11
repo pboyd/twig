@@ -8,6 +8,15 @@
 
 **Input**: User description: "goals — The task list should always be split up into things that can be done... I propose a new object in twig: goals. Goals have an ID, name, description, and due date. Users can rank goals. Goals are not nested. Goals are in one of four states: Incubating, Committed, Completed, Archived. Tasks can be associated to goals. In the TUI, Goals should be the first tab with a 2-pane UI; completed and archived goals hidden by default; goals grouped by state. In the CLI, a `twig goal` subcommand manages goals. No web app support needed right now."
 
+## Clarifications
+
+### Session 2026-06-11
+
+- Q: When a task with subtasks is associated with a goal, how do the subtasks relate to the goal? → A: Subtree inherits — associating a task brings its entire subtree into the goal; descendants implicitly belong to the same goal and cannot be associated with a different one; the goal detail view shows the full subtree.
+- Q: In the TUI, where can the user manage a task's goal association? → A: Both sides — from the goal detail pane (create a new task attached to the goal, link/unlink existing tasks) and from the task edit views (set or clear the goal).
+- Q: Where should a task's associated goal be visible in the task views? → A: Detail only — the task detail view (TUI detail pane, CLI task show) displays the associated goal's name; task tree/list rows stay unchanged.
+- Q: Where does a goal land in the rank order when created or when it changes state? → A: Bottom of group — new goals append to the bottom of the Incubating group; a goal that changes state appends to the bottom of its new group; existing curated order is never disturbed.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Capture and track long-term goals (Priority: P1)
@@ -101,6 +110,7 @@ A user with several goals in a state group puts the most important ones first. I
 - **FR-004**: Goals MUST NOT nest — there is no parent/child relationship between goals.
 - **FR-005**: Users MUST be able to create, view, edit (name, description, due date), and delete goals.
 - **FR-006**: Users MUST be able to associate a task with at most one goal, and to remove that association. Task–goal association MUST remain optional; tasks without a goal behave exactly as they do today.
+- **FR-006a**: Associating a task with a goal MUST include its entire subtree: descendants implicitly belong to the same goal, cannot be associated with a different goal, and the goal's detail view shows the full subtree.
 - **FR-007**: Deleting a goal MUST remove its task associations without deleting or otherwise modifying the tasks. Completing or archiving a goal MUST NOT change its associated tasks.
 - **FR-008**: Goals MUST be scoped to the owning user; a user can only see and modify their own goals.
 - **FR-009**: The TUI MUST present Goals as the first tab, using a two-pane layout (goal list + detail of the selected goal) consistent with the Tasks and Plans tabs.
@@ -108,14 +118,16 @@ A user with several goals in a state group puts the most important ones first. I
 - **FR-011**: Completed and Archived goals MUST be hidden by default in the TUI and CLI listings, with an explicit control (TUI toggle, CLI option) to show them.
 - **FR-012**: The goal detail view MUST show the goal's name, description, due date, state, and its associated tasks.
 - **FR-013**: Users MUST be able to rank goals within their state group in the TUI using the `{` and `}` keys (matching task ranking), and the order MUST persist and apply to all goal listings.
+- **FR-013a**: A newly created goal MUST append to the bottom of the Incubating group's rank order; a goal whose state changes MUST append to the bottom of its new group, leaving the existing order of other goals undisturbed.
 - **FR-014**: The CLI MUST provide a `twig goal` subcommand covering listing, creating, showing, editing, changing state, and deleting goals.
-- **FR-015**: Users MUST be able to manage a task's goal association from the interfaces where tasks are edited (TUI and CLI).
+- **FR-015**: Users MUST be able to manage task–goal associations from both sides: in the goal detail pane (create a new task attached to the goal, link/unlink existing tasks) and in the interfaces where tasks are edited (TUI task views and CLI).
 - **FR-016**: Goal commands referencing a nonexistent goal MUST fail with a clear, user-friendly error.
+- **FR-017**: Task detail views (TUI detail pane, CLI task show) MUST display the associated goal's name when one is set; task tree/list rows remain unchanged.
 
 ### Key Entities
 
 - **Goal**: A long-term aim that is not directly actionable today. Attributes: ID, name (required), description (optional), due date (optional), state (Incubating | Committed | Completed | Archived), user-defined rank, owning user. Goals do not nest.
-- **Task** (existing, extended): Gains an optional reference to a single goal. All current task behavior is unchanged when no goal is set.
+- **Task** (existing, extended): Gains an optional reference to a single goal. Association is set on a task and covers its entire subtree — descendants implicitly belong to the same goal and cannot be associated with a different one. All current task behavior is unchanged when no goal is set.
 
 ## Success Criteria *(mandatory)*
 
