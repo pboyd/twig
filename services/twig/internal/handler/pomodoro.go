@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -114,4 +115,30 @@ func (t *Task) CompletePomodoro(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&taskv1.CompletePomodoroResponse{Pomodoro: dbPomodoroToProto(p)}), nil
+}
+
+func (t *Task) CountCompletedPomodoros(
+	ctx context.Context,
+	req *connect.Request[taskv1.CountCompletedPomodorosRequest],
+) (*connect.Response[taskv1.CountCompletedPomodorosResponse], error) {
+	if req.Msg.Start == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("start is required"))
+	}
+	if req.Msg.End == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("end is required"))
+	}
+	if !req.Msg.End.AsTime().After(req.Msg.Start.AsTime()) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("end must be after start"))
+	}
+
+	userID := auth.UserID(ctx)
+	count, err := t.Queries.CountCompletedPomodorosInRange(ctx, db.CountCompletedPomodorosInRangeParams{
+		UserID:  userID,
+		EndAt:   pgtype.Timestamptz{Time: req.Msg.Start.AsTime(), Valid: true},
+		EndAt_2: pgtype.Timestamptz{Time: req.Msg.End.AsTime(), Valid: true},
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&taskv1.CountCompletedPomodorosResponse{Count: count}), nil
 }

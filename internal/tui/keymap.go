@@ -3,9 +3,10 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 // KeyMap holds all keybindings for the TUI.
-// PlanningMode controls which bindings appear in ShortHelp/FullHelp.
+// PlanningMode and ReportMode control which bindings appear in ShortHelp/FullHelp.
 type KeyMap struct {
 	PlanningMode bool
+	ReportMode   bool
 	Up           key.Binding
 	Down         key.Binding
 	First        key.Binding
@@ -50,6 +51,9 @@ type KeyMap struct {
 	ShiftTab key.Binding
 	Editor   key.Binding
 	Calendar key.Binding
+	// Report-tab keys
+	ReportPrevPreset key.Binding
+	ReportNextPreset key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -211,11 +215,22 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+g"),
 			key.WithHelp("ctrl+g", "pick a date"),
 		),
+		ReportPrevPreset: key.NewBinding(
+			key.WithKeys("left", "h"),
+			key.WithHelp("←/h", "prev period"),
+		),
+		ReportNextPreset: key.NewBinding(
+			key.WithKeys("right", "l"),
+			key.WithHelp("→/l", "next period"),
+		),
 	}
 }
 
 // ShortHelp returns the short help for the key map (used by the bubbles help component).
 func (k KeyMap) ShortHelp() []key.Binding {
+	if k.ReportMode {
+		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}
+	}
 	if k.PlanningMode {
 		return []key.Binding{k.Up, k.Down, k.Complete, k.PomStart, k.PlanAddTask, k.PlanAutoSchedule, k.Help, k.Quit}
 	}
@@ -224,6 +239,13 @@ func (k KeyMap) ShortHelp() []key.Binding {
 
 // FullHelp returns the full help for the key map grouped by category.
 func (k KeyMap) FullHelp() [][]key.Binding {
+	if k.ReportMode {
+		return [][]key.Binding{
+			{k.ReportPrevPreset, k.ReportNextPreset},
+			{k.Up, k.Down, k.Refresh},
+			{k.NextTab, k.Help, k.Quit},
+		}
+	}
 	if k.PlanningMode {
 		return [][]key.Binding{
 			{k.Up, k.Down, k.PlanPrevDay, k.PlanNextDay},

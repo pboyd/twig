@@ -78,7 +78,7 @@ Both the root CLI module and the server module depend on `api/` via local `repla
 ### Binaries
 
 - **`cmd/server`** — HTTP/2 server (port 8080) with ConnectRPC (gRPC-compatible) handlers and a plain HTTP auth layer (`/auth/login`, `/auth/logout`). Runs migrations on startup.
-- **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning).
+- **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning), `report` (activity report).
 
 ### Key internal packages
 

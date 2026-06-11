@@ -11,11 +11,12 @@ import (
 	"github.com/pboyd/twig/internal/cli"
 )
 
-// renderTabBar renders the one-line tab bar: " Tasks │ Planning "
+// renderTabBar renders the one-line tab bar: " Tasks │ Planning │ Report "
 // with the active tab highlighted in accent color (styled) or plain text (unstyled).
 func (m Model) renderTabBar(width int) string {
 	tasks := " Tasks "
 	planning := " Planning "
+	reportLabel := " Report "
 
 	if m.styled {
 		// Active tab: bold blue accent. Inactive: dim.
@@ -25,15 +26,17 @@ func (m Model) renderTabBar(width int) string {
 			reset      = "\x1b[0m"
 			sepDim     = "\x1b[2m│\x1b[0m"
 		)
-		var taskStr, planStr string
-		if m.activeTab == tabTasks {
-			taskStr = accentOpen + tasks + reset
-			planStr = dimOpen + planning + reset
-		} else {
-			taskStr = dimOpen + tasks + reset
-			planStr = accentOpen + planning + reset
+		renderTab := func(label string, active bool) string {
+			if active {
+				return accentOpen + label + reset
+			}
+			return dimOpen + label + reset
 		}
-		bar := taskStr + sepDim + planStr
+		bar := renderTab(tasks, m.activeTab == tabTasks) +
+			sepDim +
+			renderTab(planning, m.activeTab == tabPlanning) +
+			sepDim +
+			renderTab(reportLabel, m.activeTab == tabReport)
 		visW := lipgloss.Width(bar)
 		if width > visW {
 			bar += strings.Repeat(" ", width-visW)
@@ -42,7 +45,7 @@ func (m Model) renderTabBar(width int) string {
 	}
 
 	sep := "|"
-	bar := tasks + sep + planning
+	bar := tasks + sep + planning + sep + reportLabel
 	if width > len(bar) {
 		bar += strings.Repeat(" ", width-len(bar))
 	}

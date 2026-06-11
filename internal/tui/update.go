@@ -16,6 +16,8 @@ import (
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/pomodoro"
+	"github.com/pboyd/twig/internal/report"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ── message types ──────────────────────────────────────────────────────────
@@ -45,6 +47,16 @@ type moveTaskResultMsg struct {
 	taskID int64
 	tree   []*cli.TreeNode
 	err    error
+}
+
+// reportResultMsg carries the result of a report fetch (tasks + pom count).
+type reportResultMsg struct {
+	dayGroups []report.DayGroup
+	finished  []report.AccomplishmentGroup
+	ongoing   []report.AccomplishmentGroup
+	totals    report.Totals
+	period    report.Period
+	err       error
 }
 
 // scheduledDaysResultMsg carries the result of a ListScheduledDays RPC.
@@ -293,6 +305,50 @@ func pomodoroRemaining(startAt time.Time, now time.Time) time.Duration {
 	return pomodoro.Remaining(startAt, now)
 }
 
+// fetchReportCmd fetches all tasks and the pomodoro count for the given period,
+// builds day-grouped and accomplishment-grouped data, and returns a reportResultMsg.
+func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period) tea.Cmd {
+	return func() tea.Msg {
+		tasksResp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
+		if err != nil {
+			return reportResultMsg{err: err, period: p}
+		}
+
+		pomResp, err := client.CountCompletedPomodoros(context.Background(), connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(p.StartUTC()),
+			End:   timestamppb.New(p.EndUTC()),
+		}))
+		if err != nil {
+			return reportResultMsg{err: err, period: p}
+		}
+
+		tasks := tasksResp.Msg.Tasks
+		entries := report.BuildEntries(tasks, p)
+		totals := report.Totals{
+			TasksCompleted:     len(entries),
+			PomodorosCompleted: pomResp.Msg.Count,
+		}
+
+		var dayGroups []report.DayGroup
+		var finished, ongoing []report.AccomplishmentGroup
+
+		switch p.ReportLayout() {
+		case report.DayGrouped:
+			dayGroups = report.GroupByDay(entries)
+		case report.AccomplishmentGrouped:
+			finished, ongoing = report.GroupByAccomplishment(entries, tasks, p)
+		}
+
+		return reportResultMsg{
+			dayGroups: dayGroups,
+			finished:  finished,
+			ongoing:   ongoing,
+			totals:    totals,
+			period:    p,
+		}
+	}
+}
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(listTasksCmd(m.client), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient))
 }
@@ -497,6 +553,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		return m.handlePaste(msg)
 
+	case reportResultMsg:
+		m.reportData.err = msg.err
+		if msg.err == nil {
+			m.reportData.dayGroups = msg.dayGroups
+			m.reportData.finished = msg.finished
+			m.reportData.ongoing = msg.ongoing
+			m.reportData.totals = msg.totals
+			m.reportData.period = msg.period
+			m.reportData.scroll = 0
+		}
+		m.reportData.loaded = true
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -538,6 +607,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.activeTab == tabPlanning {
 		return m.handlePlanningKey(msg)
 	}
+	if m.activeTab == tabReport {
+		return m.handleReportKey(msg)
+	}
 	switch m.mode {
 	case modeList:
 		return m.handleListKey(msg)
@@ -549,6 +621,94 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleMoveKey(msg)
 	case modeDatePrompt:
 		return m.handleDatePromptKey(msg)
+	}
+	return m, nil
+}
+
+// handleReportKey handles all key events while the Report tab is active.
+func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Handle quit confirmation overlay.
+	if m.confirmingQuit {
+		switch msg.String() {
+		case "y":
+			return m, m.saveAndQuitCmd()
+		case "n", "esc":
+			m.confirmingQuit = false
+		}
+		return m, nil
+	}
+
+	if m.mode == modeHelp {
+		m.mode = modeList
+		return m, nil
+	}
+
+	now := m.nowOrDefault()
+	presets := report.PresetOrder()
+
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		if m.pom != nil && !m.pom.completed {
+			m.confirmingQuit = true
+			return m, nil
+		}
+		return m, m.saveAndQuitCmd()
+
+	case key.Matches(msg, m.keys.NextTab):
+		m.activeTab = tabTasks
+		m.keys.ReportMode = false
+		m.keys.PlanningMode = false
+		m.reportData.err = nil
+		return m, nil
+
+	case key.Matches(msg, m.keys.PrevTab):
+		m.activeTab = tabPlanning
+		m.keys.ReportMode = false
+		m.keys.PlanningMode = true
+		m.reportData.err = nil
+		return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day))
+
+	case key.Matches(msg, m.keys.ReportPrevPreset):
+		idx := (m.reportData.presetIdx - 1 + len(presets)) % len(presets)
+		m.reportData.presetIdx = idx
+		m.reportData.loaded = false
+		p, _ := report.ParsePeriod(presets[idx], "", "", now)
+		m.reportData.period = p
+		return m, fetchReportCmd(m.client, p)
+
+	case key.Matches(msg, m.keys.ReportNextPreset):
+		idx := (m.reportData.presetIdx + 1) % len(presets)
+		m.reportData.presetIdx = idx
+		m.reportData.loaded = false
+		p, _ := report.ParsePeriod(presets[idx], "", "", now)
+		m.reportData.period = p
+		return m, fetchReportCmd(m.client, p)
+
+	case key.Matches(msg, m.keys.Refresh):
+		m.reportData.loaded = false
+		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
+		m.reportData.period = p
+		return m, fetchReportCmd(m.client, p)
+
+	case key.Matches(msg, m.keys.Up):
+		if m.reportData.scroll > 0 {
+			m.reportData.scroll--
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Down):
+		maxScroll := len(m.renderReportLines(m.width)) - m.reportBodyHeight()
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if m.reportData.scroll < maxScroll {
+			m.reportData.scroll++
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.Help):
+		m.mode = modeHelp
+		return m, nil
 	}
 	return m, nil
 }
@@ -586,8 +746,21 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handlePlanModalKey(msg)
 	}
 
-	// Tab / Shift+Tab switches to the Tasks tab (not blocked — planList mode).
-	if key.Matches(msg, m.keys.NextTab) || key.Matches(msg, m.keys.PrevTab) {
+	// Tab → Report; Shift+Tab → Tasks.
+	if key.Matches(msg, m.keys.NextTab) {
+		m.activeTab = tabReport
+		m.keys.PlanningMode = false
+		m.keys.ReportMode = true
+		m.plan.err = nil
+		m.plan.pendingComplete = nil
+		now := m.nowOrDefault()
+		presets := report.PresetOrder()
+		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
+		m.reportData.period = p
+		m.reportData.loaded = false
+		return m, fetchReportCmd(m.client, p)
+	}
+	if key.Matches(msg, m.keys.PrevTab) {
 		m.activeTab = tabTasks
 		m.keys.PlanningMode = false
 		m.plan.err = nil
@@ -858,7 +1031,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.saveAndQuitCmd()
 
-	case key.Matches(msg, m.keys.NextTab) || key.Matches(msg, m.keys.PrevTab):
+	case key.Matches(msg, m.keys.NextTab):
+		// Tasks → Planning
 		m.activeTab = tabPlanning
 		m.keys.PlanningMode = true
 		m.err = nil
@@ -868,6 +1042,18 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, planTickCmd())
 		}
 		return m, tea.Batch(cmds...)
+
+	case key.Matches(msg, m.keys.PrevTab):
+		// Tasks → Report (wrapping backwards)
+		m.activeTab = tabReport
+		m.keys.ReportMode = true
+		m.err = nil
+		now := m.nowOrDefault()
+		presets := report.PresetOrder()
+		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
+		m.reportData.period = p
+		m.reportData.loaded = false
+		return m, fetchReportCmd(m.client, p)
 
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil

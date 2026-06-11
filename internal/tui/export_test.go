@@ -167,3 +167,19 @@ func ExportSetNowFunc(m *Model, f func() time.Time) {
 func ExportNotice(m Model) string {
 	return m.notice
 }
+
+// ExportTabReport is the tabReport constant for tests.
+const ExportTabReport = int(tabReport)
+
+// ExportNewReportModel creates a Model in the Report tab for unit tests.
+func ExportNewReportModel(client taskv1connect.TaskServiceClient) Model {
+	m := newModel(client, nil, "", config.PomodoroConfig{}, false, nil)
+	m.activeTab = tabReport
+	m.keys.ReportMode = true
+	return m
+}
+
+// ExportSetReportData seeds the report state for render tests.
+func ExportSetReportData(m *Model, data reportState) {
+	m.reportData = data
+}

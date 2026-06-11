@@ -19,13 +19,20 @@ const tabBarHeight = 1
 // always active — no WithAltScreen option is needed on tea.NewProgram.
 func (m Model) View() tea.View {
 	var body string
-	if m.activeTab == tabPlanning {
+	switch m.activeTab {
+	case tabPlanning:
 		if m.mode == modeHelp {
 			body = m.viewHelp()
 		} else {
 			body = m.viewPlanning()
 		}
-	} else {
+	case tabReport:
+		if m.mode == modeHelp {
+			body = m.viewHelp()
+		} else {
+			body = m.viewReport()
+		}
+	default: // tabTasks
 		switch m.mode {
 		case modeHelp:
 			body = m.viewHelp()
@@ -474,6 +481,8 @@ func (m Model) renderStatus() string {
 	activeErr := m.err
 	if m.activeTab == tabPlanning && m.plan.err != nil {
 		activeErr = m.plan.err
+	} else if m.activeTab == tabReport && m.reportData.err != nil {
+		activeErr = m.reportData.err
 	}
 
 	if activeErr != nil {

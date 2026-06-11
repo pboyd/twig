@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const cancelActivePomodoro = `-- name: CancelActivePomodoro :one
@@ -92,6 +94,24 @@ type CountCompletedPomodorosForTaskParams struct {
 
 func (q *Queries) CountCompletedPomodorosForTask(ctx context.Context, arg CountCompletedPomodorosForTaskParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCompletedPomodorosForTask, arg.TaskID, arg.UserID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countCompletedPomodorosInRange = `-- name: CountCompletedPomodorosInRange :one
+SELECT count(*)::bigint AS count FROM pomodoros
+WHERE user_id = $1 AND complete AND end_at >= $2 AND end_at < $3
+`
+
+type CountCompletedPomodorosInRangeParams struct {
+	UserID  int64
+	EndAt   pgtype.Timestamptz
+	EndAt_2 pgtype.Timestamptz
+}
+
+func (q *Queries) CountCompletedPomodorosInRange(ctx context.Context, arg CountCompletedPomodorosInRangeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompletedPomodorosInRange, arg.UserID, arg.EndAt, arg.EndAt_2)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

@@ -27,3 +27,7 @@ SELECT task_id, count(*)::bigint AS count
 FROM pomodoros
 WHERE user_id = $1 AND complete
 GROUP BY task_id;
+
+-- name: CountCompletedPomodorosInRange :one
+SELECT count(*)::bigint AS count FROM pomodoros
+WHERE user_id = $1 AND complete AND end_at >= $2 AND end_at < $3;

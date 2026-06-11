@@ -11,6 +11,7 @@ import (
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/config"
+	"github.com/pboyd/twig/internal/report"
 )
 
 type viewMode int
@@ -30,6 +31,7 @@ type tab int
 const (
 	tabTasks tab = iota
 	tabPlanning
+	tabReport
 )
 
 type planMode int
@@ -77,6 +79,19 @@ type planState struct {
 	pendingComplete *int32 // entry id of a just-completed untimed entry to retain while highlighted
 }
 
+// reportState holds all state for the Report tab.
+type reportState struct {
+	presetIdx int             // index into report.PresetOrder()
+	period    report.Period   // resolved period for presetIdx
+	dayGroups []report.DayGroup
+	finished  []report.AccomplishmentGroup
+	ongoing   []report.AccomplishmentGroup
+	totals    report.Totals
+	loaded    bool
+	err       error
+	scroll    int // scroll offset in lines
+}
+
 // Model is the root Bubble Tea model for the TUI.
 type Model struct {
 	client            taskv1connect.TaskServiceClient
@@ -120,6 +135,8 @@ type Model struct {
 	// nowFunc, when non-nil, overrides time.Now().Local() for the auto-schedule floor.
 	// Set only in tests via export_test.go shim.
 	nowFunc func() time.Time
+	// report holds all state for the Report tab.
+	reportData reportState
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {

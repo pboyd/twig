@@ -17,7 +17,7 @@
 
 **Purpose**: Commit the API contract change and regenerate stubs — required by Principle II before any implementation.
 
-- [ ] T001 Add `CountCompletedPomodoros` RPC and `CountCompletedPomodorosRequest`/`CountCompletedPomodorosResponse` messages to `api/proto/task/v1/task.proto` exactly per `contracts/report-rpc.md`, then run `make proto` to regenerate `api/gen/`
+- [X] T001 Add `CountCompletedPomodoros` RPC and `CountCompletedPomodorosRequest`/`CountCompletedPomodorosResponse` messages to `api/proto/task/v1/task.proto` exactly per `contracts/report-rpc.md`, then run `make proto` to regenerate `api/gen/`
 
 ---
 
@@ -27,13 +27,13 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 [P] Add `CountCompletedPomodorosInRange` query to `services/twig/db/queries/pomodoro.sql` per `contracts/report-rpc.md`, then run `sqlc generate` in `services/twig/` to regenerate `services/twig/internal/db/`
-- [ ] T003 Implement the `CountCompletedPomodoros` handler in `services/twig/internal/handler/pomodoro.go` — user scoping from auth context, `InvalidArgument` for missing timestamps or `end <= start`, count via the T002 query (depends on T001, T002)
-- [ ] T004 Add `DATABASE_URL`-gated integration test for `CountCompletedPomodoros` in `services/twig/internal/handler/pomodoro_test.go` — counts only `complete` pomodoros with `end_at` in `[start, end)`, ignores other users, `InvalidArgument` cases (depends on T003)
-- [ ] T005 [P] Create `internal/report/period.go` — `Period` type (From/To local days, Label), preset resolution (`recent`, `today`, `yesterday`, `week`, `last-week`, `month`, `quarter`, `year`; Monday-start weeks), explicit `YYYY-MM-DD` range parsing with validation, `StartUTC`/`EndUTC` half-open range math, `Days` span, and the 14-day layout threshold per `data-model.md`
-- [ ] T006 Add `internal/report/period_test.go` — preset boundaries (ISO week, month/quarter/year starts), near-midnight and DST-transition day math, inverted/unparseable range validation errors (depends on T005)
-- [ ] T007 Create `internal/report/group.go` — build `Entry` values from `[]*taskv1.Task` (filter `completed_at` in `[StartUTC, EndUTC)`, resolve `ParentName`, `TopLevelID`, `Depth` by walking `parent_id`), day grouping (most recent local day first, entries by `CompletedAt` desc), and `Totals` per `data-model.md` (depends on T005)
-- [ ] T008 Add `internal/report/group_test.go` — in/out-of-range filtering, uncompleted tasks excluded, subtask parent context, local-day attribution for near-midnight completions, day ordering (depends on T007)
+- [X] T002 [P] Add `CountCompletedPomodorosInRange` query to `services/twig/db/queries/pomodoro.sql` per `contracts/report-rpc.md`, then run `sqlc generate` in `services/twig/` to regenerate `services/twig/internal/db/`
+- [X] T003 Implement the `CountCompletedPomodoros` handler in `services/twig/internal/handler/pomodoro.go` — user scoping from auth context, `InvalidArgument` for missing timestamps or `end <= start`, count via the T002 query (depends on T001, T002)
+- [X] T004 Add `DATABASE_URL`-gated integration test for `CountCompletedPomodoros` in `services/twig/internal/handler/pomodoro_test.go` — counts only `complete` pomodoros with `end_at` in `[start, end)`, ignores other users, `InvalidArgument` cases (depends on T003)
+- [X] T005 [P] Create `internal/report/period.go` — `Period` type (From/To local days, Label), preset resolution (`recent`, `today`, `yesterday`, `week`, `last-week`, `month`, `quarter`, `year`; Monday-start weeks), explicit `YYYY-MM-DD` range parsing with validation, `StartUTC`/`EndUTC` half-open range math, `Days` span, and the 14-day layout threshold per `data-model.md`
+- [X] T006 Add `internal/report/period_test.go` — preset boundaries (ISO week, month/quarter/year starts), near-midnight and DST-transition day math, inverted/unparseable range validation errors (depends on T005)
+- [X] T007 Create `internal/report/group.go` — build `Entry` values from `[]*taskv1.Task` (filter `completed_at` in `[StartUTC, EndUTC)`, resolve `ParentName`, `TopLevelID`, `Depth` by walking `parent_id`), day grouping (most recent local day first, entries by `CompletedAt` desc), and `Totals` per `data-model.md` (depends on T005)
+- [X] T008 Add `internal/report/group_test.go` — in/out-of-range filtering, uncompleted tasks excluded, subtask parent context, local-day attribution for near-midnight completions, day ordering (depends on T007)
 
 **Checkpoint**: Foundation ready — `go test ./...` and `cd services/twig && go test ./...` pass; user stories can proceed (in parallel if desired).
 
@@ -47,12 +47,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add `tabReport` to the `tab` constants and a `reportState` struct (preset index, period, day groups, totals, loaded, err) to the `Model` in `internal/tui/model.go`
-- [ ] T010 [US1] Add report fetch command and tab key handling in `internal/tui/update.go` — on entering the tab (default preset `recent`) and on `←/→`/`h`/`l` preset cycling, fetch `ListTasks` + `CountCompletedPomodoros` and build groups via `internal/report`; `r` refreshes; reuse existing error plumbing (depends on T009)
-- [ ] T011 [P] [US1] Add Report-tab bindings/help entries (preset cycle ←/→, refresh, scroll) to `internal/tui/keymap.go` following the existing `PlanningMode`-style contextual help pattern
-- [ ] T012 [US1] Create `internal/tui/report_view.go` — themed rendering per `contracts/report-cli.md` TUI section: header with period label + totals, day-grouped body with parent context on subtasks, playful empty state, scroll handling for overflow; all styles from `internal/tui/theme.go` (depends on T009, T010)
-- [ ] T013 [US1] Wire the Report tab into the tab bar and view dispatch in `internal/tui/view.go` (depends on T012)
-- [ ] T014 [US1] Add `internal/tui/report_view_test.go` — default preset on entry, preset cycling updates period label, day-grouped ordering, empty state copy, totals line; use the existing `nowFunc`-style time injection (depends on T013)
+- [X] T009 [US1] Add `tabReport` to the `tab` constants and a `reportState` struct (preset index, period, day groups, totals, loaded, err) to the `Model` in `internal/tui/model.go`
+- [X] T010 [US1] Add report fetch command and tab key handling in `internal/tui/update.go` — on entering the tab (default preset `recent`) and on `←/→`/`h`/`l` preset cycling, fetch `ListTasks` + `CountCompletedPomodoros` and build groups via `internal/report`; `r` refreshes; reuse existing error plumbing (depends on T009)
+- [X] T011 [P] [US1] Add Report-tab bindings/help entries (preset cycle ←/→, refresh, scroll) to `internal/tui/keymap.go` following the existing `PlanningMode`-style contextual help pattern
+- [X] T012 [US1] Create `internal/tui/report_view.go` — themed rendering per `contracts/report-cli.md` TUI section: header with period label + totals, day-grouped body with parent context on subtasks, playful empty state, scroll handling for overflow; all styles from `internal/tui/theme.go` (depends on T009, T010)
+- [X] T013 [US1] Wire the Report tab into the tab bar and view dispatch in `internal/tui/view.go` (depends on T012)
+- [X] T014 [US1] Add `internal/tui/report_view_test.go` — default preset on entry, preset cycling updates period label, day-grouped ordering, empty state copy, totals line; use the existing `nowFunc`-style time injection (depends on T013)
 
 **Checkpoint**: User Story 1 fully functional — TUI answers "what did I do yesterday?" end-to-end.
 
@@ -66,9 +66,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Create `internal/cli/report.go` — argument parsing per `contracts/report-cli.md` (preset xor `--from`/`--to`, both-or-neither, playful validation errors naming accepted formats, exit 1), fetch `ListTasks` + `CountCompletedPomodoros`, render the day-grouped layout with TTY-gated styling via existing `internal/cli/render.go` conventions, playful empty state (exit 0)
-- [ ] T016 [US2] Register the `report` command in `internal/cli/cli.go` — `Run` dispatch, root usage listing, `runHelp` case, and a `printReportUsage` function consistent with existing usage text (depends on T015)
-- [ ] T017 [US2] Add `internal/cli/report_test.go` — preset and explicit-range selection, day-grouped output ordering, parent context, styled vs piped output, validation errors and exit codes, empty state (depends on T016)
+- [X] T015 [US2] Create `internal/cli/report.go` — argument parsing per `contracts/report-cli.md` (preset xor `--from`/`--to`, both-or-neither, playful validation errors naming accepted formats, exit 1), fetch `ListTasks` + `CountCompletedPomodoros`, render the day-grouped layout with TTY-gated styling via existing `internal/cli/render.go` conventions, playful empty state (exit 0)
+- [X] T016 [US2] Register the `report` command in `internal/cli/cli.go` — `Run` dispatch, root usage listing, `runHelp` case, and a `printReportUsage` function consistent with existing usage text (depends on T015)
+- [X] T017 [US2] Add `internal/cli/report_test.go` — preset and explicit-range selection, day-grouped output ordering, parent context, styled vs piped output, validation errors and exit codes, empty state (depends on T016)
 
 **Checkpoint**: User Stories 1 and 2 both work independently; `twig help report` documents the command.
 
@@ -82,10 +82,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Add accomplishment grouping to `internal/report/group.go` — `AccomplishmentGroup` per `data-model.md`: group entries by `TopLevelID`, split into Finished (top-level completed in period, newest first) and ongoing sections, entries ordered by `Depth` then `CompletedAt`
-- [ ] T019 [US3] Extend `internal/report/group_test.go` — every entry in exactly one group/section (SC-004 invariant), Finished vs ongoing classification (incl. top-level completed *outside* the period), deep-nesting depth/order (depends on T018)
-- [ ] T020 [P] [US3] Render the accomplishment layout in `internal/cli/report.go` for periods > 14 days per `contracts/report-cli.md` — Finished / "Progress on ongoing work" sections, indentation, `(done <date>)` annotations; extend `internal/cli/report_test.go` with layout-switch and quarter-output cases (depends on T018)
-- [ ] T021 [P] [US3] Render the accomplishment layout in `internal/tui/report_view.go` for periods > 14 days using shared theme styles; extend `internal/tui/report_view_test.go` with layout-switch cases for `quarter`/`year` presets (depends on T018)
+- [X] T018 [US3] Add accomplishment grouping to `internal/report/group.go` — `AccomplishmentGroup` per `data-model.md`: group entries by `TopLevelID`, split into Finished (top-level completed in period, newest first) and ongoing sections, entries ordered by `Depth` then `CompletedAt`
+- [X] T019 [US3] Extend `internal/report/group_test.go` — every entry in exactly one group/section (SC-004 invariant), Finished vs ongoing classification (incl. top-level completed *outside* the period), deep-nesting depth/order (depends on T018)
+- [X] T020 [P] [US3] Render the accomplishment layout in `internal/cli/report.go` for periods > 14 days per `contracts/report-cli.md` — Finished / "Progress on ongoing work" sections, indentation, `(done <date>)` annotations; extend `internal/cli/report_test.go` with layout-switch and quarter-output cases (depends on T018)
+- [X] T021 [P] [US3] Render the accomplishment layout in `internal/tui/report_view.go` for periods > 14 days using shared theme styles; extend `internal/tui/report_view_test.go` with layout-switch cases for `quarter`/`year` presets (depends on T018)
 
 **Checkpoint**: All user stories independently functional; the 14-day rule selects the layout automatically on both surfaces.
 
@@ -93,10 +93,10 @@
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T022 [P] Update `CLAUDE.md` — add `report` to the CLI commands list (Binaries section) and any command examples that enumerate `task`, `pom`, `plan`
-- [ ] T023 [P] Tone review (Principle IV) of every new user-facing string in `internal/cli/report.go`, `internal/cli/cli.go` usage text, and `internal/tui/report_view.go` — playful but accurate; errors actionable
-- [ ] T024 Run the full `specs/048-activity-report/quickstart.md` walkthrough against `make dev` (CLI checks, TUI checks, piped output, validation errors, uncomplete-removes-entry)
-- [ ] T025 Verify all suites green: `go test ./...` at repo root and `cd services/twig && go test ./...` (plus a `DATABASE_URL` run for the handler test); `go build -o twig ./cmd/twig`
+- [X] T022 [P] Update `CLAUDE.md` — add `report` to the CLI commands list (Binaries section) and any command examples that enumerate `task`, `pom`, `plan`
+- [X] T023 [P] Tone review (Principle IV) of every new user-facing string in `internal/cli/report.go`, `internal/cli/cli.go` usage text, and `internal/tui/report_view.go` — playful but accurate; errors actionable
+- [X] T024 Run the full `specs/048-activity-report/quickstart.md` walkthrough against `make dev` (CLI checks, TUI checks, piped output, validation errors, uncomplete-removes-entry)
+- [X] T025 Verify all suites green: `go test ./...` at repo root and `cd services/twig && go test ./...` (plus a `DATABASE_URL` run for the handler test); `go build -o twig ./cmd/twig`
 
 ---
 

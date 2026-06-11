@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
@@ -370,6 +371,152 @@ func TestPomodoro_CascadeDelete(t *testing.T) {
 	if count != 0 {
 		t.Errorf("expected 0 pomodoros after task delete, got %d", count)
 	}
+}
+
+// ---- T004: CountCompletedPomodoros ----
+
+func TestCountCompletedPomodoros(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "count pomo task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	rangeStart := time.Now().UTC()
+
+	// Complete one pomodoro in range.
+	_, err = h.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+	if err != nil {
+		t.Fatalf("StartPomodoro: %v", err)
+	}
+	_, err = h.CompletePomodoro(ctx, connect.NewRequest(&taskv1.CompletePomodoroRequest{}))
+	if err != nil {
+		t.Fatalf("CompletePomodoro: %v", err)
+	}
+
+	// CompleteActivePomodoro sets end_at = start_at + 25 minutes (the
+	// pomodoro's nominal end), so the range must extend past that moment
+	// for the completed pomodoro to fall inside it.
+	rangeEnd := rangeStart.Add(30 * time.Minute)
+
+	t.Run("counts complete pomodoros in range", func(t *testing.T) {
+		resp, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(rangeStart),
+			End:   timestamppb.New(rangeEnd),
+		}))
+		if err != nil {
+			t.Fatalf("CountCompletedPomodoros: %v", err)
+		}
+		if resp.Msg.Count != 1 {
+			t.Errorf("count = %d, want 1", resp.Msg.Count)
+		}
+	})
+
+	t.Run("returns 0 when no pomodoros in range", func(t *testing.T) {
+		futureStart := rangeEnd.Add(time.Hour)
+		futureEnd := futureStart.Add(time.Hour)
+		resp, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(futureStart),
+			End:   timestamppb.New(futureEnd),
+		}))
+		if err != nil {
+			t.Fatalf("CountCompletedPomodoros: %v", err)
+		}
+		if resp.Msg.Count != 0 {
+			t.Errorf("count = %d, want 0", resp.Msg.Count)
+		}
+	})
+
+	t.Run("ignores cancelled pomodoros", func(t *testing.T) {
+		_, err = h.StartPomodoro(ctx, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskID}))
+		if err != nil {
+			t.Fatalf("StartPomodoro: %v", err)
+		}
+		_, err = h.CancelPomodoro(ctx, connect.NewRequest(&taskv1.CancelPomodoroRequest{}))
+		if err != nil {
+			t.Fatalf("CancelPomodoro: %v", err)
+		}
+		resp, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(rangeStart),
+			End:   timestamppb.New(rangeEnd.Add(time.Hour)),
+		}))
+		if err != nil {
+			t.Fatalf("CountCompletedPomodoros: %v", err)
+		}
+		if resp.Msg.Count != 1 {
+			t.Errorf("count = %d, want 1 (cancelled should not count)", resp.Msg.Count)
+		}
+	})
+
+	t.Run("does not count another user's pomodoros", func(t *testing.T) {
+		_, userB := newTestHandler(t)
+		ctxB := ctxWithUser(userB)
+		taskRespB, err := h.CreateTask(ctxB, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "user B task"}))
+		if err != nil {
+			t.Fatalf("CreateTask userB: %v", err)
+		}
+		_, err = h.StartPomodoro(ctxB, connect.NewRequest(&taskv1.StartPomodoroRequest{TaskId: taskRespB.Msg.Task.Id}))
+		if err != nil {
+			t.Fatalf("StartPomodoro userB: %v", err)
+		}
+		_, err = h.CompletePomodoro(ctxB, connect.NewRequest(&taskv1.CompletePomodoroRequest{}))
+		if err != nil {
+			t.Fatalf("CompletePomodoro userB: %v", err)
+		}
+		resp, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(rangeStart),
+			End:   timestamppb.New(rangeEnd.Add(time.Hour)),
+		}))
+		if err != nil {
+			t.Fatalf("CountCompletedPomodoros: %v", err)
+		}
+		if resp.Msg.Count != 1 {
+			t.Errorf("count = %d, want 1 (should not count other user's pomodoros)", resp.Msg.Count)
+		}
+	})
+
+	t.Run("InvalidArgument when start missing", func(t *testing.T) {
+		_, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			End: timestamppb.New(rangeEnd),
+		}))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected CodeInvalidArgument, got %v", err)
+		}
+	})
+
+	t.Run("InvalidArgument when end missing", func(t *testing.T) {
+		_, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(rangeStart),
+		}))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected CodeInvalidArgument, got %v", err)
+		}
+	})
+
+	t.Run("InvalidArgument when end <= start", func(t *testing.T) {
+		_, err := h.CountCompletedPomodoros(ctx, connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
+			Start: timestamppb.New(rangeEnd),
+			End:   timestamppb.New(rangeStart),
+		}))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeInvalidArgument {
+			t.Errorf("expected CodeInvalidArgument, got %v", err)
+		}
+	})
 }
 
 // ---- T030: concurrency invariant ----

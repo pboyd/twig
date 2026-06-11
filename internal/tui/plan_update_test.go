@@ -141,16 +141,16 @@ func TestTabSwitch_TasksToPlanning(t *testing.T) {
 	}
 }
 
-// TestTabSwitch_PlanningToTasks checks that pressing Tab from Planning tab
-// switches back to Tasks tab.
-func TestTabSwitch_PlanningToTasks(t *testing.T) {
+// TestTabSwitch_PlanningToReport checks that pressing Tab from Planning tab
+// switches to the Report tab (Tasks → Planning → Report cycle).
+func TestTabSwitch_PlanningToReport(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc) // starts in tabPlanning
 
 	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyTab})
 
-	if m2.activeTab != tabTasks {
-		t.Errorf("after Tab on Planning: expected tabTasks, got %d", m2.activeTab)
+	if m2.activeTab != tabReport {
+		t.Errorf("after Tab on Planning: expected tabReport, got %d", m2.activeTab)
 	}
 }
 

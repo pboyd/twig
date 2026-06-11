@@ -71,6 +71,9 @@ const (
 	// TaskServiceGetActivePomodoroProcedure is the fully-qualified name of the TaskService's
 	// GetActivePomodoro RPC.
 	TaskServiceGetActivePomodoroProcedure = "/task.v1.TaskService/GetActivePomodoro"
+	// TaskServiceCountCompletedPomodorosProcedure is the fully-qualified name of the TaskService's
+	// CountCompletedPomodoros RPC.
+	TaskServiceCountCompletedPomodorosProcedure = "/task.v1.TaskService/CountCompletedPomodoros"
 )
 
 // TaskServiceClient is a client for the task.v1.TaskService service.
@@ -118,6 +121,11 @@ type TaskServiceClient interface {
 	CompletePomodoro(context.Context, *connect.Request[v1.CompletePomodoroRequest]) (*connect.Response[v1.CompletePomodoroResponse], error)
 	// GetActivePomodoro returns the calling user's active pomodoro, if any.
 	GetActivePomodoro(context.Context, *connect.Request[v1.GetActivePomodoroRequest]) (*connect.Response[v1.GetActivePomodoroResponse], error)
+	// CountCompletedPomodoros returns how many of the calling user's pomodoros
+	// were completed within the half-open UTC instant range [start, end).
+	// A pomodoro counts when complete = true and start <= end_at < end,
+	// regardless of whether its task is complete.
+	CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error)
 }
 
 // NewTaskServiceClient constructs a client for the task.v1.TaskService service. By default, it uses
@@ -209,24 +217,31 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(taskServiceMethods.ByName("GetActivePomodoro")),
 			connect.WithClientOptions(opts...),
 		),
+		countCompletedPomodoros: connect.NewClient[v1.CountCompletedPomodorosRequest, v1.CountCompletedPomodorosResponse](
+			httpClient,
+			baseURL+TaskServiceCountCompletedPomodorosProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("CountCompletedPomodoros")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // taskServiceClient implements TaskServiceClient.
 type taskServiceClient struct {
-	createTask        *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
-	reorderTask       *connect.Client[v1.ReorderTaskRequest, v1.ReorderTaskResponse]
-	getTask           *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	listTasks         *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
-	updateTask        *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
-	deleteTask        *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
-	completeTask      *connect.Client[v1.CompleteTaskRequest, v1.CompleteTaskResponse]
-	uncompleteTask    *connect.Client[v1.UncompleteTaskRequest, v1.UncompleteTaskResponse]
-	setEstimate       *connect.Client[v1.SetEstimateRequest, v1.SetEstimateResponse]
-	startPomodoro     *connect.Client[v1.StartPomodoroRequest, v1.StartPomodoroResponse]
-	cancelPomodoro    *connect.Client[v1.CancelPomodoroRequest, v1.CancelPomodoroResponse]
-	completePomodoro  *connect.Client[v1.CompletePomodoroRequest, v1.CompletePomodoroResponse]
-	getActivePomodoro *connect.Client[v1.GetActivePomodoroRequest, v1.GetActivePomodoroResponse]
+	createTask              *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
+	reorderTask             *connect.Client[v1.ReorderTaskRequest, v1.ReorderTaskResponse]
+	getTask                 *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
+	listTasks               *connect.Client[v1.ListTasksRequest, v1.ListTasksResponse]
+	updateTask              *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
+	deleteTask              *connect.Client[v1.DeleteTaskRequest, v1.DeleteTaskResponse]
+	completeTask            *connect.Client[v1.CompleteTaskRequest, v1.CompleteTaskResponse]
+	uncompleteTask          *connect.Client[v1.UncompleteTaskRequest, v1.UncompleteTaskResponse]
+	setEstimate             *connect.Client[v1.SetEstimateRequest, v1.SetEstimateResponse]
+	startPomodoro           *connect.Client[v1.StartPomodoroRequest, v1.StartPomodoroResponse]
+	cancelPomodoro          *connect.Client[v1.CancelPomodoroRequest, v1.CancelPomodoroResponse]
+	completePomodoro        *connect.Client[v1.CompletePomodoroRequest, v1.CompletePomodoroResponse]
+	getActivePomodoro       *connect.Client[v1.GetActivePomodoroRequest, v1.GetActivePomodoroResponse]
+	countCompletedPomodoros *connect.Client[v1.CountCompletedPomodorosRequest, v1.CountCompletedPomodorosResponse]
 }
 
 // CreateTask calls task.v1.TaskService.CreateTask.
@@ -294,6 +309,11 @@ func (c *taskServiceClient) GetActivePomodoro(ctx context.Context, req *connect.
 	return c.getActivePomodoro.CallUnary(ctx, req)
 }
 
+// CountCompletedPomodoros calls task.v1.TaskService.CountCompletedPomodoros.
+func (c *taskServiceClient) CountCompletedPomodoros(ctx context.Context, req *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error) {
+	return c.countCompletedPomodoros.CallUnary(ctx, req)
+}
+
 // TaskServiceHandler is an implementation of the task.v1.TaskService service.
 type TaskServiceHandler interface {
 	// CreateTask stores a new task and returns it with its assigned id.
@@ -339,6 +359,11 @@ type TaskServiceHandler interface {
 	CompletePomodoro(context.Context, *connect.Request[v1.CompletePomodoroRequest]) (*connect.Response[v1.CompletePomodoroResponse], error)
 	// GetActivePomodoro returns the calling user's active pomodoro, if any.
 	GetActivePomodoro(context.Context, *connect.Request[v1.GetActivePomodoroRequest]) (*connect.Response[v1.GetActivePomodoroResponse], error)
+	// CountCompletedPomodoros returns how many of the calling user's pomodoros
+	// were completed within the half-open UTC instant range [start, end).
+	// A pomodoro counts when complete = true and start <= end_at < end,
+	// regardless of whether its task is complete.
+	CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error)
 }
 
 // NewTaskServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -426,6 +451,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(taskServiceMethods.ByName("GetActivePomodoro")),
 		connect.WithHandlerOptions(opts...),
 	)
+	taskServiceCountCompletedPomodorosHandler := connect.NewUnaryHandler(
+		TaskServiceCountCompletedPomodorosProcedure,
+		svc.CountCompletedPomodoros,
+		connect.WithSchema(taskServiceMethods.ByName("CountCompletedPomodoros")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/task.v1.TaskService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TaskServiceCreateTaskProcedure:
@@ -454,6 +485,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 			taskServiceCompletePomodoroHandler.ServeHTTP(w, r)
 		case TaskServiceGetActivePomodoroProcedure:
 			taskServiceGetActivePomodoroHandler.ServeHTTP(w, r)
+		case TaskServiceCountCompletedPomodorosProcedure:
+			taskServiceCountCompletedPomodorosHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -513,4 +546,8 @@ func (UnimplementedTaskServiceHandler) CompletePomodoro(context.Context, *connec
 
 func (UnimplementedTaskServiceHandler) GetActivePomodoro(context.Context, *connect.Request[v1.GetActivePomodoroRequest]) (*connect.Response[v1.GetActivePomodoroResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.GetActivePomodoro is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.CountCompletedPomodoros is not implemented"))
 }

@@ -67,6 +67,13 @@ service TaskService {
 
   // GetActivePomodoro returns the calling user's active pomodoro, if any.
   rpc GetActivePomodoro(GetActivePomodoroRequest) returns (GetActivePomodoroResponse);
+
+  // CountCompletedPomodoros returns how many of the calling user's pomodoros
+  // were completed within the half-open UTC instant range [start, end).
+  // A pomodoro counts when complete = true and start <= end_at < end,
+  // regardless of whether its task is complete.
+  rpc CountCompletedPomodoros(CountCompletedPomodorosRequest)
+      returns (CountCompletedPomodorosResponse);
 }
 
 // Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -209,6 +216,18 @@ message CompletePomodoroResponse {
 message GetActivePomodoroRequest {}
 message GetActivePomodoroResponse {
   Pomodoro pomodoro = 1;
+}
+
+message CountCompletedPomodorosRequest {
+  // Inclusive lower bound (UTC). Required.
+  google.protobuf.Timestamp start = 1;
+  // Exclusive upper bound (UTC). Required; must be after start.
+  google.protobuf.Timestamp end = 2;
+}
+
+message CountCompletedPomodorosResponse {
+  // Number of pomodoros completed in [start, end). 0 when none.
+  int64 count = 1;
 }
 
 message ReorderTaskRequest {

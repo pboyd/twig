@@ -86,6 +86,8 @@ func Run(profile string, args []string) int {
 		return runPomTop(profile, args[1:])
 	case "plan":
 		return runPlan(profile, args[1:])
+	case "report":
+		return runReport(profile, args[1:])
 	case "help":
 		return runHelp(args[1:])
 	default:
@@ -110,6 +112,9 @@ func runHelp(args []string) int {
 	case "plan":
 		printPlanUsage(os.Stdout)
 		return 0
+	case "report":
+		printReportUsage(os.Stdout)
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\nRun 'twig help' for usage.\n", args[0])
 		return 1
@@ -125,9 +130,10 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --profile <name>   Use a named account profile (or set TWIG_PROFILE)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  task   Manage tasks (add, remove, modify, list)")
-	fmt.Fprintln(w, "  pom    Pomodoro timer (estimate, start, resume, cancel, status)")
-	fmt.Fprintln(w, "  plan   Daily planning (schedule tasks and events)")
+	fmt.Fprintln(w, "  task     Manage tasks (add, remove, modify, list)")
+	fmt.Fprintln(w, "  pom      Pomodoro timer (estimate, start, resume, cancel, status)")
+	fmt.Fprintln(w, "  plan     Daily planning (schedule tasks and events)")
+	fmt.Fprintln(w, "  report   Activity report (what did I get done?)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'twig help <command>' for command-specific help.")
 	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml (see specs/033-alternate-profiles/contracts/config-schema.md)")
