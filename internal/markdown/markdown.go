@@ -48,14 +48,42 @@ func NewRenderer(theme Theme) *Renderer {
 	}
 }
 
-// Render converts markdown text to a terminal string. Currently a stub that
-// returns the input unchanged.
+// Render converts markdown text to a terminal string. Consults the internal
+// cache before rendering; stores results on cache miss.
 func (r *Renderer) Render(text string, opts Options) string {
+	key := cacheKey{text: text, width: opts.Width, styled: opts.Styled, inline: false}
+	if v, ok := r.cache[key]; ok {
+		return v
+	}
+	if len(r.cache) >= 256 {
+		r.cache = make(map[cacheKey]string)
+	}
+	result := r.doRender(text, opts)
+	r.cache[key] = result
+	return result
+}
+
+// RenderInline converts inline markdown to a terminal string. Consults the
+// internal cache before rendering; stores results on cache miss.
+func (r *Renderer) RenderInline(text string, opts Options) string {
+	key := cacheKey{text: text, width: opts.Width, styled: opts.Styled, inline: true}
+	if v, ok := r.cache[key]; ok {
+		return v
+	}
+	if len(r.cache) >= 256 {
+		r.cache = make(map[cacheKey]string)
+	}
+	result := r.doRenderInline(text, opts)
+	r.cache[key] = result
+	return result
+}
+
+// doRender is a stub for full markdown rendering (AST walking added in T014).
+func (r *Renderer) doRender(text string, opts Options) string {
 	return text
 }
 
-// RenderInline converts inline markdown to a terminal string. Currently a stub
-// that returns the input unchanged.
-func (r *Renderer) RenderInline(text string, opts Options) string {
+// doRenderInline is a stub for inline markdown rendering (AST walking added in T019).
+func (r *Renderer) doRenderInline(text string, opts Options) string {
 	return text
 }
