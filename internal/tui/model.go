@@ -13,6 +13,7 @@ import (
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/config"
+	"github.com/pboyd/twig/internal/markdown"
 	"github.com/pboyd/twig/internal/report"
 )
 
@@ -165,6 +166,8 @@ type Model struct {
 	reportData reportState
 	// goal holds all state for the Goals tab.
 	goal goalState
+	// md renders Markdown to terminal-styled text.
+	md *markdown.Renderer
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {
@@ -187,5 +190,6 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		plan: planState{
 			day: time.Now().Format("2006-01-02"),
 		},
+		md: markdown.NewRenderer(buildMarkdownTheme()),
 	}
 }
