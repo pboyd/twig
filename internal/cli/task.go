@@ -385,6 +385,10 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		return 1
 	}
 
+	// Report the name/due update before attempting the goal association so the
+	// user knows those changes were applied even if the goal change fails.
+	fmt.Printf("updated task %d\n", id)
+
 	// Handle goal association after UpdateTask.
 	if goalStr != "" {
 		if !setTaskGoal(client, addr, id, goalStr) {
@@ -392,6 +396,5 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		}
 	}
 
-	fmt.Printf("updated task %d\n", id)
 	return 0
 }

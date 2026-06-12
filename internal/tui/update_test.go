@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -769,6 +771,7 @@ type fakeTaskClient struct {
 	completeErr       error
 	uncompleteErr     error
 	pomErr            error
+	setTaskGoalErr    error // if non-nil, SetTaskGoal returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
 	// createTaskID is the ID returned for the newly created task.
@@ -820,6 +823,13 @@ func (f *fakeTaskClient) StartPomodoro(_ context.Context, req *connect.Request[t
 			StartAt: timestamppb.Now(),
 		},
 	}), nil
+}
+
+func (f *fakeTaskClient) SetTaskGoal(_ context.Context, req *connect.Request[taskv1.SetTaskGoalRequest]) (*connect.Response[taskv1.SetTaskGoalResponse], error) {
+	if f.setTaskGoalErr != nil {
+		return nil, f.setTaskGoalErr
+	}
+	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: &taskv1.Task{Id: req.Msg.TaskId}}), nil
 }
 
 // ── T002: planning-tab complete action (US1) ──────────────────────────────────
@@ -1785,5 +1795,68 @@ func TestPaste_ListMode_IsNoOp(t *testing.T) {
 	after := m2.(Model).cursor
 	if after != before {
 		t.Errorf("cursor changed in list mode on paste: before=%d after=%d", before, after)
+	}
+}
+
+// ── Fix #1: edit-form goal failure routes to friendly notice ─────────────────
+
+// TestUpdateTaskCmd_GoalChangedFailedPreconditionShowsFriendlyNotice verifies
+// that when SetTaskGoal returns FailedPrecondition, the edit-form save path
+// returns a taskGoalMutationMsg (not a raw refreshedMsg error), so that the
+// friendly "subtree already belongs to a goal" notice is shown.
+func TestUpdateTaskCmd_GoalChangedFailedPreconditionShowsFriendlyNotice(t *testing.T) {
+	goalErr := connect.NewError(connect.CodeFailedPrecondition, errors.New("nesting conflict"))
+	fc := &fakeTaskClient{
+		setTaskGoalErr: goalErr,
+		listTasksResp:  []*taskv1.Task{{Id: 5, Name: "task"}},
+	}
+
+	taskID := int64(5)
+	goalID := int64(9)
+	msg := editSavedMsg{
+		taskID:      &taskID,
+		name:        "new name",
+		goalChanged: true,
+		newGoalID:   &goalID,
+	}
+
+	cmd := ExportUpdateTaskCmd(fc, msg)
+	result := cmd()
+
+	// Must be taskGoalMutationMsg, not refreshedMsg carrying the raw error.
+	if _, ok := result.(taskGoalMutationMsg); !ok {
+		t.Errorf("expected taskGoalMutationMsg, got %T — edit-form goal failure must route through the friendly notice path", result)
+	}
+
+	// Dispatch to model: notice must appear; m.err must stay nil.
+	m := buildTestModel()
+	next, _ := m.Update(result)
+	nm := next.(Model)
+	if nm.notice == "" {
+		t.Error("expected friendly notice after FailedPrecondition on SetTaskGoal; got empty notice")
+	}
+	if nm.err != nil {
+		t.Errorf("m.err should be nil when notice is shown; got %v", nm.err)
+	}
+}
+
+// ── Fix #3: effectiveGoalName falls back to ID when goal not cached ──────────
+
+// TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached verifies that when a task
+// is linked to a goal that is not in m.goal.goals (e.g. completed/archived),
+// effectiveGoalName returns something containing the goal ID rather than "".
+func TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached(t *testing.T) {
+	goalID := int64(42)
+	tasks := []*taskv1.Task{{Id: 1, Name: "task", GoalId: &goalID}}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewModel(nil, tree)
+	// m.goal.goals is empty — goal 42 is not in the cache (completed/archived)
+
+	name := m.effectiveGoalName(1)
+	if name == "" {
+		t.Error("effectiveGoalName: got empty string when goal not cached; want non-empty fallback")
+	}
+	if !strings.Contains(name, "42") {
+		t.Errorf("effectiveGoalName fallback should contain goal ID 42, got %q", name)
 	}
 }

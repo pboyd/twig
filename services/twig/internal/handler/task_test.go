@@ -78,6 +78,15 @@ func ctxWithUser(userID int64) context.Context {
 	return auth.WithUserID(context.Background(), userID)
 }
 
+// newGoalTestHandlerWithPool creates a Goal handler that shares the given task
+// handler's DB connection. Use this when a test needs both Task and Goal
+// operations on the same user — the task handler was already set up by
+// newTestHandler, so no new user needs to be created.
+func newGoalTestHandlerWithPool(t *testing.T, taskH *handler.Task) (*handler.Goal, int64) {
+	t.Helper()
+	return &handler.Goal{Queries: taskH.Queries, Pool: taskH.Pool}, 0
+}
+
 // ---- Unit tests: dbTaskToProto ----
 
 func TestDbTaskToProto_CompletedAt(t *testing.T) {
@@ -1783,5 +1792,92 @@ func TestSetTaskGoal_NotFound(t *testing.T) {
 			t.Errorf("expected CodeNotFound, got %v", err)
 		}
 	})
+}
+
+// ── Fix #4: SetTaskGoal rejects completed/archived goals ─────────────────────
+
+// TestSetTaskGoal_RejectsCompletedGoal verifies that linking a task to a
+// completed goal returns InvalidArgument — completed goals are closed and should
+// not accept new task associations.
+func TestSetTaskGoal_RejectsCompletedGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	gh, _ := newGoalTestHandlerWithPool(t, h)
+	ctx := ctxWithUser(userID)
+
+	// Create a goal and transition it to completed.
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Done goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+	_, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_COMPLETED,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState completed: %v", err)
+	}
+
+	// Create a task.
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "My task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Linking to completed goal must be rejected.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: taskID,
+		GoalId: &goalID,
+	}))
+	if err == nil {
+		t.Fatal("expected error linking task to completed goal, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument for completed goal, got %v", err)
+	}
+}
+
+// TestSetTaskGoal_RejectsArchivedGoal verifies that linking a task to an
+// archived goal returns InvalidArgument.
+func TestSetTaskGoal_RejectsArchivedGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	gh, _ := newGoalTestHandlerWithPool(t, h)
+	ctx := ctxWithUser(userID)
+
+	// Create a goal and archive it.
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Archived goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+	_, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_ARCHIVED,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState archived: %v", err)
+	}
+
+	// Create a task.
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "My task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Linking to archived goal must be rejected.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: taskID,
+		GoalId: &goalID,
+	}))
+	if err == nil {
+		t.Fatal("expected error linking task to archived goal, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument for archived goal, got %v", err)
+	}
 }
 

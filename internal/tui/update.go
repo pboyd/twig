@@ -197,7 +197,9 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			goalReq := &taskv1.SetTaskGoalRequest{TaskId: id, GoalId: msg.newGoalID}
 			_, err = client.SetTaskGoal(context.Background(), connect.NewRequest(goalReq))
 			if err != nil {
-				return refreshedMsg{err: err}
+				// Route through taskGoalMutationMsg so the friendly
+				// FailedPrecondition notice is shown (not a raw error).
+				return taskGoalMutationMsg{err: err}
 			}
 		}
 

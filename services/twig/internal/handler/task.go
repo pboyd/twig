@@ -591,12 +591,19 @@ func (t *Task) SetTaskGoal(
 
 	// Setting: verify goal exists for this user.
 	goalID := *req.Msg.GoalId
-	_, err = t.Queries.GetGoal(ctx, db.GetGoalParams{ID: goalID, UserID: userID})
+	fetchedGoal, err := t.Queries.GetGoal(ctx, db.GetGoalParams{ID: goalID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Reject linking to closed (completed/archived) goals — they no longer
+	// accept new task associations.
+	if fetchedGoal.State == "completed" || fetchedGoal.State == "archived" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("cannot link a task to a completed or archived goal"))
 	}
 
 	// Check ancestor constraint.

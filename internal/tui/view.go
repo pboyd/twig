@@ -472,8 +472,7 @@ func (m Model) effectiveGoalName(taskID int64) string {
 	}
 	// Goal present on task but not in our cached list (e.g. completed/archived).
 	// Return the raw ID as a fallback so something appears.
-	_ = gid
-	return ""
+	return fmt.Sprintf("goal %d", gid)
 }
 
 func (m Model) renderStatus() string {

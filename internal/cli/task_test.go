@@ -22,9 +22,10 @@ import (
 // fakeTaskService is an in-memory implementation of TaskServiceHandler for testing.
 type fakeTaskService struct {
 	taskv1connect.UnimplementedTaskServiceHandler
-	mu     sync.Mutex
-	tasks  map[int64]*taskv1.Task
-	nextID int64
+	mu             sync.Mutex
+	tasks          map[int64]*taskv1.Task
+	nextID         int64
+	setTaskGoalErr error // if non-nil, overrides SetTaskGoal name-based logic
 }
 
 func newFakeTaskService() *fakeTaskService {
@@ -194,6 +195,11 @@ func (s *fakeTaskService) isDescendant(ancestorID, candidateID int64) bool {
 func (s *fakeTaskService) SetTaskGoal(_ context.Context, req *connect.Request[taskv1.SetTaskGoalRequest]) (*connect.Response[taskv1.SetTaskGoalResponse], error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Field-level override takes precedence.
+	if s.setTaskGoalErr != nil {
+		return nil, s.setTaskGoalErr
+	}
 
 	task, ok := s.tasks[req.Msg.TaskId]
 	if !ok {
@@ -1011,5 +1017,38 @@ func TestModWithGoalNestingConflictMessage(t *testing.T) {
 	want := "twig: that subtree already belongs to a goal — clear that link first."
 	if !strings.Contains(stderr, want) {
 		t.Errorf("expected nesting-conflict message %q; got: %s", want, stderr)
+	}
+}
+
+// ── Fix #2: task mod with --goal that fails still reports name update ─────────
+
+// TestModWithGoalConflict_NameUpdateIsAlwaysReported verifies that when the
+// name/due part of a task mod succeeds but the goal association fails with a
+// nesting conflict, the output still tells the user that the task was updated
+// (name/due already committed) so they know the partial write happened.
+func TestModWithGoalConflict_NameUpdateIsAlwaysReported(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"original name"}) // id=1
+
+	// Override SetTaskGoal to always return FailedPrecondition regardless of name.
+	h.svc.setTaskGoalErr = connect.NewError(connect.CodeFailedPrecondition, errors.New("ancestor already has goal"))
+
+	stdout, stderr, code := runCmd(runMod, h, []string{"1", "new name", "--goal", "5"})
+
+	// Goal change must fail.
+	if code == 0 {
+		t.Fatal("expected non-zero exit for goal nesting conflict")
+	}
+
+	// The nesting-conflict message must still appear.
+	want := "twig: that subtree already belongs to a goal — clear that link first."
+	if !strings.Contains(stderr, want) {
+		t.Errorf("expected nesting-conflict message in stderr; got: %s", stderr)
+	}
+
+	// The name change WAS applied — stdout must report the task was updated so the
+	// user knows the name change took effect before the goal change failed.
+	if !strings.Contains(stdout, "updated task") {
+		t.Errorf("expected 'updated task' in stdout even when goal change fails (partial write); stdout=%q", stdout)
 	}
 }
