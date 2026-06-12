@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // renderDetails formats the details pane for the given task, wrapping text to
@@ -14,9 +15,16 @@ import (
 // and labels are dim and column-aligned. scheduledDays is the task's scheduled
 // days slice (ascending YYYY-MM-DD, today-or-future); nil or empty omits the line.
 // effectiveGoalName, when non-empty, adds a "Goal:" line (from own or inherited goal).
-func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
+func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
 	if task == nil {
 		return ""
+	}
+
+	renderDesc := func() string {
+		if md != nil {
+			return md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: styled})
+		}
+		return wrapDescription(task.GetDescription(), width)
 	}
 
 	if !styled {
@@ -42,8 +50,7 @@ func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []st
 
 		if task.GetDescription() != "" {
 			fmt.Fprintln(&sb)
-			desc := wrapDescription(task.GetDescription(), width)
-			fmt.Fprintln(&sb, desc)
+			fmt.Fprintln(&sb, renderDesc())
 		}
 
 		if cat := cli.FormatCompletedAt(task.CompletedAt); cat != "" {
@@ -89,8 +96,7 @@ func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []st
 
 	if task.GetDescription() != "" {
 		fmt.Fprintln(&sb)
-		desc := wrapDescription(task.GetDescription(), width)
-		fmt.Fprintln(&sb, desc)
+		fmt.Fprintln(&sb, renderDesc())
 	}
 
 	if cat := cli.FormatCompletedAt(task.CompletedAt); cat != "" {

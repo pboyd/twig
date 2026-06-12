@@ -13,6 +13,7 @@ import (
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/config"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // TestMain initialises the theme palette before any test runs.
@@ -138,8 +139,8 @@ func ExportRenderList(m Model, width int) string {
 }
 
 // ExportRenderDetails exposes renderDetails for unit tests.
-func ExportRenderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
-	return renderDetails(task, width, styled, scheduledDays, effectiveGoalName)
+func ExportRenderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
+	return renderDetails(task, md, width, styled, scheduledDays, effectiveGoalName)
 }
 
 // ExportSplitPlanEntries exposes splitPlanEntries for tests.
