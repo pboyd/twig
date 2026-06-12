@@ -9,6 +9,7 @@ import (
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/goal"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // goalGroup holds a state-grouped set of goals for display.
@@ -287,7 +288,7 @@ func (m Model) renderGoalDetail(width int) string {
 	// Description.
 	if desc := g.GetDescription(); desc != "" {
 		sb.WriteByte('\n')
-		sb.WriteString(wrapDescription(desc, width))
+		sb.WriteString(m.md.Render(desc, markdown.Options{Width: width, Styled: m.styled}))
 		sb.WriteByte('\n')
 	}
 

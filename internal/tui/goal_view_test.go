@@ -259,10 +259,10 @@ func TestGoal_NoTasksDetailCopy(t *testing.T) {
 	}
 }
 
-// TestGoalDetail_DescriptionPreservesNewlines verifies that embedded newlines in
-// a goal's description are preserved in the detail pane. The old inline
-// strings.Fields loop collapsed all whitespace; wrapDescription respects them.
-func TestGoalDetail_DescriptionPreservesNewlines(t *testing.T) {
+// TestGoalDetail_DescriptionRendered verifies that a goal's description appears
+// in the detail pane. The markdown renderer is used, so a single newline within
+// a paragraph is treated as a soft line break (joined with a space) per CommonMark.
+func TestGoalDetail_DescriptionRendered(t *testing.T) {
 	desc := "Line one\nLine two"
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Description: desc},
@@ -270,8 +270,8 @@ func TestGoalDetail_DescriptionPreservesNewlines(t *testing.T) {
 	m := ExportNewGoalModel(nil, goals)
 
 	out := m.renderGoalDetail(80)
-	if !strings.Contains(out, "Line one\nLine two") {
-		t.Errorf("renderGoalDetail: embedded newline in description should be preserved; got:\n%q", out)
+	if !strings.Contains(out, "Line one") || !strings.Contains(out, "Line two") {
+		t.Errorf("renderGoalDetail: description content missing from output; got:\n%q", out)
 	}
 }
 
