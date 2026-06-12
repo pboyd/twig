@@ -284,7 +284,7 @@ func (m Model) renderGoalDetail(width int) string {
 		// Word-wrap description to width.
 		words := strings.Fields(desc)
 		lineW := 0
-		for i, w := range words {
+		for _, w := range words {
 			if lineW+len(w)+1 > width && lineW > 0 {
 				sb.WriteByte('\n')
 				lineW = 0
@@ -295,7 +295,6 @@ func (m Model) renderGoalDetail(width int) string {
 			}
 			sb.WriteString(w)
 			lineW += len(w)
-			_ = i
 		}
 		sb.WriteByte('\n')
 	}

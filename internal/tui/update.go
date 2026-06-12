@@ -603,6 +603,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case editCancelledMsg:
+		if m.activeTab == tabGoals {
+			m.goal.mode = goalList
+		}
 		m.mode = modeList
 		m.cursor = msg.originalCursor
 		m.err = nil
@@ -673,7 +676,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.goal.goals = msg.goals
 		}
 		m.goal.loaded = true
-		m.goal.cursor = clampCursor(m.goal.cursor, len(m.goal.goals))
+		m.goal.cursor = clampCursor(m.goal.cursor, len(visibleGoals(m.goal.goals, m.goal.showAll)))
 		return m, nil
 
 	case goalMutationMsg:
@@ -871,8 +874,9 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.goal.mode == goalConfirmDelete {
 		switch msg.String() {
 		case "y":
-			if len(m.goal.goals) > 0 && m.goal.cursor < len(m.goal.goals) {
-				id := m.goal.goals[m.goal.cursor].Id
+			visible := visibleGoals(m.goal.goals, m.goal.showAll)
+			if len(visible) > 0 && m.goal.cursor < len(visible) {
+				id := visible[m.goal.cursor].Id
 				m.goal.mode = goalList
 				return m, deleteGoalCmd(m.goalClient, id)
 			}
