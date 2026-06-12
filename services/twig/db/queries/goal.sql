@@ -8,7 +8,17 @@ RETURNING *;
 SELECT * FROM goals WHERE id = $1 AND user_id = $2;
 
 -- name: ListGoals :many
-SELECT * FROM goals WHERE user_id = $1 ORDER BY state, position, id;
+SELECT * FROM goals
+WHERE user_id = $1
+ORDER BY
+  CASE state
+    WHEN 'committed'  THEN 1
+    WHEN 'incubating' THEN 2
+    WHEN 'completed'  THEN 3
+    WHEN 'archived'   THEN 4
+    ELSE 5
+  END,
+  position, id;
 
 -- name: UpdateGoal :one
 UPDATE goals
@@ -20,7 +30,7 @@ RETURNING *;
 UPDATE goals AS g
 SET state = $3,
     position = COALESCE((SELECT MAX(g2.position) + 1 FROM goals g2 WHERE g2.user_id = $2 AND g2.state = $3), 0)
-WHERE g.id = $1 AND g.user_id = $2
+WHERE g.id = $1 AND g.user_id = $2 AND g.state <> $3
 RETURNING *;
 
 -- name: ListGoalStateGroup :many

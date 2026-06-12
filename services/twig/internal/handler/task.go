@@ -270,6 +270,44 @@ func (t *Task) UpdateTask(
 			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				fmt.Errorf("Task %d is already crossed off — nothing moves under a finished job.", newParentID))
 		}
+
+		// Check no-nested-goal-associations invariant.
+		// If the new parent or any of its ancestors has a goal association,
+		// the task being moved (or its descendants) cannot also have a goal.
+		newParentTask, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: newParentID, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		newParentOrAncestorHasGoal := newParentTask.GoalID.Valid
+		if !newParentOrAncestorHasGoal {
+			ancestorHasGoal, err := t.Queries.AncestorHasGoal(ctx, db.AncestorHasGoalParams{ID: newParentID, UserID: userID})
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			newParentOrAncestorHasGoal = ancestorHasGoal
+		}
+		if newParentOrAncestorHasGoal {
+			movingTask, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			taskOrDescHasGoal := movingTask.GoalID.Valid
+			if !taskOrDescHasGoal {
+				descHasGoal, err := t.Queries.DescendantHasGoal(ctx, db.DescendantHasGoalParams{
+					ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
+					UserID:   userID,
+				})
+				if err != nil {
+					return nil, connect.NewError(connect.CodeInternal, err)
+				}
+				taskOrDescHasGoal = descHasGoal
+			}
+			if taskOrDescHasGoal {
+				return nil, connect.NewError(connect.CodeFailedPrecondition,
+					errors.New("moving this task would nest goal associations — clear the goal link first"))
+			}
+		}
+
 		params.ParentID = pgtype.Int8{Int64: newParentID, Valid: true}
 	}
 

@@ -126,7 +126,17 @@ func (q *Queries) ListGoalStateGroup(ctx context.Context, arg ListGoalStateGroup
 }
 
 const listGoals = `-- name: ListGoals :many
-SELECT id, user_id, name, description, due, state, position FROM goals WHERE user_id = $1 ORDER BY state, position, id
+SELECT id, user_id, name, description, due, state, position FROM goals
+WHERE user_id = $1
+ORDER BY
+  CASE state
+    WHEN 'committed'  THEN 1
+    WHEN 'incubating' THEN 2
+    WHEN 'completed'  THEN 3
+    WHEN 'archived'   THEN 4
+    ELSE 5
+  END,
+  position, id
 `
 
 func (q *Queries) ListGoals(ctx context.Context, userID int64) ([]Goal, error) {
@@ -161,7 +171,7 @@ const setGoalState = `-- name: SetGoalState :one
 UPDATE goals AS g
 SET state = $3,
     position = COALESCE((SELECT MAX(g2.position) + 1 FROM goals g2 WHERE g2.user_id = $2 AND g2.state = $3), 0)
-WHERE g.id = $1 AND g.user_id = $2
+WHERE g.id = $1 AND g.user_id = $2 AND g.state <> $3
 RETURNING id, user_id, name, description, due, state, position
 `
 

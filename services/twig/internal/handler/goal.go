@@ -172,27 +172,21 @@ func (g *Goal) SetGoalState(
 		return nil, err
 	}
 
-	// Fetch current goal to check for same-state no-op.
-	current, err := g.Queries.GetGoal(ctx, db.GetGoalParams{ID: req.Msg.Id, UserID: userID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
-	}
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	// Same-state: no-op, return unchanged goal.
-	if current.State == stateStr {
-		return connect.NewResponse(&goalv1.SetGoalStateResponse{Goal: dbGoalToProto(current)}), nil
-	}
-
 	row, err := g.Queries.SetGoalState(ctx, db.SetGoalStateParams{
 		ID:     req.Msg.Id,
 		UserID: userID,
 		State:  stateStr,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
+		// Either the goal doesn't exist, or it was already in the target state (no-op).
+		current, err := g.Queries.GetGoal(ctx, db.GetGoalParams{ID: req.Msg.Id, UserID: userID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
+		}
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		return connect.NewResponse(&goalv1.SetGoalStateResponse{Goal: dbGoalToProto(current)}), nil
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
