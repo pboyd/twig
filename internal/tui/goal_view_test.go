@@ -257,6 +257,32 @@ func TestGoal_NoTasksDetailCopy(t *testing.T) {
 	}
 }
 
+// TestGoal_AddTaskFormVisible verifies that pressing 'a' on the Goals tab
+// shows the task-creation form in the right pane rather than hiding it behind
+// an invisible edit form (regression for goalNewTask missing from viewGoals gate).
+func TestGoal_AddTaskFormVisible(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Learn woodworking", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.width = 80
+	m.height = 24
+
+	// Press 'a' to open the new-task form.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m2 := next.(Model)
+
+	if m2.goal.mode != goalNewTask {
+		t.Fatalf("after 'a': want goalNewTask (%d), got %d", int(goalNewTask), int(m2.goal.mode))
+	}
+
+	// The view must render the form (Save button) so the user sees it.
+	out := m2.viewGoals()
+	if !strings.Contains(out, "[ Save ]") {
+		t.Errorf("viewGoals in goalNewTask mode: expected '[ Save ]' in output (form must be visible);\ngot:\n%q", out)
+	}
+}
+
 // TestGoal_DeleteConfirmCopyMentionsTasksStickAround verifies that the delete
 // confirmation notice contains the expected copy about tasks.
 func TestGoal_DeleteConfirmCopyMentionsTasksStickAround(t *testing.T) {

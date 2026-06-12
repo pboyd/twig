@@ -92,7 +92,7 @@ func (m Model) viewGoals() string {
 	listWidth := m.width / 2
 	detailWidth := m.width - listWidth
 
-	if m.goal.mode == goalEdit || m.goal.mode == goalNew {
+	if m.goal.mode == goalEdit || m.goal.mode == goalNew || m.goal.mode == goalNewTask {
 		// Show form in right pane.
 		if m.styled {
 			innerH := m.height - 2 - m.statusHeight() - tabBarHeight
