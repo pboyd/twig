@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -97,11 +98,14 @@ func ExportActiveTab(m Model) int {
 	return int(m.activeTab)
 }
 
-// ExportTabPlanning is the tabPlanning constant for tests.
-const ExportTabPlanning = int(tabPlanning)
+// ExportTabGoals is the tabGoals constant for tests.
+const ExportTabGoals = int(tabGoals)
 
 // ExportTabTasks is the tabTasks constant for tests.
 const ExportTabTasks = int(tabTasks)
+
+// ExportTabPlanning is the tabPlanning constant for tests.
+const ExportTabPlanning = int(tabPlanning)
 
 // ExportVisibleRow exposes the visibleRow type for inspection in tests.
 type ExportVisibleRow = visibleRow
@@ -183,3 +187,19 @@ func ExportNewReportModel(client taskv1connect.TaskServiceClient) Model {
 func ExportSetReportData(m *Model, data reportState) {
 	m.reportData = data
 }
+
+// ExportNewGoalModel creates a Model in the Goals tab for unit tests.
+func ExportNewGoalModel(taskClient taskv1connect.TaskServiceClient, goals []*goalv1.Goal) Model {
+	m := newModel(taskClient, nil, "", config.PomodoroConfig{}, false, nil)
+	m.activeTab = tabGoals
+	m.goal.goals = goals
+	m.goal.loaded = true
+	m.keys.GoalMode = true
+	return m
+}
+
+// ExportGoalCursor returns the current goal cursor.
+func ExportGoalCursor(m Model) int { return m.goal.cursor }
+
+// ExportGoalShowAll returns the current goal showAll state.
+func ExportGoalShowAll(m Model) bool { return m.goal.showAll }

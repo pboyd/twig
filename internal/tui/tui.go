@@ -46,8 +46,9 @@ func Run(_ context.Context, profile string) error {
 	tsf := loadTreeState(statePath)
 	expanded := tsf.expandedSet(pKey)
 
-	taskClient, planClient, addr := NewClient(cfg)
+	taskClient, planClient, goalClient, addr := NewClient(cfg)
 	m := newModel(taskClient, planClient, addr, cfg.Pomodoro, hasDarkBg, expanded)
+	m.goalClient = goalClient
 	m.statePath = statePath
 	m.activeProfile = pKey
 	// colorprofile (charmbracelet/colorprofile) ignores COLORTERM when TERM

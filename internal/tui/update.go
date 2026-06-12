@@ -10,6 +10,8 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"connectrpc.com/connect"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
+	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -63,6 +65,23 @@ type reportResultMsg struct {
 type scheduledDaysResultMsg struct {
 	days map[int64][]string
 	err  error
+}
+
+// listGoalsResultMsg carries the result of a ListGoals RPC.
+type listGoalsResultMsg struct {
+	goals []*goalv1.Goal
+	err   error
+}
+
+// goalMutationMsg carries the result of a create or update goal RPC.
+type goalMutationMsg struct {
+	goal *goalv1.Goal
+	err  error
+}
+
+// goalDeletedMsg carries the result of a delete goal RPC.
+type goalDeletedMsg struct {
+	err error
 }
 
 // ── command factories ───────────────────────────────────────────────────────
@@ -288,6 +307,88 @@ func moveTaskCmd(client taskv1connect.TaskServiceClient, task *taskv1.Task, newP
 			return moveTaskResultMsg{taskID: task.Id, err: err}
 		}
 		return moveTaskResultMsg{taskID: task.Id, tree: cli.BuildTree(resp.Msg.Tasks)}
+	}
+}
+
+// ── goal command factories ───────────────────────────────────────────────────
+
+func listGoalsCmd(client goalv1connect.GoalServiceClient) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.ListGoals(context.Background(), connect.NewRequest(&goalv1.ListGoalsRequest{}))
+		if err != nil {
+			return listGoalsResultMsg{err: err}
+		}
+		return listGoalsResultMsg{goals: resp.Msg.Goals}
+	}
+}
+
+func createGoalCmd(client goalv1connect.GoalServiceClient, name, desc string, due *timestamppb.Timestamp) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.CreateGoal(context.Background(), connect.NewRequest(&goalv1.CreateGoalRequest{
+			Name:        name,
+			Description: desc,
+			Due:         due,
+		}))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		return goalMutationMsg{goal: resp.Msg.Goal}
+	}
+}
+
+func updateGoalCmd(client goalv1connect.GoalServiceClient, id int64, name, desc string, due *timestamppb.Timestamp) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.UpdateGoal(context.Background(), connect.NewRequest(&goalv1.UpdateGoalRequest{
+			Id:          id,
+			Name:        name,
+			Description: desc,
+			Due:         due,
+		}))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		return goalMutationMsg{goal: resp.Msg.Goal}
+	}
+}
+
+func setGoalStateCmd(client goalv1connect.GoalServiceClient, id int64, state goalv1.GoalState) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.SetGoalState(context.Background(), connect.NewRequest(&goalv1.SetGoalStateRequest{
+			Id:    id,
+			State: state,
+		}))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		return goalMutationMsg{goal: resp.Msg.Goal}
+	}
+}
+
+func deleteGoalCmd(client goalv1connect.GoalServiceClient, id int64) tea.Cmd {
+	return func() tea.Msg {
+		_, err := client.DeleteGoal(context.Background(), connect.NewRequest(&goalv1.DeleteGoalRequest{Id: id}))
+		return goalDeletedMsg{err: err}
+	}
+}
+
+func reorderGoalCmd(client goalv1connect.GoalServiceClient, goalID, anchorID int64, insertBefore bool) tea.Cmd {
+	return func() tea.Msg {
+		req := &goalv1.ReorderGoalRequest{GoalId: goalID}
+		if insertBefore {
+			req.Anchor = &goalv1.ReorderGoalRequest_BeforeGoalId{BeforeGoalId: anchorID}
+		} else {
+			req.Anchor = &goalv1.ReorderGoalRequest_AfterGoalId{AfterGoalId: anchorID}
+		}
+		_, err := client.ReorderGoal(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		// Re-fetch goals after reorder to get updated positions.
+		resp, err := client.ListGoals(context.Background(), connect.NewRequest(&goalv1.ListGoalsRequest{}))
+		if err != nil {
+			return listGoalsResultMsg{err: err}
+		}
+		return listGoalsResultMsg{goals: resp.Msg.Goals}
 	}
 }
 
@@ -566,6 +667,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reportData.loaded = true
 		return m, nil
 
+	case listGoalsResultMsg:
+		m.goal.err = msg.err
+		if msg.err == nil {
+			m.goal.goals = msg.goals
+		}
+		m.goal.loaded = true
+		m.goal.cursor = clampCursor(m.goal.cursor, len(m.goal.goals))
+		return m, nil
+
+	case goalMutationMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			return m, nil
+		}
+		m.goal.err = nil
+		m.goal.mode = goalList
+		m.mode = modeList
+		// Re-fetch to get updated list.
+		return m, listGoalsCmd(m.goalClient)
+
+	case goalDeletedMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			return m, nil
+		}
+		m.goal.err = nil
+		m.goal.mode = goalList
+		return m, listGoalsCmd(m.goalClient)
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -576,6 +706,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // to the currently focused text input. Without this the message is dropped
 // because PasteMsg is no longer a tea.KeyPressMsg.
 func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if m.activeTab == tabGoals {
+		if m.goal.mode == goalEdit || m.goal.mode == goalNew {
+			newEdit, cmd := m.edit.Update(msg, m.keys)
+			m.edit = newEdit
+			return m, cmd
+		}
+		return m, nil
+	}
 	if m.activeTab == tabPlanning {
 		switch m.plan.mode {
 		case planTaskTime, planEventForm, planEdit:
@@ -604,6 +742,9 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.notice = "" // clear transient notice on every user action
+	if m.activeTab == tabGoals {
+		return m.handleGoalsKey(msg)
+	}
 	if m.activeTab == tabPlanning {
 		return m.handlePlanningKey(msg)
 	}
@@ -655,10 +796,14 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.saveAndQuitCmd()
 
 	case key.Matches(msg, m.keys.NextTab):
-		m.activeTab = tabTasks
+		m.activeTab = tabGoals
 		m.keys.ReportMode = false
 		m.keys.PlanningMode = false
+		m.keys.GoalMode = true
 		m.reportData.err = nil
+		if !m.goal.loaded {
+			return m, listGoalsCmd(m.goalClient)
+		}
 		return m, nil
 
 	case key.Matches(msg, m.keys.PrevTab):
@@ -711,6 +856,207 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// handleGoalsKey handles all key events while the Goals tab is active.
+func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// If in edit/new form mode, route to edit handler.
+	if m.goal.mode == goalEdit || m.goal.mode == goalNew {
+		newEdit, cmd := m.edit.Update(msg, m.keys)
+		m.edit = newEdit
+		return m, cmd
+	}
+
+	// Confirm-delete mode.
+	if m.goal.mode == goalConfirmDelete {
+		switch msg.String() {
+		case "y":
+			if len(m.goal.goals) > 0 && m.goal.cursor < len(m.goal.goals) {
+				id := m.goal.goals[m.goal.cursor].Id
+				m.goal.mode = goalList
+				return m, deleteGoalCmd(m.goalClient, id)
+			}
+			m.goal.mode = goalList
+		case "n", "esc":
+			m.goal.mode = goalList
+		}
+		return m, nil
+	}
+
+	// Help overlay.
+	if m.mode == modeHelp {
+		m.mode = modeList
+		return m, nil
+	}
+
+	// Quit confirmation.
+	if m.confirmingQuit {
+		switch msg.String() {
+		case "y":
+			return m, m.saveAndQuitCmd()
+		case "n", "esc":
+			m.confirmingQuit = false
+		}
+		return m, nil
+	}
+
+	visible := visibleGoals(m.goal.goals, m.goal.showAll)
+
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		if m.pom != nil && !m.pom.completed {
+			m.confirmingQuit = true
+			return m, nil
+		}
+		return m, m.saveAndQuitCmd()
+
+	case key.Matches(msg, m.keys.NextTab):
+		// Goals → Tasks
+		m.activeTab = tabTasks
+		m.keys.GoalMode = false
+		m.goal.err = nil
+		return m, nil
+
+	case key.Matches(msg, m.keys.PrevTab):
+		// Goals → Report (wrap around)
+		m.activeTab = tabReport
+		m.keys.GoalMode = false
+		m.keys.ReportMode = true
+		m.goal.err = nil
+		now := m.nowOrDefault()
+		presets := report.PresetOrder()
+		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
+		m.reportData.period = p
+		m.reportData.loaded = false
+		return m, fetchReportCmd(m.client, p)
+
+	case key.Matches(msg, m.keys.Up):
+		if m.goal.cursor > 0 {
+			m.goal.cursor--
+		}
+
+	case key.Matches(msg, m.keys.Down):
+		if m.goal.cursor < len(visible)-1 {
+			m.goal.cursor++
+		}
+
+	case key.Matches(msg, m.keys.GoalToggleAll):
+		m.goal.showAll = !m.goal.showAll
+		m.goal.cursor = clampCursor(m.goal.cursor, len(visibleGoals(m.goal.goals, m.goal.showAll)))
+
+	case key.Matches(msg, m.keys.GoalNew):
+		m.originalCursor = m.goal.cursor
+		m.edit = NewRootForm(m.goal.cursor)
+		m.goal.mode = goalNew
+		m.mode = modeNewRoot
+		m.goal.err = nil
+
+	case key.Matches(msg, m.keys.GoalEdit):
+		if len(visible) > 0 {
+			g := visible[m.goal.cursor]
+			// Build a fake task to reuse the edit form.
+			fakeTask := goalToFakeTask(g)
+			m.originalCursor = m.goal.cursor
+			m.edit = NewEditForm(fakeTask, m.goal.cursor)
+			m.goal.mode = goalEdit
+			m.mode = modeEdit
+			m.goal.err = nil
+		}
+
+	case key.Matches(msg, m.keys.GoalDelete):
+		if len(visible) > 0 {
+			m.goal.mode = goalConfirmDelete
+			m.notice = "Delete this goal? Tasks attached to it will stick around. [y]es [n]o"
+		}
+
+	case key.Matches(msg, m.keys.GoalSetIncubate):
+		if len(visible) > 0 {
+			id := visible[m.goal.cursor].Id
+			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_INCUBATING)
+		}
+
+	case key.Matches(msg, m.keys.GoalSetCommit):
+		if len(visible) > 0 {
+			id := visible[m.goal.cursor].Id
+			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMMITTED)
+		}
+
+	case key.Matches(msg, m.keys.GoalSetComplete):
+		if len(visible) > 0 {
+			id := visible[m.goal.cursor].Id
+			m.notice = "Goal achieved — take a bow! 🎉"
+			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMPLETED)
+		}
+
+	case key.Matches(msg, m.keys.GoalSetArchive):
+		if len(visible) > 0 {
+			id := visible[m.goal.cursor].Id
+			m.notice = "Tucked away. It'll be here if you change your mind."
+			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_ARCHIVED)
+		}
+
+	case key.Matches(msg, m.keys.GoalRankUp):
+		if len(visible) > 0 && m.goal.cursor > 0 {
+			cur := visible[m.goal.cursor]
+			prev := visible[m.goal.cursor-1]
+			// Only reorder within same state group.
+			if cur.State == prev.State {
+				return m, reorderGoalCmd(m.goalClient, cur.Id, prev.Id, true)
+			}
+		}
+
+	case key.Matches(msg, m.keys.GoalRankDown):
+		if len(visible) > 0 && m.goal.cursor < len(visible)-1 {
+			cur := visible[m.goal.cursor]
+			next := visible[m.goal.cursor+1]
+			// Only reorder within same state group.
+			if cur.State == next.State {
+				return m, reorderGoalCmd(m.goalClient, cur.Id, next.Id, false)
+			}
+		}
+
+	case key.Matches(msg, m.keys.Refresh):
+		m.goal.loaded = false
+		m.goal.err = nil
+		return m, listGoalsCmd(m.goalClient)
+
+	case key.Matches(msg, m.keys.Help):
+		m.mode = modeHelp
+	}
+
+	return m, nil
+}
+
+// handleGoalEditSaved handles an editSavedMsg when the Goals tab is active.
+func (m Model) handleGoalEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(msg.name) == "" {
+		m.goal.err = fmt.Errorf("goal name cannot be empty")
+		return m, nil
+	}
+
+	var due *timestamppb.Timestamp
+	if msg.dueStr != "" {
+		ts, err := cli.ParseDue(msg.dueStr)
+		if err != nil {
+			m.goal.err = err
+			return m, nil
+		}
+		due = ts
+	}
+
+	m.goal.err = nil
+
+	if m.goal.mode == goalEdit {
+		// Find the goal being edited.
+		visible := visibleGoals(m.goal.goals, m.goal.showAll)
+		if len(visible) > 0 && m.goal.cursor < len(visible) {
+			id := visible[m.goal.cursor].Id
+			return m, updateGoalCmd(m.goalClient, id, msg.name, msg.description, due)
+		}
+	}
+
+	// New goal.
+	return m, createGoalCmd(m.goalClient, msg.name, msg.description, due)
 }
 
 // handlePlanningKey handles all key events while the Planning tab is active.
@@ -1035,6 +1381,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Tasks → Planning
 		m.activeTab = tabPlanning
 		m.keys.PlanningMode = true
+		m.keys.GoalMode = false
 		m.err = nil
 		var cmds []tea.Cmd
 		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day))
@@ -1044,16 +1391,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case key.Matches(msg, m.keys.PrevTab):
-		// Tasks → Report (wrapping backwards)
-		m.activeTab = tabReport
-		m.keys.ReportMode = true
+		// Tasks → Goals (wrapping backwards)
+		m.activeTab = tabGoals
+		m.keys.GoalMode = true
 		m.err = nil
-		now := m.nowOrDefault()
-		presets := report.PresetOrder()
-		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
-		m.reportData.period = p
-		m.reportData.loaded = false
-		return m, fetchReportCmd(m.client, p)
+		if !m.goal.loaded {
+			return m, listGoalsCmd(m.goalClient)
+		}
+		return m, nil
 
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil
@@ -1294,6 +1639,11 @@ func (m Model) handleHelpKey(_ tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
+	// Route to goal handler if on Goals tab.
+	if m.activeTab == tabGoals {
+		return m.handleGoalEditSaved(msg)
+	}
+
 	// Validate name.
 	if strings.TrimSpace(msg.name) == "" {
 		m.err = fmt.Errorf("task name cannot be empty")

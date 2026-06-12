@@ -6,6 +6,8 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/textinput"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
+	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
@@ -29,10 +31,29 @@ const (
 type tab int
 
 const (
-	tabTasks tab = iota
+	tabGoals tab = iota
+	tabTasks
 	tabPlanning
 	tabReport
 )
+
+type goalViewMode int
+
+const (
+	goalList          goalViewMode = iota
+	goalEdit
+	goalNew
+	goalConfirmDelete
+)
+
+type goalState struct {
+	goals   []*goalv1.Goal
+	cursor  int
+	showAll bool
+	loaded  bool
+	err     error
+	mode    goalViewMode
+}
 
 type planMode int
 
@@ -96,6 +117,7 @@ type reportState struct {
 type Model struct {
 	client            taskv1connect.TaskServiceClient
 	planClient        planv1connect.PlanServiceClient
+	goalClient        goalv1connect.GoalServiceClient
 	addr              string
 	pomConfig         config.PomodoroConfig
 	activeTab         tab
@@ -137,6 +159,8 @@ type Model struct {
 	nowFunc func() time.Time
 	// report holds all state for the Report tab.
 	reportData reportState
+	// goal holds all state for the Goals tab.
+	goal goalState
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {
@@ -148,6 +172,7 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		planClient:        planClient,
 		addr:              addr,
 		pomConfig:         pomConfig,
+		activeTab:         tabTasks,
 		expanded:          expanded,
 		keys:              DefaultKeyMap(),
 		help:              newHelpModel(hasDarkBg),

@@ -3,8 +3,9 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 // KeyMap holds all keybindings for the TUI.
-// PlanningMode and ReportMode control which bindings appear in ShortHelp/FullHelp.
+// PlanningMode, ReportMode, and GoalMode control which bindings appear in ShortHelp/FullHelp.
 type KeyMap struct {
+	GoalMode     bool
 	PlanningMode bool
 	ReportMode   bool
 	Up           key.Binding
@@ -54,6 +55,17 @@ type KeyMap struct {
 	// Report-tab keys
 	ReportPrevPreset key.Binding
 	ReportNextPreset key.Binding
+	// Goals-tab keys
+	GoalNew          key.Binding
+	GoalEdit         key.Binding
+	GoalDelete       key.Binding
+	GoalSetIncubate  key.Binding
+	GoalSetCommit    key.Binding
+	GoalSetComplete  key.Binding
+	GoalSetArchive   key.Binding
+	GoalToggleAll    key.Binding
+	GoalRankUp       key.Binding
+	GoalRankDown     key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -223,11 +235,54 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("right", "l"),
 			key.WithHelp("→/l", "next period"),
 		),
+		GoalNew: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new goal"),
+		),
+		GoalEdit: key.NewBinding(
+			key.WithKeys("e", "enter"),
+			key.WithHelp("e/enter", "edit goal"),
+		),
+		GoalDelete: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "delete goal"),
+		),
+		GoalSetIncubate: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "incubating"),
+		),
+		GoalSetCommit: key.NewBinding(
+			key.WithKeys("o"),
+			key.WithHelp("o", "commit"),
+		),
+		GoalSetComplete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "done"),
+		),
+		GoalSetArchive: key.NewBinding(
+			key.WithKeys("v"),
+			key.WithHelp("v", "archive"),
+		),
+		GoalToggleAll: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "toggle show all"),
+		),
+		GoalRankUp: key.NewBinding(
+			key.WithKeys("{"),
+			key.WithHelp("{", "rank higher"),
+		),
+		GoalRankDown: key.NewBinding(
+			key.WithKeys("}"),
+			key.WithHelp("}", "rank lower"),
+		),
 	}
 }
 
 // ShortHelp returns the short help for the key map (used by the bubbles help component).
 func (k KeyMap) ShortHelp() []key.Binding {
+	if k.GoalMode {
+		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalEdit, k.GoalToggleAll, k.Help, k.Quit}
+	}
 	if k.ReportMode {
 		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}
 	}
@@ -239,6 +294,14 @@ func (k KeyMap) ShortHelp() []key.Binding {
 
 // FullHelp returns the full help for the key map grouped by category.
 func (k KeyMap) FullHelp() [][]key.Binding {
+	if k.GoalMode {
+		return [][]key.Binding{
+			{k.Up, k.Down, k.GoalNew, k.GoalEdit},
+			{k.GoalDelete, k.GoalSetIncubate, k.GoalSetCommit},
+			{k.GoalSetComplete, k.GoalSetArchive, k.GoalRankUp, k.GoalRankDown},
+			{k.GoalToggleAll, k.Help, k.Quit},
+		}
+	}
 	if k.ReportMode {
 		return [][]key.Binding{
 			{k.ReportPrevPreset, k.ReportNextPreset},

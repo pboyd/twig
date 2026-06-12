@@ -20,6 +20,12 @@ const tabBarHeight = 1
 func (m Model) View() tea.View {
 	var body string
 	switch m.activeTab {
+	case tabGoals:
+		if m.mode == modeHelp {
+			body = m.viewHelp()
+		} else {
+			body = m.viewGoals()
+		}
 	case tabPlanning:
 		if m.mode == modeHelp {
 			body = m.viewHelp()
@@ -479,7 +485,9 @@ func (m Model) renderStatus() string {
 	}
 
 	activeErr := m.err
-	if m.activeTab == tabPlanning && m.plan.err != nil {
+	if m.activeTab == tabGoals && m.goal.err != nil {
+		activeErr = m.goal.err
+	} else if m.activeTab == tabPlanning && m.plan.err != nil {
 		activeErr = m.plan.err
 	} else if m.activeTab == tabReport && m.reportData.err != nil {
 		activeErr = m.reportData.err

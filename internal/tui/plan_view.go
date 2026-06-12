@@ -11,9 +11,10 @@ import (
 	"github.com/pboyd/twig/internal/cli"
 )
 
-// renderTabBar renders the one-line tab bar: " Tasks │ Planning │ Report "
+// renderTabBar renders the one-line tab bar: " Goals │ Tasks │ Planning │ Report "
 // with the active tab highlighted in accent color (styled) or plain text (unstyled).
 func (m Model) renderTabBar(width int) string {
+	goals := " Goals "
 	tasks := " Tasks "
 	planning := " Planning "
 	reportLabel := " Report "
@@ -32,7 +33,9 @@ func (m Model) renderTabBar(width int) string {
 			}
 			return dimOpen + label + reset
 		}
-		bar := renderTab(tasks, m.activeTab == tabTasks) +
+		bar := renderTab(goals, m.activeTab == tabGoals) +
+			sepDim +
+			renderTab(tasks, m.activeTab == tabTasks) +
 			sepDim +
 			renderTab(planning, m.activeTab == tabPlanning) +
 			sepDim +
@@ -45,7 +48,7 @@ func (m Model) renderTabBar(width int) string {
 	}
 
 	sep := "|"
-	bar := tasks + sep + planning + sep + reportLabel
+	bar := goals + sep + tasks + sep + planning + sep + reportLabel
 	if width > len(bar) {
 		bar += strings.Repeat(" ", width-len(bar))
 	}
