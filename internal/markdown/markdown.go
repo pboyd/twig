@@ -5,6 +5,7 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	text_pkg "github.com/yuin/goldmark/text"
 )
 
 // Theme holds styling colors for markdown rendering.
@@ -78,9 +79,12 @@ func (r *Renderer) RenderInline(text string, opts Options) string {
 	return result
 }
 
-// doRender is a stub for full markdown rendering (AST walking added in T014).
+// doRender parses and renders full block-level markdown.
 func (r *Renderer) doRender(text string, opts Options) string {
-	return text
+	src := []byte(text)
+	reader := text_pkg.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+	return renderBlocks(doc, src, r.theme, opts)
 }
 
 // doRenderInline is a stub for inline markdown rendering (AST walking added in T019).
