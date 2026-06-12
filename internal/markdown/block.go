@@ -74,7 +74,7 @@ func renderBlock(node gast.Node, src []byte, theme Theme, opts Options, depth in
 	default:
 		// For table nodes and any unknown nodes, skip tables, recurse others.
 		if node.Kind() == extast.KindTable {
-			return "[table]"
+			return renderTable(node, src, theme, opts)
 		}
 		// Walk children and collect their output.
 		blocks := collectBlocks(node, src, theme, opts, depth)
