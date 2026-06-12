@@ -4,6 +4,7 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // Semantic palette — adaptive so the app is legible on light and dark terminals.
@@ -27,6 +28,16 @@ var (
 	dimStyle       lipgloss.Style
 	accentStyle    lipgloss.Style
 )
+
+// buildMarkdownTheme maps the shared palette vars to a markdown.Theme.
+// Text is left as nil (zero value) so the renderer falls back to the terminal default.
+func buildMarkdownTheme() markdown.Theme {
+	return markdown.Theme{
+		Accent: accent,
+		Dim:    dim,
+		CodeBg: cursorBg,
+	}
+}
 
 // initPalette resolves all theme colors for the detected terminal background.
 // Must be called before creating any Model (i.e. before tea.NewProgram).
