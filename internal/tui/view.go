@@ -423,25 +423,43 @@ func (m Model) renderList(width int) string {
 			maxNameW = 0
 		}
 
-		name := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxNameW, Styled: m.styled})
-		if lipgloss.Width(name) > maxNameW {
-			name = ansi.Truncate(name, maxNameW, "")
-		}
-		if row.node.Task.GetCompletedAt() != nil {
-			name = cli.Strike(name, m.styled)
-		}
-		if taskIsSnoozed(row.node.Task, time.Now().Local()) {
-			name += " 💤"
-		}
+		completed := row.node.Task.GetCompletedAt() != nil
+		snoozed := taskIsSnoozed(row.node.Task, time.Now().Local())
 
-		line := prefix + name
-
+		var line string
 		if i == m.cursor && m.styled {
-			line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
-		} else if i == m.cursor {
-			line = highlightStyle.Render(padRightAnsi(line, width))
+			// Cursor row: render name in plain mode so there are no inner ANSI
+			// reset codes that would clear the cursor background mid-line.
+			// Strikethrough is applied via the lipgloss style instead.
+			plainName := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxNameW, Styled: false})
+			if lipgloss.Width(plainName) > maxNameW {
+				plainName = ansi.Truncate(plainName, maxNameW, "")
+			}
+			if snoozed {
+				plainName += " 💤"
+			}
+			cursorStyle := lipgloss.NewStyle().Bold(true).Background(cursorBg)
+			if completed {
+				cursorStyle = cursorStyle.Strikethrough(true)
+			}
+			line = cursorStyle.Render(padRightAnsi(prefix+plainName, width))
 		} else {
-			line = padRightAnsi(line, width)
+			name := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxNameW, Styled: m.styled})
+			if lipgloss.Width(name) > maxNameW {
+				name = ansi.Truncate(name, maxNameW, "")
+			}
+			if completed {
+				name = cli.Strike(name, m.styled)
+			}
+			if snoozed {
+				name += " 💤"
+			}
+			line = prefix + name
+			if i == m.cursor {
+				line = highlightStyle.Render(padRightAnsi(line, width))
+			} else {
+				line = padRightAnsi(line, width)
+			}
 		}
 
 		sb.WriteString(line)

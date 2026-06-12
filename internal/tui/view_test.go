@@ -7,10 +7,18 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// hasStrikethrough reports whether s contains ANSI strikethrough (SGR 9) in
+// any encoding: standalone \x1b[9m (from cli.Strike) or embedded ;9m within a
+// combined sequence (from lipgloss Strikethrough(true) on the cursor row).
+func hasStrikethrough(s string) bool {
+	return strings.Contains(s, "\x1b[9m") || strings.Contains(s, ";9m")
+}
 
 // TestRenderList_StrikethroughOnCompletedRow (T-F) asserts that renderList emits
 // ANSI strikethrough around the name of a completed row and not on an incomplete row.
@@ -28,10 +36,11 @@ func TestRenderList_StrikethroughOnCompletedRow(t *testing.T) {
 
 	out := m.renderList(80)
 
-	if !strings.Contains(out, "\x1b[9m") {
+	if !hasStrikethrough(out) {
 		t.Errorf("renderList: expected ANSI strikethrough open code for completed row; got:\n%q", out)
 	}
-	if !strings.Contains(out, "\x1b[0m") {
+	// lipgloss v2 may emit \x1b[m (bare reset) instead of \x1b[0m.
+	if !strings.Contains(out, "\x1b[0m") && !strings.Contains(out, "\x1b[m") {
 		t.Errorf("renderList: expected ANSI reset code for completed row; got:\n%q", out)
 	}
 
@@ -354,8 +363,10 @@ func TestRenderList_StrikethroughAtMultipleDepths(t *testing.T) {
 	for _, name := range completedNames {
 		found := false
 		for _, line := range lines {
-			if strings.Contains(line, name) {
-				if strings.Contains(line, "\x1b[9m") {
+			// lipgloss v2 cursor-row rendering may interleave ANSI codes with
+			// each character; strip before name matching.
+			if strings.Contains(ansi.Strip(line), name) {
+				if hasStrikethrough(line) {
 					found = true
 				}
 				break
@@ -391,7 +402,7 @@ func TestRenderList_CursorHighlight(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 
 	// Cursor row: completed name should still have strikethrough (C6.2).
-	if !strings.Contains(lines[0], "\x1b[9m") {
+	if !hasStrikethrough(lines[0]) {
 		t.Errorf("cursor row: completed name must still have strikethrough; got: %q", lines[0])
 	}
 	// Non-cursor rows must not have strikethrough on incomplete tasks.

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/markdown"
@@ -27,10 +28,22 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 		return wrapDescription(task.GetDescription(), width)
 	}
 
+	// Compute the display name with markup stripped for both paths.
+	// Plain: RenderInline(Styled:false) strips ** * ~~ but keeps `backticks`.
+	// Styled: strip ANSI from the styled render to get clean text for the header.
+	displayName := task.Name
+	if md != nil {
+		displayName = md.RenderInline(task.Name, markdown.Options{Width: width, Styled: false})
+	}
+	styledDisplayName := task.Name
+	if md != nil {
+		styledDisplayName = ansi.Strip(md.RenderInline(task.Name, markdown.Options{Width: width, Styled: true}))
+	}
+
 	if !styled {
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "ID:   %d\n", task.Id)
-		fmt.Fprintf(&sb, "Name: %s\n", task.Name)
+		fmt.Fprintf(&sb, "Name: %s\n", displayName)
 
 		if due := cli.FormatDue(task.Due); due != "" {
 			fmt.Fprintf(&sb, "Due:  %s\n", due)
@@ -73,7 +86,7 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 	var sb strings.Builder
 
 	// Task name as bold accent header.
-	fmt.Fprintln(&sb, headerStyle.Render(task.Name))
+	fmt.Fprintln(&sb, headerStyle.Render(styledDisplayName))
 
 	// Column-aligned labels (4-char label + ": " = 6 chars).
 	fmt.Fprintf(&sb, "%s %d\n", labelStyle.Render("ID:  "), task.Id)
