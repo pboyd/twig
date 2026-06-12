@@ -16,6 +16,16 @@ type ApiKey struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Goal struct {
+	ID          int64
+	UserID      int64
+	Name        string
+	Description string
+	Due         pgtype.Timestamptz
+	State       string
+	Position    pgtype.Int4
+}
+
 type PlanEntry struct {
 	UserID         int64
 	Day            pgtype.Date
@@ -53,6 +63,7 @@ type Task struct {
 	Estimate    int16
 	Position    int32
 	SnoozeUntil pgtype.Timestamptz
+	GoalID      pgtype.Int8
 }
 
 type User struct {

@@ -82,3 +82,40 @@ WITH RECURSIVE descendants AS (
      WHERE t.user_id = $2
 )
 SELECT id FROM descendants WHERE completed_at IS NULL ORDER BY id;
+
+-- name: SetTaskGoal :one
+UPDATE tasks SET goal_id = $3 WHERE id = $1 AND user_id = $2 RETURNING *;
+
+-- name: ClearTaskGoal :one
+UPDATE tasks SET goal_id = NULL WHERE id = $1 AND user_id = $2 RETURNING *;
+
+-- name: AncestorHasGoal :one
+WITH RECURSIVE ancestors AS (
+    SELECT t.id, t.parent_id, t.goal_id
+      FROM tasks t
+      JOIN tasks seed ON t.id = seed.parent_id
+     WHERE seed.id = $1 AND seed.user_id = $2 AND t.user_id = $2
+    UNION ALL
+    SELECT t.id, t.parent_id, t.goal_id
+      FROM tasks t
+      JOIN ancestors ON t.id = ancestors.parent_id
+     WHERE t.user_id = $2
+)
+SELECT EXISTS (
+    SELECT 1 FROM ancestors WHERE goal_id IS NOT NULL
+) AS has_goal;
+
+-- name: DescendantHasGoal :one
+WITH RECURSIVE descendants AS (
+    SELECT tasks.id, tasks.goal_id
+      FROM tasks
+     WHERE tasks.parent_id = $1 AND tasks.user_id = $2
+    UNION ALL
+    SELECT t.id, t.goal_id
+      FROM tasks t
+      JOIN descendants d ON t.parent_id = d.id
+     WHERE t.user_id = $2
+)
+SELECT EXISTS (
+    SELECT 1 FROM descendants WHERE goal_id IS NOT NULL
+) AS has_goal;
