@@ -45,6 +45,10 @@ func dbTaskToProto(t db.Task) *taskv1.Task {
 	if t.SnoozeUntil.Valid {
 		pt.SnoozeUntil = timestamppb.New(t.SnoozeUntil.Time)
 	}
+	if t.GoalID.Valid {
+		v := t.GoalID.Int64
+		pt.GoalId = &v
+	}
 	return pt
 }
 
@@ -518,4 +522,76 @@ func (t *Task) ReorderTask(
 	}
 
 	return connect.NewResponse(&taskv1.ReorderTaskResponse{Siblings: proto}), nil
+}
+
+func (t *Task) SetTaskGoal(
+	ctx context.Context,
+	req *connect.Request[taskv1.SetTaskGoalRequest],
+) (*connect.Response[taskv1.SetTaskGoalResponse], error) {
+	userID := auth.UserID(ctx)
+
+	// Verify task exists.
+	_, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.TaskId, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Clearing: goal_id absent.
+	if req.Msg.GoalId == nil {
+		row, err := t.Queries.ClearTaskGoal(ctx, db.ClearTaskGoalParams{ID: req.Msg.TaskId, UserID: userID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+		}
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: dbTaskToProto(row)}), nil
+	}
+
+	// Setting: verify goal exists for this user.
+	goalID := *req.Msg.GoalId
+	_, err = t.Queries.GetGoal(ctx, db.GetGoalParams{ID: goalID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Check ancestor constraint.
+	ancestorHasGoal, err := t.Queries.AncestorHasGoal(ctx, db.AncestorHasGoalParams{ID: req.Msg.TaskId, UserID: userID})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if ancestorHasGoal {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("an ancestor task already has a goal assigned"))
+	}
+
+	// Check descendant constraint.
+	descendantHasGoal, err := t.Queries.DescendantHasGoal(ctx, db.DescendantHasGoalParams{
+		ParentID: pgtype.Int8{Int64: req.Msg.TaskId, Valid: true},
+		UserID:   userID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if descendantHasGoal {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("a descendant task already has a goal assigned"))
+	}
+
+	row, err := t.Queries.SetTaskGoal(ctx, db.SetTaskGoalParams{
+		ID:     req.Msg.TaskId,
+		UserID: userID,
+		GoalID: pgtype.Int8{Int64: goalID, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: dbTaskToProto(row)}), nil
 }
