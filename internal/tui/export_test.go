@@ -203,3 +203,12 @@ func ExportGoalCursor(m Model) int { return m.goal.cursor }
 
 // ExportGoalShowAll returns the current goal showAll state.
 func ExportGoalShowAll(m Model) bool { return m.goal.showAll }
+
+// ExportGoalErr returns the current goal error.
+func ExportGoalErr(m Model) error { return m.goal.err }
+
+// ExportDispatchTaskGoalMutation dispatches a taskGoalMutationMsg for testing.
+func ExportDispatchTaskGoalMutation(m Model, err error) (Model, tea.Cmd) {
+	updated, cmd := m.Update(taskGoalMutationMsg{err: err})
+	return updated.(Model), cmd
+}

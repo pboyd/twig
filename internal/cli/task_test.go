@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -200,7 +201,7 @@ func (s *fakeTaskService) SetTaskGoal(_ context.Context, req *connect.Request[ta
 	}
 	// Simulate nesting constraint: if task name contains "nested-conflict", reject.
 	if strings.Contains(task.Name, "nested-conflict") && req.Msg.GoalId != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("parent goal"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("an ancestor task already has a goal assigned"))
 	}
 	task.GoalId = req.Msg.GoalId
 	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: task}), nil
@@ -1005,8 +1006,10 @@ func TestModWithGoalNestingConflictMessage(t *testing.T) {
 	if code == 0 {
 		t.Fatal("expected non-zero exit for nesting conflict")
 	}
-	// The playful nesting error message should mention clearing the goal link.
-	if !strings.Contains(stderr, "clear") && !strings.Contains(stderr, "subtree") {
-		t.Errorf("expected nesting-conflict message; got: %s", stderr)
+	// Playful message: "that subtree already belongs to a goal — clear that link first."
+	// It must NOT interpolate the raw server error description as if it were a goal name.
+	want := "twig: that subtree already belongs to a goal — clear that link first."
+	if !strings.Contains(stderr, want) {
+		t.Errorf("expected nesting-conflict message %q; got: %s", want, stderr)
 	}
 }

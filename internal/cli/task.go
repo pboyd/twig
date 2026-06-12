@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
+	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 )
@@ -46,12 +48,7 @@ func isFailedPrecondition(err error) bool {
 }
 
 // nestingConflictMsg returns the playful nesting-conflict error copy.
-func nestingConflictMsg(err error) string {
-	// ConnectRPC nesting errors include the goal name in the message.
-	ce, ok := err.(*connect.Error)
-	if ok && ce.Message() != "" {
-		return fmt.Sprintf(`twig: that subtree already belongs to "%s" — clear that link first.`, ce.Message())
-	}
+func nestingConflictMsg(_ error) string {
 	return "twig: that subtree already belongs to a goal — clear that link first."
 }
 
@@ -206,6 +203,45 @@ func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	if goalStr != "" {
 		if !setTaskGoal(client, addr, newID, goalStr) {
 			return 1
+		}
+	}
+	return 0
+}
+
+func runTaskShow(client taskv1connect.TaskServiceClient, goalClient goalv1connect.GoalServiceClient, addr string, args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: twig task show <id>")
+		return 1
+	}
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "<id> must be an integer, got %q\n", args[0])
+		return 1
+	}
+
+	resp, err := client.GetTask(context.Background(), connect.NewRequest(&taskv1.GetTaskRequest{Id: id}))
+	if err != nil {
+		if isNotFound(err) {
+			fmt.Fprintf(os.Stderr, "twig: task %d not found.\n", id)
+			return 1
+		}
+		fmt.Fprintln(os.Stderr, mapError(err, addr))
+		return 1
+	}
+	task := resp.Msg.Task
+
+	fmt.Printf("Name:  %s\n", task.Name)
+	if task.Description != "" {
+		fmt.Printf("Desc:  %s\n", task.Description)
+	}
+	if due := FormatDue(task.Due); due != "" {
+		fmt.Printf("Due:   %s\n", due)
+	}
+
+	if task.GoalId != nil {
+		gResp, err := goalClient.GetGoal(context.Background(), connect.NewRequest(&goalv1.GetGoalRequest{Id: task.GetGoalId()}))
+		if err == nil {
+			fmt.Printf("Goal:  %s\n", gResp.Msg.Goal.Name)
 		}
 	}
 	return 0

@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -389,5 +391,26 @@ func TestGoalRank_CrossGroupBoundaryNoOp(t *testing.T) {
 	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
 	if cmd != nil {
 		t.Error("rank down across state groups: expected no-op (nil cmd), got a command")
+	}
+}
+
+// TestTaskGoalMutation_FailedPreconditionShowsPlayfulNotice verifies that
+// when SetTaskGoal returns FailedPrecondition (nesting conflict), the TUI
+// shows the playful nesting message as a notice rather than a raw error.
+func TestTaskGoalMutation_FailedPreconditionShowsPlayfulNotice(t *testing.T) {
+	g := &goalv1.Goal{Id: 1, Name: "Alpha", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	m := ExportNewGoalModel(nil, []*goalv1.Goal{g})
+
+	nestingErr := connect.NewError(connect.CodeFailedPrecondition, errors.New("an ancestor task already has a goal assigned"))
+	m2, _ := ExportDispatchTaskGoalMutation(m, nestingErr)
+
+	notice := ExportNotice(m2)
+	goalErr := ExportGoalErr(m2)
+
+	if goalErr != nil {
+		t.Errorf("goal.err should be nil for FailedPrecondition (use notice instead); got: %v", goalErr)
+	}
+	if !strings.Contains(notice, "subtree") && !strings.Contains(notice, "goal") {
+		t.Errorf("expected playful nesting notice; got: %q", notice)
 	}
 }

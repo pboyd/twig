@@ -90,11 +90,27 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) ed
 	if goals != nil {
 		f.showGoalField = true
 		f.originalGoalID = task.GoalId
-		// Collect only committed + incubating goals for the selector.
+		// Collect committed + incubating goals for the selector. Also include
+		// the task's current goal if it's completed/archived so that saving
+		// without changing the goal field doesn't clear the association.
+		var currentGoalIncluded bool
 		for _, g := range goals {
 			s := g.GetState()
 			if s == goalv1.GoalState_GOAL_STATE_COMMITTED || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
 				f.availableGoals = append(f.availableGoals, g)
+				if task.GoalId != nil && g.GetId() == task.GetGoalId() {
+					currentGoalIncluded = true
+				}
+			}
+		}
+		// If the task's goal is completed/archived and not in the list above,
+		// find it and append it so goalIdx can point to it.
+		if task.GoalId != nil && !currentGoalIncluded {
+			for _, g := range goals {
+				if g.GetId() == task.GetGoalId() {
+					f.availableGoals = append(f.availableGoals, g)
+					break
+				}
 			}
 		}
 		f.goalIdx = -1

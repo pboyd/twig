@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -794,7 +795,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case taskGoalMutationMsg:
 		if msg.err != nil {
-			m.goal.err = msg.err
+			var ce *connect.Error
+			if errors.As(msg.err, &ce) && ce.Code() == connect.CodeFailedPrecondition {
+				m.notice = "That subtree already belongs to a goal — clear that link first."
+			} else {
+				m.goal.err = msg.err
+			}
 			m.goal.mode = goalList
 			return m, nil
 		}

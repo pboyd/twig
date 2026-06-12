@@ -471,3 +471,70 @@ func TestGoalShow_NotFound(t *testing.T) {
 		t.Errorf("expected playful not-found message mentioning id 99, got: %s", stderr)
 	}
 }
+
+// TestTaskShow_WithGoal verifies that `twig task show <id>` prints task fields
+// and a Goal: line when the task has a direct goal association.
+func TestTaskShow_WithGoal(t *testing.T) {
+	h := newGoalTestHarness(t)
+
+	goalID := int64(1)
+	h.goalSvc.mu.Lock()
+	h.goalSvc.goals[goalID] = &goalv1.Goal{Id: goalID, Name: "Buy a new car", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	h.goalSvc.mu.Unlock()
+
+	h.taskSvc.mu.Lock()
+	h.taskSvc.tasks[1] = &taskv1.Task{Id: 1, Name: "Research insurance", GoalId: &goalID}
+	h.taskSvc.mu.Unlock()
+
+	var code int
+	stdout, stderr := captureOutput(func() {
+		code = runTaskShow(h.taskClient, h.goalClient, h.addr, []string{"1"})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Research insurance") {
+		t.Errorf("expected task name in output; got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "Goal:") || !strings.Contains(stdout, "Buy a new car") {
+		t.Errorf("expected 'Goal: Buy a new car' in output; got: %s", stdout)
+	}
+}
+
+// TestTaskShow_NoGoal verifies that `twig task show <id>` omits the Goal line
+// for tasks with no goal association.
+func TestTaskShow_NoGoal(t *testing.T) {
+	h := newGoalTestHarness(t)
+	h.taskSvc.mu.Lock()
+	h.taskSvc.tasks[1] = &taskv1.Task{Id: 1, Name: "Buy milk"}
+	h.taskSvc.mu.Unlock()
+
+	var code int
+	stdout, stderr := captureOutput(func() {
+		code = runTaskShow(h.taskClient, h.goalClient, h.addr, []string{"1"})
+	})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Buy milk") {
+		t.Errorf("expected task name in output; got: %s", stdout)
+	}
+	if strings.Contains(stdout, "Goal:") {
+		t.Errorf("expected no Goal: line for task with no goal; got: %s", stdout)
+	}
+}
+
+// TestTaskShow_NotFound verifies `twig task show <id>` returns a clear error for unknown IDs.
+func TestTaskShow_NotFound(t *testing.T) {
+	h := newGoalTestHarness(t)
+	var code int
+	_, stderr := captureOutput(func() {
+		code = runTaskShow(h.taskClient, h.goalClient, h.addr, []string{"99"})
+	})
+	if code == 0 {
+		t.Fatal("expected non-zero exit for unknown task")
+	}
+	if !strings.Contains(stderr, "99") {
+		t.Errorf("expected error mentioning id 99; got: %s", stderr)
+	}
+}

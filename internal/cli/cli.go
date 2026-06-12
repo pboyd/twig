@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
+	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/config"
 )
@@ -163,12 +164,13 @@ func runTask(profile string, args []string) int {
 	}
 
 	addr := cfg.APIURL
-	client := taskv1connect.NewTaskServiceClient(
-		&http.Client{},
-		addr,
+	httpClient := &http.Client{}
+	opts := []connect.ClientOption{
 		connect.WithSendGzip(),
 		connect.WithInterceptors(BearerInterceptor(cfg.APIKey)),
-	)
+	}
+	client := taskv1connect.NewTaskServiceClient(httpClient, addr, opts...)
+	goalClient := goalv1connect.NewGoalServiceClient(httpClient, addr, opts...)
 
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return runList(client, addr, args)
@@ -177,6 +179,8 @@ func runTask(profile string, args []string) int {
 	switch args[0] {
 	case "add":
 		return runAdd(client, addr, args[1:])
+	case "show":
+		return runTaskShow(client, goalClient, addr, args[1:])
 	case "rm":
 		return runRm(client, addr, args[1:])
 	case "mod":
@@ -196,10 +200,11 @@ func printTaskUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: twig task [<subcommand>] [arguments]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Subcommands (if omitted, lists tasks):")
-	fmt.Fprintln(w, "  add [--parent <id>] [--due <date>] <name>")
+	fmt.Fprintln(w, "  add [--parent <id>] [--due <date>] [--goal <id>] <name>")
 	fmt.Fprintln(w, "                   Add a new task")
+	fmt.Fprintln(w, "  show <id>        Show task details (name, due, goal)")
 	fmt.Fprintln(w, "  rm <id>          Remove a task")
-	fmt.Fprintln(w, "  mod <id> [<name>] [--parent <id>] [--due <date>]")
+	fmt.Fprintln(w, "  mod <id> [<name>] [--parent <id>] [--due <date>] [--goal <id>|none]")
 	fmt.Fprintln(w, "                   Modify a task")
 	fmt.Fprintln(w, "  complete <id>    Mark a task complete")
 	fmt.Fprintln(w, "  uncomplete <id>  Mark a completed task incomplete again")

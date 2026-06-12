@@ -708,6 +708,30 @@ func TestEditForm_GoalField_SaveEmitsGoalChanged(t *testing.T) {
 	}
 }
 
+// TestEditForm_GoalField_CompletedGoalPreservedOnSave verifies that editing a task
+// whose goal is completed/archived does not clear the association when the user
+// makes no goal change.
+func TestEditForm_GoalField_CompletedGoalPreservedOnSave(t *testing.T) {
+	completedGoalID := int64(99)
+	task := &taskv1.Task{Id: 1, Name: "task", GoalId: &completedGoalID}
+	// goals list includes the completed goal (as the real TUI passes m.goal.goals which
+	// contains all goals, including completed/archived).
+	allGoals := append(makeGoals(), &goalv1.Goal{Id: 99, Name: "Done goal", State: goalv1.GoalState_GOAL_STATE_COMPLETED})
+	f := NewEditForm(task, 0, allGoals)
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, DefaultKeyMap())
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.goalChanged {
+		t.Errorf("goalChanged should be false when task goal (id=99) is not in available list and user made no change")
+	}
+}
+
 // TestEditForm_GoalField_SaveUnchangedNotChanged verifies goalChanged is false
 // when no change was made.
 func TestEditForm_GoalField_SaveUnchangedNotChanged(t *testing.T) {
