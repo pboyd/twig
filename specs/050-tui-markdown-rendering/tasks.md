@@ -26,8 +26,8 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 **Purpose**: Add the dependency and stand up the package skeleton everything else builds on.
 
-- [ ] T001 Add `github.com/yuin/goldmark` v1.7.13 as a direct dependency (`go get github.com/yuin/goldmark@v1.7.13` then `go mod tidy`) and confirm it lands in `go.mod`/`go.sum`
-- [ ] T002 Create the `internal/markdown` package skeleton in `internal/markdown/markdown.go`: define `Theme`, `Options`, `Renderer` (unexported `md`, `theme`, `cache`), `cacheKey{text,width,styled,inline}`, `NewRenderer(theme Theme) *Renderer` (build `goldmark.New(goldmark.WithExtensions(extension.GFM))`), and `Render`/`RenderInline` method stubs matching `contracts/markdown-package.md`
+- [X] T001 Add `github.com/yuin/goldmark` v1.7.13 as a direct dependency (`go get github.com/yuin/goldmark@v1.7.13` then `go mod tidy`) and confirm it lands in `go.mod`/`go.sum`
+- [X] T002 Create the `internal/markdown` package skeleton in `internal/markdown/markdown.go`: define `Theme`, `Options`, `Renderer` (unexported `md`, `theme`, `cache`), `cacheKey{text,width,styled,inline}`, `NewRenderer(theme Theme) *Renderer` (build `goldmark.New(goldmark.WithExtensions(extension.GFM))`), and `Render`/`RenderInline` method stubs matching `contracts/markdown-package.md`
 
 **Checkpoint**: package compiles with stub methods; goldmark wired.
 
@@ -39,13 +39,13 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 **⚠️ CRITICAL**: complete this phase before starting Phase 3 or 4.
 
-- [ ] T003 [P] Implement display-width-aware soft-wrap helper (using `rivo/uniseg`/`mattn/go-runewidth`, NOT byte length) in `internal/markdown/wrap.go`
-- [ ] T004 [P] Implement link rendering helper in `internal/markdown/link.go`: styled → wrap text in `ansi.SetHyperlink(url)` with underline+accent; plain → `text (url)` (per FR-007 amended + `contracts/markdown-package.md`)
-- [ ] T005 Implement the inline node renderer in `internal/markdown/inline.go`: walk strong/emphasis/strikethrough/code-span/link/text nodes → `lipgloss/v2` styles drawn only from `Theme`; plain mode emits ZERO escape sequences; strips markup chars (depends on T004)
-- [ ] T006 Implement memoized dispatch in `internal/markdown/markdown.go`: `Render`/`RenderInline` consult the bounded `cache` keyed by `cacheKey`, render on miss, store, and return; correctness must not depend on the cache (depends on T002)
-- [ ] T007 [P] Add `buildMarkdownTheme() markdown.Theme` mapping palette vars (`accent`, `dim`, code-bg derived from `cursorBg`) → `markdown.Theme` in `internal/tui/theme.go` (no new ad-hoc colors — Principle III)
-- [ ] T008 Add a `*markdown.Renderer` field to `Model` and construct it via `markdown.NewRenderer(buildMarkdownTheme())` in `NewModel` in `internal/tui/model.go` (depends on T002, T007)
-- [ ] T009 [P] Unit tests for the inline renderer and link helper in `internal/markdown/inline_test.go` and `internal/markdown/link_test.go`: styled output carries styling; plain output contains no `\x1b`; no leftover `*`/`` ` ``/`~`; link styled→OSC 8 present, plain→`text (url)` (covers T004, T005)
+- [X] T003 [P] Implement display-width-aware soft-wrap helper (using `rivo/uniseg`/`mattn/go-runewidth`, NOT byte length) in `internal/markdown/wrap.go`
+- [X] T004 [P] Implement link rendering helper in `internal/markdown/link.go`: styled → wrap text in `ansi.SetHyperlink(url)` with underline+accent; plain → `text (url)` (per FR-007 amended + `contracts/markdown-package.md`)
+- [X] T005 Implement the inline node renderer in `internal/markdown/inline.go`: walk strong/emphasis/strikethrough/code-span/link/text nodes → `lipgloss/v2` styles drawn only from `Theme`; plain mode emits ZERO escape sequences; strips markup chars (depends on T004)
+- [X] T006 Implement memoized dispatch in `internal/markdown/markdown.go`: `Render`/`RenderInline` consult the bounded `cache` keyed by `cacheKey`, render on miss, store, and return; correctness must not depend on the cache (depends on T002)
+- [X] T007 [P] Add `buildMarkdownTheme() markdown.Theme` mapping palette vars (`accent`, `dim`, code-bg derived from `cursorBg`) → `markdown.Theme` in `internal/tui/theme.go` (no new ad-hoc colors — Principle III)
+- [X] T008 Add a `*markdown.Renderer` field to `Model` and construct it via `markdown.NewRenderer(buildMarkdownTheme())` in `NewModel` in `internal/tui/model.go` (depends on T002, T007)
+- [X] T009 [P] Unit tests for the inline renderer and link helper in `internal/markdown/inline_test.go` and `internal/markdown/link_test.go`: styled output carries styling; plain output contains no `\x1b`; no leftover `*`/`` ` ``/`~`; link styled→OSC 8 present, plain→`text (url)` (covers T004, T005)
 
 **Checkpoint**: shared primitives + TUI renderer wiring ready; both user stories can proceed.
 
@@ -59,17 +59,17 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they fail)
 
-- [ ] T010 [P] [US1] Block render tests in `internal/markdown/block_test.go`: heading (styled distinct), unordered/ordered/nested/task lists (Unicode markers), blockquote bar, code block verbatim, horizontal rule, image→alt placeholder, raw HTML pass-through; width wrapping; malformed input does not panic; plain mode zero-escape
-- [ ] T011 [P] [US1] Table render tests in `internal/markdown/table_test.go`: column alignment, width reflow/shrink to fit, plain-mode ASCII grid
+- [X] T010 [P] [US1] Block render tests in `internal/markdown/block_test.go`: heading (styled distinct), unordered/ordered/nested/task lists (Unicode markers), blockquote bar, code block verbatim, horizontal rule, image→alt placeholder, raw HTML pass-through; width wrapping; malformed input does not panic; plain mode zero-escape
+- [X] T011 [P] [US1] Table render tests in `internal/markdown/table_test.go`: column alignment, width reflow/shrink to fit, plain-mode ASCII grid
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Implement the block AST walker in `internal/markdown/block.go`: headings (bold accent, level-prefixed), paragraphs, unordered/ordered/task lists with nesting, blockquote left bar, code block (verbatim, not reflowed), horizontal rule, image alt placeholder (warm copy), raw HTML pass-through — calling the inline renderer (T005) and wrap helper (T003)
-- [ ] T013 [US1] Implement GFM table rendering via `lipgloss/v2` `table` (width-aware) in `internal/markdown/table.go` and dispatch table nodes to it from the block walker (depends on T005, T012)
-- [ ] T014 [US1] Implement public `Render()` in `internal/markdown/markdown.go`: parse GFM, walk blocks, join with no trailing newline, behind the memoized dispatch (depends on T012, T013, T006)
-- [ ] T015 [US1] Render the task description via `m.md.Render(desc, markdown.Options{Width: width, Styled: m.styled})` in `renderDetails` (both styled and plain paths), replacing `wrapDescription` for the description in `internal/tui/details.go` (depends on T014, T008)
-- [ ] T016 [US1] Render the goal description via `m.md.Render(...)` in `renderGoalDetail`, replacing `wrapDescription` for the description in `internal/tui/goal_view.go` (depends on T014, T008)
-- [ ] T017 [P] [US1] Integration tests asserting rendered descriptions (styled carries styling, plain is escape-free, content stays within width) in `internal/tui/details_test.go` and `internal/tui/goal_view_test.go`
+- [X] T012 [US1] Implement the block AST walker in `internal/markdown/block.go`: headings (bold accent, level-prefixed), paragraphs, unordered/ordered/task lists with nesting, blockquote left bar, code block (verbatim, not reflowed), horizontal rule, image alt placeholder (warm copy), raw HTML pass-through — calling the inline renderer (T005) and wrap helper (T003)
+- [X] T013 [US1] Implement GFM table rendering via `lipgloss/v2` `table` (width-aware) in `internal/markdown/table.go` and dispatch table nodes to it from the block walker (depends on T005, T012)
+- [X] T014 [US1] Implement public `Render()` in `internal/markdown/markdown.go`: parse GFM, walk blocks, join with no trailing newline, behind the memoized dispatch (depends on T012, T013, T006)
+- [X] T015 [US1] Render the task description via `m.md.Render(desc, markdown.Options{Width: width, Styled: m.styled})` in `renderDetails` (both styled and plain paths), replacing `wrapDescription` for the description in `internal/tui/details.go` (depends on T014, T008)
+- [X] T016 [US1] Render the goal description via `m.md.Render(...)` in `renderGoalDetail`, replacing `wrapDescription` for the description in `internal/tui/goal_view.go` (depends on T014, T008)
+- [X] T017 [P] [US1] Integration tests asserting rendered descriptions (styled carries styling, plain is escape-free, content stays within width) in `internal/tui/details_test.go` and `internal/tui/goal_view_test.go`
 
 **Checkpoint**: US1 independently functional — long fields render full markdown. This is the MVP.
 
