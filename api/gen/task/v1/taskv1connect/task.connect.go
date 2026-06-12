@@ -74,6 +74,8 @@ const (
 	// TaskServiceCountCompletedPomodorosProcedure is the fully-qualified name of the TaskService's
 	// CountCompletedPomodoros RPC.
 	TaskServiceCountCompletedPomodorosProcedure = "/task.v1.TaskService/CountCompletedPomodoros"
+	// TaskServiceSetTaskGoalProcedure is the fully-qualified name of the TaskService's SetTaskGoal RPC.
+	TaskServiceSetTaskGoalProcedure = "/task.v1.TaskService/SetTaskGoal"
 )
 
 // TaskServiceClient is a client for the task.v1.TaskService service.
@@ -126,6 +128,15 @@ type TaskServiceClient interface {
 	// A pomodoro counts when complete = true and start <= end_at < end,
 	// regardless of whether its task is complete.
 	CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error)
+	// SetTaskGoal associates a task (and implicitly its whole subtree) with a
+	// goal, or clears the association when goal_id is unset.
+	//
+	// Errors:
+	//
+	//	NotFound           — task or goal missing (for this user)
+	//	FailedPrecondition — an ancestor of the task already has a goal, or
+	//	                     (when setting) a descendant has its own goal
+	SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error)
 }
 
 // NewTaskServiceClient constructs a client for the task.v1.TaskService service. By default, it uses
@@ -223,6 +234,12 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(taskServiceMethods.ByName("CountCompletedPomodoros")),
 			connect.WithClientOptions(opts...),
 		),
+		setTaskGoal: connect.NewClient[v1.SetTaskGoalRequest, v1.SetTaskGoalResponse](
+			httpClient,
+			baseURL+TaskServiceSetTaskGoalProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("SetTaskGoal")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -242,6 +259,7 @@ type taskServiceClient struct {
 	completePomodoro        *connect.Client[v1.CompletePomodoroRequest, v1.CompletePomodoroResponse]
 	getActivePomodoro       *connect.Client[v1.GetActivePomodoroRequest, v1.GetActivePomodoroResponse]
 	countCompletedPomodoros *connect.Client[v1.CountCompletedPomodorosRequest, v1.CountCompletedPomodorosResponse]
+	setTaskGoal             *connect.Client[v1.SetTaskGoalRequest, v1.SetTaskGoalResponse]
 }
 
 // CreateTask calls task.v1.TaskService.CreateTask.
@@ -314,6 +332,11 @@ func (c *taskServiceClient) CountCompletedPomodoros(ctx context.Context, req *co
 	return c.countCompletedPomodoros.CallUnary(ctx, req)
 }
 
+// SetTaskGoal calls task.v1.TaskService.SetTaskGoal.
+func (c *taskServiceClient) SetTaskGoal(ctx context.Context, req *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error) {
+	return c.setTaskGoal.CallUnary(ctx, req)
+}
+
 // TaskServiceHandler is an implementation of the task.v1.TaskService service.
 type TaskServiceHandler interface {
 	// CreateTask stores a new task and returns it with its assigned id.
@@ -364,6 +387,15 @@ type TaskServiceHandler interface {
 	// A pomodoro counts when complete = true and start <= end_at < end,
 	// regardless of whether its task is complete.
 	CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error)
+	// SetTaskGoal associates a task (and implicitly its whole subtree) with a
+	// goal, or clears the association when goal_id is unset.
+	//
+	// Errors:
+	//
+	//	NotFound           — task or goal missing (for this user)
+	//	FailedPrecondition — an ancestor of the task already has a goal, or
+	//	                     (when setting) a descendant has its own goal
+	SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error)
 }
 
 // NewTaskServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -457,6 +489,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(taskServiceMethods.ByName("CountCompletedPomodoros")),
 		connect.WithHandlerOptions(opts...),
 	)
+	taskServiceSetTaskGoalHandler := connect.NewUnaryHandler(
+		TaskServiceSetTaskGoalProcedure,
+		svc.SetTaskGoal,
+		connect.WithSchema(taskServiceMethods.ByName("SetTaskGoal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/task.v1.TaskService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TaskServiceCreateTaskProcedure:
@@ -487,6 +525,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 			taskServiceGetActivePomodoroHandler.ServeHTTP(w, r)
 		case TaskServiceCountCompletedPomodorosProcedure:
 			taskServiceCountCompletedPomodorosHandler.ServeHTTP(w, r)
+		case TaskServiceSetTaskGoalProcedure:
+			taskServiceSetTaskGoalHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -550,4 +590,8 @@ func (UnimplementedTaskServiceHandler) GetActivePomodoro(context.Context, *conne
 
 func (UnimplementedTaskServiceHandler) CountCompletedPomodoros(context.Context, *connect.Request[v1.CountCompletedPomodorosRequest]) (*connect.Response[v1.CountCompletedPomodorosResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.CountCompletedPomodoros is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.SetTaskGoal is not implemented"))
 }

@@ -74,6 +74,15 @@ service TaskService {
   // regardless of whether its task is complete.
   rpc CountCompletedPomodoros(CountCompletedPomodorosRequest)
       returns (CountCompletedPomodorosResponse);
+
+  // SetTaskGoal associates a task (and implicitly its whole subtree) with a
+  // goal, or clears the association when goal_id is unset.
+  //
+  // Errors:
+  //   NotFound           — task or goal missing (for this user)
+  //   FailedPrecondition — an ancestor of the task already has a goal, or
+  //                        (when setting) a descendant has its own goal
+  rpc SetTaskGoal(SetTaskGoalRequest) returns (SetTaskGoalResponse);
 }
 
 // Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -107,6 +116,11 @@ message Task {
   // task is not snoozed. Clients hide the task while this day is strictly after
   // the client's local current day; on/after that day the task is shown.
   google.protobuf.Timestamp snooze_until = 10;
+  // Effective only on the association root: the goal this task's subtree
+  // belongs to. Unset when the task is not directly associated with a goal
+  // (descendants inherit the nearest ancestor's goal client-side).
+  // Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
+  optional int64 goal_id = 11;
 }
 
 message Pomodoro {
@@ -248,3 +262,10 @@ message ReorderTaskResponse {
   // order, each with its updated position.
   repeated Task siblings = 1;
 }
+
+message SetTaskGoalRequest {
+  int64 task_id = 1;
+  // Present: associate with this goal. Absent: clear the association.
+  optional int64 goal_id = 2;
+}
+message SetTaskGoalResponse { Task task = 1; }
