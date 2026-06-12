@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
@@ -18,9 +19,10 @@ const (
 	focusDue         = 2
 	focusEstimate    = 3
 	focusSnooze      = 4
-	focusSave        = 5
-	focusCancel      = 6
-	focusCount       = 7
+	focusGoal        = 5
+	focusSave        = 6
+	focusCancel      = 7
+	focusCount       = 8
 )
 
 // editFormModel holds the state of the task edit/create form.
@@ -36,6 +38,11 @@ type editFormModel struct {
 	originalCursor   int
 	calendar         *calendarModel
 	nowFunc          func() time.Time
+	// Goal selector (task edit forms only; hidden when showGoalField is false).
+	availableGoals []*goalv1.Goal // committed + incubating goals
+	goalIdx        int            // -1 = none, 0..N-1 = index into availableGoals
+	showGoalField  bool
+	originalGoalID *int64
 }
 
 // editSavedMsg is dispatched when the user confirms the edit form.
@@ -48,6 +55,9 @@ type editSavedMsg struct {
 	estimateStr    string
 	snoozeStr      string
 	originalCursor int
+	// Goal association: populated only when showGoalField was true.
+	newGoalID   *int64 // nil = clear association; non-nil = associate with this goal
+	goalChanged bool   // true if goal differs from the task's original goal_id
 }
 
 // editCancelledMsg is dispatched when the user cancels the edit form.
@@ -56,7 +66,9 @@ type editCancelledMsg struct {
 }
 
 // NewEditForm creates a form pre-filled with an existing task's values.
-func NewEditForm(task *taskv1.Task, originalCursor int) editFormModel {
+// goals, when non-nil, enables the Goal selector field showing committed/incubating goals.
+// Pass nil (e.g. when editing a goal via its fake-task) to hide the Goal field.
+func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) editFormModel {
 	f := newBlankForm(originalCursor)
 	f.taskID = &task.Id
 	if task.ParentId != nil {
@@ -74,6 +86,28 @@ func NewEditForm(task *taskv1.Task, originalCursor int) editFormModel {
 	if task.SnoozeUntil != nil {
 		f.snooze.SetValue(task.SnoozeUntil.AsTime().UTC().Format("2006-01-02"))
 	}
+
+	if goals != nil {
+		f.showGoalField = true
+		f.originalGoalID = task.GoalId
+		// Collect only committed + incubating goals for the selector.
+		for _, g := range goals {
+			s := g.GetState()
+			if s == goalv1.GoalState_GOAL_STATE_COMMITTED || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
+				f.availableGoals = append(f.availableGoals, g)
+			}
+		}
+		f.goalIdx = -1
+		if task.GoalId != nil {
+			for i, g := range f.availableGoals {
+				if g.GetId() == task.GetGoalId() {
+					f.goalIdx = i
+					break
+				}
+			}
+		}
+	}
+
 	return f
 }
 
@@ -204,18 +238,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		return f, nil
 
 	case key.Matches(keyMsg, keys.Save):
-		return f, func() tea.Msg {
-			return editSavedMsg{
-				taskID:         f.taskID,
-				parentID:       f.parentID,
-				name:           f.name.Value(),
-				description:    f.description.Value(),
-				dueStr:         f.due.Value(),
-				estimateStr:    f.pomodoroEstimate.Value(),
-				snoozeStr:      f.snooze.Value(),
-				originalCursor: f.originalCursor,
-			}
-		}
+		return f, f.buildSaveMsg()
 
 	case key.Matches(keyMsg, keys.Cancel):
 		return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
@@ -229,26 +252,27 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		return f, nil
 	}
 
+	// Handle goal field key events (left/right cycle the selector).
+	if f.focusIndex == focusGoal && f.showGoalField {
+		switch keyMsg.Code {
+		case tea.KeyLeft:
+			f = f.cycleGoal(-1)
+			return f, nil
+		case tea.KeyRight:
+			f = f.cycleGoal(1)
+			return f, nil
+		}
+	}
+
 	// Enter on Save/Cancel buttons.
 	if keyMsg.Code == tea.KeyEnter {
 		switch f.focusIndex {
 		case focusSave:
-			return f, func() tea.Msg {
-				return editSavedMsg{
-					taskID:         f.taskID,
-					parentID:       f.parentID,
-					name:           f.name.Value(),
-					description:    f.description.Value(),
-					dueStr:         f.due.Value(),
-					estimateStr:    f.pomodoroEstimate.Value(),
-					snoozeStr:      f.snooze.Value(),
-					originalCursor: f.originalCursor,
-				}
-			}
+			return f, f.buildSaveMsg()
 		case focusCancel:
 			return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
 		// Enter on single-line fields advances focus.
-		case focusName, focusDue, focusEstimate, focusSnooze:
+		case focusName, focusDue, focusEstimate, focusSnooze, focusGoal:
 			f = f.cycleFocus(1)
 			return f, nil
 		}
@@ -257,10 +281,60 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	return f.updateFocusedField(msg)
 }
 
+// buildSaveMsg builds the editSavedMsg command, including goal association state.
+func (f editFormModel) buildSaveMsg() func() tea.Msg {
+	return func() tea.Msg {
+		msg := editSavedMsg{
+			taskID:         f.taskID,
+			parentID:       f.parentID,
+			name:           f.name.Value(),
+			description:    f.description.Value(),
+			dueStr:         f.due.Value(),
+			estimateStr:    f.pomodoroEstimate.Value(),
+			snoozeStr:      f.snooze.Value(),
+			originalCursor: f.originalCursor,
+		}
+		if f.showGoalField {
+			var newGoalID *int64
+			if f.goalIdx >= 0 && f.goalIdx < len(f.availableGoals) {
+				gid := f.availableGoals[f.goalIdx].GetId()
+				newGoalID = &gid
+			}
+			msg.newGoalID = newGoalID
+			orig := f.originalGoalID
+			msg.goalChanged = (orig == nil) != (newGoalID == nil) ||
+				(orig != nil && newGoalID != nil && *orig != *newGoalID)
+		}
+		return msg
+	}
+}
+
+// cycleGoal moves the goal selector by delta (-1 or +1), wrapping around.
+// -1 is "none"; 0..N-1 index the available goals.
+func (f editFormModel) cycleGoal(delta int) editFormModel {
+	n := len(f.availableGoals)
+	if n == 0 {
+		return f
+	}
+	// Treat -1 (none) as position n in the cycle so we can do modular arithmetic.
+	pos := f.goalIdx + 1 // 0 = none, 1..n = goal[0..n-1]
+	pos = (pos + delta + n + 1) % (n + 1)
+	f.goalIdx = pos - 1
+	return f
+}
+
 // cycleFocus moves the focus index by delta, wrapping around, and updates field
-// focus state.
+// focus state. focusGoal is skipped when showGoalField is false.
 func (f editFormModel) cycleFocus(delta int) editFormModel {
-	f.focusIndex = (f.focusIndex + delta + focusCount) % focusCount
+	idx := f.focusIndex
+	for {
+		idx = (idx + delta + focusCount) % focusCount
+		if idx == focusGoal && !f.showGoalField {
+			continue
+		}
+		break
+	}
+	f.focusIndex = idx
 	f.name.Blur()
 	f.description.Blur()
 	f.due.Blur()
@@ -338,6 +412,19 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
 
 	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
+
+	if f.showGoalField {
+		goalName := "none"
+		if f.goalIdx >= 0 && f.goalIdx < len(f.availableGoals) {
+			goalName = f.availableGoals[f.goalIdx].GetName()
+		}
+		sb.WriteString(fieldLabel("Goal", f.focusIndex == focusGoal))
+		sb.WriteString(goalName + "\n")
+		if f.focusIndex == focusGoal {
+			sb.WriteString("  ←/→: change  tab: next field\n")
+		}
+		sb.WriteString("\n")
+	}
 
 	saveStyle := "[ Save ]"
 	cancelStyle := "[ Cancel ]"

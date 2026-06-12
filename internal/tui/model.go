@@ -44,6 +44,9 @@ const (
 	goalEdit
 	goalNew
 	goalConfirmDelete
+	goalNewTask  // `a`: creating a new task to attach to the selected goal
+	goalPickLink // `L`: task picker open — pick a task to link to the selected goal
+	goalPickUnlink // `U`: picker open — pick an association root to unlink
 )
 
 type goalState struct {
@@ -53,6 +56,7 @@ type goalState struct {
 	loaded  bool
 	err     error
 	mode    goalViewMode
+	picker  pickerState // task picker used for L (link) and U (unlink)
 }
 
 type planMode int

@@ -1315,7 +1315,7 @@ func TestHelp_DismissOnPlanning(t *testing.T) {
 func TestEditorFinished_SuccessUpdatesDescription(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil)
 	m.err = errForTest("old error")
 
 	next, cmd := m.Update(editorFinishedMsg{content: "new content"})
@@ -1337,7 +1337,7 @@ func TestEditorFinished_SuccessUpdatesDescription(t *testing.T) {
 func TestEditorFinished_ErrorPreservesDescription(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil)
 	m.err = nil
 
 	next, cmd := m.Update(editorFinishedMsg{err: errForTest("editor failed")})

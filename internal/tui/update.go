@@ -84,6 +84,17 @@ type goalDeletedMsg struct {
 	err error
 }
 
+// goalPickerTasksMsg carries the task tree for the goal-tab task picker (L/U flows).
+type goalPickerTasksMsg struct {
+	tree []*cli.TreeNode
+	err  error
+}
+
+// taskGoalMutationMsg carries the result of a SetTaskGoal RPC called from the goal pane.
+type taskGoalMutationMsg struct {
+	err error
+}
+
 // ── command factories ───────────────────────────────────────────────────────
 
 // persistTreeStateCmd snapshots the current expanded set and saves it
@@ -179,6 +190,16 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 		if err != nil {
 			return refreshedMsg{err: err}
 		}
+
+		// If the goal association changed, update it via SetTaskGoal.
+		if msg.goalChanged {
+			goalReq := &taskv1.SetTaskGoalRequest{TaskId: id, GoalId: msg.newGoalID}
+			_, err = client.SetTaskGoal(context.Background(), connect.NewRequest(goalReq))
+			if err != nil {
+				return refreshedMsg{err: err}
+			}
+		}
+
 		return fetchAfterMutation(client, id)
 	}
 }
@@ -392,6 +413,59 @@ func reorderGoalCmd(client goalv1connect.GoalServiceClient, goalID, anchorID int
 	}
 }
 
+// goalListTasksForPickerCmd fetches all tasks for the goal-tab task picker.
+func goalListTasksForPickerCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
+		if err != nil {
+			return goalPickerTasksMsg{err: err}
+		}
+		return goalPickerTasksMsg{tree: cli.BuildTree(resp.Msg.Tasks)}
+	}
+}
+
+// setTaskGoalAndRefreshCmd calls SetTaskGoal then re-fetches tasks.
+func setTaskGoalAndRefreshCmd(taskClient taskv1connect.TaskServiceClient, taskID int64, goalID *int64) tea.Cmd {
+	return func() tea.Msg {
+		req := &taskv1.SetTaskGoalRequest{TaskId: taskID, GoalId: goalID}
+		_, err := taskClient.SetTaskGoal(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return taskGoalMutationMsg{err: err}
+		}
+		return taskGoalMutationMsg{}
+	}
+}
+
+// createAndLinkTaskCmd creates a task then associates it with goalID via SetTaskGoal.
+func createAndLinkTaskCmd(taskClient taskv1connect.TaskServiceClient, msg editSavedMsg, goalID int64) tea.Cmd {
+	return func() tea.Msg {
+		req := &taskv1.CreateTaskRequest{
+			Name:        msg.name,
+			Description: msg.description,
+		}
+		if msg.dueStr != "" {
+			ts, err := cli.ParseDue(msg.dueStr)
+			if err != nil {
+				return refreshedMsg{err: err}
+			}
+			req.Due = ts
+		}
+		createResp, err := taskClient.CreateTask(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return refreshedMsg{err: err}
+		}
+		newTaskID := createResp.Msg.Task.Id
+		_, err = taskClient.SetTaskGoal(context.Background(), connect.NewRequest(&taskv1.SetTaskGoalRequest{
+			TaskId: newTaskID,
+			GoalId: &goalID,
+		}))
+		if err != nil {
+			return refreshedMsg{err: err}
+		}
+		return fetchAfterMutation(taskClient, newTaskID)
+	}
+}
+
 func fetchAfterMutation(client taskv1connect.TaskServiceClient, highlightID int64) tea.Msg {
 	resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 	if err != nil {
@@ -451,7 +525,11 @@ func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period) tea
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listTasksCmd(m.client), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient))
+	cmds := []tea.Cmd{listTasksCmd(m.client), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient)}
+	if m.goalClient != nil {
+		cmds = append(cmds, listGoalsCmd(m.goalClient))
+	}
+	return tea.Batch(cmds...)
 }
 
 // ── Update ─────────────────────────────────────────────────────────────────
@@ -699,6 +777,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.goal.mode = goalList
 		return m, listGoalsCmd(m.goalClient)
 
+	case goalPickerTasksMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			m.goal.mode = goalList
+			return m, nil
+		}
+		expanded := allTaskIDs(msg.tree)
+		m.goal.picker = pickerState{
+			tree:     msg.tree,
+			visible:  buildVisible(msg.tree, expanded, false, nil, time.Now().Local()),
+			cursor:   0,
+			expanded: expanded,
+		}
+		return m, nil
+
+	case taskGoalMutationMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			m.goal.mode = goalList
+			return m, nil
+		}
+		m.goal.err = nil
+		m.goal.mode = goalList
+		// Re-fetch both tasks (to update goal_id fields) and goals (for detail pane).
+		return m, tea.Batch(listTasksCmd(m.client), listGoalsCmd(m.goalClient))
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -710,7 +814,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // because PasteMsg is no longer a tea.KeyPressMsg.
 func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	if m.activeTab == tabGoals {
-		if m.goal.mode == goalEdit || m.goal.mode == goalNew {
+		if m.goal.mode == goalEdit || m.goal.mode == goalNew || m.goal.mode == goalNewTask {
 			newEdit, cmd := m.edit.Update(msg, m.keys)
 			m.edit = newEdit
 			return m, cmd
@@ -863,11 +967,16 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // handleGoalsKey handles all key events while the Goals tab is active.
 func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// If in edit/new form mode, route to edit handler.
-	if m.goal.mode == goalEdit || m.goal.mode == goalNew {
+	// If in edit/new form mode (goal or task), route to edit handler.
+	if m.goal.mode == goalEdit || m.goal.mode == goalNew || m.goal.mode == goalNewTask {
 		newEdit, cmd := m.edit.Update(msg, m.keys)
 		m.edit = newEdit
 		return m, cmd
+	}
+
+	// Picker modes (L: link, U: unlink).
+	if m.goal.mode == goalPickLink || m.goal.mode == goalPickUnlink {
+		return m.handleGoalPickerKey(msg)
 	}
 
 	// Confirm-delete mode.
@@ -961,7 +1070,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Build a fake task to reuse the edit form.
 			fakeTask := goalToFakeTask(g)
 			m.originalCursor = m.goal.cursor
-			m.edit = NewEditForm(fakeTask, m.goal.cursor)
+			m.edit = NewEditForm(fakeTask, m.goal.cursor, nil)
 			m.goal.mode = goalEdit
 			m.mode = modeEdit
 			m.goal.err = nil
@@ -1019,6 +1128,49 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case key.Matches(msg, m.keys.GoalAddTask):
+		// `a`: open a new-task form; on save, create task and link to current goal.
+		if len(visible) > 0 {
+			m.originalCursor = m.goal.cursor
+			m.edit = NewRootForm(m.goal.cursor)
+			m.goal.mode = goalNewTask
+			m.mode = modeNewRoot
+			m.goal.err = nil
+		}
+
+	case key.Matches(msg, m.keys.GoalLinkTask):
+		// `L`: open task picker; on selection, call SetTaskGoal.
+		if len(visible) > 0 {
+			m.goal.mode = goalPickLink
+			m.goal.err = nil
+			return m, goalListTasksForPickerCmd(m.client)
+		}
+
+	case key.Matches(msg, m.keys.GoalUnlinkTask):
+		// `U`: open picker of the current goal's association roots; on selection, clear goal.
+		if len(visible) > 0 {
+			g := visible[m.goal.cursor]
+			allTasks := flattenTree(m.tree)
+			roots := associationRoots(allTasks, g.GetId())
+			if len(roots) == 0 {
+				m.notice = "No tasks linked to this goal yet."
+				return m, nil
+			}
+			var rootNodes []*cli.TreeNode
+			for _, t := range roots {
+				rootNodes = append(rootNodes, &cli.TreeNode{Task: t})
+			}
+			expanded := allTaskIDs(rootNodes)
+			m.goal.picker = pickerState{
+				tree:     rootNodes,
+				visible:  buildVisible(rootNodes, expanded, true, nil, time.Now().Local()),
+				cursor:   0,
+				expanded: expanded,
+			}
+			m.goal.mode = goalPickUnlink
+			m.goal.err = nil
+		}
+
 	case key.Matches(msg, m.keys.Refresh):
 		m.goal.loaded = false
 		m.goal.err = nil
@@ -1029,6 +1181,65 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleGoalPickerKey handles key events in the goal-tab task picker (L and U flows).
+func (m Model) handleGoalPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Cancel):
+		m.goal.mode = goalList
+		m.goal.err = nil
+	case key.Matches(msg, m.keys.Up):
+		if m.goal.picker.cursor > 0 {
+			m.goal.picker.cursor--
+		}
+	case key.Matches(msg, m.keys.Down):
+		if m.goal.picker.cursor < len(m.goal.picker.visible)-1 {
+			m.goal.picker.cursor++
+		}
+	case msg.Code == tea.KeyEnter:
+		if len(m.goal.picker.visible) == 0 {
+			m.goal.mode = goalList
+			return m, nil
+		}
+		row := m.goal.picker.visible[m.goal.picker.cursor]
+		taskID := row.node.Task.Id
+
+		visible := visibleGoals(m.goal.goals, m.goal.showAll)
+		if len(visible) == 0 || m.goal.cursor >= len(visible) {
+			m.goal.mode = goalList
+			return m, nil
+		}
+		goalID := visible[m.goal.cursor].Id
+		prevMode := m.goal.mode
+		m.goal.mode = goalList
+
+		if prevMode == goalPickLink {
+			return m, setTaskGoalAndRefreshCmd(m.client, taskID, &goalID)
+		}
+		// goalPickUnlink: clear the goal association.
+		return m, setTaskGoalAndRefreshCmd(m.client, taskID, nil)
+	}
+	return m, nil
+}
+
+// handleGoalNewTaskSaved handles an editSavedMsg when creating a task attached to a goal.
+func (m Model) handleGoalNewTaskSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(msg.name) == "" {
+		m.goal.err = fmt.Errorf("task name cannot be empty")
+		return m, nil
+	}
+	visible := visibleGoals(m.goal.goals, m.goal.showAll)
+	if len(visible) == 0 || m.goal.cursor >= len(visible) {
+		m.goal.mode = goalList
+		m.mode = modeList
+		return m, nil
+	}
+	goalID := visible[m.goal.cursor].Id
+	m.goal.err = nil
+	m.goal.mode = goalList
+	m.mode = modeList
+	return m, createAndLinkTaskCmd(m.client, msg, goalID)
 }
 
 // handleGoalEditSaved handles an editSavedMsg when the Goals tab is active.
@@ -1473,7 +1684,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.visible) > 0 {
 			task := m.visible[m.cursor].node.Task
 			m.originalCursor = m.cursor
-			m.edit = NewEditForm(task, m.cursor)
+			m.edit = NewEditForm(task, m.cursor, m.goal.goals)
 			m.mode = modeEdit
 			m.err = nil
 		}
@@ -1643,8 +1854,11 @@ func (m Model) handleHelpKey(_ tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
-	// Route to goal handler if on Goals tab.
+	// Route to goal handlers if on Goals tab.
 	if m.activeTab == tabGoals {
+		if m.goal.mode == goalNewTask {
+			return m.handleGoalNewTaskSaved(msg)
+		}
 		return m.handleGoalEditSaved(msg)
 	}
 
@@ -1803,6 +2017,17 @@ func findParentNode(tree []*cli.TreeNode, childID int64) *cli.TreeNode {
 		}
 	}
 	return nil
+}
+
+// associationRoots returns tasks directly associated with goalID (task.GoalId == goalID).
+func associationRoots(tasks []*taskv1.Task, goalID int64) []*taskv1.Task {
+	var roots []*taskv1.Task
+	for _, t := range tasks {
+		if t.GoalId != nil && t.GetGoalId() == goalID {
+			roots = append(roots, t)
+		}
+	}
+	return roots
 }
 
 func findCursor(visible []*visibleRow, taskID int64) int {

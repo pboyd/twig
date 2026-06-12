@@ -190,6 +190,22 @@ func (s *fakeTaskService) isDescendant(ancestorID, candidateID int64) bool {
 }
 
 // deleteSubtree removes a task and all its descendants. Caller must hold mu.
+func (s *fakeTaskService) SetTaskGoal(_ context.Context, req *connect.Request[taskv1.SetTaskGoalRequest]) (*connect.Response[taskv1.SetTaskGoalResponse], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[req.Msg.TaskId]
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task not found"))
+	}
+	// Simulate nesting constraint: if task name contains "nested-conflict", reject.
+	if strings.Contains(task.Name, "nested-conflict") && req.Msg.GoalId != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("parent goal"))
+	}
+	task.GoalId = req.Msg.GoalId
+	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: task}), nil
+}
+
 func (s *fakeTaskService) deleteSubtree(id int64) {
 	delete(s.tasks, id)
 	for _, t := range s.tasks {
@@ -895,5 +911,102 @@ func TestListSubtaskSiblingsByPosition(t *testing.T) {
 	idxC := strings.Index(stdout, "child-c")
 	if idxC > idxA || idxA > idxB {
 		t.Errorf("expected position order child-c < child-a < child-b, got:\n%s", stdout)
+	}
+}
+
+// ── T022: --goal flag tests ──────────────────────────────────────────────────
+
+func TestAddWithGoal(t *testing.T) {
+	h := newTestHarness(t)
+	stdout, stderr, code := runCmd(runAdd, h, []string{"--goal", "42", "my task"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "created task") {
+		t.Errorf("expected success message, got: %s", stdout)
+	}
+	// Verify goal_id was set on the created task.
+	h.svc.mu.Lock()
+	task := h.svc.tasks[1]
+	h.svc.mu.Unlock()
+	if task.GoalId == nil || *task.GoalId != 42 {
+		t.Errorf("task.GoalId: want 42, got %v", task.GoalId)
+	}
+}
+
+func TestAddWithGoalNone(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runAdd, h, []string{"--goal", "none", "my task"})
+	// "none" means clear — no SetTaskGoal call needed after create; should succeed.
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+}
+
+func TestAddWithGoalInvalidID(t *testing.T) {
+	h := newTestHarness(t)
+	_, stderr, code := runCmd(runAdd, h, []string{"--goal", "notanumber", "my task"})
+	if code == 0 {
+		t.Fatal("expected non-zero exit for invalid goal id")
+	}
+	if !strings.Contains(stderr, "--goal") {
+		t.Errorf("expected --goal in error message; got: %s", stderr)
+	}
+}
+
+func TestModWithGoalFlag(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"task one"}) // id=1
+
+	stdout, stderr, code := runCmd(runMod, h, []string{"1", "--goal", "99"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "updated task") {
+		t.Errorf("expected success message, got: %s", stdout)
+	}
+	h.svc.mu.Lock()
+	task := h.svc.tasks[1]
+	h.svc.mu.Unlock()
+	if task.GoalId == nil || *task.GoalId != 99 {
+		t.Errorf("task.GoalId: want 99, got %v", task.GoalId)
+	}
+}
+
+func TestModWithGoalNoneClears(t *testing.T) {
+	h := newTestHarness(t)
+	runCmd(runAdd, h, []string{"task one"}) // id=1
+
+	// Set a goal first.
+	runCmd(runMod, h, []string{"1", "--goal", "99"})
+
+	// Clear it with "none".
+	stdout, stderr, code := runCmd(runMod, h, []string{"1", "--goal", "none"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "updated task") {
+		t.Errorf("expected success message, got: %s", stdout)
+	}
+	h.svc.mu.Lock()
+	task := h.svc.tasks[1]
+	h.svc.mu.Unlock()
+	if task.GoalId != nil {
+		t.Errorf("task.GoalId: expected nil after --goal none, got %v", task.GoalId)
+	}
+}
+
+func TestModWithGoalNestingConflictMessage(t *testing.T) {
+	h := newTestHarness(t)
+	// Create a task with the special name that triggers FailedPrecondition in the fake service.
+	runCmd(runAdd, h, []string{"nested-conflict task"}) // id=1
+
+	_, stderr, code := runCmd(runMod, h, []string{"1", "--goal", "5"})
+	if code == 0 {
+		t.Fatal("expected non-zero exit for nesting conflict")
+	}
+	// The playful nesting error message should mention clearing the goal link.
+	if !strings.Contains(stderr, "clear") && !strings.Contains(stderr, "subtree") {
+		t.Errorf("expected nesting-conflict message; got: %s", stderr)
 	}
 }

@@ -463,7 +463,7 @@ func TestView_PomTimerInModeEdit(t *testing.T) {
 		startAt:  time.Now().Add(-5 * time.Minute),
 	}
 	m.mode = modeEdit
-	m.edit = NewEditForm(tasks[0], 0)
+	m.edit = NewEditForm(tasks[0], 0, nil)
 	out := m.viewWithForm()
 	if !contains(out, "task-one") {
 		t.Errorf("modeEdit view should show timer; got:\n%q", out[:min(len(out), 200)])

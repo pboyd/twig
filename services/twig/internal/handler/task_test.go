@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
@@ -1495,6 +1496,291 @@ func TestUpdateTask_SnoozeUntil_Integration(t *testing.T) {
 		}
 		if resp.Msg.Task.SnoozeUntil != nil {
 			t.Errorf("expected nil snooze_until after clear, got %v", resp.Msg.Task.SnoozeUntil)
+		}
+	})
+}
+
+// ---- Integration tests: T008 — SetTaskGoal + goal_id in responses ----
+
+func TestSetTaskGoal_SetAndClear(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "linked task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "My goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	t.Run("set goal_id", func(t *testing.T) {
+		resp, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+			TaskId: taskID,
+			GoalId: &goalID,
+		}))
+		if err != nil {
+			t.Fatalf("SetTaskGoal: %v", err)
+		}
+		if resp.Msg.Task.GoalId == nil || *resp.Msg.Task.GoalId != goalID {
+			t.Errorf("SetTaskGoal response goal_id = %v, want %d", resp.Msg.Task.GoalId, goalID)
+		}
+	})
+
+	t.Run("goal_id appears in GetTask", func(t *testing.T) {
+		gr, err := h.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+		if err != nil {
+			t.Fatalf("GetTask: %v", err)
+		}
+		if gr.Msg.Task.GoalId == nil || *gr.Msg.Task.GoalId != goalID {
+			t.Errorf("GetTask goal_id = %v, want %d", gr.Msg.Task.GoalId, goalID)
+		}
+	})
+
+	t.Run("goal_id appears in ListTasks", func(t *testing.T) {
+		lr, err := h.ListTasks(ctx, connect.NewRequest(&taskv1.ListTasksRequest{}))
+		if err != nil {
+			t.Fatalf("ListTasks: %v", err)
+		}
+		found := false
+		for _, task := range lr.Msg.Tasks {
+			if task.Id == taskID {
+				found = true
+				if task.GoalId == nil || *task.GoalId != goalID {
+					t.Errorf("ListTasks goal_id = %v, want %d", task.GoalId, goalID)
+				}
+			}
+		}
+		if !found {
+			t.Error("task not found in ListTasks")
+		}
+	})
+
+	t.Run("clear goal_id", func(t *testing.T) {
+		resp, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+			TaskId: taskID,
+			// GoalId nil → clear
+		}))
+		if err != nil {
+			t.Fatalf("SetTaskGoal clear: %v", err)
+		}
+		if resp.Msg.Task.GoalId != nil {
+			t.Errorf("expected nil goal_id after clear, got %v", resp.Msg.Task.GoalId)
+		}
+	})
+
+	t.Run("goal_id nil in GetTask after clear", func(t *testing.T) {
+		gr, err := h.GetTask(ctx, connect.NewRequest(&taskv1.GetTaskRequest{Id: taskID}))
+		if err != nil {
+			t.Fatalf("GetTask after clear: %v", err)
+		}
+		if gr.Msg.Task.GoalId != nil {
+			t.Errorf("GetTask goal_id = %v, want nil", gr.Msg.Task.GoalId)
+		}
+	})
+}
+
+func TestSetTaskGoal_AncestorNestingRejected(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Ancestor goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent"}))
+	if err != nil {
+		t.Fatalf("CreateTask parent: %v", err)
+	}
+	parentID := parentResp.Msg.Task.Id
+
+	childResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+		Name:     "child",
+		ParentId: &parentID,
+	}))
+	if err != nil {
+		t.Fatalf("CreateTask child: %v", err)
+	}
+	childID := childResp.Msg.Task.Id
+
+	// Assign goal to parent.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: parentID,
+		GoalId: &goalID,
+	}))
+	if err != nil {
+		t.Fatalf("SetTaskGoal on parent: %v", err)
+	}
+
+	// Assigning same (or any) goal to child should fail — ancestor has goal.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: childID,
+		GoalId: &goalID,
+	}))
+	if err == nil {
+		t.Fatal("expected FailedPrecondition (ancestor has goal), got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeFailedPrecondition {
+		t.Errorf("expected CodeFailedPrecondition, got %v", err)
+	}
+}
+
+func TestSetTaskGoal_DescendantNestingRejected(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Descendant goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	parentResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "parent"}))
+	if err != nil {
+		t.Fatalf("CreateTask parent: %v", err)
+	}
+	parentID := parentResp.Msg.Task.Id
+
+	childResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+		Name:     "child",
+		ParentId: &parentID,
+	}))
+	if err != nil {
+		t.Fatalf("CreateTask child: %v", err)
+	}
+	childID := childResp.Msg.Task.Id
+
+	// Assign goal to child.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: childID,
+		GoalId: &goalID,
+	}))
+	if err != nil {
+		t.Fatalf("SetTaskGoal on child: %v", err)
+	}
+
+	// Assigning goal to parent should fail — descendant has goal.
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: parentID,
+		GoalId: &goalID,
+	}))
+	if err == nil {
+		t.Fatal("expected FailedPrecondition (descendant has goal), got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeFailedPrecondition {
+		t.Errorf("expected CodeFailedPrecondition, got %v", err)
+	}
+}
+
+func TestUpdateTask_ReparentGoalNestingRejected(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Reparent goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	// Create two separate tasks, each linked to the same goal (different subtrees).
+	t1Resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task1"}))
+	if err != nil {
+		t.Fatalf("CreateTask task1: %v", err)
+	}
+	t1ID := t1Resp.Msg.Task.Id
+
+	t2Resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task2"}))
+	if err != nil {
+		t.Fatalf("CreateTask task2: %v", err)
+	}
+	t2ID := t2Resp.Msg.Task.Id
+
+	// Each root task gets its own goal assignment.
+	goal2Resp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Second goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal second: %v", err)
+	}
+	goal2ID := goal2Resp.Msg.Goal.Id
+
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{TaskId: t1ID, GoalId: &goalID}))
+	if err != nil {
+		t.Fatalf("SetTaskGoal task1: %v", err)
+	}
+	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{TaskId: t2ID, GoalId: &goal2ID}))
+	if err != nil {
+		t.Fatalf("SetTaskGoal task2: %v", err)
+	}
+
+	// Moving task2 under task1 would nest two goal associations — must fail.
+	_, err = h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       t2ID,
+		Name:     "task2",
+		ParentId: &t1ID,
+	}))
+	if err == nil {
+		t.Fatal("expected FailedPrecondition for goal nesting on re-parent, got nil")
+	}
+	ce, ok := err.(*connect.Error)
+	if !ok || ce.Code() != connect.CodeFailedPrecondition {
+		t.Errorf("expected CodeFailedPrecondition, got %v", err)
+	}
+}
+
+func TestSetTaskGoal_NotFound(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "real goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	taskResp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "real task"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	t.Run("unknown task", func(t *testing.T) {
+		_, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+			TaskId: 999999,
+			GoalId: &goalID,
+		}))
+		if err == nil {
+			t.Fatal("expected CodeNotFound, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("unknown goal", func(t *testing.T) {
+		badGoalID := int64(999999)
+		_, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+			TaskId: taskID,
+			GoalId: &badGoalID,
+		}))
+		if err == nil {
+			t.Fatal("expected CodeNotFound, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
 		}
 	})
 }

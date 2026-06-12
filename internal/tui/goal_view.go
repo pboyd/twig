@@ -8,6 +8,7 @@ import (
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/goal"
 )
 
 // goalGroup holds a state-grouped set of goals for display.
@@ -241,6 +242,11 @@ func (m Model) renderGoalList(width int) string {
 
 // renderGoalDetail renders the right pane of the Goals tab.
 func (m Model) renderGoalDetail(width int) string {
+	// Picker overlay (L and U modes).
+	if m.goal.mode == goalPickLink || m.goal.mode == goalPickUnlink {
+		return m.renderGoalPicker(width)
+	}
+
 	visible := visibleGoals(m.goal.goals, m.goal.showAll)
 	if len(visible) == 0 || m.goal.cursor >= len(visible) {
 		return ""
@@ -281,7 +287,6 @@ func (m Model) renderGoalDetail(width int) string {
 	// Description.
 	if desc := g.GetDescription(); desc != "" {
 		sb.WriteByte('\n')
-		// Word-wrap description to width.
 		words := strings.Fields(desc)
 		lineW := 0
 		for _, w := range words {
@@ -299,6 +304,87 @@ func (m Model) renderGoalDetail(width int) string {
 		sb.WriteByte('\n')
 	}
 
+	// Associated task subtrees.
+	allTasks := flattenTree(m.tree)
+	subtree := goal.SubtreeForGoal(allTasks, g.GetId())
+	if len(subtree) > 0 {
+		sb.WriteByte('\n')
+		taskLabel := "Tasks:"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(taskLabel))
+		} else {
+			sb.WriteString(taskLabel)
+		}
+		sb.WriteByte('\n')
+		// Build a mini-tree from the subtree and render it.
+		roots := cli.BuildTree(subtree)
+		rendered := renderGoalTaskTree(roots, m.styled, width)
+		sb.WriteString(rendered)
+	} else {
+		sb.WriteByte('\n')
+		noTasks := "No tasks attached yet — every great goal starts as a wish."
+		if m.styled {
+			sb.WriteString(dimStyle.Render(noTasks))
+		} else {
+			sb.WriteString(noTasks)
+		}
+		sb.WriteByte('\n')
+	}
+
+	return sb.String()
+}
+
+// renderGoalPicker renders the task picker overlay for L (link) and U (unlink) modes.
+func (m Model) renderGoalPicker(width int) string {
+	var sb strings.Builder
+	label := "Link task (↑/↓: nav  enter: pick  esc: cancel)"
+	if m.goal.mode == goalPickUnlink {
+		label = "Unlink task (↑/↓: nav  enter: pick  esc: cancel)"
+	}
+	if m.styled {
+		sb.WriteString(dimStyle.Render(label))
+	} else {
+		sb.WriteString(label)
+	}
+	sb.WriteByte('\n')
+
+	if len(m.goal.picker.visible) == 0 {
+		sb.WriteString("(no tasks)\n")
+		return sb.String()
+	}
+	for i, row := range m.goal.picker.visible {
+		indent := strings.Repeat("  ", row.depth)
+		line := indent + row.node.Task.Name
+		if i == m.goal.picker.cursor {
+			if m.styled {
+				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
+			} else {
+				line = highlightStyle.Render(padRightAnsi(line, width))
+			}
+		}
+		sb.WriteString(line)
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+// renderGoalTaskTree renders a simple flat list of task names in the goal detail pane.
+func renderGoalTaskTree(roots []*cli.TreeNode, styled bool, width int) string {
+	var sb strings.Builder
+	var walk func(nodes []*cli.TreeNode, depth int)
+	walk = func(nodes []*cli.TreeNode, depth int) {
+		for _, n := range nodes {
+			indent := strings.Repeat("  ", depth+1)
+			line := indent + n.Task.Name
+			if due := cli.FormatDue(n.Task.Due); due != "" {
+				line += "  " + due
+			}
+			sb.WriteString(line)
+			sb.WriteByte('\n')
+			walk(n.Children, depth+1)
+		}
+	}
+	walk(roots, 0)
 	return sb.String()
 }
 

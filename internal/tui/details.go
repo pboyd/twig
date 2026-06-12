@@ -13,7 +13,8 @@ import (
 // the given width. When styled, the name is rendered as a bold accent header
 // and labels are dim and column-aligned. scheduledDays is the task's scheduled
 // days slice (ascending YYYY-MM-DD, today-or-future); nil or empty omits the line.
-func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []string) string {
+// effectiveGoalName, when non-empty, adds a "Goal:" line (from own or inherited goal).
+func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
 	if task == nil {
 		return ""
 	}
@@ -25,6 +26,10 @@ func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []st
 
 		if due := cli.FormatDue(task.Due); due != "" {
 			fmt.Fprintf(&sb, "Due:  %s\n", due)
+		}
+
+		if effectiveGoalName != "" {
+			fmt.Fprintf(&sb, "Goal: %s\n", effectiveGoalName)
 		}
 
 		if len(scheduledDays) > 0 {
@@ -68,6 +73,10 @@ func renderDetails(task *taskv1.Task, width int, styled bool, scheduledDays []st
 
 	if due := cli.FormatDue(task.Due); due != "" {
 		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Due: "), due)
+	}
+
+	if effectiveGoalName != "" {
+		fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Goal:"), effectiveGoalName)
 	}
 
 	if len(scheduledDays) > 0 {

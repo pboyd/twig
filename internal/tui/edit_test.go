@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,7 +22,7 @@ func TestEditFormPreFill(t *testing.T) {
 		Description: "2% please",
 		Estimate:    2,
 	}
-	f := NewEditForm(task, 0)
+	f := NewEditForm(task, 0, nil)
 
 	if f.name.Value() != "buy milk" {
 		t.Errorf("name: want %q, got %q", "buy milk", f.name.Value())
@@ -71,6 +72,7 @@ func TestNewRootFormIsBlank(t *testing.T) {
 }
 
 // TestEditFormTabCyclesFocus verifies Tab cycles through all focus positions.
+// When showGoalField is false (NewRootForm), focusGoal is skipped.
 func TestEditFormTabCyclesFocus(t *testing.T) {
 	f := NewRootForm(0)
 	keys := DefaultKeyMap()
@@ -79,14 +81,16 @@ func TestEditFormTabCyclesFocus(t *testing.T) {
 		t.Fatalf("initial focus: want focusName(%d), got %d", focusName, f.focusIndex)
 	}
 
-	for i := 1; i < focusCount; i++ {
+	// Expected focus order (focusGoal is skipped because showGoalField=false).
+	want := []int{focusDescription, focusDue, focusEstimate, focusSnooze, focusSave, focusCancel}
+	for step, w := range want {
 		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
-		if f.focusIndex != i {
-			t.Errorf("after %d tab(s): want %d, got %d", i, i, f.focusIndex)
+		if f.focusIndex != w {
+			t.Errorf("after %d tab(s): want %d, got %d", step+1, w, f.focusIndex)
 		}
 	}
 
-	// One more Tab wraps to 0.
+	// One more Tab wraps back to focusName.
 	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
 	if f.focusIndex != focusName {
 		t.Errorf("after wrap: want focusName(%d), got %d", focusName, f.focusIndex)
@@ -127,7 +131,7 @@ func TestEditFormEscCancels(t *testing.T) {
 // TestEditFormCtrlSSaves verifies Ctrl+S dispatches editSavedMsg.
 func TestEditFormCtrlSSaves(t *testing.T) {
 	task := makeTask(10, "walk the dog")
-	f := NewEditForm(task, 2)
+	f := NewEditForm(task, 2, nil)
 	keys := DefaultKeyMap()
 
 	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
@@ -223,7 +227,7 @@ func TestEditForm_CtrlG_DescriptionFocused(t *testing.T) {
 func TestEditFormSnooze_PreFill(t *testing.T) {
 	snoozeTime := timestamppb.New(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	task := &taskv1.Task{Id: 1, Name: "task", SnoozeUntil: snoozeTime}
-	f := NewEditForm(task, 0)
+	f := NewEditForm(task, 0, nil)
 	if f.snooze.Value() != "2026-09-01" {
 		t.Errorf("snooze prefill: want %q, got %q", "2026-09-01", f.snooze.Value())
 	}
@@ -232,7 +236,7 @@ func TestEditFormSnooze_PreFill(t *testing.T) {
 // TestEditFormSnooze_SaveEmitsSnoozeStr verifies Ctrl+S emits snoozeStr.
 func TestEditFormSnooze_SaveEmitsSnoozeStr(t *testing.T) {
 	task := makeTask(1, "task")
-	f := NewEditForm(task, 0)
+	f := NewEditForm(task, 0, nil)
 	keys := DefaultKeyMap()
 
 	// Set the snooze value directly.
@@ -255,7 +259,7 @@ func TestEditFormSnooze_SaveEmitsSnoozeStr(t *testing.T) {
 // TestEditFormSnooze_BlankSnoozeIsEmpty verifies snoozeStr is empty when snooze field is blank.
 func TestEditFormSnooze_BlankSnoozeIsEmpty(t *testing.T) {
 	task := makeTask(2, "no snooze")
-	f := NewEditForm(task, 0)
+	f := NewEditForm(task, 0, nil)
 	keys := DefaultKeyMap()
 
 	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
@@ -562,5 +566,163 @@ func TestEditForm_Calendar_NowFuncInjection(t *testing.T) {
 	wantToday := time.Date(2030, 1, 15, 0, 0, 0, 0, time.UTC)
 	if !f.calendar.today.Equal(wantToday) {
 		t.Errorf("calendar.today: want %v, got %v", wantToday, f.calendar.today)
+	}
+}
+
+// ── T022: Goal field in task edit form ──────────────────────────────────────
+
+func makeGoals() []*goalv1.Goal {
+	return []*goalv1.Goal{
+		{Id: 10, Name: "Alpha goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: 20, Name: "Beta goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING},
+	}
+}
+
+// TestEditForm_GoalField_ShowsWhenGoalsProvided verifies showGoalField is true
+// when goals are passed to NewEditForm.
+func TestEditForm_GoalField_ShowsWhenGoalsProvided(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, makeGoals())
+	if !f.showGoalField {
+		t.Error("showGoalField should be true when goals are provided")
+	}
+}
+
+// TestEditForm_GoalField_HiddenWhenNilGoals verifies showGoalField is false
+// when nil goals are passed (e.g. when editing a goal record itself).
+func TestEditForm_GoalField_HiddenWhenNilGoals(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, nil)
+	if f.showGoalField {
+		t.Error("showGoalField should be false when goals param is nil")
+	}
+}
+
+// TestEditForm_GoalField_DefaultNone verifies that a task with no goal_id starts
+// at "none" (goalIdx == -1).
+func TestEditForm_GoalField_DefaultNone(t *testing.T) {
+	task := makeTask(1, "task") // GoalId nil
+	f := NewEditForm(task, 0, makeGoals())
+	if f.goalIdx != -1 {
+		t.Errorf("goalIdx: want -1 (none), got %d", f.goalIdx)
+	}
+}
+
+// TestEditForm_GoalField_PreFillFromTask verifies that a task with goal_id pre-selects
+// the matching goal in the form.
+func TestEditForm_GoalField_PreFillFromTask(t *testing.T) {
+	id20 := int64(20)
+	task := &taskv1.Task{Id: 1, Name: "task", GoalId: &id20}
+	f := NewEditForm(task, 0, makeGoals())
+	if f.goalIdx != 1 {
+		t.Errorf("goalIdx: want 1 (second goal id=20), got %d", f.goalIdx)
+	}
+}
+
+// TestEditForm_GoalField_RightArrowCycles verifies → cycles none→goal0→goal1→none.
+func TestEditForm_GoalField_RightArrowCycles(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, makeGoals())
+	f.focusIndex = focusGoal
+	keys := DefaultKeyMap()
+
+	// none → first goal
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if f.goalIdx != 0 {
+		t.Errorf("after →: want goalIdx=0, got %d", f.goalIdx)
+	}
+
+	// first → second
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if f.goalIdx != 1 {
+		t.Errorf("after →→: want goalIdx=1, got %d", f.goalIdx)
+	}
+
+	// second → none (wrap)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if f.goalIdx != -1 {
+		t.Errorf("after →→→ (wrap): want goalIdx=-1, got %d", f.goalIdx)
+	}
+}
+
+// TestEditForm_GoalField_LeftArrowCycles verifies ← cycles none→last goal→...
+func TestEditForm_GoalField_LeftArrowCycles(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, makeGoals())
+	f.focusIndex = focusGoal
+	keys := DefaultKeyMap()
+
+	// none → last goal (wrap backwards)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyLeft}, keys)
+	if f.goalIdx != 1 {
+		t.Errorf("after ← from none: want goalIdx=1 (last), got %d", f.goalIdx)
+	}
+}
+
+// TestEditForm_GoalField_TabIncludesGoal verifies Tab cycles through focusGoal
+// when showGoalField is true.
+func TestEditForm_GoalField_TabIncludesGoal(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, makeGoals())
+	keys := DefaultKeyMap()
+
+	// Tab from focusName through all fields — should pass through focusGoal.
+	foundGoal := false
+	for i := 0; i < focusCount; i++ {
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f.focusIndex == focusGoal {
+			foundGoal = true
+			break
+		}
+	}
+	if !foundGoal {
+		t.Errorf("Tab cycling with showGoalField=true never reached focusGoal (%d)", focusGoal)
+	}
+}
+
+// TestEditForm_GoalField_SaveEmitsGoalChanged verifies editSavedMsg.goalChanged is true
+// when the goal is changed from its original value.
+func TestEditForm_GoalField_SaveEmitsGoalChanged(t *testing.T) {
+	task := makeTask(1, "task") // no goal originally
+	f := NewEditForm(task, 0, makeGoals())
+	f.focusIndex = focusGoal
+	keys := DefaultKeyMap()
+
+	// Select first goal with →.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+
+	// Save.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if !saved.goalChanged {
+		t.Error("goalChanged should be true when goal was set from none")
+	}
+	if saved.newGoalID == nil || *saved.newGoalID != 10 {
+		t.Errorf("newGoalID: want 10, got %v", saved.newGoalID)
+	}
+}
+
+// TestEditForm_GoalField_SaveUnchangedNotChanged verifies goalChanged is false
+// when no change was made.
+func TestEditForm_GoalField_SaveUnchangedNotChanged(t *testing.T) {
+	task := makeTask(1, "task") // no goal originally
+	f := NewEditForm(task, 0, makeGoals())
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, DefaultKeyMap())
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.goalChanged {
+		t.Error("goalChanged should be false when goal was not changed")
 	}
 }

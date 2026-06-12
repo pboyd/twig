@@ -66,6 +66,9 @@ type KeyMap struct {
 	GoalToggleAll    key.Binding
 	GoalRankUp       key.Binding
 	GoalRankDown     key.Binding
+	GoalAddTask      key.Binding
+	GoalLinkTask     key.Binding
+	GoalUnlinkTask   key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -275,6 +278,18 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("}"),
 			key.WithHelp("}", "rank lower"),
 		),
+		GoalAddTask: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add task"),
+		),
+		GoalLinkTask: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "link task"),
+		),
+		GoalUnlinkTask: key.NewBinding(
+			key.WithKeys("U"),
+			key.WithHelp("U", "unlink task"),
+		),
 	}
 }
 
@@ -299,7 +314,8 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			{k.Up, k.Down, k.GoalNew, k.GoalEdit},
 			{k.GoalDelete, k.GoalSetIncubate, k.GoalSetCommit},
 			{k.GoalSetComplete, k.GoalSetArchive, k.GoalRankUp, k.GoalRankDown},
-			{k.GoalToggleAll, k.Help, k.Quit},
+			{k.GoalAddTask, k.GoalLinkTask, k.GoalUnlinkTask, k.GoalToggleAll},
+			{k.Help, k.Quit},
 		}
 	}
 	if k.ReportMode {

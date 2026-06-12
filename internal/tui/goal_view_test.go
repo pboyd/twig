@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
+	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
+	"github.com/pboyd/twig/internal/cli"
 )
 
 // ── T017: Goals tab unit tests ───────────────────────────────────────────────
@@ -151,6 +153,107 @@ func TestGoal_EmptyStateCopyWhenAllGoalsHidden(t *testing.T) {
 	want := "A blank canvas! Press 'n' to plant your first goal."
 	if !strings.Contains(out, want) {
 		t.Errorf("empty-state copy with all-hidden goals: want %q in output, got:\n%q", want, out)
+	}
+}
+
+// ── T022: Association tests ──────────────────────────────────────────────────
+
+// TestGoal_LKeyEntersPickLinkMode verifies that pressing 'L' on the goals tab
+// puts the model into goalPickLink mode.
+func TestGoal_LKeyEntersPickLinkMode(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'L', Text: "L"})
+	m2 := next.(Model)
+
+	if m2.goal.mode != goalPickLink {
+		t.Errorf("after 'L': want goalPickLink (%d), got %d", int(goalPickLink), int(m2.goal.mode))
+	}
+}
+
+// TestGoal_UKeyEntersPickUnlinkMode verifies that pressing 'U' on the goals tab
+// puts the model into goalPickUnlink mode when there are tasks linked to the goal.
+func TestGoal_UKeyEntersPickUnlinkMode(t *testing.T) {
+	goalID := int64(1)
+	goals := []*goalv1.Goal{
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	// Create a task linked to the goal so unlink mode is available.
+	linkedTask := &taskv1.Task{Id: 100, Name: "linked task", GoalId: &goalID}
+	tree := []*cli.TreeNode{{Task: linkedTask}}
+
+	m := ExportNewGoalModel(nil, goals)
+	m.tree = tree
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'U', Text: "U"})
+	m2 := next.(Model)
+
+	if m2.goal.mode != goalPickUnlink {
+		t.Errorf("after 'U': want goalPickUnlink (%d), got %d", int(goalPickUnlink), int(m2.goal.mode))
+	}
+}
+
+// TestGoal_PickerRendersLabel verifies the picker overlay renders the appropriate
+// label in goalPickLink mode.
+func TestGoal_PickerRendersLabel(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.mode = goalPickLink
+
+	out := m.renderGoalDetail(40)
+	if !strings.Contains(out, "Link task") {
+		t.Errorf("picker in link mode: expected 'Link task' label; got:\n%q", out)
+	}
+}
+
+// TestGoal_PickerUnlinkRendersLabel verifies the picker overlay renders the
+// "Unlink task" label in goalPickUnlink mode.
+func TestGoal_PickerUnlinkRendersLabel(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.mode = goalPickUnlink
+
+	out := m.renderGoalDetail(40)
+	if !strings.Contains(out, "Unlink task") {
+		t.Errorf("picker in unlink mode: expected 'Unlink task' label; got:\n%q", out)
+	}
+}
+
+// TestGoal_EscCancelsPicker verifies Esc from picker mode returns to goalList.
+func TestGoal_EscCancelsPicker(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.mode = goalPickLink
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m2 := next.(Model)
+
+	if m2.goal.mode != goalList {
+		t.Errorf("after Esc from picker: want goalList (%d), got %d", int(goalList), int(m2.goal.mode))
+	}
+}
+
+// TestGoal_NoTasksDetailCopy verifies the detail pane shows the empty-task copy
+// when no tasks are attached to the selected goal.
+func TestGoal_NoTasksDetailCopy(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Lonely goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals) // no tree, so no tasks
+
+	out := m.renderGoalDetail(60)
+	want := "No tasks attached yet"
+	if !strings.Contains(out, want) {
+		t.Errorf("detail pane: expected %q; got:\n%q", want, out)
 	}
 }
 

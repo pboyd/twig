@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/goal"
 	"github.com/pboyd/twig/internal/pomodoro"
 )
 
@@ -452,7 +453,27 @@ func (m Model) renderDetailPane(width int) string {
 		return ""
 	}
 	task := m.visible[m.cursor].node.Task
-	return renderDetails(task, width, m.styled, m.scheduledDays[task.Id])
+	goalName := m.effectiveGoalName(task.Id)
+	return renderDetails(task, width, m.styled, m.scheduledDays[task.Id], goalName)
+}
+
+// effectiveGoalName returns the display name of the nearest self-or-ancestor goal
+// for the given task ID, or "" if none.
+func (m Model) effectiveGoalName(taskID int64) string {
+	allTasks := flattenTree(m.tree)
+	gid, ok := goal.EffectiveGoalID(allTasks, taskID)
+	if !ok {
+		return ""
+	}
+	for _, g := range m.goal.goals {
+		if g.GetId() == gid {
+			return g.GetName()
+		}
+	}
+	// Goal present on task but not in our cached list (e.g. completed/archived).
+	// Return the raw ID as a fallback so something appears.
+	_ = gid
+	return ""
 }
 
 func (m Model) renderStatus() string {

@@ -14,6 +14,47 @@ import (
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 )
 
+// setTaskGoal calls SetTaskGoal for the given task. goalStr is the --goal flag
+// value: a numeric ID to associate, or "none" to clear. Returns false and prints
+// an error on failure.
+func setTaskGoal(client taskv1connect.TaskServiceClient, addr string, taskID int64, goalStr string) bool {
+	req := &taskv1.SetTaskGoalRequest{TaskId: taskID}
+	if goalStr != "none" {
+		gid, err := strconv.ParseInt(goalStr, 10, 64)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "--goal must be a goal id or 'none', got %q\n", goalStr)
+			return false
+		}
+		req.GoalId = &gid
+	}
+	_, err := client.SetTaskGoal(context.Background(), connect.NewRequest(req))
+	if err != nil {
+		if isFailedPrecondition(err) {
+			fmt.Fprintln(os.Stderr, nestingConflictMsg(err))
+		} else {
+			fmt.Fprintln(os.Stderr, mapError(err, addr))
+		}
+		return false
+	}
+	return true
+}
+
+// isFailedPrecondition returns true when err is a ConnectRPC FailedPrecondition error.
+func isFailedPrecondition(err error) bool {
+	ce, ok := err.(*connect.Error)
+	return ok && ce.Code() == connect.CodeFailedPrecondition
+}
+
+// nestingConflictMsg returns the playful nesting-conflict error copy.
+func nestingConflictMsg(err error) string {
+	// ConnectRPC nesting errors include the goal name in the message.
+	ce, ok := err.(*connect.Error)
+	if ok && ce.Message() != "" {
+		return fmt.Sprintf(`twig: that subtree already belongs to "%s" — clear that link first.`, ce.Message())
+	}
+	return "twig: that subtree already belongs to a goal — clear that link first."
+}
+
 func runList(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -120,14 +161,16 @@ func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	fs.SetOutput(os.Stderr)
 	var parentStr string
 	var dueStr string
+	var goalStr string
 	fs.StringVar(&parentStr, "parent", "", "parent task id")
 	fs.StringVar(&dueStr, "due", "", "due date (RFC 3339 or YYYY-MM-DD)")
+	fs.StringVar(&goalStr, "goal", "", "goal id to associate with")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
 
 	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: twig task add [--parent <id>] [--due <timestamp>] <name>")
+		fmt.Fprintln(os.Stderr, "usage: twig task add [--parent <id>] [--due <timestamp>] [--goal <id>] <name>")
 		return 1
 	}
 	name := fs.Arg(0)
@@ -157,7 +200,14 @@ func runAdd(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		fmt.Fprintln(os.Stderr, mapError(err, addr))
 		return 1
 	}
-	fmt.Printf("created task %d\n", resp.Msg.Task.Id)
+	newID := resp.Msg.Task.Id
+	fmt.Printf("created task %d\n", newID)
+
+	if goalStr != "" {
+		if !setTaskGoal(client, addr, newID, goalStr) {
+			return 1
+		}
+	}
 	return 0
 }
 
@@ -184,7 +234,7 @@ func runRm(client taskv1connect.TaskServiceClient, addr string, args []string) i
 
 func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) int {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>] [--goal <id>|none]")
 		return 1
 	}
 
@@ -198,8 +248,10 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	fs.SetOutput(os.Stderr)
 	var parentStr string
 	var dueStr string
+	var goalStr string
 	fs.StringVar(&parentStr, "parent", "", "parent task id")
 	fs.StringVar(&dueStr, "due", "", "due date (RFC 3339 or YYYY-MM-DD)")
+	fs.StringVar(&goalStr, "goal", "", "goal id to associate with, or 'none' to clear")
 
 	// Pre-separate flag tokens from positionals so flags work in any position.
 	var flagTokens []string
@@ -223,7 +275,7 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 	}
 
 	if len(positionals) > 1 {
-		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>]")
+		fmt.Fprintln(os.Stderr, "usage: twig task mod <id> [<name>] [--parent <id>] [--due <timestamp>] [--goal <id>|none]")
 		return 1
 	}
 
@@ -238,9 +290,18 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		hasName = true
 	}
 
-	if !hasName && parentStr == "" && dueStr == "" {
+	if !hasName && parentStr == "" && dueStr == "" && goalStr == "" {
 		fmt.Fprintln(os.Stderr, "nothing to update")
 		return 1
+	}
+
+	// If only --goal is being changed, call SetTaskGoal without touching UpdateTask.
+	if goalStr != "" && !hasName && parentStr == "" && dueStr == "" {
+		if !setTaskGoal(client, addr, id, goalStr) {
+			return 1
+		}
+		fmt.Printf("updated task %d\n", id)
+		return 0
 	}
 
 	// Fetch current state to preserve unflagged fields (fetch-then-update)
@@ -287,6 +348,14 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		fmt.Fprintln(os.Stderr, mapError(err, addr))
 		return 1
 	}
+
+	// Handle goal association after UpdateTask.
+	if goalStr != "" {
+		if !setTaskGoal(client, addr, id, goalStr) {
+			return 1
+		}
+	}
+
 	fmt.Printf("updated task %d\n", id)
 	return 0
 }
