@@ -12,8 +12,8 @@
 
 ### Session 2026-06-12
 
-- Q: When rendered content is wider than the field/terminal (wide tables, long code lines, long URLs), how should overflow be handled? → A: Soft-wrap to the available width — long lines wrap and table columns reflow/shrink to fit; all content stays visible (no horizontal scroll, no truncation in display mode).
-- Q: How should a markdown link surface its destination in display mode? → A: Emit terminal hyperlink escape sequences (OSC 8) where the terminal supports them (link text is clickable); on unsupported terminals, fall back to showing `text (url)` so the destination is always visible.
+- Q: When rendered content is wider than the field/terminal (wide tables, long code lines, long URLs), how should overflow be handled? → A: Soft-wrap prose/lists/quotes to the available width and reflow/shrink tables best-effort; no horizontal scrolling. Code blocks and unbreakable tokens (long URLs) are not wrapped and may clip at the pane edge; surrounding UI is never corrupted. (Refined during planning: a blanket "all content always visible" guarantee is not achievable for code blocks and very wide tables.)
+- Q: How should a markdown link surface its destination in display mode? → A: In styled mode, emit OSC 8 hyperlink escapes (clickable where supported, ignored elsewhere); in plain/unstyled mode, show `text (url)`. (Refined during planning: OSC 8 support cannot be reliably detected at runtime, so the inline-URL fallback keys off plain vs. styled output rather than terminal capability.)
 - Q: Which TUI text fields should be treated as markdown? → A: All user-authored fields across Goals/Tasks/Plan — task name & description, goal name & description, and plan-entry notes/text — with long fields getting full block rendering and short fields inline-only. Generated text (Report tab) is rendered as-is.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -68,7 +68,7 @@ A user opens a text field for editing in the TUI. They see and edit the original
 
 ### Edge Cases
 
-- **Width overflow**: Wide tables, long code lines, and long URLs that exceed the terminal width soft-wrap to the available width (table columns reflow/shrink) rather than bleeding into other UI; all content stays visible without horizontal scroll or truncation.
+- **Width overflow**: Prose wraps to width and wide tables are reflowed/shrunk to fit (best-effort) rather than bleeding into other UI. Long code lines and long URLs are not wrapped and may be clipped at the pane boundary; very wide tables may become cramped. In all cases surrounding UI is never corrupted and rendering never panics.
 - **Malformed/incomplete markdown**: Unclosed emphasis, a half-written table, or stray markup must render as readable text (as close to source as possible) and never crash or hang the TUI.
 - **Deeply nested lists/quotes**: Nesting beyond a reasonable depth should still render legibly, with indentation capped if needed to fit the width.
 - **Limited terminals**: On a terminal without ANSI color/style support (or where styling is disabled), output degrades to plain, readable text with no visible escape codes.
@@ -88,11 +88,11 @@ A user opens a text field for editing in the TUI. They see and edit the original
 - **FR-004**: Bold, italic, and similar emphasis MUST be conveyed using terminal styling (ANSI), and for supported inline styles the surrounding markup characters MUST NOT appear in display mode.
 - **FR-005**: Lists and tables MUST use Unicode glyphs (e.g. bullets, box-drawing characters) for markers and structure where the terminal supports them.
 - **FR-006**: Headings MUST be visually distinguished from body text using available terminal styling (since true heading semantics cannot be reproduced in a terminal).
-- **FR-007**: Links MUST render their display text in a distinguished style. On terminals that support hyperlink escape sequences (OSC 8), the link MUST be emitted as a clickable terminal hyperlink; on terminals without that support, the destination MUST be surfaced inline as `text (url)` so it is always visible.
+- **FR-007**: Links MUST render their display text in a distinguished style. In styled (TTY) mode, the link MUST be emitted wrapped in an OSC 8 hyperlink escape (clickable in terminals that support it; silently ignored by those that do not — note OSC 8 support cannot be reliably detected at runtime). In plain/unstyled mode, the destination MUST be surfaced inline as `text (url)` so it remains visible.
 - **FR-008**: Short, single-line fields (e.g. task name, goal name) MUST render inline markdown only; block-level syntax appearing in such fields MUST be rendered inline or neutralized so it does not break single-line layout.
 - **FR-009**: Rendered short-field text MUST be applied consistently wherever the field is displayed (list rows, tree rows, detail headers, and any other display context).
 - **FR-010**: Markdown rendering MUST be display-only and MUST NOT modify the stored text; editing a field MUST present the raw markdown source.
-- **FR-011**: Rendering MUST stay within the available field/terminal width and MUST NOT corrupt or overflow into surrounding TUI elements; overly wide content MUST soft-wrap to the available width (long lines wrap; table columns reflow/shrink to fit) so all content stays visible in display mode — without horizontal scrolling or truncation.
+- **FR-011**: Rendering MUST stay within the available field/terminal width and MUST NOT corrupt or overflow into surrounding TUI elements. Prose, lists, and blockquotes MUST soft-wrap to the available width; tables MUST be reflowed/shrunk to fit on a best-effort basis. Code blocks and unbreakable tokens (e.g. long URLs) are NOT wrapped and MAY be clipped at the pane boundary. Horizontal scrolling is not used. Regardless of content, rendering MUST NOT corrupt surrounding UI and MUST NOT panic.
 - **FR-012**: Malformed, incomplete, or unsupported markdown MUST render as readable text approximating the source and MUST NOT cause the TUI to crash, hang, or visibly garble unrelated UI.
 - **FR-013**: When terminal styling is unavailable or disabled, rendering MUST degrade gracefully to plain, readable text with no visible escape sequences; when Unicode glyphs are unavailable, structure MUST fall back to ASCII-equivalent markers.
 - **FR-014**: Constructs that cannot be faithfully represented in a terminal (e.g. images, raw HTML) MUST be handled gracefully (placeholder, alt text, or pass-through) rather than dropped silently or shown as broken markup.
@@ -121,5 +121,5 @@ A user opens a text field for editing in the TUI. They see and edit the original
 - **Fields treated as markdown** are the user-authored text fields across the Goals, Tasks, and Plan tabs (names/titles and descriptions/notes). Generated/computed text (e.g. the Report tab output) is rendered as-is unless it already contains user-authored markdown.
 - **Length character drives rendering depth**: long/multi-line fields get full block + inline rendering; short/single-line fields get inline-only rendering.
 - **Terminal capability detection** reuses the TUI's existing TTY/ANSI gating; where color/Unicode is unavailable, the documented fallbacks apply.
-- **Link destinations** are surfaced via OSC 8 terminal hyperlink escape sequences where the terminal supports them (clickable), otherwise inline as `text (url)`; true clickable headings/anchors are not attempted.
+- **Link destinations**: styled mode emits OSC 8 hyperlink escapes (clickable where supported); plain mode shows `text (url)`. OSC 8 support is not runtime-detectable, so the fallback keys off styled vs. plain output. True clickable headings/anchors are not attempted.
 - **No new stored data**: this feature does not change what is persisted on the server; the same raw text is stored and retrieved as today.
