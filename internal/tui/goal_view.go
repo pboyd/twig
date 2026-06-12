@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -219,7 +220,15 @@ func (m Model) renderGoalList(width int) string {
 		sb.WriteByte('\n')
 
 		for _, g := range grp.goals {
-			line := "  " + g.GetName()
+			maxW := width - 2
+			if maxW < 0 {
+				maxW = 0
+			}
+			renderedName := m.md.RenderInline(g.GetName(), markdown.Options{Width: maxW, Styled: m.styled})
+			if lipgloss.Width(renderedName) > maxW {
+				renderedName = ansi.Truncate(renderedName, maxW, "")
+			}
+			line := "  " + renderedName
 			if due := cli.FormatDue(g.GetDue()); due != "" {
 				line += "  " + due
 			}
@@ -257,11 +266,11 @@ func (m Model) renderGoalDetail(width int) string {
 	var sb strings.Builder
 
 	// Name (bold/accent).
-	name := g.GetName()
+	renderedName := m.md.RenderInline(g.GetName(), markdown.Options{Width: width, Styled: m.styled})
 	if m.styled {
-		sb.WriteString(accentStyle.Render(lipgloss.NewStyle().Bold(true).Render(name)))
+		sb.WriteString(accentStyle.Render(lipgloss.NewStyle().Bold(true).Render(renderedName)))
 	} else {
-		sb.WriteString(name)
+		sb.WriteString(renderedName)
 	}
 	sb.WriteByte('\n')
 
@@ -306,7 +315,7 @@ func (m Model) renderGoalDetail(width int) string {
 		sb.WriteByte('\n')
 		// Build a mini-tree from the subtree and render it.
 		roots := cli.BuildTree(subtree)
-		rendered := renderGoalTaskTree(roots, m.styled, width)
+		rendered := renderGoalTaskTree(roots, m.md, m.styled, width)
 		sb.WriteString(rendered)
 	} else {
 		sb.WriteByte('\n')
@@ -342,7 +351,15 @@ func (m Model) renderGoalPicker(width int) string {
 	}
 	for i, row := range m.goal.picker.visible {
 		indent := strings.Repeat("  ", row.depth)
-		line := indent + row.node.Task.Name
+		maxW := width - lipgloss.Width(indent)
+		if maxW < 0 {
+			maxW = 0
+		}
+		taskName := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxW, Styled: m.styled})
+		if lipgloss.Width(taskName) > maxW {
+			taskName = ansi.Truncate(taskName, maxW, "")
+		}
+		line := indent + taskName
 		if i == m.goal.picker.cursor {
 			if m.styled {
 				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
@@ -357,13 +374,21 @@ func (m Model) renderGoalPicker(width int) string {
 }
 
 // renderGoalTaskTree renders a simple flat list of task names in the goal detail pane.
-func renderGoalTaskTree(roots []*cli.TreeNode, styled bool, width int) string {
+func renderGoalTaskTree(roots []*cli.TreeNode, md *markdown.Renderer, styled bool, width int) string {
 	var sb strings.Builder
 	var walk func(nodes []*cli.TreeNode, depth int)
 	walk = func(nodes []*cli.TreeNode, depth int) {
 		for _, n := range nodes {
 			indent := strings.Repeat("  ", depth+1)
-			line := indent + n.Task.Name
+			maxW := width - lipgloss.Width(indent)
+			if maxW < 0 {
+				maxW = 0
+			}
+			taskName := md.RenderInline(n.Task.Name, markdown.Options{Width: maxW, Styled: styled})
+			if lipgloss.Width(taskName) > maxW {
+				taskName = ansi.Truncate(taskName, maxW, "")
+			}
+			line := indent + taskName
 			if due := cli.FormatDue(n.Task.Due); due != "" {
 				line += "  " + due
 			}

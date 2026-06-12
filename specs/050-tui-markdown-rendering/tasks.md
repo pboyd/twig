@@ -83,15 +83,15 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they fail)
 
-- [ ] T018 [P] [US2] `RenderInline` tests in `internal/markdown/markdown_test.go`: single-line output (no `\n`); block syntax (leading `# `, `- `) flattened inline without breaking layout; markup chars stripped; plain mode zero-escape
+- [X] T018 [P] [US2] `RenderInline` tests in `internal/markdown/markdown_test.go`: single-line output (no `\n`); block syntax (leading `# `, `- `) flattened inline without breaking layout; markup chars stripped; plain mode zero-escape
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Implement public `RenderInline()` in `internal/markdown/markdown.go`: parse, walk inline descendants only (block containers contribute flattened inline children), emit a single line with no newlines, behind the memoized dispatch (depends on T005, T006)
-- [ ] T020 [US2] Render task names via `m.md.RenderInline(name, markdown.Options{Width: width, Styled: m.styled})` at the tree-row site in `internal/tui/view.go` (preserve existing cursor/highlight + `padRightAnsi` behavior) (depends on T019, T008)
-- [ ] T021 [US2] Render goal names via `RenderInline` in `renderGoalList`, the `renderGoalDetail` name header, `renderGoalTaskTree`, and `renderGoalPicker` in `internal/tui/goal_view.go` (depends on T019, T008)
-- [ ] T022 [US2] Render plan-entry / task-name displays via `RenderInline` in `internal/tui/plan_view.go` (depends on T019, T008)
-- [ ] T023 [P] [US2] Integration tests for inline-rendered names in `internal/tui/view_test.go`, `internal/tui/goal_view_test.go`, and `internal/tui/plan_view_test.go` (consistent rendering across all display contexts — FR-009)
+- [X] T019 [US2] Implement public `RenderInline()` in `internal/markdown/markdown.go`: parse, walk inline descendants only (block containers contribute flattened inline children), emit a single line with no newlines, behind the memoized dispatch (depends on T005, T006)
+- [X] T020 [US2] Render task names via `m.md.RenderInline(name, markdown.Options{Width: width, Styled: m.styled})` at the tree-row site in `internal/tui/view.go` (preserve existing cursor/highlight + `padRightAnsi` behavior) (depends on T019, T008)
+- [X] T021 [US2] Render goal names via `RenderInline` in `renderGoalList`, the `renderGoalDetail` name header, `renderGoalTaskTree`, and `renderGoalPicker` in `internal/tui/goal_view.go` (depends on T019, T008)
+- [X] T022 [US2] Render plan-entry / task-name displays via `RenderInline` in `internal/tui/plan_view.go` (depends on T019, T008)
+- [X] T023 [P] [US2] Integration tests for inline-rendered names in `internal/tui/view_test.go`, `internal/tui/goal_view_test.go`, and `internal/tui/plan_view_test.go` (consistent rendering across all display contexts — FR-009)
 
 **Checkpoint**: US2 independently functional — names carry inline emphasis everywhere.
 
@@ -105,11 +105,11 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 ### Tests for User Story 3 ⚠️ (write first, ensure they fail)
 
-- [ ] T024 [P] [US3] Round-trip test in `internal/tui/edit_test.go`: entering edit mode shows raw markdown source (not rendered); saving an unchanged field leaves the stored text byte-for-byte identical (SC-003)
+- [X] T024 [P] [US3] Round-trip test in `internal/tui/edit_test.go`: entering edit mode shows raw markdown source (not rendered); saving an unchanged field leaves the stored text byte-for-byte identical (SC-003)
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] Verify and, if needed, adjust the edit/textarea paths in `internal/tui/edit.go` so editing always presents raw markdown source and no rendering is applied on the edit path (display-only invariant, FR-010) (depends on T024)
+- [X] T025 [US3] Verify and, if needed, adjust the edit/textarea paths in `internal/tui/edit.go` so editing always presents raw markdown source and no rendering is applied on the edit path (display-only invariant, FR-010) (depends on T024)
 
 **Checkpoint**: US3 verified — round-trip is safe; rendering is strictly display-only.
 
@@ -119,11 +119,11 @@ Single project (CLI/TUI client). New renderer package: `internal/markdown/`. Int
 
 **Purpose**: Edge cases, degradation, tone, cleanup, and final verification.
 
-- [ ] T026 [P] Verify the Report tab renders generated text as-is (no unintended markdown interpretation of computed output) in `internal/tui/report_view.go`, adding a guard/test if needed
-- [ ] T027 [P] Add edge-case tests in `internal/markdown/markdown_test.go`: non-ASCII/emoji wrap on display width; empty/whitespace-only field renders empty without error; literal `*`/`_`/`#` not forming markup are preserved
-- [ ] T028 [P] Review the image-alt / unrenderable-content placeholder copy for warm tone (Principle IV) in `internal/markdown/block.go`
-- [ ] T029 Remove or scope down `wrapDescription` in `internal/tui/details.go` if fully superseded by the renderer; run `gofmt` and `go vet ./...`
-- [ ] T030 Run the full suite (`go test ./...`) and perform the manual TUI verification steps from `quickstart.md` (build, view a markdown-rich task, narrow-resize, `NO_COLOR=1` plain check)
+- [X] T026 [P] Verify the Report tab renders generated text as-is (no unintended markdown interpretation of computed output) in `internal/tui/report_view.go`, adding a guard/test if needed
+- [X] T027 [P] Add edge-case tests in `internal/markdown/markdown_test.go`: non-ASCII/emoji wrap on display width; empty/whitespace-only field renders empty without error; literal `*`/`_`/`#` not forming markup are preserved
+- [X] T028 [P] Review the image-alt / unrenderable-content placeholder copy for warm tone (Principle IV) in `internal/markdown/block.go`
+- [X] T029 Remove or scope down `wrapDescription` in `internal/tui/details.go` if fully superseded by the renderer; run `gofmt` and `go vet ./...`
+- [X] T030 Run the full suite (`go test ./...`) and perform the manual TUI verification steps from `quickstart.md` (build, view a markdown-rich task, narrow-resize, `NO_COLOR=1` plain check)
 
 ---
 

@@ -347,3 +347,38 @@ func TestReportKey_ScrollClamped(t *testing.T) {
 		t.Errorf("over-scrolled view should not snap back to the header, got: %q", body)
 	}
 }
+
+// TestReport_ComputedOutputPassthrough asserts that task names containing
+// markdown syntax in the report are rendered as-is (no markdown interpretation).
+// The report shows computed output, not user-authored markdown display fields.
+func TestReport_ComputedOutputPassthrough(t *testing.T) {
+	// A task name with markdown-like syntax should appear verbatim in the report.
+	markdownName := "**Ship** the report"
+	data := reportState{
+		loaded: true,
+		period: report.Period{
+			Label: "today",
+			From:  time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC),
+			To:    time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC),
+		},
+		dayGroups: []report.DayGroup{
+			{
+				Day: time.Date(2026, 6, 12, 0, 0, 0, 0, time.UTC),
+				Entries: []report.Entry{
+					{Name: markdownName},
+				},
+			},
+		},
+		totals: report.Totals{TasksCompleted: 1},
+	}
+	m := ExportNewReportModel(nil)
+	m.width = 80
+	m.height = 40
+	ExportSetReportData(&m, data)
+
+	out := m.viewReport()
+	// The raw markdown name must appear verbatim (no rendering applied).
+	if !strings.Contains(out, markdownName) {
+		t.Errorf("report view: expected task name %q to appear verbatim; got output:\n%q", markdownName, out)
+	}
+}

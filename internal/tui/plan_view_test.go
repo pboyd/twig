@@ -342,7 +342,7 @@ func TestViewPlanning_EmptyDay_Placeholder(t *testing.T) {
 
 // TestRenderPlanDetail_NilEntry checks that nil entry returns a placeholder (T023).
 func TestRenderPlanDetail_NilEntry(t *testing.T) {
-	out := renderPlanDetail(nil, nil, 40, false)
+	out := renderPlanDetail(nil, nil, 40, false, nil)
 	if !strings.Contains(out, "no entry") && !strings.Contains(out, "nothing") && !strings.Contains(out, "(empty)") && out == "" {
 		// Any non-empty placeholder is fine.
 	}
@@ -358,7 +358,7 @@ func TestRenderPlanDetail_EventEntry(t *testing.T) {
 		DurationMinute: 30,
 		TaskId:         0, // event, not a task
 	}
-	out := renderPlanDetail(entry, nil, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false, nil)
 
 	if !strings.Contains(out, "Team sync") {
 		t.Errorf("event: expected entry name 'Team sync'; got %q", out)
@@ -381,7 +381,7 @@ func TestRenderPlanDetail_TaskEntry(t *testing.T) {
 		TaskId:         42,
 		Completed:      false,
 	}
-	out := renderPlanDetail(entry, nil, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false, nil)
 
 	if !strings.Contains(out, "Write tests") {
 		t.Errorf("task entry: expected name; got %q", out)
@@ -404,7 +404,7 @@ func TestRenderPlanDetail_CompletedTask(t *testing.T) {
 		TaskId:         5,
 		Completed:      true,
 	}
-	out := renderPlanDetail(entry, nil, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false, nil)
 	if !strings.Contains(out, "complet") { // "completed" or "complete"
 		t.Errorf("completed task: expected 'completed' status; got %q", out)
 	}
@@ -418,7 +418,7 @@ func TestRenderPlanDetail_Unstyled(t *testing.T) {
 		DurationMinute: 120,
 		TaskId:         0,
 	}
-	out := renderPlanDetail(entry, nil, 40, false)
+	out := renderPlanDetail(entry, nil, 40, false, nil)
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("unstyled renderPlanDetail: must not emit ANSI codes; got %q", out)
 	}
@@ -806,7 +806,7 @@ func TestRenderPlanDetail_GlyphRowLinkedTask(t *testing.T) {
 	}
 
 	// Plain mode.
-	plain := renderPlanDetail(entry, task, 60, false)
+	plain := renderPlanDetail(entry, task, 60, false, nil)
 	n := countPomodoroGlyphs(plain)
 	if n != 3 {
 		t.Errorf("plain: want 3 glyphs for estimate=3; got %d; %q", n, plain)
@@ -816,7 +816,7 @@ func TestRenderPlanDetail_GlyphRowLinkedTask(t *testing.T) {
 	}
 
 	// Styled mode.
-	styled := renderPlanDetail(entry, task, 60, true)
+	styled := renderPlanDetail(entry, task, 60, true, nil)
 	ns := countPomodoroGlyphs(styled)
 	if ns != 3 {
 		t.Errorf("styled: want 3 glyphs for estimate=3; got %d; %q", ns, styled)
@@ -831,7 +831,7 @@ func TestRenderPlanDetail_GlyphRowEventEntry(t *testing.T) {
 		DurationMinute: 30,
 		TaskId:         0,
 	}
-	out := renderPlanDetail(entry, nil, 60, false)
+	out := renderPlanDetail(entry, nil, 60, false, nil)
 	if countPomodoroGlyphs(out) != 0 {
 		t.Errorf("event entry must not show glyph row; got %q", out)
 	}
@@ -850,7 +850,7 @@ func TestRenderPlanDetail_GlyphRowNoPomodoros(t *testing.T) {
 		Estimate:               0,
 		CompletedPomodoroCount: 0,
 	}
-	out := renderPlanDetail(entry, task, 60, false)
+	out := renderPlanDetail(entry, task, 60, false, nil)
 	if countPomodoroGlyphs(out) != 0 {
 		t.Errorf("task with 0 estimate and 0 completed must not show glyph row; got %q", out)
 	}
@@ -1086,4 +1086,50 @@ func TestPreviewLifecycle_EditedEntryStillRenderedAfterClose(t *testing.T) {
 			t.Errorf("entry 'Standup' missing from styled grid after edit cancelled; got:\n%s", out)
 		}
 	})
+}
+
+// ── T023: Inline rendering integration tests for plan picker ──────────────────
+
+// TestPlanPicker_InlineNameNoMarkupChars asserts that the plan task picker
+// renders task names without leftover markdown syntax in plain mode.
+func TestPlanPicker_InlineNameNoMarkupChars(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "normal task"},
+		{Id: 2, Name: "**Bold plan task**"},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewPlanModel(nil, nil, "2026-06-12")
+	m.styled = false
+	m.plan.mode = planPickTask
+	expanded := map[int64]bool{1: true, 2: true}
+	m.plan.picker = pickerState{
+		tree:    tree,
+		visible: ExportBuildVisible(tree, expanded, false, nil),
+		cursor:  0,
+	}
+
+	out := m.renderPlanPickerView(60)
+	if strings.Contains(out, "**") {
+		t.Errorf("plain plan picker: leftover ** in output %q", out)
+	}
+	if !strings.Contains(out, "Bold plan task") {
+		t.Errorf("plain plan picker: task name missing; got %q", out)
+	}
+}
+
+// TestPlanDetail_EntryNameInlinePlain asserts that plan entry names are
+// rendered without raw markdown syntax in plain mode when a renderer is passed.
+func TestPlanDetail_EntryNameInlinePlain(t *testing.T) {
+	m := ExportNewPlanModel(nil, nil, "2026-06-12")
+	entry := &planv1.PlanEntry{
+		Id:   1,
+		Name: "**Stand-up** meeting",
+	}
+	out := renderPlanDetail(entry, nil, 60, false, m.md)
+	if strings.Contains(out, "**") {
+		t.Errorf("plain renderPlanDetail: leftover ** in output %q", out)
+	}
+	if !strings.Contains(out, "Stand-up") {
+		t.Errorf("plain renderPlanDetail: entry name missing; got %q", out)
+	}
 }

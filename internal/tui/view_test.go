@@ -479,3 +479,61 @@ func TestRenderStatus_ActivePomodoroGlyph(t *testing.T) {
 		t.Errorf("plain active-pom timer line must not emit ANSI codes; got %q", timerLine)
 	}
 }
+
+// ── T023: Inline rendering integration tests for task names in renderList ─────
+
+// TestRenderList_InlineMarkdownStyledOutput asserts that when a task name
+// contains markdown emphasis, the styled output carries ANSI codes (no raw
+// asterisks) and the plain non-cursor row has no extra ANSI from inline rendering.
+func TestRenderList_InlineMarkdownStyledOutput(t *testing.T) {
+	// Two tasks: cursor stays at 0 (first). We check the second row in plain mode.
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "plain cursor row"},
+		{Id: 2, Name: "**Ship** the *report*"},
+	}
+	tree := cli.BuildTree(tasks)
+
+	// Styled: second row should have ANSI codes from inline rendering.
+	m := ExportNewStyledModel(nil, tree, true)
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	styled := m.renderList(80)
+	if !strings.Contains(styled, "\x1b[") {
+		t.Errorf("styled renderList with markdown name: expected ANSI codes; got %q", styled)
+	}
+
+	// Plain: second row (non-cursor) should contain the text without ** chars.
+	mp := ExportNewStyledModel(nil, tree, false)
+	mp.visible = buildVisible(mp.tree, mp.expanded, mp.showAll, mp.pendingComplete, time.Now().Local())
+	plain := mp.renderList(80)
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("plain renderList: expected at least 2 lines; got %q", plain)
+	}
+	secondLine := lines[1]
+	if strings.Contains(secondLine, "**") {
+		t.Errorf("plain renderList: leftover ** in non-cursor row %q", secondLine)
+	}
+	if !strings.Contains(secondLine, "Ship") {
+		t.Errorf("plain renderList: task text missing in non-cursor row %q", secondLine)
+	}
+}
+
+// TestRenderList_InlineNameNoNewline asserts that renderList never emits a
+// newline inside a task name row (i.e. each row is exactly one terminal line).
+func TestRenderList_InlineNameNoNewline(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "# Heading in name"},
+		{Id: 2, Name: "- bullet in name"},
+		{Id: 3, Name: "plain name"},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	out := m.renderList(80)
+
+	// Each row ends with exactly one newline; no embedded newline inside row text.
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != len(tasks) {
+		t.Errorf("renderList: expected %d lines, got %d; output:\n%q", len(tasks), len(lines), out)
+	}
+}

@@ -750,3 +750,49 @@ func TestEditForm_GoalField_SaveUnchangedNotChanged(t *testing.T) {
 		t.Error("goalChanged should be false when goal was not changed")
 	}
 }
+
+// ── T024: Round-trip test: editing shows raw markdown source ──────────────────
+
+// TestEditForm_DescriptionRoundTrip asserts that:
+//  1. The form's description field holds the raw markdown source (not rendered).
+//  2. Saving the form without changes preserves the text byte-for-byte.
+func TestEditForm_DescriptionRoundTrip(t *testing.T) {
+	rawMarkdown := "**Ship** the report\n\nWith *notes* below:\n- item 1\n- item 2"
+
+	task := &taskv1.Task{
+		Id:          1,
+		Name:        "task",
+		Description: rawMarkdown,
+	}
+
+	f := NewEditForm(task, 0, nil)
+
+	// The description field must hold the raw markdown, not a rendered version.
+	if f.description.Value() != rawMarkdown {
+		t.Errorf("edit form description: want raw markdown %q, got %q", rawMarkdown, f.description.Value())
+	}
+
+	// Building the save message must preserve the text byte-for-byte.
+	saveMsg := f.buildSaveMsg()().(editSavedMsg)
+	if saveMsg.description != rawMarkdown {
+		t.Errorf("editSavedMsg description: want %q, got %q", rawMarkdown, saveMsg.description)
+	}
+}
+
+// TestEditForm_NameRoundTrip asserts that a name containing markdown syntax is
+// preserved as-is in the form field and in the saved message (display-only invariant).
+func TestEditForm_NameRoundTrip(t *testing.T) {
+	rawName := "**Ship** the *report*"
+
+	task := &taskv1.Task{Id: 2, Name: rawName}
+	f := NewEditForm(task, 0, nil)
+
+	if f.name.Value() != rawName {
+		t.Errorf("edit form name: want raw %q, got %q", rawName, f.name.Value())
+	}
+
+	saveMsg := f.buildSaveMsg()().(editSavedMsg)
+	if saveMsg.name != rawName {
+		t.Errorf("editSavedMsg name: want %q, got %q", rawName, saveMsg.name)
+	}
+}

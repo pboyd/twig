@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // renderTabBar renders the one-line tab bar: " Goals │ Tasks │ Planning │ Report "
@@ -138,8 +140,15 @@ func (m Model) renderPlanPickerView(width int) string {
 	}
 
 	for i, row := range m.plan.picker.visible {
-		name := row.node.Task.Name
 		prefix := row.treePrefix + "  "
+		maxW := width - lipgloss.Width(prefix)
+		if maxW < 0 {
+			maxW = 0
+		}
+		name := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxW, Styled: m.styled})
+		if lipgloss.Width(name) > maxW {
+			name = ansi.Truncate(name, maxW, "")
+		}
 		if m.styled && i == m.plan.picker.cursor {
 			line := prefix + name
 			sb.WriteString("\x1b[1m" + padRightAnsi(line, width) + "\x1b[0m\n")
@@ -292,7 +301,7 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 // When entry is nil (empty day or no selection), a placeholder is returned.
 // For event entries (TaskId == 0), task-specific fields are omitted.
 // task is the linked Task looked up from the in-memory tree (nil when absent or TaskId==0).
-func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, styled bool) string {
+func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, styled bool, md *markdown.Renderer) string {
 	if entry == nil {
 		if styled {
 			return lipgloss.NewStyle().Foreground(dim).Render("(no entry selected)") + "\n"
@@ -312,9 +321,16 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 		window = "untimed"
 	}
 
+	entryNamePlain := entry.Name
+	entryNameStyled := entry.Name
+	if md != nil {
+		entryNamePlain = md.RenderInline(entry.Name, markdown.Options{Width: width, Styled: false})
+		entryNameStyled = md.RenderInline(entry.Name, markdown.Options{Width: width, Styled: true})
+	}
+
 	if !styled {
 		var sb strings.Builder
-		fmt.Fprintln(&sb, entry.Name)
+		fmt.Fprintln(&sb, entryNamePlain)
 		fmt.Fprintf(&sb, "Window:   %s\n", window)
 		fmt.Fprintf(&sb, "Duration: %d min\n", dur)
 		if entry.TaskId != 0 {
@@ -337,7 +353,7 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 	completedStyle := lipgloss.NewStyle().Foreground(completed)
 
 	var sb strings.Builder
-	fmt.Fprintln(&sb, headerStyle.Render(entry.Name))
+	fmt.Fprintln(&sb, headerStyle.Render(entryNameStyled))
 	fmt.Fprintf(&sb, "%s %s\n", labelStyle.Render("Window:  "), window)
 	fmt.Fprintf(&sb, "%s %d min\n", labelStyle.Render("Duration:"), dur)
 	if entry.TaskId != 0 {

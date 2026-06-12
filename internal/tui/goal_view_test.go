@@ -506,3 +506,80 @@ func TestGoalDetail_DescriptionWithinWidth(t *testing.T) {
 		}
 	}
 }
+
+// ── T023: Inline rendering integration tests for goal names ───────────────────
+
+// TestGoalList_InlineNameStyled asserts that goal names with markdown emphasis
+// carry ANSI codes in styled mode. For plain mode, checks that the text is
+// visible and the non-cursor row has no leftover ** markup chars.
+func TestGoalList_InlineNameStyled(t *testing.T) {
+	// Two goals: cursor at 0. Second goal has markdown name; check it in plain mode.
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "cursor row", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: 2, Name: "**Bold Goal**", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+	}
+
+	// Styled: expect ANSI codes somewhere (section headers, name styles, highlight).
+	ms := ExportNewGoalModel(nil, goals)
+	ms.styled = true
+	out := ms.renderGoalList(60)
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("styled renderGoalList: expected ANSI codes; got %q", out)
+	}
+
+	// Plain: second row (non-cursor) must not have leftover ** from markdown.
+	mp := ExportNewGoalModel(nil, goals)
+	mp.styled = false
+	out = mp.renderGoalList(60)
+	if strings.Contains(out, "**") {
+		t.Errorf("plain renderGoalList: leftover ** in output %q", out)
+	}
+	if !strings.Contains(out, "Bold Goal") {
+		t.Errorf("plain renderGoalList: name text missing; got %q", out)
+	}
+}
+
+// TestGoalDetail_NameInlineStyledNoMarkupChars asserts that the goal name
+// header in the detail pane has no leftover markup chars (*, `) in its
+// visible text, and carries ANSI codes in styled mode.
+func TestGoalDetail_NameInlineStyledNoMarkupChars(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "**Deploy** the `app`", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.styled = true
+	out := m.renderGoalDetail(80)
+
+	// Should have ANSI codes.
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("renderGoalDetail name styled: expected ANSI codes; got %q", out)
+	}
+}
+
+// TestGoalPicker_InlineNamePlain asserts that the goal picker renders task
+// names without leftover markdown syntax in plain mode.
+func TestGoalPicker_InlineNamePlain(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "**Bold task**"},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewGoalModel(nil, nil)
+	m.styled = false
+	m.goal.mode = goalPickLink
+	// Build picker state directly: all tasks expanded and visible.
+	expanded := map[int64]bool{1: true}
+	m.goal.picker = pickerState{
+		tree:     tree,
+		visible:  ExportBuildVisible(tree, expanded, false, nil),
+		cursor:   0,
+		expanded: expanded,
+	}
+
+	out := m.renderGoalPicker(60)
+	if strings.Contains(out, "**") {
+		t.Errorf("plain goal picker: leftover ** in output %q", out)
+	}
+	if !strings.Contains(out, "Bold task") {
+		t.Errorf("plain goal picker: name text missing; got %q", out)
+	}
+}

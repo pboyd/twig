@@ -7,9 +7,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/goal"
+	"github.com/pboyd/twig/internal/markdown"
 	"github.com/pboyd/twig/internal/pomodoro"
 )
 
@@ -97,7 +99,7 @@ func (m Model) viewPlanning() string {
 			if sel != nil && sel.TaskId != 0 {
 				linkedTask = findTask(m.tree, sel.TaskId)
 			}
-			rightContent = renderPlanDetail(sel, linkedTask, innerRightW, m.styled)
+			rightContent = renderPlanDetail(sel, linkedTask, innerRightW, m.styled, m.md)
 			rightTitle = "Details"
 			gridFocused = true
 		} else {
@@ -129,7 +131,7 @@ func (m Model) viewPlanning() string {
 		if sel != nil && sel.TaskId != 0 {
 			linkedTask = findTask(m.tree, sel.TaskId)
 		}
-		rightContent = renderPlanDetail(sel, linkedTask, rightWidth, m.styled)
+		rightContent = renderPlanDetail(sel, linkedTask, rightWidth, m.styled, m.md)
 	} else {
 		rightContent = m.renderPlanRightPane(rightWidth)
 	}
@@ -421,9 +423,9 @@ func (m Model) renderList(width int) string {
 			maxNameW = 0
 		}
 
-		name := row.node.Task.Name
-		if len(name) > maxNameW {
-			name = name[:maxNameW]
+		name := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxNameW, Styled: m.styled})
+		if lipgloss.Width(name) > maxNameW {
+			name = ansi.Truncate(name, maxNameW, "")
 		}
 		if row.node.Task.GetCompletedAt() != nil {
 			name = cli.Strike(name, m.styled)

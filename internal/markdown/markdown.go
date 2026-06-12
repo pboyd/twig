@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"image/color"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -24,10 +25,10 @@ type Options struct {
 
 // cacheKey is used to deduplicate rendered output.
 type cacheKey struct {
-	text    string
-	width   int
-	styled  bool
-	inline  bool
+	text   string
+	width  int
+	styled bool
+	inline bool
 }
 
 // Renderer renders markdown text to terminal-friendly strings.
@@ -87,7 +88,25 @@ func (r *Renderer) doRender(text string, opts Options) string {
 	return renderBlocks(doc, src, r.theme, opts)
 }
 
-// doRenderInline is a stub for inline markdown rendering (AST walking added in T019).
+// doRenderInline parses text as GFM and renders all inline content on a single
+// line. Block containers are treated as transparent: their inline children are
+// extracted and joined with spaces, producing output suitable for single-line
+// display fields (task names, goal names, plan entry names).
 func (r *Renderer) doRenderInline(text string, opts Options) string {
-	return text
+	if text == "" {
+		return ""
+	}
+	src := []byte(text)
+	reader := text_pkg.NewReader(src)
+	doc := r.md.Parser().Parse(reader)
+	var parts []string
+	for child := doc.FirstChild(); child != nil; child = child.NextSibling() {
+		part := renderInlineNodes(child, src, r.theme, opts.Styled)
+		part = strings.ReplaceAll(part, "\n", " ")
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return strings.Join(parts, " ")
 }
