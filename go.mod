@@ -10,6 +10,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/pboyd/twig/api v0.0.0
+	github.com/yuin/goldmark v1.7.13
 	golang.org/x/term v0.43.0
 	google.golang.org/protobuf v1.36.9
 )
