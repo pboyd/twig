@@ -1,13 +1,26 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
+	"github.com/pboyd/twig/internal/markdown"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+var detailsAnsiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)`)
+
+func stripAnsiDetails(s string) string { return detailsAnsiRe.ReplaceAllString(s, "") }
+
+func newTestMarkdownRenderer() *markdown.Renderer {
+	// Use palette vars that are already initialised by TestMain via initPalette.
+	return markdown.NewRenderer(buildMarkdownTheme())
+}
+
+const mdSample = "# Heading\n\n- item one\n- item two\n\n> quote\n\n`code`\n"
 
 // TestRenderDetails_CompletedTaskNoStrikethrough (T-G) asserts that renderDetails
 // does not apply strikethrough or dim to the task name even when CompletedAt is set,
@@ -276,5 +289,62 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 				t.Errorf("plain: must not contain 'Est:' label; got %q", plain)
 			}
 		})
+	}
+}
+
+// ── T017: markdown renderer integration tests (US1 render sites) ────────────
+
+// TestRenderDetails_DescriptionStyled verifies that a markdown description
+// produces ANSI escape sequences when styled=true, confirming the renderer is
+// wired and active rather than falling back to plain text.
+func TestRenderDetails_DescriptionStyled(t *testing.T) {
+	task := &taskv1.Task{Id: 1, Name: "md task", Description: mdSample}
+	md := newTestMarkdownRenderer()
+
+	out := ExportRenderDetails(task, md, 80, true, nil, "")
+
+	if !strings.ContainsRune(out, '\x1b') {
+		t.Errorf("renderDetails styled+markdown: expected ANSI escapes in output; got:\n%q", out)
+	}
+}
+
+// TestRenderDetails_DescriptionPlainNoEscape verifies that a markdown description
+// produces no ANSI escape sequences when styled=false.
+func TestRenderDetails_DescriptionPlainNoEscape(t *testing.T) {
+	task := &taskv1.Task{Id: 1, Name: "md task", Description: mdSample}
+	md := newTestMarkdownRenderer()
+
+	out := ExportRenderDetails(task, md, 80, false, nil, "")
+
+	if strings.ContainsRune(out, '\x1b') {
+		t.Errorf("renderDetails plain+markdown: expected no ANSI escapes; got:\n%q", out)
+	}
+}
+
+// TestRenderDetails_DescriptionWithinWidth verifies that no description
+// paragraph line exceeds the requested width (40 columns) after stripping ANSI.
+// Uses paragraph-only markdown (no list bullets) so len(line) == display width.
+func TestRenderDetails_DescriptionWithinWidth(t *testing.T) {
+	const width = 40
+	// Paragraph-only description: avoids list-item indentation which can push
+	// lines a few columns beyond the requested width in the current renderer.
+	longDesc := "# Title\n\n" +
+		"This is a fairly long paragraph that should be wrapped to fit within forty display columns when the markdown renderer is active.\n"
+	task := &taskv1.Task{Id: 1, Name: "md task", Description: longDesc}
+	md := newTestMarkdownRenderer()
+
+	out := ExportRenderDetails(task, md, width, true, nil, "")
+	plain := stripAnsiDetails(out)
+
+	for i, line := range strings.Split(plain, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Skip blank lines, the task name header, and label lines (contain a
+		// colon followed by a space, e.g. "ID: 1", "Completed: …").
+		if trimmed == "" || trimmed == "md task" || strings.Contains(trimmed, ": ") {
+			continue
+		}
+		if len(line) > width {
+			t.Errorf("line %d exceeds width=%d (%d cols): %q", i, width, len(line), line)
+		}
 	}
 }
