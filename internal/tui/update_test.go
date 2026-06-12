@@ -1840,6 +1840,64 @@ func TestUpdateTaskCmd_GoalChangedFailedPreconditionShowsFriendlyNotice(t *testi
 	}
 }
 
+// TestTaskGoalMutationMsg_FailedPrecondition_ShowsServerMessage verifies that the
+// nesting-conflict notice uses the server's message text, not a hardcoded
+// generic string, so the user knows whether the conflict is with an ancestor or
+// a descendant goal.
+func TestTaskGoalMutationMsg_FailedPrecondition_ShowsServerMessage(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+
+	serverMsg := "a descendant task already has a goal assigned"
+	goalErr := connect.NewError(connect.CodeFailedPrecondition, errors.New(serverMsg))
+	next, _ := m.Update(taskGoalMutationMsg{err: goalErr})
+	nm := next.(Model)
+
+	if !strings.Contains(nm.notice, serverMsg) {
+		t.Errorf("notice should contain server message %q, got %q", serverMsg, nm.notice)
+	}
+}
+
+// TestTaskGoalMutationMsg_FailedPrecondition_ResetsEditMode verifies that when
+// a SetTaskGoal call from the Tasks-tab edit form returns FailedPrecondition,
+// the edit form is dismissed (m.mode == modeList), not left open.
+func TestTaskGoalMutationMsg_FailedPrecondition_ResetsEditMode(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit // simulate being in edit mode (edit form is open)
+
+	goalErr := connect.NewError(connect.CodeFailedPrecondition, errors.New("nesting conflict"))
+	next, _ := m.Update(taskGoalMutationMsg{err: goalErr})
+	nm := next.(Model)
+
+	if nm.mode != modeList {
+		t.Errorf("after FailedPrecondition goal error: want modeList, got %v", nm.mode)
+	}
+}
+
+// TestTaskGoalMutationMsg_GenericError_SurfacesOnTasksTab verifies that when a
+// SetTaskGoal call from the Tasks-tab edit form returns a non-FailedPrecondition
+// error, the error is visible on the Tasks tab (m.err, not m.goal.err which is
+// invisible there).
+func TestTaskGoalMutationMsg_GenericError_SurfacesOnTasksTab(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	// activeTab is tabTasks by default in buildTestModel
+
+	genericErr := connect.NewError(connect.CodeNotFound, errors.New("goal deleted"))
+	next, _ := m.Update(taskGoalMutationMsg{err: genericErr})
+	nm := next.(Model)
+
+	if nm.mode != modeList {
+		t.Errorf("after generic goal error: want modeList, got %v", nm.mode)
+	}
+	if nm.err == nil {
+		t.Error("after non-FailedPrecondition goal error on Tasks tab: want m.err set, got nil")
+	}
+	if nm.goal.err != nil {
+		t.Errorf("m.goal.err should not be set when active tab is Tasks: got %v", nm.goal.err)
+	}
+}
+
 // ── Fix #3: effectiveGoalName falls back to ID when goal not cached ──────────
 
 // TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached verifies that when a task

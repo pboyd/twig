@@ -18,6 +18,7 @@ import (
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/goal"
 	"github.com/pboyd/twig/internal/pomodoro"
 	"github.com/pboyd/twig/internal/report"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -799,12 +800,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			var ce *connect.Error
 			if errors.As(msg.err, &ce) && ce.Code() == connect.CodeFailedPrecondition {
-				m.notice = "That subtree already belongs to a goal — clear that link first."
-			} else {
+				m.notice = cli.UserMessage(msg.err)
+			} else if m.activeTab == tabGoals {
 				m.goal.err = msg.err
+			} else {
+				// On the Tasks tab goal.err is invisible; surface the error where it
+				// will actually be shown.
+				m.err = msg.err
 			}
 			m.goal.mode = goalList
-			return m, nil
+			m.mode = modeList
+			// Re-fetch tasks so the list reflects the partial update (name/due were
+			// already persisted by UpdateTask before SetTaskGoal failed).
+			return m, listTasksCmd(m.client)
 		}
 		m.goal.err = nil
 		m.goal.mode = goalList
@@ -1159,7 +1167,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(visible) > 0 {
 			g := visible[m.goal.cursor]
 			allTasks := flattenTree(m.tree)
-			roots := associationRoots(allTasks, g.GetId())
+			roots := goal.AssociationRoots(allTasks, g.GetId())
 			if len(roots) == 0 {
 				m.notice = "No tasks linked to this goal yet."
 				return m, nil
@@ -2025,17 +2033,6 @@ func findParentNode(tree []*cli.TreeNode, childID int64) *cli.TreeNode {
 		}
 	}
 	return nil
-}
-
-// associationRoots returns tasks directly associated with goalID (task.GoalId == goalID).
-func associationRoots(tasks []*taskv1.Task, goalID int64) []*taskv1.Task {
-	var roots []*taskv1.Task
-	for _, t := range tasks {
-		if t.GoalId != nil && t.GetGoalId() == goalID {
-			roots = append(roots, t)
-		}
-	}
-	return roots
 }
 
 func findCursor(visible []*visibleRow, taskID int64) int {

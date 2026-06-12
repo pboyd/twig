@@ -287,20 +287,7 @@ func (m Model) renderGoalDetail(width int) string {
 	// Description.
 	if desc := g.GetDescription(); desc != "" {
 		sb.WriteByte('\n')
-		words := strings.Fields(desc)
-		lineW := 0
-		for _, w := range words {
-			if lineW+len(w)+1 > width && lineW > 0 {
-				sb.WriteByte('\n')
-				lineW = 0
-			}
-			if lineW > 0 {
-				sb.WriteByte(' ')
-				lineW++
-			}
-			sb.WriteString(w)
-			lineW += len(w)
-		}
+		sb.WriteString(wrapDescription(desc, width))
 		sb.WriteByte('\n')
 	}
 

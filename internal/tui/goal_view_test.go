@@ -259,6 +259,22 @@ func TestGoal_NoTasksDetailCopy(t *testing.T) {
 	}
 }
 
+// TestGoalDetail_DescriptionPreservesNewlines verifies that embedded newlines in
+// a goal's description are preserved in the detail pane. The old inline
+// strings.Fields loop collapsed all whitespace; wrapDescription respects them.
+func TestGoalDetail_DescriptionPreservesNewlines(t *testing.T) {
+	desc := "Line one\nLine two"
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Description: desc},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	out := m.renderGoalDetail(80)
+	if !strings.Contains(out, "Line one\nLine two") {
+		t.Errorf("renderGoalDetail: embedded newline in description should be preserved; got:\n%q", out)
+	}
+}
+
 // TestGoal_AddTaskFormVisible verifies that pressing 'a' on the Goals tab
 // shows the task-creation form in the right pane rather than hiding it behind
 // an invisible edit form (regression for goalNewTask missing from viewGoals gate).
