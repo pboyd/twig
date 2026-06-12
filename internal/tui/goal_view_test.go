@@ -300,3 +300,94 @@ func TestGoal_DeleteConfirmCopyMentionsTasksStickAround(t *testing.T) {
 		t.Errorf("delete confirm notice: want substring 'Tasks attached to it will stick around.', got:\n%q", notice)
 	}
 }
+
+// ── T027: Goal ranking tests ─────────────────────────────────────────────────
+
+// TestGoalRank_UpWithinGroup verifies that pressing '{' issues a reorder command
+// when two goals of the same state are adjacent and cursor is not at the top.
+func TestGoalRank_UpWithinGroup(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "First", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 2, Name: "Second", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Move cursor to Second (index 1).
+	m.goal.cursor = 1
+
+	// Press '{' to rank up.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
+
+	// A reorder RPC command should have been returned (non-nil).
+	if cmd == nil {
+		t.Error("rank up within same group: expected a reorder command, got nil")
+	}
+}
+
+// TestGoalRank_DownWithinGroup verifies that pressing '}' issues a reorder command
+// when two goals of the same state are adjacent and cursor is not at the bottom.
+func TestGoalRank_DownWithinGroup(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "First", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 2, Name: "Second", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Cursor at First (index 0).
+	m.goal.cursor = 0
+
+	// Press '}' to rank down.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+
+	if cmd == nil {
+		t.Error("rank down within same group: expected a reorder command, got nil")
+	}
+}
+
+// TestGoalRank_UpAtTopEdge verifies that pressing '{' at the first goal in a
+// group is a no-op (no reorder command issued).
+func TestGoalRank_UpAtTopEdge(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Only goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.cursor = 0
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
+	if cmd != nil {
+		t.Error("rank up at group top: expected no-op (nil cmd), got a command")
+	}
+}
+
+// TestGoalRank_DownAtBottomEdge verifies that pressing '}' at the last goal in
+// a group is a no-op (no reorder command issued).
+func TestGoalRank_DownAtBottomEdge(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Only goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.cursor = 0
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+	if cmd != nil {
+		t.Error("rank down at group bottom: expected no-op (nil cmd), got a command")
+	}
+}
+
+// TestGoalRank_CrossGroupBoundaryNoOp verifies that pressing '}' at the last
+// goal in a group (adjacent to a different state group) is a no-op.
+func TestGoalRank_CrossGroupBoundaryNoOp(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Committed goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 2, Name: "Incubating goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	// Cursor at index 0 (Committed), adjacent to index 1 (Incubating).
+	m.goal.cursor = 0
+
+	// Pressing '}' should not reorder across state groups.
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+	if cmd != nil {
+		t.Error("rank down across state groups: expected no-op (nil cmd), got a command")
+	}
+}

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Running `twig` with no arguments launches the interactive TUI on a TTY.
+Running `twig` with no arguments launches the interactive TUI on a TTY. The TUI has four tabs: **Goals · Tasks · Plan · Report** (opens on Tasks by default; `shift+tab` from Tasks reaches the Goals tab).
 
 ## Commands
 
@@ -78,7 +78,7 @@ Both the root CLI module and the server module depend on `api/` via local `repla
 ### Binaries
 
 - **`cmd/server`** — HTTP/2 server (port 8080) with ConnectRPC (gRPC-compatible) handlers and a plain HTTP auth layer (`/auth/login`, `/auth/logout`). Runs migrations on startup.
-- **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `task`, `pom` (Pomodoro timer), `plan` (daily planning), `report` (activity report).
+- **`cmd/twig`** — CLI client that talks to the server via ConnectRPC. Entry point is `internal/cli.Run()`. Commands: `goal` (long-term goals), `task`, `pom` (Pomodoro timer), `plan` (daily planning), `report` (activity report).
 
 ### Key internal packages
 

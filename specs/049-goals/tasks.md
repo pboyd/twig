@@ -87,9 +87,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Create `internal/cli/goal.go` — `twig goal [--all]` listing grouped by state in position order, `add [--due <date>] [--desc <text>] <name>`, `show <id>` (fields + associated task subtrees via ListTasks + `internal/goal`, with the no-tasks line), `mod <id> [<name>] [--due] [--desc]`, `state <id> <state>`, `rm <id>`; TTY-gated styling via `internal/cli/render.go`, all copy per `contracts/goal-cli.md`
-- [ ] T024 [US3] Register `goal` in `internal/cli/cli.go` — `Run` dispatch, `runHelp` case, `printGoalUsage`, and root usage listing `goal` before `task` (depends on T023)
-- [ ] T025 [US3] Add `internal/cli/goal_test.go` — listing groups/order, `--all`, add/mod/state/rm round-trips against a stub client, invalid state arg lists the four states, not-found copy + exit codes, empty-state copy, styled vs piped output (depends on T024)
+- [X] T023 [US3] Create `internal/cli/goal.go` — `twig goal [--all]` listing grouped by state in position order, `add [--due <date>] [--desc <text>] <name>`, `show <id>` (fields + associated task subtrees via ListTasks + `internal/goal`, with the no-tasks line), `mod <id> [<name>] [--due] [--desc]`, `state <id> <state>`, `rm <id>`; TTY-gated styling via `internal/cli/render.go`, all copy per `contracts/goal-cli.md`
+- [X] T024 [US3] Register `goal` in `internal/cli/cli.go` — `Run` dispatch, `runHelp` case, `printGoalUsage`, and root usage listing `goal` before `task` (depends on T023)
+- [X] T025 [US3] Add `internal/cli/goal_test.go` — listing groups/order, `--all`, add/mod/state/rm round-trips against a stub client, invalid state arg lists the four states, not-found copy + exit codes, empty-state copy, styled vs piped output (depends on T024)
 
 **Checkpoint**: All CRUD + state operations available on both surfaces (SC-003).
 
@@ -103,8 +103,8 @@
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Handle `{`/`}` on the Goals tab in `internal/tui/update.go` — call `ReorderGoal` with the adjacent same-group goal as before/after anchor, no-op at group edges or single-goal groups, refresh group order from the response; reuse the existing RankUp/RankDown bindings and add Goals-tab help entries in `internal/tui/keymap.go`
-- [ ] T027 [US4] Add ranking tests in `internal/tui/goal_view_test.go` — reorder within group, edge no-ops, order preserved across simulated reload; assert CLI listing order follows `position` in `internal/cli/goal_test.go` (depends on T026)
+- [X] T026 [US4] Handle `{`/`}` on the Goals tab in `internal/tui/update.go` — call `ReorderGoal` with the adjacent same-group goal as before/after anchor, no-op at group edges or single-goal groups, refresh group order from the response; reuse the existing RankUp/RankDown bindings and add Goals-tab help entries in `internal/tui/keymap.go`
+- [X] T027 [US4] Add ranking tests in `internal/tui/goal_view_test.go` — reorder within group, edge no-ops, order preserved across simulated reload; assert CLI listing order follows `position` in `internal/cli/goal_test.go` (depends on T026)
 
 **Checkpoint**: All four user stories independently functional.
 
@@ -114,9 +114,9 @@
 
 **Purpose**: Documentation, tone review, and end-to-end validation.
 
-- [ ] T028 [P] Update `CLAUDE.md` — add `goal` to the CLI command list (cmd/twig commands line) and mention the Goals tab where the TUI is described
-- [ ] T029 [P] Tone + consistency review (Principles III & IV quality gates): audit every new user-facing string in `internal/cli/goal.go`, `internal/cli/task.go`, `internal/tui/goal_view.go`, `internal/tui/update.go` against `contracts/goal-cli.md` copy; verify key bindings and styles match existing tabs
-- [ ] T030 Run the full `specs/049-goals/quickstart.md` walkthrough against `make dev` (sections 1–5), plus `go test ./...`, `cd services/twig && go test ./...` (with `DATABASE_URL` for gated tests), and `go vet ./...`; verify SC-006 by confirming pre-existing task tests pass unmodified
+- [X] T028 [P] Update `CLAUDE.md` — add `goal` to the CLI command list (cmd/twig commands line) and mention the Goals tab where the TUI is described
+- [X] T029 [P] Tone + consistency review (Principles III & IV quality gates): audit every new user-facing string in `internal/cli/goal.go`, `internal/cli/task.go`, `internal/tui/goal_view.go`, `internal/tui/update.go` against `contracts/goal-cli.md` copy; verify key bindings and styles match existing tabs
+- [X] T030 Run the full `specs/049-goals/quickstart.md` walkthrough against `make dev` (sections 1–5), plus `go test ./...`, `cd services/twig && go test ./...` (with `DATABASE_URL` for gated tests), and `go vet ./...`; verify SC-006 by confirming pre-existing task tests pass unmodified
 
 ---
 

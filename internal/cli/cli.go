@@ -80,6 +80,8 @@ func Run(profile string, args []string) int {
 	}
 
 	switch args[0] {
+	case "goal":
+		return runGoal(profile, args[1:])
 	case "task":
 		return runTask(profile, args[1:])
 	case "pom":
@@ -103,6 +105,9 @@ func runHelp(args []string) int {
 		return 0
 	}
 	switch args[0] {
+	case "goal":
+		printGoalUsage(os.Stdout)
+		return 0
 	case "task":
 		printTaskUsage(os.Stdout)
 		return 0
@@ -130,6 +135,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --profile <name>   Use a named account profile (or set TWIG_PROFILE)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  goal     Long-term goals (incubate, commit, complete)")
 	fmt.Fprintln(w, "  task     Manage tasks (add, remove, modify, list)")
 	fmt.Fprintln(w, "  pom      Pomodoro timer (estimate, start, resume, cancel, status)")
 	fmt.Fprintln(w, "  plan     Daily planning (schedule tasks and events)")
