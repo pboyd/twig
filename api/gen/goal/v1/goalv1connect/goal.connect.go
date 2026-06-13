@@ -48,6 +48,18 @@ const (
 	GoalServiceReorderGoalProcedure = "/goal.v1.GoalService/ReorderGoal"
 	// GoalServiceDeleteGoalProcedure is the fully-qualified name of the GoalService's DeleteGoal RPC.
 	GoalServiceDeleteGoalProcedure = "/goal.v1.GoalService/DeleteGoal"
+	// GoalServiceListGoalStatusUpdatesProcedure is the fully-qualified name of the GoalService's
+	// ListGoalStatusUpdates RPC.
+	GoalServiceListGoalStatusUpdatesProcedure = "/goal.v1.GoalService/ListGoalStatusUpdates"
+	// GoalServiceAddGoalStatusUpdateProcedure is the fully-qualified name of the GoalService's
+	// AddGoalStatusUpdate RPC.
+	GoalServiceAddGoalStatusUpdateProcedure = "/goal.v1.GoalService/AddGoalStatusUpdate"
+	// GoalServiceUpdateGoalStatusUpdateProcedure is the fully-qualified name of the GoalService's
+	// UpdateGoalStatusUpdate RPC.
+	GoalServiceUpdateGoalStatusUpdateProcedure = "/goal.v1.GoalService/UpdateGoalStatusUpdate"
+	// GoalServiceDeleteGoalStatusUpdateProcedure is the fully-qualified name of the GoalService's
+	// DeleteGoalStatusUpdate RPC.
+	GoalServiceDeleteGoalStatusUpdateProcedure = "/goal.v1.GoalService/DeleteGoalStatusUpdate"
 )
 
 // GoalServiceClient is a client for the goal.v1.GoalService service.
@@ -81,6 +93,15 @@ type GoalServiceClient interface {
 	// DeleteGoal removes a goal. Associated tasks are NOT deleted or modified;
 	// their association is cleared (DB-level ON DELETE SET NULL).
 	DeleteGoal(context.Context, *connect.Request[v1.DeleteGoalRequest]) (*connect.Response[v1.DeleteGoalResponse], error)
+	// ListGoalStatusUpdates returns a goal's status updates, newest first.
+	ListGoalStatusUpdates(context.Context, *connect.Request[v1.ListGoalStatusUpdatesRequest]) (*connect.Response[v1.ListGoalStatusUpdatesResponse], error)
+	// AddGoalStatusUpdate records a new status update on a goal (created_at = now).
+	AddGoalStatusUpdate(context.Context, *connect.Request[v1.AddGoalStatusUpdateRequest]) (*connect.Response[v1.AddGoalStatusUpdateResponse], error)
+	// UpdateGoalStatusUpdate replaces the body of an existing update.
+	// created_at is preserved.
+	UpdateGoalStatusUpdate(context.Context, *connect.Request[v1.UpdateGoalStatusUpdateRequest]) (*connect.Response[v1.UpdateGoalStatusUpdateResponse], error)
+	// DeleteGoalStatusUpdate removes a single status update.
+	DeleteGoalStatusUpdate(context.Context, *connect.Request[v1.DeleteGoalStatusUpdateRequest]) (*connect.Response[v1.DeleteGoalStatusUpdateResponse], error)
 }
 
 // NewGoalServiceClient constructs a client for the goal.v1.GoalService service. By default, it uses
@@ -136,18 +157,46 @@ func NewGoalServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(goalServiceMethods.ByName("DeleteGoal")),
 			connect.WithClientOptions(opts...),
 		),
+		listGoalStatusUpdates: connect.NewClient[v1.ListGoalStatusUpdatesRequest, v1.ListGoalStatusUpdatesResponse](
+			httpClient,
+			baseURL+GoalServiceListGoalStatusUpdatesProcedure,
+			connect.WithSchema(goalServiceMethods.ByName("ListGoalStatusUpdates")),
+			connect.WithClientOptions(opts...),
+		),
+		addGoalStatusUpdate: connect.NewClient[v1.AddGoalStatusUpdateRequest, v1.AddGoalStatusUpdateResponse](
+			httpClient,
+			baseURL+GoalServiceAddGoalStatusUpdateProcedure,
+			connect.WithSchema(goalServiceMethods.ByName("AddGoalStatusUpdate")),
+			connect.WithClientOptions(opts...),
+		),
+		updateGoalStatusUpdate: connect.NewClient[v1.UpdateGoalStatusUpdateRequest, v1.UpdateGoalStatusUpdateResponse](
+			httpClient,
+			baseURL+GoalServiceUpdateGoalStatusUpdateProcedure,
+			connect.WithSchema(goalServiceMethods.ByName("UpdateGoalStatusUpdate")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteGoalStatusUpdate: connect.NewClient[v1.DeleteGoalStatusUpdateRequest, v1.DeleteGoalStatusUpdateResponse](
+			httpClient,
+			baseURL+GoalServiceDeleteGoalStatusUpdateProcedure,
+			connect.WithSchema(goalServiceMethods.ByName("DeleteGoalStatusUpdate")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // goalServiceClient implements GoalServiceClient.
 type goalServiceClient struct {
-	createGoal   *connect.Client[v1.CreateGoalRequest, v1.CreateGoalResponse]
-	getGoal      *connect.Client[v1.GetGoalRequest, v1.GetGoalResponse]
-	listGoals    *connect.Client[v1.ListGoalsRequest, v1.ListGoalsResponse]
-	updateGoal   *connect.Client[v1.UpdateGoalRequest, v1.UpdateGoalResponse]
-	setGoalState *connect.Client[v1.SetGoalStateRequest, v1.SetGoalStateResponse]
-	reorderGoal  *connect.Client[v1.ReorderGoalRequest, v1.ReorderGoalResponse]
-	deleteGoal   *connect.Client[v1.DeleteGoalRequest, v1.DeleteGoalResponse]
+	createGoal             *connect.Client[v1.CreateGoalRequest, v1.CreateGoalResponse]
+	getGoal                *connect.Client[v1.GetGoalRequest, v1.GetGoalResponse]
+	listGoals              *connect.Client[v1.ListGoalsRequest, v1.ListGoalsResponse]
+	updateGoal             *connect.Client[v1.UpdateGoalRequest, v1.UpdateGoalResponse]
+	setGoalState           *connect.Client[v1.SetGoalStateRequest, v1.SetGoalStateResponse]
+	reorderGoal            *connect.Client[v1.ReorderGoalRequest, v1.ReorderGoalResponse]
+	deleteGoal             *connect.Client[v1.DeleteGoalRequest, v1.DeleteGoalResponse]
+	listGoalStatusUpdates  *connect.Client[v1.ListGoalStatusUpdatesRequest, v1.ListGoalStatusUpdatesResponse]
+	addGoalStatusUpdate    *connect.Client[v1.AddGoalStatusUpdateRequest, v1.AddGoalStatusUpdateResponse]
+	updateGoalStatusUpdate *connect.Client[v1.UpdateGoalStatusUpdateRequest, v1.UpdateGoalStatusUpdateResponse]
+	deleteGoalStatusUpdate *connect.Client[v1.DeleteGoalStatusUpdateRequest, v1.DeleteGoalStatusUpdateResponse]
 }
 
 // CreateGoal calls goal.v1.GoalService.CreateGoal.
@@ -185,6 +234,26 @@ func (c *goalServiceClient) DeleteGoal(ctx context.Context, req *connect.Request
 	return c.deleteGoal.CallUnary(ctx, req)
 }
 
+// ListGoalStatusUpdates calls goal.v1.GoalService.ListGoalStatusUpdates.
+func (c *goalServiceClient) ListGoalStatusUpdates(ctx context.Context, req *connect.Request[v1.ListGoalStatusUpdatesRequest]) (*connect.Response[v1.ListGoalStatusUpdatesResponse], error) {
+	return c.listGoalStatusUpdates.CallUnary(ctx, req)
+}
+
+// AddGoalStatusUpdate calls goal.v1.GoalService.AddGoalStatusUpdate.
+func (c *goalServiceClient) AddGoalStatusUpdate(ctx context.Context, req *connect.Request[v1.AddGoalStatusUpdateRequest]) (*connect.Response[v1.AddGoalStatusUpdateResponse], error) {
+	return c.addGoalStatusUpdate.CallUnary(ctx, req)
+}
+
+// UpdateGoalStatusUpdate calls goal.v1.GoalService.UpdateGoalStatusUpdate.
+func (c *goalServiceClient) UpdateGoalStatusUpdate(ctx context.Context, req *connect.Request[v1.UpdateGoalStatusUpdateRequest]) (*connect.Response[v1.UpdateGoalStatusUpdateResponse], error) {
+	return c.updateGoalStatusUpdate.CallUnary(ctx, req)
+}
+
+// DeleteGoalStatusUpdate calls goal.v1.GoalService.DeleteGoalStatusUpdate.
+func (c *goalServiceClient) DeleteGoalStatusUpdate(ctx context.Context, req *connect.Request[v1.DeleteGoalStatusUpdateRequest]) (*connect.Response[v1.DeleteGoalStatusUpdateResponse], error) {
+	return c.deleteGoalStatusUpdate.CallUnary(ctx, req)
+}
+
 // GoalServiceHandler is an implementation of the goal.v1.GoalService service.
 type GoalServiceHandler interface {
 	// CreateGoal stores a new goal in the incubating state, ranked at the
@@ -216,6 +285,15 @@ type GoalServiceHandler interface {
 	// DeleteGoal removes a goal. Associated tasks are NOT deleted or modified;
 	// their association is cleared (DB-level ON DELETE SET NULL).
 	DeleteGoal(context.Context, *connect.Request[v1.DeleteGoalRequest]) (*connect.Response[v1.DeleteGoalResponse], error)
+	// ListGoalStatusUpdates returns a goal's status updates, newest first.
+	ListGoalStatusUpdates(context.Context, *connect.Request[v1.ListGoalStatusUpdatesRequest]) (*connect.Response[v1.ListGoalStatusUpdatesResponse], error)
+	// AddGoalStatusUpdate records a new status update on a goal (created_at = now).
+	AddGoalStatusUpdate(context.Context, *connect.Request[v1.AddGoalStatusUpdateRequest]) (*connect.Response[v1.AddGoalStatusUpdateResponse], error)
+	// UpdateGoalStatusUpdate replaces the body of an existing update.
+	// created_at is preserved.
+	UpdateGoalStatusUpdate(context.Context, *connect.Request[v1.UpdateGoalStatusUpdateRequest]) (*connect.Response[v1.UpdateGoalStatusUpdateResponse], error)
+	// DeleteGoalStatusUpdate removes a single status update.
+	DeleteGoalStatusUpdate(context.Context, *connect.Request[v1.DeleteGoalStatusUpdateRequest]) (*connect.Response[v1.DeleteGoalStatusUpdateResponse], error)
 }
 
 // NewGoalServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -267,6 +345,30 @@ func NewGoalServiceHandler(svc GoalServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(goalServiceMethods.ByName("DeleteGoal")),
 		connect.WithHandlerOptions(opts...),
 	)
+	goalServiceListGoalStatusUpdatesHandler := connect.NewUnaryHandler(
+		GoalServiceListGoalStatusUpdatesProcedure,
+		svc.ListGoalStatusUpdates,
+		connect.WithSchema(goalServiceMethods.ByName("ListGoalStatusUpdates")),
+		connect.WithHandlerOptions(opts...),
+	)
+	goalServiceAddGoalStatusUpdateHandler := connect.NewUnaryHandler(
+		GoalServiceAddGoalStatusUpdateProcedure,
+		svc.AddGoalStatusUpdate,
+		connect.WithSchema(goalServiceMethods.ByName("AddGoalStatusUpdate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	goalServiceUpdateGoalStatusUpdateHandler := connect.NewUnaryHandler(
+		GoalServiceUpdateGoalStatusUpdateProcedure,
+		svc.UpdateGoalStatusUpdate,
+		connect.WithSchema(goalServiceMethods.ByName("UpdateGoalStatusUpdate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	goalServiceDeleteGoalStatusUpdateHandler := connect.NewUnaryHandler(
+		GoalServiceDeleteGoalStatusUpdateProcedure,
+		svc.DeleteGoalStatusUpdate,
+		connect.WithSchema(goalServiceMethods.ByName("DeleteGoalStatusUpdate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/goal.v1.GoalService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GoalServiceCreateGoalProcedure:
@@ -283,6 +385,14 @@ func NewGoalServiceHandler(svc GoalServiceHandler, opts ...connect.HandlerOption
 			goalServiceReorderGoalHandler.ServeHTTP(w, r)
 		case GoalServiceDeleteGoalProcedure:
 			goalServiceDeleteGoalHandler.ServeHTTP(w, r)
+		case GoalServiceListGoalStatusUpdatesProcedure:
+			goalServiceListGoalStatusUpdatesHandler.ServeHTTP(w, r)
+		case GoalServiceAddGoalStatusUpdateProcedure:
+			goalServiceAddGoalStatusUpdateHandler.ServeHTTP(w, r)
+		case GoalServiceUpdateGoalStatusUpdateProcedure:
+			goalServiceUpdateGoalStatusUpdateHandler.ServeHTTP(w, r)
+		case GoalServiceDeleteGoalStatusUpdateProcedure:
+			goalServiceDeleteGoalStatusUpdateHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -318,4 +428,20 @@ func (UnimplementedGoalServiceHandler) ReorderGoal(context.Context, *connect.Req
 
 func (UnimplementedGoalServiceHandler) DeleteGoal(context.Context, *connect.Request[v1.DeleteGoalRequest]) (*connect.Response[v1.DeleteGoalResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("goal.v1.GoalService.DeleteGoal is not implemented"))
+}
+
+func (UnimplementedGoalServiceHandler) ListGoalStatusUpdates(context.Context, *connect.Request[v1.ListGoalStatusUpdatesRequest]) (*connect.Response[v1.ListGoalStatusUpdatesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("goal.v1.GoalService.ListGoalStatusUpdates is not implemented"))
+}
+
+func (UnimplementedGoalServiceHandler) AddGoalStatusUpdate(context.Context, *connect.Request[v1.AddGoalStatusUpdateRequest]) (*connect.Response[v1.AddGoalStatusUpdateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("goal.v1.GoalService.AddGoalStatusUpdate is not implemented"))
+}
+
+func (UnimplementedGoalServiceHandler) UpdateGoalStatusUpdate(context.Context, *connect.Request[v1.UpdateGoalStatusUpdateRequest]) (*connect.Response[v1.UpdateGoalStatusUpdateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("goal.v1.GoalService.UpdateGoalStatusUpdate is not implemented"))
+}
+
+func (UnimplementedGoalServiceHandler) DeleteGoalStatusUpdate(context.Context, *connect.Request[v1.DeleteGoalStatusUpdateRequest]) (*connect.Response[v1.DeleteGoalStatusUpdateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("goal.v1.GoalService.DeleteGoalStatusUpdate is not implemented"))
 }

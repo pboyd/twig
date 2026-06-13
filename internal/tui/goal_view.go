@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -11,7 +12,30 @@ import (
 	"github.com/pboyd/twig/internal/cli"
 	"github.com/pboyd/twig/internal/goal"
 	"github.com/pboyd/twig/internal/markdown"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// relativeTime formats a proto timestamp as a human-readable relative string
+// (e.g. "just now", "5m ago", "2h ago", "3d ago").
+func relativeTime(ts *timestamppb.Timestamp) string {
+	if ts == nil {
+		return ""
+	}
+	d := time.Since(ts.AsTime())
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+}
 
 // goalGroup holds a state-grouped set of goals for display.
 type goalGroup struct {
@@ -89,6 +113,37 @@ func (m Model) viewGoals() string {
 
 	if !m.goal.loaded {
 		return m.renderTabBar(m.width) + "\nLoading...\n" + m.renderStatus()
+	}
+
+	// Status history / reader / confirm-delete: full-width single pane.
+	if m.goal.mode == goalStatusHistory || m.goal.mode == goalStatusReader || m.goal.mode == goalStatusConfirmDel {
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
+		if innerH < 1 {
+			innerH = 1
+		}
+		innerW := m.width - 2
+		if innerW < 0 {
+			innerW = 0
+		}
+
+		var content string
+		switch m.goal.mode {
+		case goalStatusReader:
+			content = m.renderStatusReader(innerW, innerH)
+		case goalStatusConfirmDel:
+			content = m.renderStatusDeleteConfirm(innerW, innerH)
+		default:
+			content = m.renderStatusHistory(innerW, innerH)
+		}
+
+		title := statusHistoryHeader(m.goal.mode)
+		if m.styled {
+			pane := paneBox(content, m.width, innerH, title, true)
+			return m.renderTabBar(m.width) + "\n" + pane + "\n" + m.renderStatus()
+		}
+
+		help := goalStatusHelp(m.goal.mode)
+		return m.renderTabBar(m.width) + "\n" + help + "\n" + content + "\n" + m.renderStatus()
 	}
 
 	listWidth := m.width / 2
@@ -298,6 +353,48 @@ func (m Model) renderGoalDetail(width int) string {
 	if desc := g.GetDescription(); desc != "" {
 		sb.WriteByte('\n')
 		sb.WriteString(m.md.Render(desc, markdown.Options{Width: width, Styled: m.styled}))
+		sb.WriteByte('\n')
+	}
+
+	// Latest status update.
+	sb.WriteByte('\n')
+	if su := g.GetLatestStatusUpdate(); su != nil {
+		statusLabel := "Latest status:"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(statusLabel))
+		} else {
+			sb.WriteString(statusLabel)
+		}
+		sb.WriteByte('\n')
+		timeStr := relativeTime(su.GetCreatedAt())
+		if m.styled {
+			sb.WriteString(dimStyle.Render(timeStr))
+		} else {
+			sb.WriteString(timeStr)
+		}
+		sb.WriteByte('\n')
+		sb.WriteString(m.md.Render(su.GetBody(), markdown.Options{Width: width, Styled: m.styled}))
+		hint := "[s] status history"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(hint))
+		} else {
+			sb.WriteString(hint)
+		}
+		sb.WriteByte('\n')
+	} else {
+		noStatus := "No status yet — how's it going?"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(noStatus))
+		} else {
+			sb.WriteString(noStatus)
+		}
+		sb.WriteByte('\n')
+		hint := "[S] add a status update  [s] history"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(hint))
+		} else {
+			sb.WriteString(hint)
+		}
 		sb.WriteByte('\n')
 	}
 

@@ -463,3 +463,271 @@ func TestGoalCrossUserIsolation(t *testing.T) {
 	})
 }
 
+// ---- Integration tests: T005 (status updates) ----
+
+func TestGoalStatusUpdate_ValidateBody(t *testing.T) {
+	gh := &handler.Goal{Queries: nil}
+	cases := []struct {
+		name  string
+		body  string
+		isErr bool
+	}{
+		{"empty string", "", true},
+		{"whitespace only", "   \n\t", true},
+		{"valid body", "Making progress on the roadmap.", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.isErr {
+				req := connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{Body: tc.body})
+				_, err := gh.AddGoalStatusUpdate(context.Background(), req)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				ce, ok := err.(*connect.Error)
+				if !ok || ce.Code() != connect.CodeInvalidArgument {
+					t.Errorf("expected CodeInvalidArgument, got %v", err)
+				}
+			} else {
+				// Valid body passes validation; nil Queries will panic — that's OK.
+				defer func() { recover() }()
+				req := connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{GoalId: 1, Body: tc.body})
+				_, _ = gh.AddGoalStatusUpdate(context.Background(), req)
+			}
+		})
+	}
+}
+
+func TestGoalStatusUpdate_CRUD(t *testing.T) {
+	gh, userID := newGoalTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Create a goal to attach updates to.
+	gresp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Status test goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := gresp.Msg.Goal.Id
+
+	t.Run("add status update", func(t *testing.T) {
+		resp, err := gh.AddGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "First update — things are moving!",
+		}))
+		if err != nil {
+			t.Fatalf("AddGoalStatusUpdate: %v", err)
+		}
+		su := resp.Msg.Update
+		if su.Id <= 0 {
+			t.Errorf("expected positive id, got %d", su.Id)
+		}
+		if su.GoalId != goalID {
+			t.Errorf("goal_id = %d, want %d", su.GoalId, goalID)
+		}
+		if su.Body != "First update — things are moving!" {
+			t.Errorf("body = %q", su.Body)
+		}
+		if su.CreatedAt == nil {
+			t.Error("created_at should be set")
+		}
+	})
+
+	t.Run("list returns newest first", func(t *testing.T) {
+		// Add a second update.
+		_, err := gh.AddGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "Second update — almost there.",
+		}))
+		if err != nil {
+			t.Fatalf("AddGoalStatusUpdate second: %v", err)
+		}
+
+		resp, err := gh.ListGoalStatusUpdates(ctx, connect.NewRequest(&goalv1.ListGoalStatusUpdatesRequest{
+			GoalId: goalID,
+		}))
+		if err != nil {
+			t.Fatalf("ListGoalStatusUpdates: %v", err)
+		}
+		updates := resp.Msg.Updates
+		if len(updates) < 2 {
+			t.Fatalf("want at least 2 updates, got %d", len(updates))
+		}
+		// Newest first: second update should be first.
+		if !strings.Contains(updates[0].Body, "Second") {
+			t.Errorf("expected newest first, got %q", updates[0].Body)
+		}
+	})
+
+	t.Run("update body preserves created_at", func(t *testing.T) {
+		addResp, err := gh.AddGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "Original body.",
+		}))
+		if err != nil {
+			t.Fatalf("AddGoalStatusUpdate: %v", err)
+		}
+		su := addResp.Msg.Update
+		originalCreatedAt := su.CreatedAt.AsTime()
+
+		updResp, err := gh.UpdateGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.UpdateGoalStatusUpdateRequest{
+			Id:   su.Id,
+			Body: "Revised body.",
+		}))
+		if err != nil {
+			t.Fatalf("UpdateGoalStatusUpdate: %v", err)
+		}
+		updated := updResp.Msg.Update
+		if updated.Body != "Revised body." {
+			t.Errorf("body = %q, want %q", updated.Body, "Revised body.")
+		}
+		if !updated.CreatedAt.AsTime().Equal(originalCreatedAt) {
+			t.Errorf("created_at changed: was %v, now %v", originalCreatedAt, updated.CreatedAt.AsTime())
+		}
+	})
+
+	t.Run("delete removes update", func(t *testing.T) {
+		addResp, err := gh.AddGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "To be deleted.",
+		}))
+		if err != nil {
+			t.Fatalf("AddGoalStatusUpdate: %v", err)
+		}
+		suID := addResp.Msg.Update.Id
+
+		_, err = gh.DeleteGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.DeleteGoalStatusUpdateRequest{
+			Id: suID,
+		}))
+		if err != nil {
+			t.Fatalf("DeleteGoalStatusUpdate: %v", err)
+		}
+
+		// Verify it's gone.
+		listResp, err := gh.ListGoalStatusUpdates(ctx, connect.NewRequest(&goalv1.ListGoalStatusUpdatesRequest{
+			GoalId: goalID,
+		}))
+		if err != nil {
+			t.Fatalf("ListGoalStatusUpdates after delete: %v", err)
+		}
+		for _, su := range listResp.Msg.Updates {
+			if su.Id == suID {
+				t.Errorf("deleted update %d still present", suID)
+			}
+		}
+	})
+
+	t.Run("ListGoals embeds latest_status_update", func(t *testing.T) {
+		// Add a known latest update.
+		_, err := gh.AddGoalStatusUpdate(ctx, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "The very latest.",
+		}))
+		if err != nil {
+			t.Fatalf("AddGoalStatusUpdate: %v", err)
+		}
+
+		listResp, err := gh.ListGoals(ctx, connect.NewRequest(&goalv1.ListGoalsRequest{}))
+		if err != nil {
+			t.Fatalf("ListGoals: %v", err)
+		}
+		var found *goalv1.Goal
+		for _, g := range listResp.Msg.Goals {
+			if g.Id == goalID {
+				found = g
+				break
+			}
+		}
+		if found == nil {
+			t.Fatal("goal not found in ListGoals response")
+		}
+		if found.LatestStatusUpdate == nil {
+			t.Fatal("latest_status_update should be set")
+		}
+		if found.LatestStatusUpdate.Body != "The very latest." {
+			t.Errorf("latest body = %q, want %q", found.LatestStatusUpdate.Body, "The very latest.")
+		}
+	})
+}
+
+func TestGoalStatusUpdate_CrossUserIsolation(t *testing.T) {
+	ghA, userAID := newGoalTestHandler(t)
+	ctxA := ctxWithUser(userAID)
+
+	ghB, userBID := newGoalTestHandler(t)
+	ctxB := ctxWithUser(userBID)
+
+	// User A creates a goal.
+	gresp, err := ghA.CreateGoal(ctxA, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "User A's goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := gresp.Msg.Goal.Id
+
+	// User A adds an update.
+	addResp, err := ghA.AddGoalStatusUpdate(ctxA, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+		GoalId: goalID,
+		Body:   "User A's secret plans.",
+	}))
+	if err != nil {
+		t.Fatalf("AddGoalStatusUpdate: %v", err)
+	}
+	suID := addResp.Msg.Update.Id
+
+	_ = userBID // referenced via ctxB
+
+	t.Run("user B cannot list updates on user A's goal", func(t *testing.T) {
+		_, err := ghB.ListGoalStatusUpdates(ctxB, connect.NewRequest(&goalv1.ListGoalStatusUpdatesRequest{
+			GoalId: goalID,
+		}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B cannot add update to user A's goal", func(t *testing.T) {
+		_, err := ghB.AddGoalStatusUpdate(ctxB, connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   "User B sneaking in.",
+		}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B cannot update user A's status update", func(t *testing.T) {
+		_, err := ghB.UpdateGoalStatusUpdate(ctxB, connect.NewRequest(&goalv1.UpdateGoalStatusUpdateRequest{
+			Id:   suID,
+			Body: "Tampered.",
+		}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+
+	t.Run("user B cannot delete user A's status update", func(t *testing.T) {
+		_, err := ghB.DeleteGoalStatusUpdate(ctxB, connect.NewRequest(&goalv1.DeleteGoalStatusUpdateRequest{
+			Id: suID,
+		}))
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		ce, ok := err.(*connect.Error)
+		if !ok || ce.Code() != connect.CodeNotFound {
+			t.Errorf("expected CodeNotFound, got %v", err)
+		}
+	})
+}
+

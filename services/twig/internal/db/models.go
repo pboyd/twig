@@ -26,6 +26,13 @@ type Goal struct {
 	Position    pgtype.Int4
 }
 
+type GoalStatusUpdate struct {
+	ID        int64
+	GoalID    int64
+	Body      string
+	CreatedAt pgtype.Timestamptz
+}
+
 type PlanEntry struct {
 	UserID         int64
 	Day            pgtype.Date

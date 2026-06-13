@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
@@ -70,6 +71,29 @@ func dbGoalToProto(g db.Goal) *goalv1.Goal {
 	return pg
 }
 
+// dbStatusUpdateToProto converts a db.GoalStatusUpdate to proto.
+func dbStatusUpdateToProto(su db.GoalStatusUpdate) *goalv1.StatusUpdate {
+	p := &goalv1.StatusUpdate{
+		Id:     su.ID,
+		GoalId: su.GoalID,
+		Body:   su.Body,
+	}
+	if su.CreatedAt.Valid {
+		p.CreatedAt = timestamppb.New(su.CreatedAt.Time)
+	}
+	return p
+}
+
+// validateBody trims and validates a status-update body.
+func validateBody(body string) (string, error) {
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		return "", connect.NewError(connect.CodeInvalidArgument,
+			errors.New("a status update needs a few words — mind jotting something down?"))
+	}
+	return trimmed, nil
+}
+
 func (g *Goal) CreateGoal(
 	ctx context.Context,
 	req *connect.Request[goalv1.CreateGoalRequest],
@@ -110,7 +134,11 @@ func (g *Goal) GetGoal(
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&goalv1.GetGoalResponse{Goal: dbGoalToProto(row)}), nil
+	pg := dbGoalToProto(row)
+	if su, err := g.Queries.GetLatestGoalStatusUpdate(ctx, row.ID); err == nil {
+		pg.LatestStatusUpdate = dbStatusUpdateToProto(su)
+	}
+	return connect.NewResponse(&goalv1.GetGoalResponse{Goal: pg}), nil
 }
 
 func (g *Goal) ListGoals(
@@ -127,6 +155,28 @@ func (g *Goal) ListGoals(
 	for i, r := range rows {
 		goals[i] = dbGoalToProto(r)
 	}
+
+	// Populate latest_status_update for each goal in a single round trip.
+	if len(goals) > 0 {
+		goalIDs := make([]int64, len(rows))
+		for i, r := range rows {
+			goalIDs[i] = r.ID
+		}
+		latestUpdates, err := g.Queries.ListLatestGoalStatusUpdates(ctx, goalIDs)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		latestByGoal := make(map[int64]*goalv1.StatusUpdate, len(latestUpdates))
+		for _, su := range latestUpdates {
+			latestByGoal[su.GoalID] = dbStatusUpdateToProto(su)
+		}
+		for _, pg := range goals {
+			if su, ok := latestByGoal[pg.Id]; ok {
+				pg.LatestStatusUpdate = su
+			}
+		}
+	}
+
 	return connect.NewResponse(&goalv1.ListGoalsResponse{Goals: goals}), nil
 }
 
@@ -326,4 +376,102 @@ func (g *Goal) DeleteGoal(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&goalv1.DeleteGoalResponse{}), nil
+}
+
+func (g *Goal) ListGoalStatusUpdates(
+	ctx context.Context,
+	req *connect.Request[goalv1.ListGoalStatusUpdatesRequest],
+) (*connect.Response[goalv1.ListGoalStatusUpdatesResponse], error) {
+	userID := auth.UserID(ctx)
+
+	// Verify goal ownership.
+	_, err := g.Queries.GetGoal(ctx, db.GetGoalParams{ID: req.Msg.GoalId, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	rows, err := g.Queries.ListGoalStatusUpdates(ctx, db.ListGoalStatusUpdatesParams{
+		GoalID: req.Msg.GoalId,
+		UserID: userID,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	updates := make([]*goalv1.StatusUpdate, len(rows))
+	for i, r := range rows {
+		updates[i] = dbStatusUpdateToProto(r)
+	}
+	return connect.NewResponse(&goalv1.ListGoalStatusUpdatesResponse{Updates: updates}), nil
+}
+
+func (g *Goal) AddGoalStatusUpdate(
+	ctx context.Context,
+	req *connect.Request[goalv1.AddGoalStatusUpdateRequest],
+) (*connect.Response[goalv1.AddGoalStatusUpdateResponse], error) {
+	userID := auth.UserID(ctx)
+
+	body, err := validateBody(req.Msg.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	su, err := g.Queries.AddGoalStatusUpdate(ctx, db.AddGoalStatusUpdateParams{
+		GoalID: req.Msg.GoalId,
+		UserID: userID,
+		Body:   body,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("goal not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&goalv1.AddGoalStatusUpdateResponse{Update: dbStatusUpdateToProto(su)}), nil
+}
+
+func (g *Goal) UpdateGoalStatusUpdate(
+	ctx context.Context,
+	req *connect.Request[goalv1.UpdateGoalStatusUpdateRequest],
+) (*connect.Response[goalv1.UpdateGoalStatusUpdateResponse], error) {
+	userID := auth.UserID(ctx)
+
+	body, err := validateBody(req.Msg.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	su, err := g.Queries.UpdateGoalStatusUpdate(ctx, db.UpdateGoalStatusUpdateParams{
+		ID:     req.Msg.Id,
+		UserID: userID,
+		Body:   body,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("status update not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&goalv1.UpdateGoalStatusUpdateResponse{Update: dbStatusUpdateToProto(su)}), nil
+}
+
+func (g *Goal) DeleteGoalStatusUpdate(
+	ctx context.Context,
+	req *connect.Request[goalv1.DeleteGoalStatusUpdateRequest],
+) (*connect.Response[goalv1.DeleteGoalStatusUpdateResponse], error) {
+	userID := auth.UserID(ctx)
+
+	_, err := g.Queries.DeleteGoalStatusUpdate(ctx, db.DeleteGoalStatusUpdateParams{
+		ID:     req.Msg.Id,
+		UserID: userID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("status update not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&goalv1.DeleteGoalStatusUpdateResponse{}), nil
 }

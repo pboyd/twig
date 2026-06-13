@@ -43,6 +43,23 @@ service GoalService {
   // DeleteGoal removes a goal. Associated tasks are NOT deleted or modified;
   // their association is cleared (DB-level ON DELETE SET NULL).
   rpc DeleteGoal(DeleteGoalRequest) returns (DeleteGoalResponse);
+
+  // ListGoalStatusUpdates returns a goal's status updates, newest first.
+  rpc ListGoalStatusUpdates(ListGoalStatusUpdatesRequest)
+      returns (ListGoalStatusUpdatesResponse);
+
+  // AddGoalStatusUpdate records a new status update on a goal (created_at = now).
+  rpc AddGoalStatusUpdate(AddGoalStatusUpdateRequest)
+      returns (AddGoalStatusUpdateResponse);
+
+  // UpdateGoalStatusUpdate replaces the body of an existing update.
+  // created_at is preserved.
+  rpc UpdateGoalStatusUpdate(UpdateGoalStatusUpdateRequest)
+      returns (UpdateGoalStatusUpdateResponse);
+
+  // DeleteGoalStatusUpdate removes a single status update.
+  rpc DeleteGoalStatusUpdate(DeleteGoalStatusUpdateRequest)
+      returns (DeleteGoalStatusUpdateResponse);
 }
 
 enum GoalState {
@@ -51,6 +68,17 @@ enum GoalState {
   GOAL_STATE_COMMITTED = 2;
   GOAL_STATE_COMPLETED = 3;
   GOAL_STATE_ARCHIVED = 4;
+}
+
+message StatusUpdate {
+  // Server-assigned, positive, increasing, never reused.
+  int64 id = 1;
+  // The owning goal.
+  int64 goal_id = 2;
+  // Required, non-empty (trimmed). Markdown.
+  string body = 3;
+  // When the update was recorded (UTC). Unchanged by edits.
+  google.protobuf.Timestamp created_at = 4;
 }
 
 message Goal {
@@ -67,6 +95,9 @@ message Goal {
   // Order within the (user, state) group. Lower sorts first. Read-only:
   // populated on reads, ignored on writes.
   int64 position = 6;
+  // The goal's most recent status update; unset when the goal has none.
+  // Read-only: populated on reads (ListGoals/GetGoal), ignored on writes.
+  StatusUpdate latest_status_update = 7;
 }
 
 message CreateGoalRequest {
@@ -114,3 +145,21 @@ message ReorderGoalResponse {
 
 message DeleteGoalRequest { int64 id = 1; }
 message DeleteGoalResponse {}
+
+message ListGoalStatusUpdatesRequest { int64 goal_id = 1; }
+message ListGoalStatusUpdatesResponse { repeated StatusUpdate updates = 1; }
+
+message AddGoalStatusUpdateRequest {
+  int64 goal_id = 1;
+  string body = 2;
+}
+message AddGoalStatusUpdateResponse { StatusUpdate update = 1; }
+
+message UpdateGoalStatusUpdateRequest {
+  int64 id = 1;
+  string body = 2;
+}
+message UpdateGoalStatusUpdateResponse { StatusUpdate update = 1; }
+
+message DeleteGoalStatusUpdateRequest { int64 id = 1; }
+message DeleteGoalStatusUpdateResponse {}

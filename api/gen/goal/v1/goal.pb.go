@@ -77,6 +77,78 @@ func (GoalState) EnumDescriptor() ([]byte, []int) {
 	return file_goal_v1_goal_proto_rawDescGZIP(), []int{0}
 }
 
+type StatusUpdate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Server-assigned, positive, increasing, never reused.
+	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// The owning goal.
+	GoalId int64 `protobuf:"varint,2,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	// Required, non-empty (trimmed). Markdown.
+	Body string `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	// When the update was recorded (UTC). Unchanged by edits.
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusUpdate) Reset() {
+	*x = StatusUpdate{}
+	mi := &file_goal_v1_goal_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusUpdate) ProtoMessage() {}
+
+func (x *StatusUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusUpdate.ProtoReflect.Descriptor instead.
+func (*StatusUpdate) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *StatusUpdate) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *StatusUpdate) GetGoalId() int64 {
+	if x != nil {
+		return x.GoalId
+	}
+	return 0
+}
+
+func (x *StatusUpdate) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *StatusUpdate) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
 type Goal struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Server-assigned, positive, increasing, never reused.
@@ -91,14 +163,17 @@ type Goal struct {
 	State GoalState `protobuf:"varint,5,opt,name=state,proto3,enum=goal.v1.GoalState" json:"state,omitempty"`
 	// Order within the (user, state) group. Lower sorts first. Read-only:
 	// populated on reads, ignored on writes.
-	Position      int64 `protobuf:"varint,6,opt,name=position,proto3" json:"position,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Position int64 `protobuf:"varint,6,opt,name=position,proto3" json:"position,omitempty"`
+	// The goal's most recent status update; unset when the goal has none.
+	// Read-only: populated on reads (ListGoals/GetGoal), ignored on writes.
+	LatestStatusUpdate *StatusUpdate `protobuf:"bytes,7,opt,name=latest_status_update,json=latestStatusUpdate,proto3" json:"latest_status_update,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Goal) Reset() {
 	*x = Goal{}
-	mi := &file_goal_v1_goal_proto_msgTypes[0]
+	mi := &file_goal_v1_goal_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -110,7 +185,7 @@ func (x *Goal) String() string {
 func (*Goal) ProtoMessage() {}
 
 func (x *Goal) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[0]
+	mi := &file_goal_v1_goal_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -123,7 +198,7 @@ func (x *Goal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Goal.ProtoReflect.Descriptor instead.
 func (*Goal) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{0}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Goal) GetId() int64 {
@@ -168,6 +243,13 @@ func (x *Goal) GetPosition() int64 {
 	return 0
 }
 
+func (x *Goal) GetLatestStatusUpdate() *StatusUpdate {
+	if x != nil {
+		return x.LatestStatusUpdate
+	}
+	return nil
+}
+
 type CreateGoalRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -179,7 +261,7 @@ type CreateGoalRequest struct {
 
 func (x *CreateGoalRequest) Reset() {
 	*x = CreateGoalRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[1]
+	mi := &file_goal_v1_goal_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -191,7 +273,7 @@ func (x *CreateGoalRequest) String() string {
 func (*CreateGoalRequest) ProtoMessage() {}
 
 func (x *CreateGoalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[1]
+	mi := &file_goal_v1_goal_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -204,7 +286,7 @@ func (x *CreateGoalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGoalRequest.ProtoReflect.Descriptor instead.
 func (*CreateGoalRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{1}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreateGoalRequest) GetName() string {
@@ -237,7 +319,7 @@ type CreateGoalResponse struct {
 
 func (x *CreateGoalResponse) Reset() {
 	*x = CreateGoalResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[2]
+	mi := &file_goal_v1_goal_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -249,7 +331,7 @@ func (x *CreateGoalResponse) String() string {
 func (*CreateGoalResponse) ProtoMessage() {}
 
 func (x *CreateGoalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[2]
+	mi := &file_goal_v1_goal_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +344,7 @@ func (x *CreateGoalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGoalResponse.ProtoReflect.Descriptor instead.
 func (*CreateGoalResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{2}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreateGoalResponse) GetGoal() *Goal {
@@ -281,7 +363,7 @@ type GetGoalRequest struct {
 
 func (x *GetGoalRequest) Reset() {
 	*x = GetGoalRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[3]
+	mi := &file_goal_v1_goal_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +375,7 @@ func (x *GetGoalRequest) String() string {
 func (*GetGoalRequest) ProtoMessage() {}
 
 func (x *GetGoalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[3]
+	mi := &file_goal_v1_goal_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +388,7 @@ func (x *GetGoalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGoalRequest.ProtoReflect.Descriptor instead.
 func (*GetGoalRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{3}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetGoalRequest) GetId() int64 {
@@ -325,7 +407,7 @@ type GetGoalResponse struct {
 
 func (x *GetGoalResponse) Reset() {
 	*x = GetGoalResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[4]
+	mi := &file_goal_v1_goal_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -337,7 +419,7 @@ func (x *GetGoalResponse) String() string {
 func (*GetGoalResponse) ProtoMessage() {}
 
 func (x *GetGoalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[4]
+	mi := &file_goal_v1_goal_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -350,7 +432,7 @@ func (x *GetGoalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGoalResponse.ProtoReflect.Descriptor instead.
 func (*GetGoalResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{4}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetGoalResponse) GetGoal() *Goal {
@@ -368,7 +450,7 @@ type ListGoalsRequest struct {
 
 func (x *ListGoalsRequest) Reset() {
 	*x = ListGoalsRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[5]
+	mi := &file_goal_v1_goal_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -380,7 +462,7 @@ func (x *ListGoalsRequest) String() string {
 func (*ListGoalsRequest) ProtoMessage() {}
 
 func (x *ListGoalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[5]
+	mi := &file_goal_v1_goal_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -393,7 +475,7 @@ func (x *ListGoalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGoalsRequest.ProtoReflect.Descriptor instead.
 func (*ListGoalsRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{5}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{6}
 }
 
 type ListGoalsResponse struct {
@@ -405,7 +487,7 @@ type ListGoalsResponse struct {
 
 func (x *ListGoalsResponse) Reset() {
 	*x = ListGoalsResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[6]
+	mi := &file_goal_v1_goal_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -417,7 +499,7 @@ func (x *ListGoalsResponse) String() string {
 func (*ListGoalsResponse) ProtoMessage() {}
 
 func (x *ListGoalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[6]
+	mi := &file_goal_v1_goal_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -430,7 +512,7 @@ func (x *ListGoalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGoalsResponse.ProtoReflect.Descriptor instead.
 func (*ListGoalsResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{6}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListGoalsResponse) GetGoals() []*Goal {
@@ -453,7 +535,7 @@ type UpdateGoalRequest struct {
 
 func (x *UpdateGoalRequest) Reset() {
 	*x = UpdateGoalRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[7]
+	mi := &file_goal_v1_goal_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +547,7 @@ func (x *UpdateGoalRequest) String() string {
 func (*UpdateGoalRequest) ProtoMessage() {}
 
 func (x *UpdateGoalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[7]
+	mi := &file_goal_v1_goal_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,7 +560,7 @@ func (x *UpdateGoalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGoalRequest.ProtoReflect.Descriptor instead.
 func (*UpdateGoalRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{7}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateGoalRequest) GetId() int64 {
@@ -518,7 +600,7 @@ type UpdateGoalResponse struct {
 
 func (x *UpdateGoalResponse) Reset() {
 	*x = UpdateGoalResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[8]
+	mi := &file_goal_v1_goal_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -530,7 +612,7 @@ func (x *UpdateGoalResponse) String() string {
 func (*UpdateGoalResponse) ProtoMessage() {}
 
 func (x *UpdateGoalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[8]
+	mi := &file_goal_v1_goal_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -543,7 +625,7 @@ func (x *UpdateGoalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGoalResponse.ProtoReflect.Descriptor instead.
 func (*UpdateGoalResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{8}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *UpdateGoalResponse) GetGoal() *Goal {
@@ -564,7 +646,7 @@ type SetGoalStateRequest struct {
 
 func (x *SetGoalStateRequest) Reset() {
 	*x = SetGoalStateRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[9]
+	mi := &file_goal_v1_goal_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +658,7 @@ func (x *SetGoalStateRequest) String() string {
 func (*SetGoalStateRequest) ProtoMessage() {}
 
 func (x *SetGoalStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[9]
+	mi := &file_goal_v1_goal_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +671,7 @@ func (x *SetGoalStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGoalStateRequest.ProtoReflect.Descriptor instead.
 func (*SetGoalStateRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{9}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SetGoalStateRequest) GetId() int64 {
@@ -615,7 +697,7 @@ type SetGoalStateResponse struct {
 
 func (x *SetGoalStateResponse) Reset() {
 	*x = SetGoalStateResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[10]
+	mi := &file_goal_v1_goal_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -627,7 +709,7 @@ func (x *SetGoalStateResponse) String() string {
 func (*SetGoalStateResponse) ProtoMessage() {}
 
 func (x *SetGoalStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[10]
+	mi := &file_goal_v1_goal_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -640,7 +722,7 @@ func (x *SetGoalStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetGoalStateResponse.ProtoReflect.Descriptor instead.
 func (*SetGoalStateResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{10}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SetGoalStateResponse) GetGoal() *Goal {
@@ -666,7 +748,7 @@ type ReorderGoalRequest struct {
 
 func (x *ReorderGoalRequest) Reset() {
 	*x = ReorderGoalRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[11]
+	mi := &file_goal_v1_goal_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +760,7 @@ func (x *ReorderGoalRequest) String() string {
 func (*ReorderGoalRequest) ProtoMessage() {}
 
 func (x *ReorderGoalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[11]
+	mi := &file_goal_v1_goal_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +773,7 @@ func (x *ReorderGoalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReorderGoalRequest.ProtoReflect.Descriptor instead.
 func (*ReorderGoalRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{11}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ReorderGoalRequest) GetGoalId() int64 {
@@ -753,7 +835,7 @@ type ReorderGoalResponse struct {
 
 func (x *ReorderGoalResponse) Reset() {
 	*x = ReorderGoalResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[12]
+	mi := &file_goal_v1_goal_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -765,7 +847,7 @@ func (x *ReorderGoalResponse) String() string {
 func (*ReorderGoalResponse) ProtoMessage() {}
 
 func (x *ReorderGoalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[12]
+	mi := &file_goal_v1_goal_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -778,7 +860,7 @@ func (x *ReorderGoalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReorderGoalResponse.ProtoReflect.Descriptor instead.
 func (*ReorderGoalResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{12}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReorderGoalResponse) GetGoals() []*Goal {
@@ -797,7 +879,7 @@ type DeleteGoalRequest struct {
 
 func (x *DeleteGoalRequest) Reset() {
 	*x = DeleteGoalRequest{}
-	mi := &file_goal_v1_goal_proto_msgTypes[13]
+	mi := &file_goal_v1_goal_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +891,7 @@ func (x *DeleteGoalRequest) String() string {
 func (*DeleteGoalRequest) ProtoMessage() {}
 
 func (x *DeleteGoalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[13]
+	mi := &file_goal_v1_goal_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +904,7 @@ func (x *DeleteGoalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGoalRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGoalRequest) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{13}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteGoalRequest) GetId() int64 {
@@ -840,7 +922,7 @@ type DeleteGoalResponse struct {
 
 func (x *DeleteGoalResponse) Reset() {
 	*x = DeleteGoalResponse{}
-	mi := &file_goal_v1_goal_proto_msgTypes[14]
+	mi := &file_goal_v1_goal_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +934,7 @@ func (x *DeleteGoalResponse) String() string {
 func (*DeleteGoalResponse) ProtoMessage() {}
 
 func (x *DeleteGoalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_goal_v1_goal_proto_msgTypes[14]
+	mi := &file_goal_v1_goal_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,21 +947,388 @@ func (x *DeleteGoalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGoalResponse.ProtoReflect.Descriptor instead.
 func (*DeleteGoalResponse) Descriptor() ([]byte, []int) {
-	return file_goal_v1_goal_proto_rawDescGZIP(), []int{14}
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{15}
+}
+
+type ListGoalStatusUpdatesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        int64                  `protobuf:"varint,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGoalStatusUpdatesRequest) Reset() {
+	*x = ListGoalStatusUpdatesRequest{}
+	mi := &file_goal_v1_goal_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalStatusUpdatesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalStatusUpdatesRequest) ProtoMessage() {}
+
+func (x *ListGoalStatusUpdatesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalStatusUpdatesRequest.ProtoReflect.Descriptor instead.
+func (*ListGoalStatusUpdatesRequest) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListGoalStatusUpdatesRequest) GetGoalId() int64 {
+	if x != nil {
+		return x.GoalId
+	}
+	return 0
+}
+
+type ListGoalStatusUpdatesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Updates       []*StatusUpdate        `protobuf:"bytes,1,rep,name=updates,proto3" json:"updates,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGoalStatusUpdatesResponse) Reset() {
+	*x = ListGoalStatusUpdatesResponse{}
+	mi := &file_goal_v1_goal_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGoalStatusUpdatesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGoalStatusUpdatesResponse) ProtoMessage() {}
+
+func (x *ListGoalStatusUpdatesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGoalStatusUpdatesResponse.ProtoReflect.Descriptor instead.
+func (*ListGoalStatusUpdatesResponse) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListGoalStatusUpdatesResponse) GetUpdates() []*StatusUpdate {
+	if x != nil {
+		return x.Updates
+	}
+	return nil
+}
+
+type AddGoalStatusUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GoalId        int64                  `protobuf:"varint,1,opt,name=goal_id,json=goalId,proto3" json:"goal_id,omitempty"`
+	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddGoalStatusUpdateRequest) Reset() {
+	*x = AddGoalStatusUpdateRequest{}
+	mi := &file_goal_v1_goal_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddGoalStatusUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddGoalStatusUpdateRequest) ProtoMessage() {}
+
+func (x *AddGoalStatusUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddGoalStatusUpdateRequest.ProtoReflect.Descriptor instead.
+func (*AddGoalStatusUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *AddGoalStatusUpdateRequest) GetGoalId() int64 {
+	if x != nil {
+		return x.GoalId
+	}
+	return 0
+}
+
+func (x *AddGoalStatusUpdateRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type AddGoalStatusUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Update        *StatusUpdate          `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddGoalStatusUpdateResponse) Reset() {
+	*x = AddGoalStatusUpdateResponse{}
+	mi := &file_goal_v1_goal_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddGoalStatusUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddGoalStatusUpdateResponse) ProtoMessage() {}
+
+func (x *AddGoalStatusUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddGoalStatusUpdateResponse.ProtoReflect.Descriptor instead.
+func (*AddGoalStatusUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AddGoalStatusUpdateResponse) GetUpdate() *StatusUpdate {
+	if x != nil {
+		return x.Update
+	}
+	return nil
+}
+
+type UpdateGoalStatusUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateGoalStatusUpdateRequest) Reset() {
+	*x = UpdateGoalStatusUpdateRequest{}
+	mi := &file_goal_v1_goal_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateGoalStatusUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateGoalStatusUpdateRequest) ProtoMessage() {}
+
+func (x *UpdateGoalStatusUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateGoalStatusUpdateRequest.ProtoReflect.Descriptor instead.
+func (*UpdateGoalStatusUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *UpdateGoalStatusUpdateRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateGoalStatusUpdateRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type UpdateGoalStatusUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Update        *StatusUpdate          `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateGoalStatusUpdateResponse) Reset() {
+	*x = UpdateGoalStatusUpdateResponse{}
+	mi := &file_goal_v1_goal_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateGoalStatusUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateGoalStatusUpdateResponse) ProtoMessage() {}
+
+func (x *UpdateGoalStatusUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateGoalStatusUpdateResponse.ProtoReflect.Descriptor instead.
+func (*UpdateGoalStatusUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *UpdateGoalStatusUpdateResponse) GetUpdate() *StatusUpdate {
+	if x != nil {
+		return x.Update
+	}
+	return nil
+}
+
+type DeleteGoalStatusUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteGoalStatusUpdateRequest) Reset() {
+	*x = DeleteGoalStatusUpdateRequest{}
+	mi := &file_goal_v1_goal_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteGoalStatusUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteGoalStatusUpdateRequest) ProtoMessage() {}
+
+func (x *DeleteGoalStatusUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteGoalStatusUpdateRequest.ProtoReflect.Descriptor instead.
+func (*DeleteGoalStatusUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DeleteGoalStatusUpdateRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteGoalStatusUpdateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteGoalStatusUpdateResponse) Reset() {
+	*x = DeleteGoalStatusUpdateResponse{}
+	mi := &file_goal_v1_goal_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteGoalStatusUpdateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteGoalStatusUpdateResponse) ProtoMessage() {}
+
+func (x *DeleteGoalStatusUpdateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_goal_v1_goal_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteGoalStatusUpdateResponse.ProtoReflect.Descriptor instead.
+func (*DeleteGoalStatusUpdateResponse) Descriptor() ([]byte, []int) {
+	return file_goal_v1_goal_proto_rawDescGZIP(), []int{23}
 }
 
 var File_goal_v1_goal_proto protoreflect.FileDescriptor
 
 const file_goal_v1_goal_proto_rawDesc = "" +
 	"\n" +
-	"\x12goal/v1/goal.proto\x12\agoal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc0\x01\n" +
+	"\x12goal/v1/goal.proto\x12\agoal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x86\x01\n" +
+	"\fStatusUpdate\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
+	"\agoal_id\x18\x02 \x01(\x03R\x06goalId\x12\x12\n" +
+	"\x04body\x18\x03 \x01(\tR\x04body\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x89\x02\n" +
 	"\x04Goal\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12,\n" +
 	"\x03due\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x03due\x12(\n" +
 	"\x05state\x18\x05 \x01(\x0e2\x12.goal.v1.GoalStateR\x05state\x12\x1a\n" +
-	"\bposition\x18\x06 \x01(\x03R\bposition\"w\n" +
+	"\bposition\x18\x06 \x01(\x03R\bposition\x12G\n" +
+	"\x14latest_status_update\x18\a \x01(\v2\x15.goal.v1.StatusUpdateR\x12latestStatusUpdate\"w\n" +
 	"\x11CreateGoalRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12,\n" +
@@ -914,13 +1363,30 @@ const file_goal_v1_goal_proto_rawDesc = "" +
 	"\x05goals\x18\x01 \x03(\v2\r.goal.v1.GoalR\x05goals\"#\n" +
 	"\x11DeleteGoalRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
-	"\x12DeleteGoalResponse*\x8f\x01\n" +
+	"\x12DeleteGoalResponse\"7\n" +
+	"\x1cListGoalStatusUpdatesRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\x03R\x06goalId\"P\n" +
+	"\x1dListGoalStatusUpdatesResponse\x12/\n" +
+	"\aupdates\x18\x01 \x03(\v2\x15.goal.v1.StatusUpdateR\aupdates\"I\n" +
+	"\x1aAddGoalStatusUpdateRequest\x12\x17\n" +
+	"\agoal_id\x18\x01 \x01(\x03R\x06goalId\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\"L\n" +
+	"\x1bAddGoalStatusUpdateResponse\x12-\n" +
+	"\x06update\x18\x01 \x01(\v2\x15.goal.v1.StatusUpdateR\x06update\"C\n" +
+	"\x1dUpdateGoalStatusUpdateRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\"O\n" +
+	"\x1eUpdateGoalStatusUpdateResponse\x12-\n" +
+	"\x06update\x18\x01 \x01(\v2\x15.goal.v1.StatusUpdateR\x06update\"/\n" +
+	"\x1dDeleteGoalStatusUpdateRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\" \n" +
+	"\x1eDeleteGoalStatusUpdateResponse*\x8f\x01\n" +
 	"\tGoalState\x12\x1a\n" +
 	"\x16GOAL_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15GOAL_STATE_INCUBATING\x10\x01\x12\x18\n" +
 	"\x14GOAL_STATE_COMMITTED\x10\x02\x12\x18\n" +
 	"\x14GOAL_STATE_COMPLETED\x10\x03\x12\x17\n" +
-	"\x13GOAL_STATE_ARCHIVED\x10\x042\xfb\x03\n" +
+	"\x13GOAL_STATE_ARCHIVED\x10\x042\x9b\a\n" +
 	"\vGoalService\x12E\n" +
 	"\n" +
 	"CreateGoal\x12\x1a.goal.v1.CreateGoalRequest\x1a\x1b.goal.v1.CreateGoalResponse\x12<\n" +
@@ -931,7 +1397,11 @@ const file_goal_v1_goal_proto_rawDesc = "" +
 	"\fSetGoalState\x12\x1c.goal.v1.SetGoalStateRequest\x1a\x1d.goal.v1.SetGoalStateResponse\x12H\n" +
 	"\vReorderGoal\x12\x1b.goal.v1.ReorderGoalRequest\x1a\x1c.goal.v1.ReorderGoalResponse\x12E\n" +
 	"\n" +
-	"DeleteGoal\x12\x1a.goal.v1.DeleteGoalRequest\x1a\x1b.goal.v1.DeleteGoalResponseB.Z,github.com/pboyd/twig/api/gen/goal/v1;goalv1b\x06proto3"
+	"DeleteGoal\x12\x1a.goal.v1.DeleteGoalRequest\x1a\x1b.goal.v1.DeleteGoalResponse\x12f\n" +
+	"\x15ListGoalStatusUpdates\x12%.goal.v1.ListGoalStatusUpdatesRequest\x1a&.goal.v1.ListGoalStatusUpdatesResponse\x12`\n" +
+	"\x13AddGoalStatusUpdate\x12#.goal.v1.AddGoalStatusUpdateRequest\x1a$.goal.v1.AddGoalStatusUpdateResponse\x12i\n" +
+	"\x16UpdateGoalStatusUpdate\x12&.goal.v1.UpdateGoalStatusUpdateRequest\x1a'.goal.v1.UpdateGoalStatusUpdateResponse\x12i\n" +
+	"\x16DeleteGoalStatusUpdate\x12&.goal.v1.DeleteGoalStatusUpdateRequest\x1a'.goal.v1.DeleteGoalStatusUpdateResponseB.Z,github.com/pboyd/twig/api/gen/goal/v1;goalv1b\x06proto3"
 
 var (
 	file_goal_v1_goal_proto_rawDescOnce sync.Once
@@ -946,57 +1416,79 @@ func file_goal_v1_goal_proto_rawDescGZIP() []byte {
 }
 
 var file_goal_v1_goal_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_goal_v1_goal_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_goal_v1_goal_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_goal_v1_goal_proto_goTypes = []any{
-	(GoalState)(0),                // 0: goal.v1.GoalState
-	(*Goal)(nil),                  // 1: goal.v1.Goal
-	(*CreateGoalRequest)(nil),     // 2: goal.v1.CreateGoalRequest
-	(*CreateGoalResponse)(nil),    // 3: goal.v1.CreateGoalResponse
-	(*GetGoalRequest)(nil),        // 4: goal.v1.GetGoalRequest
-	(*GetGoalResponse)(nil),       // 5: goal.v1.GetGoalResponse
-	(*ListGoalsRequest)(nil),      // 6: goal.v1.ListGoalsRequest
-	(*ListGoalsResponse)(nil),     // 7: goal.v1.ListGoalsResponse
-	(*UpdateGoalRequest)(nil),     // 8: goal.v1.UpdateGoalRequest
-	(*UpdateGoalResponse)(nil),    // 9: goal.v1.UpdateGoalResponse
-	(*SetGoalStateRequest)(nil),   // 10: goal.v1.SetGoalStateRequest
-	(*SetGoalStateResponse)(nil),  // 11: goal.v1.SetGoalStateResponse
-	(*ReorderGoalRequest)(nil),    // 12: goal.v1.ReorderGoalRequest
-	(*ReorderGoalResponse)(nil),   // 13: goal.v1.ReorderGoalResponse
-	(*DeleteGoalRequest)(nil),     // 14: goal.v1.DeleteGoalRequest
-	(*DeleteGoalResponse)(nil),    // 15: goal.v1.DeleteGoalResponse
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
+	(GoalState)(0),                         // 0: goal.v1.GoalState
+	(*StatusUpdate)(nil),                   // 1: goal.v1.StatusUpdate
+	(*Goal)(nil),                           // 2: goal.v1.Goal
+	(*CreateGoalRequest)(nil),              // 3: goal.v1.CreateGoalRequest
+	(*CreateGoalResponse)(nil),             // 4: goal.v1.CreateGoalResponse
+	(*GetGoalRequest)(nil),                 // 5: goal.v1.GetGoalRequest
+	(*GetGoalResponse)(nil),                // 6: goal.v1.GetGoalResponse
+	(*ListGoalsRequest)(nil),               // 7: goal.v1.ListGoalsRequest
+	(*ListGoalsResponse)(nil),              // 8: goal.v1.ListGoalsResponse
+	(*UpdateGoalRequest)(nil),              // 9: goal.v1.UpdateGoalRequest
+	(*UpdateGoalResponse)(nil),             // 10: goal.v1.UpdateGoalResponse
+	(*SetGoalStateRequest)(nil),            // 11: goal.v1.SetGoalStateRequest
+	(*SetGoalStateResponse)(nil),           // 12: goal.v1.SetGoalStateResponse
+	(*ReorderGoalRequest)(nil),             // 13: goal.v1.ReorderGoalRequest
+	(*ReorderGoalResponse)(nil),            // 14: goal.v1.ReorderGoalResponse
+	(*DeleteGoalRequest)(nil),              // 15: goal.v1.DeleteGoalRequest
+	(*DeleteGoalResponse)(nil),             // 16: goal.v1.DeleteGoalResponse
+	(*ListGoalStatusUpdatesRequest)(nil),   // 17: goal.v1.ListGoalStatusUpdatesRequest
+	(*ListGoalStatusUpdatesResponse)(nil),  // 18: goal.v1.ListGoalStatusUpdatesResponse
+	(*AddGoalStatusUpdateRequest)(nil),     // 19: goal.v1.AddGoalStatusUpdateRequest
+	(*AddGoalStatusUpdateResponse)(nil),    // 20: goal.v1.AddGoalStatusUpdateResponse
+	(*UpdateGoalStatusUpdateRequest)(nil),  // 21: goal.v1.UpdateGoalStatusUpdateRequest
+	(*UpdateGoalStatusUpdateResponse)(nil), // 22: goal.v1.UpdateGoalStatusUpdateResponse
+	(*DeleteGoalStatusUpdateRequest)(nil),  // 23: goal.v1.DeleteGoalStatusUpdateRequest
+	(*DeleteGoalStatusUpdateResponse)(nil), // 24: goal.v1.DeleteGoalStatusUpdateResponse
+	(*timestamppb.Timestamp)(nil),          // 25: google.protobuf.Timestamp
 }
 var file_goal_v1_goal_proto_depIdxs = []int32{
-	16, // 0: goal.v1.Goal.due:type_name -> google.protobuf.Timestamp
-	0,  // 1: goal.v1.Goal.state:type_name -> goal.v1.GoalState
-	16, // 2: goal.v1.CreateGoalRequest.due:type_name -> google.protobuf.Timestamp
-	1,  // 3: goal.v1.CreateGoalResponse.goal:type_name -> goal.v1.Goal
-	1,  // 4: goal.v1.GetGoalResponse.goal:type_name -> goal.v1.Goal
-	1,  // 5: goal.v1.ListGoalsResponse.goals:type_name -> goal.v1.Goal
-	16, // 6: goal.v1.UpdateGoalRequest.due:type_name -> google.protobuf.Timestamp
-	1,  // 7: goal.v1.UpdateGoalResponse.goal:type_name -> goal.v1.Goal
-	0,  // 8: goal.v1.SetGoalStateRequest.state:type_name -> goal.v1.GoalState
-	1,  // 9: goal.v1.SetGoalStateResponse.goal:type_name -> goal.v1.Goal
-	1,  // 10: goal.v1.ReorderGoalResponse.goals:type_name -> goal.v1.Goal
-	2,  // 11: goal.v1.GoalService.CreateGoal:input_type -> goal.v1.CreateGoalRequest
-	4,  // 12: goal.v1.GoalService.GetGoal:input_type -> goal.v1.GetGoalRequest
-	6,  // 13: goal.v1.GoalService.ListGoals:input_type -> goal.v1.ListGoalsRequest
-	8,  // 14: goal.v1.GoalService.UpdateGoal:input_type -> goal.v1.UpdateGoalRequest
-	10, // 15: goal.v1.GoalService.SetGoalState:input_type -> goal.v1.SetGoalStateRequest
-	12, // 16: goal.v1.GoalService.ReorderGoal:input_type -> goal.v1.ReorderGoalRequest
-	14, // 17: goal.v1.GoalService.DeleteGoal:input_type -> goal.v1.DeleteGoalRequest
-	3,  // 18: goal.v1.GoalService.CreateGoal:output_type -> goal.v1.CreateGoalResponse
-	5,  // 19: goal.v1.GoalService.GetGoal:output_type -> goal.v1.GetGoalResponse
-	7,  // 20: goal.v1.GoalService.ListGoals:output_type -> goal.v1.ListGoalsResponse
-	9,  // 21: goal.v1.GoalService.UpdateGoal:output_type -> goal.v1.UpdateGoalResponse
-	11, // 22: goal.v1.GoalService.SetGoalState:output_type -> goal.v1.SetGoalStateResponse
-	13, // 23: goal.v1.GoalService.ReorderGoal:output_type -> goal.v1.ReorderGoalResponse
-	15, // 24: goal.v1.GoalService.DeleteGoal:output_type -> goal.v1.DeleteGoalResponse
-	18, // [18:25] is the sub-list for method output_type
-	11, // [11:18] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	25, // 0: goal.v1.StatusUpdate.created_at:type_name -> google.protobuf.Timestamp
+	25, // 1: goal.v1.Goal.due:type_name -> google.protobuf.Timestamp
+	0,  // 2: goal.v1.Goal.state:type_name -> goal.v1.GoalState
+	1,  // 3: goal.v1.Goal.latest_status_update:type_name -> goal.v1.StatusUpdate
+	25, // 4: goal.v1.CreateGoalRequest.due:type_name -> google.protobuf.Timestamp
+	2,  // 5: goal.v1.CreateGoalResponse.goal:type_name -> goal.v1.Goal
+	2,  // 6: goal.v1.GetGoalResponse.goal:type_name -> goal.v1.Goal
+	2,  // 7: goal.v1.ListGoalsResponse.goals:type_name -> goal.v1.Goal
+	25, // 8: goal.v1.UpdateGoalRequest.due:type_name -> google.protobuf.Timestamp
+	2,  // 9: goal.v1.UpdateGoalResponse.goal:type_name -> goal.v1.Goal
+	0,  // 10: goal.v1.SetGoalStateRequest.state:type_name -> goal.v1.GoalState
+	2,  // 11: goal.v1.SetGoalStateResponse.goal:type_name -> goal.v1.Goal
+	2,  // 12: goal.v1.ReorderGoalResponse.goals:type_name -> goal.v1.Goal
+	1,  // 13: goal.v1.ListGoalStatusUpdatesResponse.updates:type_name -> goal.v1.StatusUpdate
+	1,  // 14: goal.v1.AddGoalStatusUpdateResponse.update:type_name -> goal.v1.StatusUpdate
+	1,  // 15: goal.v1.UpdateGoalStatusUpdateResponse.update:type_name -> goal.v1.StatusUpdate
+	3,  // 16: goal.v1.GoalService.CreateGoal:input_type -> goal.v1.CreateGoalRequest
+	5,  // 17: goal.v1.GoalService.GetGoal:input_type -> goal.v1.GetGoalRequest
+	7,  // 18: goal.v1.GoalService.ListGoals:input_type -> goal.v1.ListGoalsRequest
+	9,  // 19: goal.v1.GoalService.UpdateGoal:input_type -> goal.v1.UpdateGoalRequest
+	11, // 20: goal.v1.GoalService.SetGoalState:input_type -> goal.v1.SetGoalStateRequest
+	13, // 21: goal.v1.GoalService.ReorderGoal:input_type -> goal.v1.ReorderGoalRequest
+	15, // 22: goal.v1.GoalService.DeleteGoal:input_type -> goal.v1.DeleteGoalRequest
+	17, // 23: goal.v1.GoalService.ListGoalStatusUpdates:input_type -> goal.v1.ListGoalStatusUpdatesRequest
+	19, // 24: goal.v1.GoalService.AddGoalStatusUpdate:input_type -> goal.v1.AddGoalStatusUpdateRequest
+	21, // 25: goal.v1.GoalService.UpdateGoalStatusUpdate:input_type -> goal.v1.UpdateGoalStatusUpdateRequest
+	23, // 26: goal.v1.GoalService.DeleteGoalStatusUpdate:input_type -> goal.v1.DeleteGoalStatusUpdateRequest
+	4,  // 27: goal.v1.GoalService.CreateGoal:output_type -> goal.v1.CreateGoalResponse
+	6,  // 28: goal.v1.GoalService.GetGoal:output_type -> goal.v1.GetGoalResponse
+	8,  // 29: goal.v1.GoalService.ListGoals:output_type -> goal.v1.ListGoalsResponse
+	10, // 30: goal.v1.GoalService.UpdateGoal:output_type -> goal.v1.UpdateGoalResponse
+	12, // 31: goal.v1.GoalService.SetGoalState:output_type -> goal.v1.SetGoalStateResponse
+	14, // 32: goal.v1.GoalService.ReorderGoal:output_type -> goal.v1.ReorderGoalResponse
+	16, // 33: goal.v1.GoalService.DeleteGoal:output_type -> goal.v1.DeleteGoalResponse
+	18, // 34: goal.v1.GoalService.ListGoalStatusUpdates:output_type -> goal.v1.ListGoalStatusUpdatesResponse
+	20, // 35: goal.v1.GoalService.AddGoalStatusUpdate:output_type -> goal.v1.AddGoalStatusUpdateResponse
+	22, // 36: goal.v1.GoalService.UpdateGoalStatusUpdate:output_type -> goal.v1.UpdateGoalStatusUpdateResponse
+	24, // 37: goal.v1.GoalService.DeleteGoalStatusUpdate:output_type -> goal.v1.DeleteGoalStatusUpdateResponse
+	27, // [27:38] is the sub-list for method output_type
+	16, // [16:27] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_goal_v1_goal_proto_init() }
@@ -1004,7 +1496,7 @@ func file_goal_v1_goal_proto_init() {
 	if File_goal_v1_goal_proto != nil {
 		return
 	}
-	file_goal_v1_goal_proto_msgTypes[11].OneofWrappers = []any{
+	file_goal_v1_goal_proto_msgTypes[12].OneofWrappers = []any{
 		(*ReorderGoalRequest_BeforeGoalId)(nil),
 		(*ReorderGoalRequest_AfterGoalId)(nil),
 	}
@@ -1014,7 +1506,7 @@ func file_goal_v1_goal_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_goal_v1_goal_proto_rawDesc), len(file_goal_v1_goal_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   15,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

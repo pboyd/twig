@@ -56,19 +56,23 @@ type KeyMap struct {
 	ReportPrevPreset key.Binding
 	ReportNextPreset key.Binding
 	// Goals-tab keys
-	GoalNew          key.Binding
-	GoalEdit         key.Binding
-	GoalDelete       key.Binding
-	GoalSetIncubate  key.Binding
-	GoalSetCommit    key.Binding
-	GoalSetComplete  key.Binding
-	GoalSetArchive   key.Binding
-	GoalToggleAll    key.Binding
-	GoalRankUp       key.Binding
-	GoalRankDown     key.Binding
-	GoalAddTask      key.Binding
-	GoalLinkTask     key.Binding
-	GoalUnlinkTask   key.Binding
+	GoalNew           key.Binding
+	GoalEdit          key.Binding
+	GoalDelete        key.Binding
+	GoalSetIncubate   key.Binding
+	GoalSetCommit     key.Binding
+	GoalSetComplete   key.Binding
+	GoalSetArchive    key.Binding
+	GoalToggleAll     key.Binding
+	GoalRankUp        key.Binding
+	GoalRankDown      key.Binding
+	GoalAddTask       key.Binding
+	GoalLinkTask      key.Binding
+	GoalUnlinkTask    key.Binding
+	GoalStatusHistory key.Binding // `s`: open status history
+	GoalAddStatus     key.Binding // `S`: quick-add status update
+	GoalStatusEdit    key.Binding // `e`: edit selected update (history view)
+	GoalStatusDelete  key.Binding // `d`: delete selected update (history view)
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -290,13 +294,29 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("U"),
 			key.WithHelp("U", "unlink task"),
 		),
+		GoalStatusHistory: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "status history"),
+		),
+		GoalAddStatus: key.NewBinding(
+			key.WithKeys("S"),
+			key.WithHelp("S", "add status"),
+		),
+		GoalStatusEdit: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit update"),
+		),
+		GoalStatusDelete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete update"),
+		),
 	}
 }
 
 // ShortHelp returns the short help for the key map (used by the bubbles help component).
 func (k KeyMap) ShortHelp() []key.Binding {
 	if k.GoalMode {
-		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalEdit, k.GoalToggleAll, k.Help, k.Quit}
+		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalEdit, k.GoalStatusHistory, k.GoalAddStatus, k.Help, k.Quit}
 	}
 	if k.ReportMode {
 		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}
@@ -315,6 +335,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			{k.GoalDelete, k.GoalSetIncubate, k.GoalSetCommit},
 			{k.GoalSetComplete, k.GoalSetArchive, k.GoalRankUp, k.GoalRankDown},
 			{k.GoalAddTask, k.GoalLinkTask, k.GoalUnlinkTask, k.GoalToggleAll},
+			{k.GoalStatusHistory, k.GoalAddStatus, k.GoalStatusEdit, k.GoalStatusDelete},
 			{k.Help, k.Quit},
 		}
 	}

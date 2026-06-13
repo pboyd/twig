@@ -45,10 +45,20 @@ const (
 	goalEdit
 	goalNew
 	goalConfirmDelete
-	goalNewTask  // `a`: creating a new task to attach to the selected goal
-	goalPickLink // `L`: task picker open — pick a task to link to the selected goal
-	goalPickUnlink // `U`: picker open — pick an association root to unlink
+	goalNewTask          // `a`: creating a new task to attach to the selected goal
+	goalPickLink         // `L`: task picker open — pick a task to link to the selected goal
+	goalPickUnlink       // `U`: picker open — pick an association root to unlink
+	goalStatusHistory    // `s`: browsing the status-update history list
+	goalStatusReader     // enter (from history): full-screen reader for a single update
+	goalStatusConfirmDel // `d` (in history): confirm before deleting a status update
 )
+
+// statusCompose tracks an in-progress status-update compose/edit started from the editor.
+type statusCompose struct {
+	goalID    int64
+	editingID int64 // 0 = add new; >0 = edit existing
+	active    bool
+}
 
 type goalState struct {
 	goals   []*goalv1.Goal
@@ -58,6 +68,12 @@ type goalState struct {
 	err     error
 	mode    goalViewMode
 	picker  pickerState // task picker used for L (link) and U (unlink)
+	// Status-update compose state (US1/US3).
+	compose statusCompose
+	// Status-update history state (US2/US3).
+	statusUpdates []*goalv1.StatusUpdate
+	statusCursor  int
+	readerOffset  int
 }
 
 type planMode int

@@ -97,6 +97,18 @@ type taskGoalMutationMsg struct {
 	err error
 }
 
+// goalStatusListMsg carries the result of a ListGoalStatusUpdates RPC.
+type goalStatusListMsg struct {
+	updates []*goalv1.StatusUpdate
+	err     error
+}
+
+// goalStatusMutationMsg carries the result of an add/update/delete status-update RPC.
+type goalStatusMutationMsg struct {
+	goalID int64
+	err    error
+}
+
 // ── command factories ───────────────────────────────────────────────────────
 
 // persistTreeStateCmd snapshots the current expanded set and saves it
@@ -417,6 +429,54 @@ func reorderGoalCmd(client goalv1connect.GoalServiceClient, goalID, anchorID int
 	}
 }
 
+// listGoalStatusUpdatesCmd fetches the status-update history for a goal.
+func listGoalStatusUpdatesCmd(client goalv1connect.GoalServiceClient, goalID int64) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.ListGoalStatusUpdates(context.Background(), connect.NewRequest(&goalv1.ListGoalStatusUpdatesRequest{
+			GoalId: goalID,
+		}))
+		if err != nil {
+			return goalStatusListMsg{err: err}
+		}
+		return goalStatusListMsg{updates: resp.Msg.Updates}
+	}
+}
+
+// addGoalStatusUpdateCmd records a new status update on a goal.
+func addGoalStatusUpdateCmd(client goalv1connect.GoalServiceClient, goalID int64, body string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := client.AddGoalStatusUpdate(context.Background(), connect.NewRequest(&goalv1.AddGoalStatusUpdateRequest{
+			GoalId: goalID,
+			Body:   body,
+		}))
+		return goalStatusMutationMsg{goalID: goalID, err: err}
+	}
+}
+
+// updateGoalStatusUpdateCmd replaces the body of an existing status update.
+func updateGoalStatusUpdateCmd(client goalv1connect.GoalServiceClient, id int64, body string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.UpdateGoalStatusUpdate(context.Background(), connect.NewRequest(&goalv1.UpdateGoalStatusUpdateRequest{
+			Id:   id,
+			Body: body,
+		}))
+		if err != nil {
+			return goalStatusMutationMsg{err: err}
+		}
+		return goalStatusMutationMsg{goalID: resp.Msg.Update.GoalId, err: nil}
+	}
+}
+
+// deleteGoalStatusUpdateCmd removes a single status update.
+func deleteGoalStatusUpdateCmd(client goalv1connect.GoalServiceClient, id int64, goalID int64) tea.Cmd {
+	return func() tea.Msg {
+		_, err := client.DeleteGoalStatusUpdate(context.Background(), connect.NewRequest(&goalv1.DeleteGoalStatusUpdateRequest{
+			Id: id,
+		}))
+		return goalStatusMutationMsg{goalID: goalID, err: err}
+	}
+}
+
 // goalListTasksForPickerCmd fetches all tasks for the goal-tab task picker.
 func goalListTasksForPickerCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
 	return func() tea.Msg {
@@ -674,6 +734,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleEditSaved(msg)
 
 	case editorFinishedMsg:
+		if m.goal.compose.active {
+			return m.handleGoalStatusEditorFinished(msg)
+		}
 		if m.mode == modeEdit || m.mode == modeNewSubtask || m.mode == modeNewRoot {
 			if msg.err != nil {
 				m.err = fmt.Errorf("couldn't open the editor — your description is safe, though! (%w)", msg.err)
@@ -818,6 +881,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.goal.mode = goalList
 		// Re-fetch both tasks (to update goal_id fields) and goals (for detail pane).
 		return m, tea.Batch(listTasksCmd(m.client), listGoalsCmd(m.goalClient))
+
+	case goalStatusListMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			return m, nil
+		}
+		m.goal.statusUpdates = msg.updates
+		m.goal.statusCursor = 0
+		m.goal.readerOffset = 0
+		m.goal.mode = goalStatusHistory
+		return m, nil
+
+	case goalStatusMutationMsg:
+		if msg.err != nil {
+			m.goal.err = msg.err
+			m.goal.compose = statusCompose{}
+			return m, nil
+		}
+		m.goal.err = nil
+		m.goal.compose = statusCompose{}
+		// Refresh the goal list (embedded latest) and, if in history view, the history.
+		var cmds []tea.Cmd
+		cmds = append(cmds, listGoalsCmd(m.goalClient))
+		if m.goal.mode == goalStatusHistory || m.goal.mode == goalStatusReader || m.goal.mode == goalStatusConfirmDel {
+			cmds = append(cmds, listGoalStatusUpdatesCmd(m.goalClient, msg.goalID))
+			// Stay in history mode; the list will update when goalStatusListMsg arrives.
+		}
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -988,6 +1079,11 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		newEdit, cmd := m.edit.Update(msg, m.keys)
 		m.edit = newEdit
 		return m, cmd
+	}
+
+	// Status-update history/reader/delete-confirm modes.
+	if m.goal.mode == goalStatusHistory || m.goal.mode == goalStatusReader || m.goal.mode == goalStatusConfirmDel {
+		return m.handleGoalStatusKey(msg)
 	}
 
 	// Picker modes (L: link, U: unlink).
@@ -1187,6 +1283,23 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.goal.err = nil
 		}
 
+	case key.Matches(msg, m.keys.GoalAddStatus):
+		// `S`: quick-add a status update via $EDITOR.
+		if len(visible) > 0 {
+			g := visible[m.goal.cursor]
+			m.goal.compose = statusCompose{goalID: g.Id, active: true}
+			m.goal.err = nil
+			return m, openEditorCmd("")
+		}
+
+	case key.Matches(msg, m.keys.GoalStatusHistory):
+		// `s`: open status-update history view.
+		if len(visible) > 0 {
+			g := visible[m.goal.cursor]
+			m.goal.err = nil
+			return m, listGoalStatusUpdatesCmd(m.goalClient, g.Id)
+		}
+
 	case key.Matches(msg, m.keys.Refresh):
 		m.goal.loaded = false
 		m.goal.err = nil
@@ -1196,6 +1309,127 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeHelp
 	}
 
+	return m, nil
+}
+
+// handleGoalStatusEditorFinished routes the editor result from a status-update compose/edit.
+func (m Model) handleGoalStatusEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+	compose := m.goal.compose
+	m.goal.compose = statusCompose{} // always clear
+
+	if msg.err != nil {
+		m.goal.err = fmt.Errorf("editor trouble — your update wasn't saved. (%w)", msg.err)
+		return m, nil
+	}
+
+	body := strings.TrimSpace(msg.content)
+	if body == "" {
+		m.notice = "Nothing written — your status update was not recorded."
+		return m, nil
+	}
+
+	if compose.editingID > 0 {
+		return m, updateGoalStatusUpdateCmd(m.goalClient, compose.editingID, body)
+	}
+	return m, addGoalStatusUpdateCmd(m.goalClient, compose.goalID, body)
+}
+
+// handleGoalStatusKey handles all key events in the status-history, reader, and confirm-delete modes.
+func (m Model) handleGoalStatusKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch m.goal.mode {
+	case goalStatusConfirmDel:
+		switch msg.String() {
+		case "y":
+			if m.goal.statusCursor < len(m.goal.statusUpdates) {
+				su := m.goal.statusUpdates[m.goal.statusCursor]
+				visible := visibleGoals(m.goal.goals, m.goal.showAll)
+				var goalID int64
+				if len(visible) > 0 && m.goal.cursor < len(visible) {
+					goalID = visible[m.goal.cursor].Id
+				}
+				m.goal.mode = goalStatusHistory
+				return m, deleteGoalStatusUpdateCmd(m.goalClient, su.Id, goalID)
+			}
+			m.goal.mode = goalStatusHistory
+		case "n", "esc":
+			m.goal.mode = goalStatusHistory
+		}
+		return m, nil
+
+	case goalStatusReader:
+		switch {
+		case key.Matches(msg, m.keys.Cancel):
+			m.goal.mode = goalStatusHistory
+			m.goal.readerOffset = 0
+		case key.Matches(msg, m.keys.Up):
+			if m.goal.readerOffset > 0 {
+				m.goal.readerOffset--
+			}
+		case key.Matches(msg, m.keys.Down):
+			m.goal.readerOffset++
+		case msg.String() == "pgup":
+			m.goal.readerOffset -= 10
+			if m.goal.readerOffset < 0 {
+				m.goal.readerOffset = 0
+			}
+		case msg.String() == "pgdown":
+			m.goal.readerOffset += 10
+		}
+		return m, nil
+
+	case goalStatusHistory:
+		switch {
+		case key.Matches(msg, m.keys.Cancel):
+			m.goal.mode = goalList
+			m.goal.statusUpdates = nil
+			m.goal.statusCursor = 0
+			m.goal.readerOffset = 0
+
+		case key.Matches(msg, m.keys.Up):
+			if m.goal.statusCursor > 0 {
+				m.goal.statusCursor--
+			}
+
+		case key.Matches(msg, m.keys.Down):
+			if m.goal.statusCursor < len(m.goal.statusUpdates)-1 {
+				m.goal.statusCursor++
+			}
+
+		case msg.Code == tea.KeyEnter:
+			if len(m.goal.statusUpdates) > 0 {
+				m.goal.mode = goalStatusReader
+				m.goal.readerOffset = 0
+			}
+
+		case key.Matches(msg, m.keys.GoalAddStatus):
+			// `S` (or the GoalStatusNew binding): add a new update from history view.
+			visible := visibleGoals(m.goal.goals, m.goal.showAll)
+			if len(visible) > 0 {
+				g := visible[m.goal.cursor]
+				m.goal.compose = statusCompose{goalID: g.Id, active: true}
+				return m, openEditorCmd("")
+			}
+
+		case key.Matches(msg, m.keys.GoalStatusEdit):
+			if len(m.goal.statusUpdates) > 0 && m.goal.statusCursor < len(m.goal.statusUpdates) {
+				su := m.goal.statusUpdates[m.goal.statusCursor]
+				visible := visibleGoals(m.goal.goals, m.goal.showAll)
+				var goalID int64
+				if len(visible) > 0 && m.goal.cursor < len(visible) {
+					goalID = visible[m.goal.cursor].Id
+				}
+				m.goal.compose = statusCompose{goalID: goalID, editingID: su.Id, active: true}
+				return m, openEditorCmd(su.Body)
+			}
+
+		case key.Matches(msg, m.keys.GoalStatusDelete):
+			if len(m.goal.statusUpdates) > 0 {
+				m.goal.mode = goalStatusConfirmDel
+				m.notice = "Delete this status update? [y]es [n]o"
+			}
+		}
+		return m, nil
+	}
 	return m, nil
 }
 

@@ -213,3 +213,76 @@ func ExportDispatchTaskGoalMutation(m Model, err error) (Model, tea.Cmd) {
 	updated, cmd := m.Update(taskGoalMutationMsg{err: err})
 	return updated.(Model), cmd
 }
+
+// ExportGoalMode returns the current goalViewMode as an int for tests.
+func ExportGoalMode(m Model) int { return int(m.goal.mode) }
+
+// ExportGoalModeStatusHistory is the goalStatusHistory constant for tests.
+const ExportGoalModeStatusHistory = int(goalStatusHistory)
+
+// ExportGoalModeStatusReader is the goalStatusReader constant for tests.
+const ExportGoalModeStatusReader = int(goalStatusReader)
+
+// ExportGoalModeList is the goalList constant for tests.
+const ExportGoalModeList = int(goalList)
+
+// ExportGoalStatusUpdates returns the current status updates slice for tests.
+func ExportGoalStatusUpdates(m Model) []*goalv1.StatusUpdate { return m.goal.statusUpdates }
+
+// ExportGoalStatusCursor returns the current status cursor for tests.
+func ExportGoalStatusCursor(m Model) int { return m.goal.statusCursor }
+
+// ExportGoalReaderOffset returns the current reader scroll offset for tests.
+func ExportGoalReaderOffset(m Model) int { return m.goal.readerOffset }
+
+// ExportGoalComposeActive returns whether a status compose is in progress.
+func ExportGoalComposeActive(m Model) bool { return m.goal.compose.active }
+
+// ExportGoalComposeEditingID returns the editingID from the current compose state.
+func ExportGoalComposeEditingID(m Model) int64 { return m.goal.compose.editingID }
+
+// ExportDispatchGoalStatusList dispatches a goalStatusListMsg for testing.
+func ExportDispatchGoalStatusList(m Model, updates []*goalv1.StatusUpdate, err error) (Model, tea.Cmd) {
+	updated, cmd := m.Update(goalStatusListMsg{updates: updates, err: err})
+	return updated.(Model), cmd
+}
+
+// ExportDispatchGoalStatusMutation dispatches a goalStatusMutationMsg for testing.
+func ExportDispatchGoalStatusMutation(m Model, goalID int64, err error) (Model, tea.Cmd) {
+	updated, cmd := m.Update(goalStatusMutationMsg{goalID: goalID, err: err})
+	return updated.(Model), cmd
+}
+
+// ExportRenderGoalDetail exposes renderGoalDetail for tests.
+func ExportRenderGoalDetail(m Model, width int) string {
+	return m.renderGoalDetail(width)
+}
+
+// ExportRenderStatusHistory exposes renderStatusHistory for tests.
+func ExportRenderStatusHistory(m Model, width, height int) string {
+	return m.renderStatusHistory(width, height)
+}
+
+// ExportRenderStatusReader exposes renderStatusReader for tests.
+func ExportRenderStatusReader(m Model, width, height int) string {
+	return m.renderStatusReader(width, height)
+}
+
+// ExportHandleGoalStatusEditorFinished dispatches an editorFinishedMsg while
+// goal.compose.active is set, for testing the status compose flow.
+func ExportHandleGoalStatusEditorFinished(m Model, content string, err error) (Model, tea.Cmd) {
+	m.goal.compose.active = true
+	updated, cmd := m.Update(editorFinishedMsg{content: content, err: err})
+	return updated.(Model), cmd
+}
+
+// ExportSetGoalStatusUpdates seeds the status updates for tests.
+func ExportSetGoalStatusUpdates(m *Model, updates []*goalv1.StatusUpdate, mode int) {
+	m.goal.statusUpdates = updates
+	m.goal.mode = goalViewMode(mode)
+}
+
+// ExportSetGoalCompose sets the compose state for tests.
+func ExportSetGoalCompose(m *Model, goalID, editingID int64) {
+	m.goal.compose = statusCompose{goalID: goalID, editingID: editingID, active: true}
+}
