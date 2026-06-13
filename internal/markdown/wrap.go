@@ -3,6 +3,7 @@ package markdown
 import (
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
 )
 
@@ -63,8 +64,10 @@ func wrapLine(line string, width int) string {
 	return sb.String()
 }
 
-// displayWidth returns the terminal display width of s, measured in columns,
-// using Unicode grapheme cluster segmentation and East Asian Width rules.
+// displayWidth returns the terminal display width of s in columns. ANSI escape
+// sequences are stripped before measurement so styled (escaped) text wraps at
+// the correct visible column. Width uses grapheme segmentation and East Asian
+// Width rules.
 func displayWidth(s string) int {
-	return uniseg.StringWidth(s)
+	return uniseg.StringWidth(ansi.Strip(s))
 }
