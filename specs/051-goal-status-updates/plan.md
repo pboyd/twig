@@ -1,40 +1,45 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Goal Status Updates
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Branch**: `051-goal-status-updates` | **Date**: 2026-06-12 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Input**: Feature specification from `/specs/051-goal-status-updates/spec.md`
 
-**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Design**: [docs/plans/2026-06-12-goal-status-updates-design.md](../../docs/plans/2026-06-12-goal-status-updates-design.md)
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Let users record timestamped, potentially long markdown notes ("status
+updates") against a goal and read them back later. A goal accumulates a history
+of updates; the newest is shown as the "latest status". TUI only — no CLI or web
+surface. Technical approach: extend the existing `goal/v1` `GoalService` with
+four status-update RPCs and a read-only `latest_status_update` field on `Goal`
+(populated by `ListGoals`/`GetGoal` so the detail pane needs no extra fetch);
+one migration adding a `goal_status_updates` table with `ON DELETE CASCADE` from
+`goals`; sqlc queries scoped to the owning user via a join to `goals`. The TUI
+Goals tab gains a "Latest status" section in the detail pane (`s` opens a
+scrollable status-history view: master list → full reader; `S` quick-adds via
+`$EDITOR`). Composing and editing reuse the existing `$EDITOR` flow
+(`openEditorCmd`) used for descriptions.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: Go 1.26 (three existing modules: root CLI/TUI, `api/`, `services/twig/`)
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Primary Dependencies**: Bubble Tea / charm.land bubbles v2 (TUI), ConnectRPC (`connectrpc.com/connect`), buf (proto gen), sqlc + pgx/v5 (server queries), golang-migrate (schema), internal `markdown` renderer (feature 050)
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Storage**: PostgreSQL — one new migration (`000011_goal_status_updates`): `goal_status_updates` table, FK `goal_id → goals(id) ON DELETE CASCADE`
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Testing**: `go test ./...` per module; handler tests via `export_test.go` shims (no DB required, per repo convention); TUI tests table-style with string assertions like `goal_view_test.go`; migration up/down
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Target Platform**: Linux/macOS terminals (TUI); Linux server container
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: Multi-module client/server — TUI client + ConnectRPC server. CLI and web app explicitly out of scope (spec)
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Performance Goals**: Detail-pane latest status adds zero round-trips beyond the existing `ListGoals` fetch (latest embedded in `Goal`); full history is one `ListGoalStatusUpdates` call when the history view opens
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Constraints**: Empty/whitespace body rejected client- and server-side (FR-005); deleting a goal cascades to its updates (FR-012); long bodies fully readable via the reader's scroll (FR-010, SC-004); markdown rendered via the existing renderer (FR-008); playful copy on all new user-facing text (Principle IV)
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
-
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Scale/Scope**: Personal data — tens of goals, a handful-to-dozens of updates per goal; full-list fetch per goal is well within the app's established patterns
 
 ## Constitution Check
 
@@ -42,77 +47,60 @@
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Simplicity / YAGNI | ✅ / ⚠️ VIOLATION | [Justify any complexity in Complexity Tracking table below] |
-| II. API-First Design | ✅ / ⚠️ VIOLATION | [Contracts committed before implementation?] |
-| III. UI/UX Consistency | ✅ / ⚠️ VIOLATION | [New surfaces use shared theme/conventions?] |
-| IV. Playful User Messages | ✅ / ⚠️ VIOLATION | [New user-facing text reviewed for tone?] |
+| I. Simplicity / YAGNI | ✅ | One migration, one new table, four RPCs on the existing `GoalService` (no new service); no denormalized `user_id` (scope via join); reuse `openEditorCmd`, the markdown renderer, and existing two-pane/help patterns. The reader's scroll is the only genuinely new TUI mechanic and is required by the spec (long bodies). |
+| II. API-First Design | ✅ | `contracts/status-update-rpc.md` (goal/v1 proto additions) committed before implementation; tasks must reference it. |
+| III. UI/UX Consistency | ✅ | New keys (`s`, `S`) join the Goals-tab keymap with help entries; history/reader use the shared `theme.go`, the same full-view replacement pattern as other views, and the established `$EDITOR` compose flow. |
+| IV. Playful User Messages | ✅ | Empty-history state, delete confirmation, empty-body discard notice, and not-found errors specified with playful copy; tone review is a quality gate. |
+
+**Post-design re-check (after Phase 1)**: all four principles still ✅ — the
+design artifacts introduced no new violations; Complexity Tracking left empty.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+specs/051-goal-status-updates/
+├── plan.md              # This file
+├── research.md          # Phase 0 output
+├── data-model.md        # Phase 1 output
+├── quickstart.md        # Phase 1 output
+├── contracts/           # Phase 1 output
+│   └── status-update-rpc.md
+├── checklists/
+│   └── requirements.md  # from /speckit-specify
+└── tasks.md             # Phase 2 output (/speckit-tasks — NOT created here)
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
 api/
-└── [same as backend above]
+├── proto/goal/v1/goal.proto         # + StatusUpdate msg, 4 RPCs, Goal.latest_status_update
+└── gen/goal/v1/                      # regenerated (make proto)
 
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+services/twig/
+├── db/migrations/000011_goal_status_updates.{up,down}.sql   # new table
+├── db/queries/goal_status_update.sql                        # sqlc queries
+├── internal/db/                                             # regenerated (sqlc generate)
+├── internal/handler/goal.go                                 # + status-update RPCs, latest population
+└── internal/handler/goal_test.go                            # + handler tests
+
+internal/tui/                          # root module
+├── goal_view.go                        # detail-pane "Latest status" section
+├── goal_status.go (new)                # history list + reader render + key handlers
+├── update.go                           # new modes, msgs, RPC command factories
+├── keymap.go                           # GoalStatusHistory (s), GoalAddStatus (S) bindings
+├── client.go                           # (if a goal client accessor is needed)
+└── *_test.go                           # goal_status_test.go, keymap/help, view tests
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Multi-module client/server, mirroring feature 049. No
+new packages — the feature extends the existing `goal/v1` proto, the
+`services/twig` handler/db layers, and the root `internal/tui` package. A single
+new TUI file (`goal_status.go`) holds the history view to keep `update.go` and
+`goal_view.go` focused.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
-
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+> No Constitution Check violations — table intentionally empty.
