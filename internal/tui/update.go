@@ -1614,6 +1614,20 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
 			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 		}
+	case key.Matches(msg, m.keys.First):
+		m.plan.cursor = clampCursor(0, len(m.plan.entries))
+		if m.plan.pendingComplete != nil {
+			m.plan.pendingComplete = nil
+			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
+		}
+	case key.Matches(msg, m.keys.Last):
+		m.plan.cursor = clampCursor(len(m.plan.entries)-1, len(m.plan.entries))
+		if m.plan.pendingComplete != nil {
+			m.plan.pendingComplete = nil
+			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
+		}
 
 	// Day navigation.
 	case key.Matches(msg, m.keys.PlanPrevDay):
