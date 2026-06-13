@@ -415,7 +415,7 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString(fieldLabel("Name", f.focusIndex == focusName))
 	sb.WriteString(f.name.View() + "\n\n")
 
-	sb.WriteString(fieldLabel("Description", f.focusIndex == focusDescription))
+	sb.WriteString(fieldLabel("Description", f.focusIndex == focusDescription) + "\n")
 	sb.WriteString(f.description.View() + "\n")
 	if f.focusIndex == focusDescription {
 		sb.WriteString("  ctrl+g: open editor\n")
