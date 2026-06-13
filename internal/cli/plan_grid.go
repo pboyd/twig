@@ -665,37 +665,7 @@ func AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excl
 		needed = 30
 	}
 
-	// Build sorted list of obstacle intervals as [start, end) pairs, unioning overlaps.
-	type interval struct{ s, e int }
-	var obs []interval
-	for _, e := range timed {
-		if excludeID != 0 && e.Id == excludeID {
-			continue
-		}
-		if e.StartMinute == nil {
-			continue
-		}
-		s := int(e.GetStartMinute())
-		end := s + int(e.DurationMinute)
-		obs = append(obs, interval{s, end})
-	}
-	// Sort by start.
-	for i := 1; i < len(obs); i++ {
-		for j := i; j > 0 && obs[j].s < obs[j-1].s; j-- {
-			obs[j], obs[j-1] = obs[j-1], obs[j]
-		}
-	}
-	// Merge overlapping/adjacent intervals.
-	var merged []interval
-	for _, iv := range obs {
-		if len(merged) > 0 && iv.s < merged[len(merged)-1].e {
-			if iv.e > merged[len(merged)-1].e {
-				merged[len(merged)-1].e = iv.e
-			}
-		} else {
-			merged = append(merged, iv)
-		}
-	}
+	merged := mergedObstacles(timed, excludeID)
 
 	// Scan free intervals from floorMin to 1440.
 	freeStart := floorMin
@@ -725,14 +695,14 @@ func ceil15(min int) int {
 	return ((min + 14) / 15) * 15
 }
 
-// NextGapFloor returns the end minute of the earliest timed entry that begins
-// at or after fromMin — the lower bound of the next free gap after the stretch
-// containing fromMin. ok is false when no such entry exists.
-//
-// Entries with Id == excludeID are ignored (the entry being moved).
-func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floorMin int, ok bool) {
-	type interval struct{ s, e int }
-	var obs []interval
+// obsInterval is a half-open [s, e) minute-of-day obstacle range.
+type obsInterval struct{ s, e int }
+
+// mergedObstacles builds the sorted, overlap-/adjacency-unioned list of timed
+// entries as [start, end) intervals. Entries with Id == excludeID (the entry
+// being moved) and entries without a start minute are ignored.
+func mergedObstacles(timed []*planv1.PlanEntry, excludeID int32) []obsInterval {
+	var obs []obsInterval
 	for _, e := range timed {
 		if excludeID != 0 && e.Id == excludeID {
 			continue
@@ -742,7 +712,7 @@ func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floo
 		}
 		s := int(e.GetStartMinute())
 		end := s + int(e.DurationMinute)
-		obs = append(obs, interval{s, end})
+		obs = append(obs, obsInterval{s, end})
 	}
 	// Sort by start.
 	for i := 1; i < len(obs); i++ {
@@ -751,7 +721,7 @@ func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floo
 		}
 	}
 	// Merge overlapping/adjacent intervals.
-	var merged []interval
+	var merged []obsInterval
 	for _, iv := range obs {
 		if len(merged) > 0 && iv.s < merged[len(merged)-1].e {
 			if iv.e > merged[len(merged)-1].e {
@@ -761,8 +731,17 @@ func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floo
 			merged = append(merged, iv)
 		}
 	}
+	return merged
+}
+
+// NextGapFloor returns the end minute of the earliest timed entry that begins
+// at or after fromMin — the lower bound of the next free gap. ok is false when
+// no entry begins at or after fromMin.
+//
+// Entries with Id == excludeID are ignored (the entry being moved).
+func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floorMin int, ok bool) {
 	// Return the end of the first merged interval whose start >= fromMin.
-	for _, iv := range merged {
+	for _, iv := range mergedObstacles(timed, excludeID) {
 		if iv.s >= fromMin {
 			return iv.e, true
 		}
