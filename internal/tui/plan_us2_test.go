@@ -399,15 +399,16 @@ func TestPlanFieldLabel_TaskTimeStartIsOptional(t *testing.T) {
 	}
 }
 
-// TestTaskTimeForm_EscCancels checks that Esc in planTaskTime mode returns to planList.
-func TestTaskTimeForm_EscCancels(t *testing.T) {
+// TestTaskTimeForm_EscDoesNotCancel checks that Esc in planTaskTime mode no longer
+// returns to planList (use the Cancel button to avoid losing in-progress work).
+func TestTaskTimeForm_EscDoesNotCancel(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.initTaskTimeForm(5)
 
 	m2, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 
-	if m2.(Model).plan.mode != planList {
-		t.Errorf("esc from task-time form: expected planList, got %d", m2.(Model).plan.mode)
+	if m2.(Model).plan.mode == planList {
+		t.Errorf("esc from task-time form: should stay in form mode, not return to planList")
 	}
 }

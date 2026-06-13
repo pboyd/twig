@@ -109,22 +109,18 @@ func TestEditFormShiftTabGoesBack(t *testing.T) {
 	}
 }
 
-// TestEditFormEscCancels verifies Esc dispatches editCancelledMsg.
-func TestEditFormEscCancels(t *testing.T) {
+// TestEditFormEscDoesNotCancel verifies Esc no longer cancels the edit form
+// (users must use the Cancel button to avoid accidentally losing typed work).
+func TestEditFormEscDoesNotCancel(t *testing.T) {
 	f := NewRootForm(5)
 	keys := DefaultKeyMap()
 
 	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
-	if cmd == nil {
-		t.Fatal("expected Cmd from Esc, got nil")
-	}
-	msg := cmd()
-	cancelled, ok := msg.(editCancelledMsg)
-	if !ok {
-		t.Fatalf("expected editCancelledMsg, got %T", msg)
-	}
-	if cancelled.originalCursor != 5 {
-		t.Errorf("originalCursor: want 5, got %d", cancelled.originalCursor)
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(editCancelledMsg); ok {
+			t.Fatal("Esc should not produce editCancelledMsg; use the Cancel button instead")
+		}
 	}
 }
 
@@ -154,7 +150,7 @@ func TestEditFormCtrlSSaves(t *testing.T) {
 	}
 }
 
-// TestEditFormEscFromAnyField verifies Esc works from any focused field.
+// TestEditFormEscFromAnyField verifies Esc does not cancel the form from any field.
 func TestEditFormEscFromAnyField(t *testing.T) {
 	keys := DefaultKeyMap()
 
@@ -164,12 +160,11 @@ func TestEditFormEscFromAnyField(t *testing.T) {
 
 		_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
 		if cmd == nil {
-			t.Errorf("focusIndex=%d: expected Cmd from Esc", fi)
 			continue
 		}
 		msg := cmd()
-		if _, ok := msg.(editCancelledMsg); !ok {
-			t.Errorf("focusIndex=%d: expected editCancelledMsg, got %T", fi, msg)
+		if _, ok := msg.(editCancelledMsg); ok {
+			t.Errorf("focusIndex=%d: Esc should not produce editCancelledMsg", fi)
 		}
 	}
 }

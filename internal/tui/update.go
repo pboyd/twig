@@ -1810,10 +1810,6 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // handlePlanFormKey handles key events in a planning text-input form.
 func (m Model) handlePlanFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Cancel):
-		m.plan.mode = planList
-		m.plan.err = nil
-		return m, nil
 	case key.Matches(msg, m.keys.Save):
 		cmd := m.submitPlanForm()
 		return m, cmd

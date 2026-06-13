@@ -378,8 +378,9 @@ func TestAddEvent_FormOpensOnE(t *testing.T) {
 	}
 }
 
-// TestAddEvent_EscCancels checks that Esc in planEventForm returns to planList.
-func TestAddEvent_EscCancels(t *testing.T) {
+// TestAddEvent_EscDoesNotCancel checks that Esc in planEventForm no longer
+// returns to planList (use the Cancel button to avoid losing in-progress work).
+func TestAddEvent_EscDoesNotCancel(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.mode = planEventForm
@@ -387,8 +388,8 @@ func TestAddEvent_EscCancels(t *testing.T) {
 
 	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 
-	if m2.plan.mode != planList {
-		t.Errorf("esc from event form: expected planList, got %d", m2.plan.mode)
+	if m2.plan.mode == planList {
+		t.Errorf("esc from event form: should stay in form mode, not return to planList")
 	}
 }
 
@@ -1510,7 +1511,7 @@ func TestScheduleTaskForm_ButtonsAndHelp(t *testing.T) {
 	if !strings.Contains(out, "[ Cancel ]") {
 		t.Errorf("schedule form: expected '[ Cancel ]'; got:\n%s", out)
 	}
-	const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+	const wantHelp = "Ctrl+S: save  Tab: next field"
 	if !strings.Contains(out, wantHelp) {
 		t.Errorf("schedule form: expected help line %q; got:\n%s", wantHelp, out)
 	}
@@ -1529,7 +1530,7 @@ func TestAddEventForm_ButtonsAndHelp(t *testing.T) {
 	if !strings.Contains(out, "[ Cancel ]") {
 		t.Errorf("add-event form: expected '[ Cancel ]'; got:\n%s", out)
 	}
-	const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+	const wantHelp = "Ctrl+S: save  Tab: next field"
 	if !strings.Contains(out, wantHelp) {
 		t.Errorf("add-event form: expected help line %q; got:\n%s", wantHelp, out)
 	}

@@ -257,9 +257,6 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	case key.Matches(keyMsg, keys.Save):
 		return f, f.buildSaveMsg()
 
-	case key.Matches(keyMsg, keys.Cancel):
-		return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
-
 	case key.Matches(keyMsg, keys.Tab):
 		f = f.cycleFocus(1)
 		return f, nil
@@ -457,7 +454,7 @@ func (f editFormModel) View(width int) string {
 		cancelStyle = "[>Cancel<]"
 	}
 	sb.WriteString(saveStyle + "  " + cancelStyle + "\n")
-	sb.WriteString("\nCtrl+S: save  Esc: cancel  Tab: next field")
+	sb.WriteString("\nCtrl+S: save  Tab: next field")
 
 	return sb.String()
 }

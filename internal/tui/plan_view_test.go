@@ -603,7 +603,7 @@ func TestPlanFormView_ButtonsAndHelpLine(t *testing.T) {
 			if !strings.Contains(out, "[ Cancel ]") {
 				t.Errorf("form should contain '[ Cancel ]'; got:\n%s", out)
 			}
-			const wantHelp = "Ctrl+S: save  Esc: cancel  Tab: next field"
+			const wantHelp = "Ctrl+S: save  Tab: next field"
 			if !strings.Contains(out, wantHelp) {
 				t.Errorf("form should contain help line %q; got:\n%s", wantHelp, out)
 			}

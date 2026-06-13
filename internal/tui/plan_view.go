@@ -191,7 +191,7 @@ func (m Model) renderPlanFormView(width int) string {
 		cancelBtn = "[>Cancel<]"
 	}
 	sb.WriteString(fmt.Sprintf("  %s  %s\n", saveBtn, cancelBtn))
-	sb.WriteString("\nCtrl+S: save  Esc: cancel  Tab: next field\n")
+	sb.WriteString("\nCtrl+S: save  Tab: next field\n")
 	return sb.String()
 }
 
