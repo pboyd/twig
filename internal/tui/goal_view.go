@@ -405,11 +405,20 @@ func (m Model) renderGoalDetail(width int) string {
 		sb.WriteByte('\n')
 	}
 
-	// Associated task subtrees.
+	// Associated task subtrees — show only incomplete root-level tasks.
 	allTasks := flattenTree(m.tree)
 	subtree := goal.SubtreeForGoal(allTasks, g.GetId())
-	if len(subtree) > 0 {
-		sb.WriteByte('\n')
+	roots := cli.BuildTree(subtree)
+	// Filter to incomplete roots only.
+	var openRoots []*cli.TreeNode
+	for _, n := range roots {
+		if n.Task.GetCompletedAt() == nil {
+			openRoots = append(openRoots, n)
+		}
+	}
+	sb.WriteByte('\n')
+	switch {
+	case len(openRoots) > 0:
 		taskLabel := "Tasks:"
 		if m.styled {
 			sb.WriteString(dimStyle.Render(taskLabel))
@@ -417,12 +426,17 @@ func (m Model) renderGoalDetail(width int) string {
 			sb.WriteString(taskLabel)
 		}
 		sb.WriteByte('\n')
-		// Build a mini-tree from the subtree and render it.
-		roots := cli.BuildTree(subtree)
-		rendered := renderGoalTaskTree(roots, m.md, m.styled, width)
-		sb.WriteString(rendered)
-	} else {
+		sb.WriteString(renderGoalTaskTree(openRoots, m.md, m.styled, width))
+	case len(subtree) > 0:
+		// Tasks exist but none are incomplete root-level tasks.
+		msg := "No open tasks right now — time to plan your next step?"
+		if m.styled {
+			sb.WriteString(dimStyle.Render(msg))
+		} else {
+			sb.WriteString(msg)
+		}
 		sb.WriteByte('\n')
+	default:
 		noTasks := "No tasks attached yet — every great goal starts as a wish."
 		if m.styled {
 			sb.WriteString(dimStyle.Render(noTasks))
@@ -484,31 +498,28 @@ func (m Model) renderGoalPicker(width int) string {
 	return sb.String()
 }
 
-// renderGoalTaskTree renders a simple flat list of task names in the goal detail pane.
+// renderGoalTaskTree renders a flat list of root-level task names in the goal
+// detail pane. Children are intentionally not rendered — callers should pass
+// only the root nodes they want displayed.
 func renderGoalTaskTree(roots []*cli.TreeNode, md *markdown.Renderer, styled bool, width int) string {
-	var sb strings.Builder
-	var walk func(nodes []*cli.TreeNode, depth int)
-	walk = func(nodes []*cli.TreeNode, depth int) {
-		for _, n := range nodes {
-			indent := strings.Repeat("  ", depth+1)
-			maxW := width - lipgloss.Width(indent)
-			if maxW < 0 {
-				maxW = 0
-			}
-			taskName := md.RenderInline(n.Task.Name, markdown.Options{Width: maxW, Styled: styled})
-			if lipgloss.Width(taskName) > maxW {
-				taskName = ansi.Truncate(taskName, maxW, "")
-			}
-			line := indent + taskName
-			if due := cli.FormatDue(n.Task.Due); due != "" {
-				line += "  " + due
-			}
-			sb.WriteString(line)
-			sb.WriteByte('\n')
-			walk(n.Children, depth+1)
-		}
+	const indent = "  "
+	maxW := width - lipgloss.Width(indent)
+	if maxW < 0 {
+		maxW = 0
 	}
-	walk(roots, 0)
+	var sb strings.Builder
+	for _, n := range roots {
+		taskName := md.RenderInline(n.Task.Name, markdown.Options{Width: maxW, Styled: styled})
+		if lipgloss.Width(taskName) > maxW {
+			taskName = ansi.Truncate(taskName, maxW, "")
+		}
+		line := indent + taskName
+		if due := cli.FormatDue(n.Task.Due); due != "" {
+			line += "  " + due
+		}
+		sb.WriteString(line)
+		sb.WriteByte('\n')
+	}
 	return sb.String()
 }
 

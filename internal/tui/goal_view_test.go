@@ -10,6 +10,7 @@ import (
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ── T017: Goals tab unit tests ───────────────────────────────────────────────
@@ -553,6 +554,88 @@ func TestGoalDetail_NameInlineStyledNoMarkupChars(t *testing.T) {
 	// Should have ANSI codes.
 	if !strings.Contains(out, "\x1b[") {
 		t.Errorf("renderGoalDetail name styled: expected ANSI codes; got %q", out)
+	}
+}
+
+// TestGoalDetail_CompletedRootTasksShowAllDoneCopy verifies that when a goal
+// has tasks but all root tasks are completed, the detail pane shows the
+// "all done" copy rather than the task names or the "no tasks attached" copy.
+func TestGoalDetail_CompletedRootTasksShowAllDoneCopy(t *testing.T) {
+	goalID := int64(1)
+	goals := []*goalv1.Goal{
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+	}
+	completedAt := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 10, Name: "Finished task", GoalId: &goalID, CompletedAt: completedAt},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewGoalModel(nil, goals)
+	m.tree = tree
+	m.styled = false
+
+	out := m.renderGoalDetail(60)
+	if strings.Contains(out, "Finished task") {
+		t.Errorf("completed root task should not appear in detail pane; got:\n%q", out)
+	}
+	if strings.Contains(out, "No tasks attached yet") {
+		t.Errorf("should not show 'no tasks attached' when tasks exist but are all done; got:\n%q", out)
+	}
+	// Should show the "all done / time to plan" copy.
+	if !strings.Contains(out, "No open tasks") {
+		t.Errorf("expected 'No open tasks' copy for all-done state; got:\n%q", out)
+	}
+}
+
+// TestGoalDetail_IncompleteRootOnlyNoChildren verifies that when a root task
+// has incomplete children, only the root task name appears — not the children.
+func TestGoalDetail_IncompleteRootOnlyNoChildren(t *testing.T) {
+	goalID := int64(1)
+	goals := []*goalv1.Goal{
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+	}
+	rootID := int64(10)
+	tasks := []*taskv1.Task{
+		{Id: rootID, Name: "Root task", GoalId: &goalID},
+		{Id: 11, Name: "Child task", ParentId: &rootID},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewGoalModel(nil, goals)
+	m.tree = tree
+	m.styled = false
+
+	out := m.renderGoalDetail(80)
+	if !strings.Contains(out, "Root task") {
+		t.Errorf("expected root task name in detail pane; got:\n%q", out)
+	}
+	if strings.Contains(out, "Child task") {
+		t.Errorf("child task should not appear in detail pane (root-level only); got:\n%q", out)
+	}
+}
+
+// TestGoalDetail_MixedCompletionOnlyIncompleteRootsShown verifies that when a
+// goal has both completed and incomplete root tasks, only the incomplete ones appear.
+func TestGoalDetail_MixedCompletionOnlyIncompleteRootsShown(t *testing.T) {
+	goalID := int64(1)
+	goals := []*goalv1.Goal{
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+	}
+	completedAt := timestamppb.Now()
+	tasks := []*taskv1.Task{
+		{Id: 10, Name: "Done task", GoalId: &goalID, CompletedAt: completedAt},
+		{Id: 11, Name: "Open task", GoalId: &goalID},
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewGoalModel(nil, goals)
+	m.tree = tree
+	m.styled = false
+
+	out := m.renderGoalDetail(80)
+	if strings.Contains(out, "Done task") {
+		t.Errorf("completed task should not appear in detail pane; got:\n%q", out)
+	}
+	if !strings.Contains(out, "Open task") {
+		t.Errorf("incomplete task should appear in detail pane; got:\n%q", out)
 	}
 }
 
