@@ -1366,14 +1366,27 @@ func (m Model) handleGoalStatusKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.goal.readerOffset--
 			}
 		case key.Matches(msg, m.keys.Down):
-			m.goal.readerOffset++
+			maxOffset := len(m.statusReaderLines()) - m.statusReaderContentHeight()
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
+			if m.goal.readerOffset < maxOffset {
+				m.goal.readerOffset++
+			}
 		case msg.String() == "pgup":
 			m.goal.readerOffset -= 10
 			if m.goal.readerOffset < 0 {
 				m.goal.readerOffset = 0
 			}
 		case msg.String() == "pgdown":
+			maxOffset := len(m.statusReaderLines()) - m.statusReaderContentHeight()
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
 			m.goal.readerOffset += 10
+			if m.goal.readerOffset > maxOffset {
+				m.goal.readerOffset = maxOffset
+			}
 		}
 		return m, nil
 

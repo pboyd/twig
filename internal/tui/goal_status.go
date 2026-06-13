@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	"github.com/pboyd/twig/internal/markdown"
 )
@@ -37,7 +38,7 @@ func (m Model) renderStatusHistory(width, height int) string {
 		// Inline-render to apply markdown (bold/italic) without block wrapping.
 		inlineBody := m.md.RenderInline(firstLine, markdown.Options{Width: maxBodyW, Styled: m.styled})
 		if lipgloss.Width(inlineBody) > maxBodyW && maxBodyW > 3 {
-			inlineBody = inlineBody[:maxBodyW-1] + "…"
+			inlineBody = ansi.Truncate(inlineBody, maxBodyW, "…")
 		}
 
 		line := fmt.Sprintf("%s  %s", timeStr, inlineBody)
@@ -160,4 +161,29 @@ func formatGoalStatusUpdatesCount(updates []*goalv1.StatusUpdate) string {
 		return "1 update"
 	}
 	return fmt.Sprintf("%d updates", n)
+}
+
+// statusReaderLines returns the rendered body lines for the currently selected
+// status update, using the model's current width and style settings. Returns
+// nil when there is no selection.
+func (m Model) statusReaderLines() []string {
+	updates := m.goal.statusUpdates
+	if len(updates) == 0 || m.goal.statusCursor >= len(updates) {
+		return nil
+	}
+	su := updates[m.goal.statusCursor]
+	rendered := m.md.Render(su.GetBody(), markdown.Options{Width: m.width - 2, Styled: m.styled})
+	return strings.Split(rendered, "\n")
+}
+
+// statusReaderContentHeight returns the number of body lines visible in the
+// reader pane given the current terminal height.
+func (m Model) statusReaderContentHeight() int {
+	// innerH = m.height - 2 - statusHeight - tabBarHeight  (pane border/title)
+	// contentHeight = innerH - 2  (header line + blank line before body)
+	h := m.height - 4 - m.statusHeight() - tabBarHeight
+	if h < 1 {
+		h = 1
+	}
+	return h
 }

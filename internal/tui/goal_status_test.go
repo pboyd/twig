@@ -292,17 +292,22 @@ func TestGoalStatus_EscFromHistoryBackToList(t *testing.T) {
 	}
 }
 
-// TestGoalStatus_ReaderScrollsLongBody verifies scroll offset changes on down key.
+// TestGoalStatus_ReaderScrollsLongBody verifies scroll offset changes on down key,
+// and that it clamps at the end of the content (no scrolling into a blank view).
 func TestGoalStatus_ReaderScrollsLongBody(t *testing.T) {
 	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
 	m := newGoalTestModel([]*goalv1.Goal{g})
+	// Set realistic terminal dimensions so the markdown renderer produces multiple
+	// lines and the scroll clamp has meaningful values.
+	m.width = 80
+	m.height = 24
 
 	// Create a multi-line body.
-	var lines []string
+	var bodyLines []string
 	for i := 0; i < 50; i++ {
-		lines = append(lines, "This is line of the status update body for scroll testing.")
+		bodyLines = append(bodyLines, "This is line of the status update body for scroll testing.")
 	}
-	body := strings.Join(lines, "\n")
+	body := strings.Join(bodyLines, "\n")
 
 	updates := []*goalv1.StatusUpdate{
 		makeStatusUpdate(1, 1, body, time.Hour),
@@ -318,6 +323,21 @@ func TestGoalStatus_ReaderScrollsLongBody(t *testing.T) {
 	m2, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if m2.(Model).goal.readerOffset != 1 {
 		t.Errorf("expected readerOffset=1 after down, got %d", m2.(Model).goal.readerOffset)
+	}
+
+	// Verify the clamp: pressing down many times should not push offset past content.
+	mc := m
+	for i := 0; i < 200; i++ {
+		m3, _ := mc.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		mc = m3.(Model)
+	}
+	renderedLines := mc.statusReaderLines()
+	maxOffset := len(renderedLines) - mc.statusReaderContentHeight()
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if mc.goal.readerOffset > maxOffset {
+		t.Errorf("readerOffset %d exceeded maxOffset %d after many Down presses", mc.goal.readerOffset, maxOffset)
 	}
 }
 
