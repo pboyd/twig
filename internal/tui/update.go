@@ -1745,13 +1745,28 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				floorMin = nowMin
 			}
 		}
+		floorMin = (floorMin / 15) * 15
+		if floorMin < 480 {
+			floorMin = 480
+		}
 		startMin, ok := cli.AutoScheduleSlot(timed, int(entry.DurationMinute), floorMin, entry.Id)
 		if !ok {
 			m.notice = "Day's packed — no room left to squeeze this one in."
 			return m, nil
 		}
 		if entry.StartMinute != nil && int(*entry.StartMinute) == startMin {
-			return m, nil
+			// Already in earliest slot — bump past the next closing entry.
+			bumpFloor, ok2 := cli.NextGapFloor(timed, int(*entry.StartMinute), entry.Id)
+			if !ok2 {
+				m.notice = "Day's packed — no room left to squeeze this one in."
+				return m, nil
+			}
+			start2, ok3 := cli.AutoScheduleSlot(timed, int(entry.DurationMinute), bumpFloor, entry.Id)
+			if !ok3 {
+				m.notice = "Day's packed — no room left to squeeze this one in."
+				return m, nil
+			}
+			return m, movePlanCmd(m.planClient, m.plan.day, entry.Id, start2, int(entry.DurationMinute), true)
 		}
 		return m, movePlanCmd(m.planClient, m.plan.day, entry.Id, startMin, int(entry.DurationMinute), true)
 

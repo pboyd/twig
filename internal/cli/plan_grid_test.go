@@ -1585,7 +1585,133 @@ func TestRenderGrid_GapVisibility_PreviewWithGap(t *testing.T) {
 	}
 }
 
+// ── NextGapFloor unit tests ────────────────────────────────────────────────
+
+// TestNextGapFloor_SingleEntry verifies that a single entry starting at/after fromMin
+// returns its end as the floor of the next gap.
+func TestNextGapFloor_SingleEntry(t *testing.T) {
+	// entry 540–600 (09:00–10:00); fromMin=480 → returns (600, true).
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 540, 60)}
+	floor, ok := cli.NextGapFloor(timed, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if floor != 600 {
+		t.Errorf("expected floor=600, got %d", floor)
+	}
+}
+
+// TestNextGapFloor_TwoEntries verifies that only the FIRST entry whose start >= fromMin
+// contributes (earliest one).
+func TestNextGapFloor_TwoEntries(t *testing.T) {
+	// entries 540–600 and 660–720; fromMin=480 → returns (600, true).
+	timed := []*planv1.PlanEntry{
+		makeTimedEntry(1, 540, 60),
+		makeTimedEntry(2, 660, 60),
+	}
+	floor, ok := cli.NextGapFloor(timed, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if floor != 600 {
+		t.Errorf("expected floor=600 (first entry end), got %d", floor)
+	}
+}
+
+// TestNextGapFloor_EntryBeforeFromMin verifies ok=false when the only entry ends before fromMin.
+func TestNextGapFloor_EntryBeforeFromMin(t *testing.T) {
+	// entry 420–480 (07:00–08:00); fromMin=480 → no entry starts at/after 480.
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 420, 60)}
+	_, ok := cli.NextGapFloor(timed, 480, 0)
+	if ok {
+		t.Error("expected ok=false when entry ends before fromMin")
+	}
+}
+
+// TestNextGapFloor_NoEntries verifies ok=false with no entries.
+func TestNextGapFloor_NoEntries(t *testing.T) {
+	_, ok := cli.NextGapFloor(nil, 480, 0)
+	if ok {
+		t.Error("expected ok=false with no entries")
+	}
+}
+
+// TestNextGapFloor_ExcludeID verifies that the excludeID entry is ignored.
+func TestNextGapFloor_ExcludeID(t *testing.T) {
+	// Excluded entry at 540–600; another at 660–720; fromMin=480.
+	// Excluding id=1 means the first qualifying entry is id=2 (660–720) → returns (720, true).
+	timed := []*planv1.PlanEntry{
+		makeTimedEntry(1, 540, 60),
+		makeTimedEntry(2, 660, 60),
+	}
+	floor, ok := cli.NextGapFloor(timed, 480, 1)
+	if !ok {
+		t.Fatal("expected ok=true (second entry is still qualifying)")
+	}
+	if floor != 720 {
+		t.Errorf("expected floor=720 (second entry end, first excluded), got %d", floor)
+	}
+}
+
+// TestNextGapFloor_ExcludeID_NoOtherEntries verifies ok=false when the only entry
+// at/after fromMin is the excluded one.
+func TestNextGapFloor_ExcludeID_NoOtherEntries(t *testing.T) {
+	// Only entry at 540–600, and it is excluded.
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 540, 60)}
+	_, ok := cli.NextGapFloor(timed, 480, 1)
+	if ok {
+		t.Error("expected ok=false when only qualifying entry is excluded")
+	}
+}
+
 // ── AutoScheduleSlot unit tests ────────────────────────────────────────────
+
+// TestAutoScheduleSlot_BoundaryAligned_OffBoundaryObstacle verifies that when an
+// obstacle ends off-boundary (e.g. 08:00–09:07 = 480–547), the returned start is
+// rounded UP to the next 15-min boundary (09:15 = 555). Boundary-aligned cases
+// (480, 540, 600) must still pass unchanged.
+func TestAutoScheduleSlot_BoundaryAligned_OffBoundaryObstacle(t *testing.T) {
+	// Obstacle ends at 547 (09:07); 30-min task must land at 555 (09:15), not 547.
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 480, 67)} // 08:00–09:07
+	start, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 555 {
+		t.Errorf("off-boundary obstacle: expected start=555 (09:15), got %d", start)
+	}
+	// start must be a 15-minute boundary.
+	if start%15 != 0 {
+		t.Errorf("start must be a 15-minute boundary, got %d", start)
+	}
+}
+
+// TestAutoScheduleSlot_BoundaryAligned_OnBoundaryObstacle verifies that when an
+// obstacle ends exactly on a boundary (08:00–09:00 = 480–540), the start stays at 540.
+func TestAutoScheduleSlot_BoundaryAligned_OnBoundaryObstacle(t *testing.T) {
+	timed := []*planv1.PlanEntry{makeTimedEntry(1, 480, 60)} // 08:00–09:00
+	start, ok := cli.AutoScheduleSlot(timed, 30, 480, 0)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if start != 540 {
+		t.Errorf("on-boundary obstacle: expected start=540, got %d", start)
+	}
+}
+
+// TestAutoScheduleSlot_BoundaryAligned_FloorAlreadyBoundary verifies that an
+// already-boundary floor (480, 540, 600) on an empty day returns that floor unchanged.
+func TestAutoScheduleSlot_BoundaryAligned_FloorAlreadyBoundary(t *testing.T) {
+	for _, floor := range []int{480, 540, 600} {
+		start, ok := cli.AutoScheduleSlot(nil, 30, floor, 0)
+		if !ok {
+			t.Fatalf("floor=%d: expected ok=true", floor)
+		}
+		if start != floor {
+			t.Errorf("floor=%d: expected start=%d, got %d", floor, floor, start)
+		}
+	}
+}
 
 func makeTimedEntry(id int32, startMin, durMin int) *planv1.PlanEntry {
 	sm := int32(startMin)

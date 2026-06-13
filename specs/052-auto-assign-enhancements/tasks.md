@@ -18,7 +18,7 @@ Single Go project (root module `github.com/pboyd/twig`). All edits are under `in
 
 **Purpose**: Confirm a green starting point before changing behavior.
 
-- [ ] T001 Run `go test ./internal/cli/ ./internal/tui/` from repo root and confirm all auto-schedule tests pass, establishing the pre-change baseline.
+- [X] T001 Run `go test ./internal/cli/ ./internal/tui/` from repo root and confirm all auto-schedule tests pass, establishing the pre-change baseline.
 
 ---
 
@@ -36,13 +36,13 @@ Single Go project (root module `github.com/pboyd/twig`). All edits are under `in
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they fail)
 
-- [ ] T002 [P] [US1] In `internal/cli/plan_grid_test.go`, add `AutoScheduleSlot` cases asserting boundary-aligned starts: an obstacle ending off-boundary (e.g. 480–547 / 08:00–09:07) yields a 30-min task at 555 (09:15, rounded up); confirm existing boundary-aligned cases (480/540/600) still pass unchanged.
-- [ ] T003 [P] [US1] In `internal/tui/plan_update_test.go`, replace `TestAutoSchedule_TodayFloor_UsesCurrentMinute` with `TestAutoSchedule_RoundsFloorDownTo15`: with `nowFunc` at 9:03 on the plan day and an open morning, assert the task is placed at 540 (09:00), not 543; add a case at 8:07 asserting the floor does not drop below 480 (8:00).
+- [X] T002 [P] [US1] In `internal/cli/plan_grid_test.go`, add `AutoScheduleSlot` cases asserting boundary-aligned starts: an obstacle ending off-boundary (e.g. 480–547 / 08:00–09:07) yields a 30-min task at 555 (09:15, rounded up); confirm existing boundary-aligned cases (480/540/600) still pass unchanged.
+- [X] T003 [P] [US1] In `internal/tui/plan_update_test.go`, replace `TestAutoSchedule_TodayFloor_UsesCurrentMinute` with `TestAutoSchedule_RoundsFloorDownTo15`: with `nowFunc` at 9:03 on the plan day and an open morning, assert the task is placed at 540 (09:00), not 543; add a case at 8:07 asserting the floor does not drop below 480 (8:00).
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] In `internal/cli/plan_grid.go`, add a `ceil15(m int) int` helper and round every candidate gap start up to the next 15-minute boundary inside `AutoScheduleSlot` (apply to both the merged-gap branch and the end-of-day tail) before the fit test, so returned `startMin` is always `% 15 == 0` and never overlaps an obstacle.
-- [ ] T005 [US1] In `internal/tui/update.go` (`PlanAutoSchedule` handler), round the computed `floorMin` **down** to the nearest 15-minute boundary (`floorMin = (floorMin/15)*15`) after the today/now adjustment, keeping the existing `max(480, nowMin)` so it never goes below 8 AM.
+- [X] T004 [US1] In `internal/cli/plan_grid.go`, add a `ceil15(m int) int` helper and round every candidate gap start up to the next 15-minute boundary inside `AutoScheduleSlot` (apply to both the merged-gap branch and the end-of-day tail) before the fit test, so returned `startMin` is always `% 15 == 0` and never overlaps an obstacle.
+- [X] T005 [US1] In `internal/tui/update.go` (`PlanAutoSchedule` handler), round the computed `floorMin` **down** to the nearest 15-minute boundary (`floorMin = (floorMin/15)*15`) after the today/now adjustment, keeping the existing `max(480, nowMin)` so it never goes below 8 AM.
 
 **Checkpoint**: Pressing `a` produces only quarter-hour starts; T002/T003 pass; baseline regression tests still green.
 
@@ -58,13 +58,13 @@ Single Go project (root module `github.com/pboyd/twig`). All edits are under `in
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they fail)
 
-- [ ] T006 [P] [US2] In `internal/cli/plan_grid_test.go`, add `NextGapFloor` unit tests: entry 540–600 with `fromMin=480` returns (600, true); two entries (540–600, 660–720) returns the first end (600, true); only an entry before `fromMin`, or no entries, returns ok=false; `excludeID` is honored.
-- [ ] T007 [US2] In `internal/tui/plan_update_test.go`, replace `TestAutoSchedule_AlreadyInPlace_NoOp` with `TestAutoSchedule_AlreadyInPlace_BumpsToNextGap` (task at 480 its earliest slot, entry 540–600, free after → moved to 600) and add `TestAutoSchedule_Bump_NoLaterGap_SetsNotice` (task in the last/only free stretch → unchanged + "Day's packed…" notice).
+- [X] T006 [P] [US2] In `internal/cli/plan_grid_test.go`, add `NextGapFloor` unit tests: entry 540–600 with `fromMin=480` returns (600, true); two entries (540–600, 660–720) returns the first end (600, true); only an entry before `fromMin`, or no entries, returns ok=false; `excludeID` is honored.
+- [X] T007 [US2] In `internal/tui/plan_update_test.go`, replace `TestAutoSchedule_AlreadyInPlace_NoOp` with `TestAutoSchedule_AlreadyInPlace_BumpsToNextGap` (task at 480 its earliest slot, entry 540–600, free after → moved to 600) and add `TestAutoSchedule_Bump_NoLaterGap_SetsNotice` (task in the last/only free stretch → unchanged + "Day's packed…" notice).
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] In `internal/cli/plan_grid.go`, implement `NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floorMin int, ok bool)` returning the `end` of the first merged obstacle whose `start >= fromMin`; `ok=false` when none — reuse the same merged-interval construction as `AutoScheduleSlot`.
-- [ ] T009 [US2] In `internal/tui/update.go` (`PlanAutoSchedule` handler), replace the current no-op branch (`*entry.StartMinute == startMin → return m, nil`) with the bump: call `cli.NextGapFloor(timed, *entry.StartMinute, entry.Id)`; on ok, `cli.AutoScheduleSlot(timed, dur, bumpFloor, entry.Id)` then `movePlanCmd(...)`; otherwise set the existing "Day's packed…" notice and don't move. Leave the unscheduled / `cur != start` paths (place / re-home-earlier) untouched.
+- [X] T008 [US2] In `internal/cli/plan_grid.go`, implement `NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floorMin int, ok bool)` returning the `end` of the first merged obstacle whose `start >= fromMin`; `ok=false` when none — reuse the same merged-interval construction as `AutoScheduleSlot`.
+- [X] T009 [US2] In `internal/tui/update.go` (`PlanAutoSchedule` handler), replace the current no-op branch (`*entry.StartMinute == startMin → return m, nil`) with the bump: call `cli.NextGapFloor(timed, *entry.StartMinute, entry.Id)`; on ok, `cli.AutoScheduleSlot(timed, dur, bumpFloor, entry.Id)` then `movePlanCmd(...)`; otherwise set the existing "Day's packed…" notice and don't move. Leave the unscheduled / `cur != start` paths (place / re-home-earlier) untouched.
 
 **Checkpoint**: `a` on an already-earliest task advances it (never a silent no-op); T006/T007 pass; US1 behavior intact.
 
@@ -76,7 +76,7 @@ Single Go project (root module `github.com/pboyd/twig`). All edits are under `in
 
 **Independent Test**: Re-run the existing auto-schedule scenarios and confirm identical outcomes.
 
-- [ ] T010 [US3] In `internal/tui/plan_update_test.go`, confirm `TestAutoSchedule_EventHighlighted_SetsNoticeNoMove`, `TestAutoSchedule_NoFit_SetsNotice`, `TestAutoSchedule_EmptyPlan_NoError`, and `TestAutoSchedule_ReHome_MovesEarlier` still pass; if `ReHome_MovesEarlier` used an off-boundary time, adjust its fixture to a boundary so it asserts the re-home-earlier path (not a bump) post-rounding.
+- [X] T010 [US3] In `internal/tui/plan_update_test.go`, confirm `TestAutoSchedule_EventHighlighted_SetsNoticeNoMove`, `TestAutoSchedule_NoFit_SetsNotice`, `TestAutoSchedule_EmptyPlan_NoError`, and `TestAutoSchedule_ReHome_MovesEarlier` still pass; if `ReHome_MovesEarlier` used an off-boundary time, adjust its fixture to a boundary so it asserts the re-home-earlier path (not a bump) post-rounding.
 
 **Checkpoint**: All feature-043 guarantees verified green alongside the new behavior.
 
@@ -84,9 +84,9 @@ Single Go project (root module `github.com/pboyd/twig`). All edits are under `in
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T011 Run `gofmt -w` and `go vet ./...` on the changed packages.
-- [ ] T012 Run the full suite `go test ./...` and confirm green.
-- [ ] T013 Build and smoke-test per `quickstart.md`: `go build -o twig ./cmd/twig`, launch the TUI Plan tab, and verify the four manual scenarios (today-floor 9:03→9:00, after-entry 9:07→9:15, bump to next gap, no-room bump notice).
+- [X] T011 Run `gofmt -w` and `go vet ./...` on the changed packages.
+- [X] T012 Run the full suite `go test ./...` and confirm green.
+- [X] T013 Build and smoke-test per `quickstart.md`: `go build -o twig ./cmd/twig`, launch the TUI Plan tab, and verify the four manual scenarios (today-floor 9:03→9:00, after-entry 9:07→9:15, bump to next gap, no-room bump notice).
 
 ---
 

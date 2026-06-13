@@ -703,7 +703,7 @@ func AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excl
 		if iv.e <= freeStart {
 			continue // obstacle ends before our search window
 		}
-		gapStart := freeStart
+		gapStart := ceil15(freeStart)
 		gapEnd := iv.s
 		if gapEnd > gapStart && gapEnd-gapStart >= needed {
 			return gapStart, true
@@ -713,8 +713,59 @@ func AutoScheduleSlot(timed []*planv1.PlanEntry, durationMin, floorMin int, excl
 		}
 	}
 	// Check tail after all obstacles.
-	if 1440-freeStart >= needed {
-		return freeStart, true
+	tailStart := ceil15(freeStart)
+	if 1440-tailStart >= needed {
+		return tailStart, true
+	}
+	return 0, false
+}
+
+// ceil15 rounds min up to the nearest 15-minute boundary.
+func ceil15(min int) int {
+	return ((min + 14) / 15) * 15
+}
+
+// NextGapFloor returns the end minute of the earliest timed entry that begins
+// at or after fromMin — the lower bound of the next free gap after the stretch
+// containing fromMin. ok is false when no such entry exists.
+//
+// Entries with Id == excludeID are ignored (the entry being moved).
+func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floorMin int, ok bool) {
+	type interval struct{ s, e int }
+	var obs []interval
+	for _, e := range timed {
+		if excludeID != 0 && e.Id == excludeID {
+			continue
+		}
+		if e.StartMinute == nil {
+			continue
+		}
+		s := int(e.GetStartMinute())
+		end := s + int(e.DurationMinute)
+		obs = append(obs, interval{s, end})
+	}
+	// Sort by start.
+	for i := 1; i < len(obs); i++ {
+		for j := i; j > 0 && obs[j].s < obs[j-1].s; j-- {
+			obs[j], obs[j-1] = obs[j-1], obs[j]
+		}
+	}
+	// Merge overlapping/adjacent intervals.
+	var merged []interval
+	for _, iv := range obs {
+		if len(merged) > 0 && iv.s < merged[len(merged)-1].e {
+			if iv.e > merged[len(merged)-1].e {
+				merged[len(merged)-1].e = iv.e
+			}
+		} else {
+			merged = append(merged, iv)
+		}
+	}
+	// Return the end of the first merged interval whose start >= fromMin.
+	for _, iv := range merged {
+		if iv.s >= fromMin {
+			return iv.e, true
+		}
 	}
 	return 0, false
 }

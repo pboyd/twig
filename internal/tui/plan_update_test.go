@@ -1866,6 +1866,62 @@ func TestAutoSchedule_TodayFloor_UsesCurrentMinute(t *testing.T) {
 	}
 }
 
+// TestAutoSchedule_RoundsFloorDownTo15 verifies that the today-floor is rounded DOWN
+// to the nearest 15-minute boundary before slot search (FR-003 + rounding rule).
+func TestAutoSchedule_RoundsFloorDownTo15(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	// now=09:03 (543) on the plan day; floor should round DOWN to 540 (09:00).
+	fixedNow := time.Date(2026, 1, 1, 9, 3, 0, 0, time.Local)
+	ExportSetNowFunc(&m, func() time.Time { return fixedNow })
+	ExportSetPlanDay(&m, "2026-01-01")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil {
+		t.Fatal("MovePlanEntry was not called or start not set")
+	}
+	// Floor 543 rounds DOWN to 540 (09:00); task lands at 540.
+	if *fc.moveReq.StartMinute != 540 {
+		t.Errorf("today-floor at 09:03: expected start=540 (09:00 rounded down), got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_RoundsFloorDownTo15_ClampedAt8AM verifies that when the
+// rounded-down floor would drop below 480 (8 AM), it is clamped to 480.
+func TestAutoSchedule_RoundsFloorDownTo15_ClampedAt8AM(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	// now=08:07 (487) on the plan day; floor rounds DOWN to 480 (08:00) — not below.
+	fixedNow := time.Date(2026, 1, 1, 8, 7, 0, 0, time.Local)
+	ExportSetNowFunc(&m, func() time.Time { return fixedNow })
+	ExportSetPlanDay(&m, "2026-01-01")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", DurationMinute: 30},
+	}, 0)
+
+	_, cmd := pressKeyStr(m, "a")
+
+	if cmd == nil {
+		t.Fatal("expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil {
+		t.Fatal("MovePlanEntry was not called or start not set")
+	}
+	// Floor 487 rounds DOWN to 480 (08:00); clamped at 480.
+	if *fc.moveReq.StartMinute != 480 {
+		t.Errorf("today-floor at 08:07: expected start=480 (clamped at 8 AM), got %d", *fc.moveReq.StartMinute)
+	}
+}
+
 // TestAutoSchedule_NoFit_SetsNotice verifies that when no slot fits a playful
 // notice is set and no command is dispatched.
 func TestAutoSchedule_NoFit_SetsNotice(t *testing.T) {
@@ -1915,23 +1971,58 @@ func TestAutoSchedule_ReHome_MovesEarlier(t *testing.T) {
 	}
 }
 
-// TestAutoSchedule_AlreadyInPlace_NoOp verifies that pressing 'a' on a task
-// already at the earliest fitting slot produces no command (FR-011 / US2.3).
-func TestAutoSchedule_AlreadyInPlace_NoOp(t *testing.T) {
+// TestAutoSchedule_AlreadyInPlace_BumpsToNextGap verifies that pressing 'a' on a task
+// already in its earliest slot bumps it past the next closing entry into the next free gap.
+func TestAutoSchedule_AlreadyInPlace_BumpsToNextGap(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
-	sm := int32(480) // already at 08:00
+	// task at 480 (08:00, its earliest slot); entry 540–600 closes the stretch; free after.
+	taskSM := int32(480)
+	blockSM := int32(540)
 	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
-		{Id: 1, TaskId: 5, Name: "Task", StartMinute: &sm, DurationMinute: 30},
+		{Id: 1, TaskId: 5, Name: "Task", StartMinute: &taskSM, DurationMinute: 30},
+		{Id: 2, TaskId: 0, Name: "Block", StartMinute: &blockSM, DurationMinute: 60}, // 09:00–10:00
 	}, 0)
 
 	_, cmd := pressKeyStr(m, "a")
 
+	if cmd == nil {
+		t.Fatal("bump: expected movePlanCmd, got nil")
+	}
+	cmd()
+	if fc.moveReq == nil || fc.moveReq.StartMinute == nil {
+		t.Fatal("bump: MovePlanEntry was not called or start not set")
+	}
+	// After bump: floor=600 (end of block), AutoScheduleSlot → 600.
+	if *fc.moveReq.StartMinute != 600 {
+		t.Errorf("bump: expected start=600 (10:00, after block), got %d", *fc.moveReq.StartMinute)
+	}
+}
+
+// TestAutoSchedule_Bump_NoLaterGap_SetsNotice verifies that when the task is in its
+// earliest slot and no later gap exists, a notice is set and no move is dispatched.
+func TestAutoSchedule_Bump_NoLaterGap_SetsNotice(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	// task at 480; block 540–midnight fills the rest. No later gap.
+	taskSM := int32(480)
+	blockSM := int32(540)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, TaskId: 5, Name: "Task", StartMinute: &taskSM, DurationMinute: 30},
+		{Id: 2, TaskId: 0, Name: "BigBlock", StartMinute: &blockSM, DurationMinute: 900}, // 09:00–24:00
+	}, 0)
+
+	m2, cmd := pressKeyStr(m, "a")
+
 	if cmd != nil {
-		t.Error("already in place: expected no command (no-op), got a command")
+		t.Error("bump no later gap: expected nil cmd (notice only), got non-nil")
+	}
+	notice := ExportNotice(m2)
+	if notice == "" {
+		t.Error("bump no later gap: expected a playful notice, got empty string")
 	}
 	if fc.moveReq != nil {
-		t.Error("already in place: MovePlanEntry should not be called")
+		t.Error("bump no later gap: MovePlanEntry should not be called")
 	}
 }
 
