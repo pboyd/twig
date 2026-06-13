@@ -38,6 +38,7 @@ type editFormModel struct {
 	originalCursor   int
 	calendar         *calendarModel
 	nowFunc          func() time.Time
+	isGoal bool // true when this form edits/creates a Goal, not a Task
 	// Goal selector (task edit forms only; hidden when showGoalField is false).
 	availableGoals []*goalv1.Goal // committed + incubating goals
 	goalIdx        int            // -1 = none, 0..N-1 = index into availableGoals
@@ -405,9 +406,14 @@ func (f editFormModel) View(width int) string {
 	var sb strings.Builder
 
 	title := "New Task"
-	if f.taskID != nil {
+	switch {
+	case f.isGoal && f.taskID != nil:
+		title = fmt.Sprintf("Edit Goal #%d", *f.taskID)
+	case f.isGoal:
+		title = "New Goal"
+	case f.taskID != nil:
 		title = fmt.Sprintf("Edit Task #%d", *f.taskID)
-	} else if f.parentID != nil {
+	case f.parentID != nil:
 		title = fmt.Sprintf("New Subtask (parent #%d)", *f.parentID)
 	}
 	sb.WriteString(title + "\n\n")

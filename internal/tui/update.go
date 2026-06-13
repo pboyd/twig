@@ -1172,6 +1172,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.GoalNew):
 		m.originalCursor = m.goal.cursor
 		m.edit = NewRootForm(m.goal.cursor)
+		m.edit.isGoal = true
 		m.goal.mode = goalNew
 		m.mode = modeNewRoot
 		m.goal.err = nil
@@ -1183,6 +1184,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			fakeTask := goalToFakeTask(g)
 			m.originalCursor = m.goal.cursor
 			m.edit = NewEditForm(fakeTask, m.goal.cursor, nil)
+			m.edit.isGoal = true
 			m.goal.mode = goalEdit
 			m.mode = modeEdit
 			m.goal.err = nil
