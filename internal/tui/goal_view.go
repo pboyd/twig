@@ -284,9 +284,6 @@ func (m Model) renderGoalList(width int) string {
 				renderedName = ansi.Truncate(renderedName, maxW, "")
 			}
 			line := "  " + renderedName
-			if due := cli.FormatDue(g.GetDue()); due != "" {
-				line += "  " + due
-			}
 
 			if cursorPos == m.goal.cursor && m.styled {
 				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
