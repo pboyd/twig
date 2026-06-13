@@ -279,18 +279,25 @@ func (m Model) renderGoalList(width int) string {
 			if maxW < 0 {
 				maxW = 0
 			}
-			renderedName := m.md.RenderInline(g.GetName(), markdown.Options{Width: maxW, Styled: m.styled})
-			if lipgloss.Width(renderedName) > maxW {
-				renderedName = ansi.Truncate(renderedName, maxW, "")
-			}
-			line := "  " + renderedName
-
+			var line string
 			if cursorPos == m.goal.cursor && m.styled {
-				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
-			} else if cursorPos == m.goal.cursor {
-				line = highlightStyle.Render(padRightAnsi(line, width))
+				// Cursor row: render name in plain mode so there are no inner ANSI
+				// reset codes that would clear the cursor background mid-line.
+				plainName := m.md.RenderInline(g.GetName(), markdown.Options{Width: maxW, Styled: false})
+				if lipgloss.Width(plainName) > maxW {
+					plainName = ansi.Truncate(plainName, maxW, "")
+				}
+				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi("  "+plainName, width))
 			} else {
-				line = padRightAnsi(line, width)
+				renderedName := m.md.RenderInline(g.GetName(), markdown.Options{Width: maxW, Styled: m.styled})
+				if lipgloss.Width(renderedName) > maxW {
+					renderedName = ansi.Truncate(renderedName, maxW, "")
+				}
+				if cursorPos == m.goal.cursor {
+					line = highlightStyle.Render(padRightAnsi("  "+renderedName, width))
+				} else {
+					line = padRightAnsi("  "+renderedName, width)
+				}
 			}
 
 			sb.WriteString(line)
@@ -318,11 +325,14 @@ func (m Model) renderGoalDetail(width int) string {
 	var sb strings.Builder
 
 	// Name (bold/accent).
-	renderedName := m.md.RenderInline(g.GetName(), markdown.Options{Width: width, Styled: m.styled})
+	// Compute two forms: plain (for unstyled output) and ANSI-stripped styled (for
+	// the header, so accentStyle/Bold control all formatting without inner resets).
+	displayName := m.md.RenderInline(g.GetName(), markdown.Options{Width: width, Styled: false})
+	styledDisplayName := ansi.Strip(m.md.RenderInline(g.GetName(), markdown.Options{Width: width, Styled: true}))
 	if m.styled {
-		sb.WriteString(accentStyle.Render(lipgloss.NewStyle().Bold(true).Render(renderedName)))
+		sb.WriteString(accentStyle.Render(lipgloss.NewStyle().Bold(true).Render(styledDisplayName)))
 	} else {
-		sb.WriteString(renderedName)
+		sb.WriteString(displayName)
 	}
 	sb.WriteByte('\n')
 
@@ -449,15 +459,22 @@ func (m Model) renderGoalPicker(width int) string {
 		if maxW < 0 {
 			maxW = 0
 		}
-		taskName := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxW, Styled: m.styled})
-		if lipgloss.Width(taskName) > maxW {
-			taskName = ansi.Truncate(taskName, maxW, "")
-		}
-		line := indent + taskName
-		if i == m.goal.picker.cursor {
-			if m.styled {
-				line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(line, width))
-			} else {
+		var line string
+		if i == m.goal.picker.cursor && m.styled {
+			// Cursor row: render name in plain mode so there are no inner ANSI
+			// reset codes that would clear the cursor background mid-line.
+			plainName := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxW, Styled: false})
+			if lipgloss.Width(plainName) > maxW {
+				plainName = ansi.Truncate(plainName, maxW, "")
+			}
+			line = lipgloss.NewStyle().Bold(true).Background(cursorBg).Render(padRightAnsi(indent+plainName, width))
+		} else {
+			taskName := m.md.RenderInline(row.node.Task.Name, markdown.Options{Width: maxW, Styled: m.styled})
+			if lipgloss.Width(taskName) > maxW {
+				taskName = ansi.Truncate(taskName, maxW, "")
+			}
+			line = indent + taskName
+			if i == m.goal.picker.cursor {
 				line = highlightStyle.Render(padRightAnsi(line, width))
 			}
 		}
