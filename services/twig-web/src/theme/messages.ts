@@ -22,6 +22,8 @@ export const messages = {
   allCompletedHidden: "All done! Your completed tasks are hiding — reveal them below.",
   allHidden: "Nothing pending right now — some tasks are snoozed or done. Reveal them below.",
   dragHandleLabel: "Drag to reorder",
+  // Accessible name for the icon-only hamburger button. Kept intentionally plain
+  // (not warm/playful) — AT announces this label directly, so clarity wins over tone.
   menuTriggerLabel: "Menu",
   reorderError: "Couldn't move that — give it another try?",
   planEmpty: "Nothing planned here yet — a blank slate full of potential.",

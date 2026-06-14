@@ -1,7 +1,10 @@
 import { NavLink } from "react-router";
 import { HeaderMenu } from "./HeaderMenu";
+import { useSignOut } from "../lib/useSignOut";
 
 export function AppHeader() {
+  const signOut = useSignOut();
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
       "text-sm font-medium px-3 py-2 rounded-md transition-colors block",
@@ -31,7 +34,7 @@ export function AppHeader() {
           Plan
         </NavLink>
 
-        {/* Download and Account: wide viewports only */}
+        {/* Download and Account: wide viewports only (C5) */}
         <NavLink
           to="/download"
           className={(state) => `${navLinkClass(state)} hidden sm:block`}
@@ -46,7 +49,20 @@ export function AppHeader() {
         </NavLink>
       </div>
 
-      <HeaderMenu navLinkClass={navLinkClass} />
+      <div className="flex items-center">
+        {/* Sign out: wide viewports only (C5) */}
+        <button
+          onClick={signOut}
+          className="hidden sm:inline-flex text-sm font-medium px-3 py-2 rounded-md transition-colors text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+        >
+          Sign out
+        </button>
+
+        {/* Compact menu trigger: small viewports only (C6) */}
+        <div className="sm:hidden">
+          <HeaderMenu />
+        </div>
+      </div>
     </header>
   );
 }

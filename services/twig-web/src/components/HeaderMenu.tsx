@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { NavLink, useLocation } from "react-router";
+import { useSignOut } from "../lib/useSignOut";
 import { messages } from "../theme/messages";
 
-interface HeaderMenuProps {
-  navLinkClass: (props: { isActive: boolean }) => string;
-}
-
-export function HeaderMenu({ navLinkClass }: HeaderMenuProps) {
+export function HeaderMenu() {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const signOut = useSignOut();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Close on route change
   useEffect(() => {
@@ -30,7 +26,10 @@ export function HeaderMenu({ navLinkClass }: HeaderMenuProps) {
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -43,12 +42,7 @@ export function HeaderMenu({ navLinkClass }: HeaderMenuProps) {
 
   async function handleSignOut() {
     setOpen(false);
-    try {
-      await fetch("/auth/logout", { method: "POST", credentials: "include" });
-    } finally {
-      queryClient.clear();
-      navigate("/login", { replace: true });
-    }
+    await signOut();
   }
 
   const menuItemClass = ({ isActive }: { isActive: boolean }) =>
@@ -62,9 +56,10 @@ export function HeaderMenu({ navLinkClass }: HeaderMenuProps) {
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
-        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls="header-menu"
         aria-label={messages.menuTriggerLabel}
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center justify-center rounded-md min-h-[44px] min-w-[44px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -78,27 +73,24 @@ export function HeaderMenu({ navLinkClass }: HeaderMenuProps) {
 
       {open && (
         <div
-          role="menu"
+          id="header-menu"
           className="absolute right-0 mt-1 w-44 rounded-md border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 z-50"
         >
           <NavLink
             to="/account"
-            role="menuitem"
-            className={navLinkClass}
+            className={menuItemClass}
             onClick={() => setOpen(false)}
           >
             Account
           </NavLink>
           <NavLink
             to="/download"
-            role="menuitem"
-            className={navLinkClass}
+            className={menuItemClass}
             onClick={() => setOpen(false)}
           >
             Download
           </NavLink>
           <button
-            role="menuitem"
             onClick={handleSignOut}
             className={menuItemClass({ isActive: false })}
           >
