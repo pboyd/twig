@@ -152,7 +152,7 @@ func TestClientIP_CFConnectingIPTakesPrecedence(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "9.8.7.6")
 	req.RemoteAddr = "10.0.0.1:1234"
 
-	got := auth.ClientIP(req)
+	got := auth.ClientIPFromRequest(req)
 	if got != "1.2.3.4" {
 		t.Errorf("CF-Connecting-IP should win, got %q", got)
 	}
@@ -164,7 +164,7 @@ func TestClientIP_XForwardedForRightMost(t *testing.T) {
 	req.RemoteAddr = "10.0.0.1:9999"
 
 	// The right-most (last) entry is the one appended by the trusted proxy.
-	got := auth.ClientIP(req)
+	got := auth.ClientIPFromRequest(req)
 	if got != "198.51.100.1" {
 		t.Errorf("want right-most XFF entry, got %q", got)
 	}
@@ -175,7 +175,7 @@ func TestClientIP_XForwardedForSingleEntry(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.5")
 	req.RemoteAddr = "10.0.0.1:9999"
 
-	got := auth.ClientIP(req)
+	got := auth.ClientIPFromRequest(req)
 	if got != "203.0.113.5" {
 		t.Errorf("want single XFF entry, got %q", got)
 	}
@@ -185,7 +185,7 @@ func TestClientIP_RemoteAddrFallback(t *testing.T) {
 	req := httptest.NewRequest("POST", "/auth/login", nil)
 	req.RemoteAddr = "192.168.1.42:5678"
 
-	got := auth.ClientIP(req)
+	got := auth.ClientIPFromRequest(req)
 	if got != "192.168.1.42" {
 		t.Errorf("should fall back to RemoteAddr, got %q", got)
 	}
@@ -195,7 +195,7 @@ func TestClientIP_RemoteAddrNoPort(t *testing.T) {
 	req := httptest.NewRequest("POST", "/auth/login", nil)
 	req.RemoteAddr = "192.168.1.1"
 
-	got := auth.ClientIP(req)
+	got := auth.ClientIPFromRequest(req)
 	if got != "192.168.1.1" {
 		t.Errorf("RemoteAddr without port should work, got %q", got)
 	}

@@ -13,7 +13,7 @@ func SetLimiterClock(l *LoginLimiter, now func() time.Time) {
 	l.now = now
 }
 
-// ClientIP exposes the unexported clientIP helper for white-box tests.
-func ClientIP(r *http.Request) string {
+// ClientIPFromRequest exposes the unexported clientIP helper for white-box tests.
+func ClientIPFromRequest(r *http.Request) string {
 	return clientIP(r)
 }

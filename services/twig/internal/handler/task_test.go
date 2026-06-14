@@ -73,9 +73,11 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 	return &handler.Task{Queries: queries, Pool: pool}, userID
 }
 
-// ctxWithUser returns a context carrying the given user_id.
+// ctxWithUser returns a context carrying the given user_id and a dummy client IP,
+// matching the context shape the auth middleware produces in production.
 func ctxWithUser(userID int64) context.Context {
-	return auth.WithUserID(context.Background(), userID)
+	ctx := auth.WithUserID(context.Background(), userID)
+	return auth.WithClientIP(ctx, "127.0.0.1")
 }
 
 // newGoalTestHandlerWithPool creates a Goal handler that shares the given task

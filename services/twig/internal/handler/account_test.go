@@ -216,6 +216,53 @@ func TestChangePassword_RateLimited(t *testing.T) {
 	}
 }
 
+func TestChangePassword_IPRateLimited(t *testing.T) {
+	q := &stubAccountQuerier{
+		user: makeUser(1, "alice", "correct-password"),
+	}
+	limiter := auth.NewLoginLimiter(1, time.Hour)
+	// Pre-fill the IP key to trigger blocking.
+	limiter.RecordFailure("ip:127.0.0.1")
+	limiter.RecordFailure("ip:127.0.0.1")
+	h := makeAccountHandlerWithLimiter(q, limiter)
+	ctx := ctxWithUser(1) // carries "127.0.0.1" as the client IP
+
+	_, err := h.ChangePassword(ctx, connect.NewRequest(&accountv1.ChangePasswordRequest{
+		CurrentPassword: "correct-password",
+		NewPassword:     "brandnewpassword",
+	}))
+
+	if err == nil {
+		t.Fatal("expected rate-limit error for blocked IP")
+	}
+	if connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Errorf("code = %v, want ResourceExhausted", connect.CodeOf(err))
+	}
+}
+
+func TestChangePassword_WrongPassword_RecordsBothKeys(t *testing.T) {
+	q := &stubAccountQuerier{
+		user: makeUser(1, "alice", "correct-password"),
+	}
+	limiter := auth.NewLoginLimiter(1, time.Hour)
+	h := makeAccountHandlerWithLimiter(q, limiter)
+	ctx := ctxWithUser(1) // carries "127.0.0.1"
+
+	_, _ = h.ChangePassword(ctx, connect.NewRequest(&accountv1.ChangePasswordRequest{
+		CurrentPassword: "wrong",
+		NewPassword:     "newpassword123",
+	}))
+
+	ipBlocked, _ := limiter.Blocked("ip:127.0.0.1")
+	if !ipBlocked {
+		t.Error("expected IP limiter key to be recorded after failure")
+	}
+	userBlocked, _ := limiter.Blocked("user:alice")
+	if !userBlocked {
+		t.Error("expected user limiter key to be recorded after failure")
+	}
+}
+
 func TestChangePassword_DBError_GetUser(t *testing.T) {
 	q := &stubAccountQuerier{
 		userErr: errors.New("db down"),

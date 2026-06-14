@@ -14,7 +14,10 @@ import (
 
 type contextKey int
 
-const userIDKey contextKey = 1
+const (
+	userIDKey   contextKey = 1
+	clientIPKey contextKey = 2
+)
 
 // Querier is the subset of db.Queries used by the auth middleware.
 type Querier interface {
@@ -31,6 +34,17 @@ func UserID(ctx context.Context) int64 {
 // WithUserID returns a context with the given user_id set. Used in tests.
 func WithUserID(ctx context.Context, userID int64) context.Context {
 	return context.WithValue(ctx, userIDKey, userID)
+}
+
+// ClientIP returns the client IP stored by the auth middleware, or "" if absent.
+func ClientIP(ctx context.Context) string {
+	ip, _ := ctx.Value(clientIPKey).(string)
+	return ip
+}
+
+// WithClientIP returns a context with the given client IP set. Used in tests.
+func WithClientIP(ctx context.Context, ip string) context.Context {
+	return context.WithValue(ctx, clientIPKey, ip)
 }
 
 // Middleware returns an http.Handler middleware that authenticates requests.
@@ -52,6 +66,7 @@ func Middleware(q Querier) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx = context.WithValue(ctx, clientIPKey, clientIP(r))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
