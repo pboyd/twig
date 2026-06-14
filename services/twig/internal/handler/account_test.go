@@ -23,9 +23,10 @@ type stubAccountQuerier struct {
 	updateErr    error
 	keys         []db.ListApiKeysByUserRow
 	keysErr      error
-	createdKey   db.ApiKey
-	createErr    error
-	deleteRows   int64
+	createdKey       db.ApiKey
+	createErr        error
+	lastCreateParams db.CreateApiKeyParams
+	deleteRows       int64
 	deleteErr    error
 }
 
@@ -45,6 +46,7 @@ func (s *stubAccountQuerier) ListApiKeysByUser(_ context.Context, _ int64) ([]db
 }
 
 func (s *stubAccountQuerier) CreateApiKey(_ context.Context, arg db.CreateApiKeyParams) (db.ApiKey, error) {
+	s.lastCreateParams = arg
 	if s.createErr != nil {
 		return db.ApiKey{}, s.createErr
 	}
@@ -277,8 +279,9 @@ func TestCreateApiKey_StoredHashMatches(t *testing.T) {
 
 	// The stored hash must equal HashAPIKey(secret) so the existing GetApiKeyByHash
 	// auth path can authenticate CLI requests made with this key (FR-012).
-	if auth.HashAPIKey(resp.Msg.Secret) == "" {
-		t.Error("expected non-empty hash derived from secret")
+	want := auth.HashAPIKey(resp.Msg.Secret)
+	if q.lastCreateParams.KeyHash != want {
+		t.Errorf("stored KeyHash = %q, want HashAPIKey(secret) = %q", q.lastCreateParams.KeyHash, want)
 	}
 }
 
