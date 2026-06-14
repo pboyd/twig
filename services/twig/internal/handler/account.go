@@ -63,7 +63,7 @@ func (a *Account) ChangePassword(
 			a.Limiter.RecordFailure(ipKey)
 		}
 		a.Limiter.RecordFailure(userKey)
-		return nil, connect.NewError(connect.CodeInvalidArgument,
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			errors.New("current password is incorrect"))
 	}
 

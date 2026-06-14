@@ -68,7 +68,7 @@ function PasswordSection() {
       if (err instanceof ConnectError) {
         if (err.code === Code.ResourceExhausted) {
           setError(m.passwordRateLimited);
-        } else if (err.code === Code.InvalidArgument) {
+        } else if (err.code === Code.FailedPrecondition) {
           setError(m.passwordWrongCurrent);
         } else {
           setError(m.passwordChangeFailed);

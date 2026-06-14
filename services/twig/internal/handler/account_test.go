@@ -101,8 +101,8 @@ func TestChangePassword_WrongCurrentPassword(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for wrong current password")
 	}
-	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Errorf("code = %v, want InvalidArgument", connect.CodeOf(err))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("code = %v, want FailedPrecondition", connect.CodeOf(err))
 	}
 }
 
