@@ -217,15 +217,12 @@ func TestChangePassword_RateLimited(t *testing.T) {
 }
 
 func TestChangePassword_IPRateLimited(t *testing.T) {
-	q := &stubAccountQuerier{
-		user: makeUser(1, "alice", "correct-password"),
-	}
+	q := &stubAccountQuerier{} // no user needed — DB not reached when IP is blocked
 	limiter := auth.NewLoginLimiter(1, time.Hour)
-	// Pre-fill the IP key to trigger blocking.
 	limiter.RecordFailure("ip:127.0.0.1")
 	limiter.RecordFailure("ip:127.0.0.1")
 	h := makeAccountHandlerWithLimiter(q, limiter)
-	ctx := ctxWithUser(1) // carries "127.0.0.1" as the client IP
+	ctx := ctxWithUser(1)
 
 	_, err := h.ChangePassword(ctx, connect.NewRequest(&accountv1.ChangePasswordRequest{
 		CurrentPassword: "correct-password",

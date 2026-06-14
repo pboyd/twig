@@ -37,25 +37,31 @@ func (a *Account) ChangePassword(
 ) (*connect.Response[accountv1.ChangePasswordResponse], error) {
 	userID := auth.UserID(ctx)
 
+	// Check IP block before hitting the DB — the IP key needs no DB lookup.
+	ipKey := ""
+	if ip := auth.ClientIP(ctx); ip != "" {
+		ipKey = "ip:" + ip
+		if blocked, _ := a.Limiter.Blocked(ipKey); blocked {
+			return nil, connect.NewError(connect.CodeResourceExhausted,
+				errors.New("too many attempts — take a breather and try again in a few minutes"))
+		}
+	}
+
 	user, err := a.Queries.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	ipKey := "ip:" + auth.ClientIP(ctx)
 	userKey := "user:" + user.Username
-
-	if blocked, _ := a.Limiter.Blocked(ipKey); blocked {
-		return nil, connect.NewError(connect.CodeResourceExhausted,
-			errors.New("too many attempts — take a breather and try again in a few minutes"))
-	}
 	if blocked, _ := a.Limiter.Blocked(userKey); blocked {
 		return nil, connect.NewError(connect.CodeResourceExhausted,
 			errors.New("too many attempts — take a breather and try again in a few minutes"))
 	}
 
 	if err := auth.VerifyPassword(user.PasswordHash, req.Msg.CurrentPassword); err != nil {
-		a.Limiter.RecordFailure(ipKey)
+		if ipKey != "" {
+			a.Limiter.RecordFailure(ipKey)
+		}
 		a.Limiter.RecordFailure(userKey)
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("current password is incorrect"))
@@ -78,7 +84,9 @@ func (a *Account) ChangePassword(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	a.Limiter.Reset(ipKey)
+	if ipKey != "" {
+		a.Limiter.Reset(ipKey)
+	}
 	a.Limiter.Reset(userKey)
 	return connect.NewResponse(&accountv1.ChangePasswordResponse{}), nil
 }
