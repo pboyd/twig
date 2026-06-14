@@ -17,15 +17,16 @@ import (
 
 // stubAccountQuerier implements handler.AccountQuerier for tests.
 type stubAccountQuerier struct {
-	user       db.User
-	userErr    error
-	updateErr  error
-	keys       []db.ListApiKeysByUserRow
-	keysErr    error
-	createdKey db.ApiKey
-	createErr  error
-	deleteRows int64
-	deleteErr  error
+	user         db.User
+	userErr      error
+	updateCalled bool
+	updateErr    error
+	keys         []db.ListApiKeysByUserRow
+	keysErr      error
+	createdKey   db.ApiKey
+	createErr    error
+	deleteRows   int64
+	deleteErr    error
 }
 
 var _ handler.AccountQuerier = (*stubAccountQuerier)(nil)
@@ -35,6 +36,7 @@ func (s *stubAccountQuerier) GetUserByID(_ context.Context, _ int64) (db.User, e
 }
 
 func (s *stubAccountQuerier) UpdateUserPasswordByID(_ context.Context, _ db.UpdateUserPasswordByIDParams) error {
+	s.updateCalled = true
 	return s.updateErr
 }
 
@@ -159,7 +161,7 @@ func TestChangePassword_HappyPath_WritesNewHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.updateErr != nil {
+	if !q.updateCalled {
 		t.Error("UpdateUserPasswordByID was not called")
 	}
 }
