@@ -11,6 +11,7 @@ export default defineConfig({
       "/health.v1": "http://localhost:8080",
       "/plan.v1": "http://localhost:8080",
       "/cli": "http://localhost:8080",
+      "/account.v1": "http://localhost:8080",
     },
   },
 });

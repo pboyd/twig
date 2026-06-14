@@ -53,3 +53,13 @@ export const movePlanEntry = PlanService.method.movePlanEntry;
  * @generated from rpc plan.v1.PlanService.ClearPlan
  */
 export const clearPlan = PlanService.method.clearPlan;
+
+/**
+ * ListScheduledDays returns, for every task the caller has scheduled, each
+ * distinct day on or after from_day on which a plan entry links that task.
+ * Untimed entries count. Results are ordered by task_id then day ascending,
+ * with no duplicate (task_id, day) pairs.
+ *
+ * @generated from rpc plan.v1.PlanService.ListScheduledDays
+ */
+export const listScheduledDays = PlanService.method.listScheduledDays;

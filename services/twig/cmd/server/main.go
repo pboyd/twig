@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"github.com/pboyd/twig/api/gen/account/v1/accountv1connect"
 	"github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	"github.com/pboyd/twig/api/gen/health/v1/healthv1connect"
 	"github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
@@ -103,6 +104,8 @@ func main() {
 	taskMux.Handle(planPath, planH)
 	goalPath, goalH := goalv1connect.NewGoalServiceHandler(&handler.Goal{Queries: queries, Pool: pool})
 	taskMux.Handle(goalPath, goalH)
+	accountPath, accountH := accountv1connect.NewAccountServiceHandler(&handler.Account{Queries: queries, Limiter: loginLimiter})
+	taskMux.Handle(accountPath, accountH)
 	taskMux.HandleFunc("GET /cli/download", cliBinary.ServeDownload)
 	taskMux.HandleFunc("GET /cli/info", cliBinary.ServeInfo)
 

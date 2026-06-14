@@ -90,6 +90,23 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteApiKeyForUser = `-- name: DeleteApiKeyForUser :execrows
+DELETE FROM api_keys WHERE id = $1 AND user_id = $2
+`
+
+type DeleteApiKeyForUserParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteApiKeyForUser(ctx context.Context, arg DeleteApiKeyForUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteApiKeyForUser, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteApiKeysByUser = `-- name: DeleteApiKeysByUser :exec
 DELETE FROM api_keys WHERE user_id = $1
 `
@@ -141,6 +158,17 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	return i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, username, password_hash FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(&i.ID, &i.Username, &i.PasswordHash)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, username, password_hash FROM users WHERE username = $1
 `
@@ -150,6 +178,36 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	var i User
 	err := row.Scan(&i.ID, &i.Username, &i.PasswordHash)
 	return i, err
+}
+
+const listApiKeysByUser = `-- name: ListApiKeysByUser :many
+SELECT id, label, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at, id
+`
+
+type ListApiKeysByUserRow struct {
+	ID        int64
+	Label     pgtype.Text
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListApiKeysByUser(ctx context.Context, userID int64) ([]ListApiKeysByUserRow, error) {
+	rows, err := q.db.Query(ctx, listApiKeysByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListApiKeysByUserRow
+	for rows.Next() {
+		var i ListApiKeysByUserRow
+		if err := rows.Scan(&i.ID, &i.Label, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
@@ -163,5 +221,19 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.Username, arg.PasswordHash)
+	return err
+}
+
+const updateUserPasswordByID = `-- name: UpdateUserPasswordByID :exec
+UPDATE users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdateUserPasswordByIDParams struct {
+	ID           int64
+	PasswordHash string
+}
+
+func (q *Queries) UpdateUserPasswordByID(ctx context.Context, arg UpdateUserPasswordByIDParams) error {
+	_, err := q.db.Exec(ctx, updateUserPasswordByID, arg.ID, arg.PasswordHash)
 	return err
 }

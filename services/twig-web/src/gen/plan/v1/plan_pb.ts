@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file plan/v1/plan.proto.
  */
 export const file_plan_v1_plan: GenFile = /*@__PURE__*/
-  fileDesc("ChJwbGFuL3YxL3BsYW4ucHJvdG8SB3BsYW4udjEimwEKCVBsYW5FbnRyeRILCgNkYXkYASABKAkSCgoCaWQYAiABKAUSDwoHdGFza19pZBgDIAEoAxIMCgRuYW1lGAQgASgJEhkKDHN0YXJ0X21pbnV0ZRgFIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgGIAEoBRIRCgljb21wbGV0ZWQYByABKAhCDwoNX3N0YXJ0X21pbnV0ZSIlChZMaXN0UGxhbkVudHJpZXNSZXF1ZXN0EgsKA2RheRgBIAEoCSI+ChdMaXN0UGxhbkVudHJpZXNSZXNwb25zZRIjCgdlbnRyaWVzGAEgAygLMhIucGxhbi52MS5QbGFuRW50cnkidwoSQWRkUGxhblRhc2tSZXF1ZXN0EgsKA2RheRgBIAEoCRIPCgd0YXNrX2lkGAIgASgDEhkKDHN0YXJ0X21pbnV0ZRgDIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgEIAEoBUIPCg1fc3RhcnRfbWludXRlIjgKE0FkZFBsYW5UYXNrUmVzcG9uc2USIQoFZW50cnkYASABKAsyEi5wbGFuLnYxLlBsYW5FbnRyeSJfChNBZGRQbGFuRXZlbnRSZXF1ZXN0EgsKA2RheRgBIAEoCRIMCgRuYW1lGAIgASgJEhQKDHN0YXJ0X21pbnV0ZRgDIAEoBRIXCg9kdXJhdGlvbl9taW51dGUYBCABKAUiOQoUQWRkUGxhbkV2ZW50UmVzcG9uc2USIQoFZW50cnkYASABKAsyEi5wbGFuLnYxLlBsYW5FbnRyeSIxChZSZW1vdmVQbGFuRW50cnlSZXF1ZXN0EgsKA2RheRgBIAEoCRIKCgJpZBgCIAEoBSIZChdSZW1vdmVQbGFuRW50cnlSZXNwb25zZSI/ChZSZW5hbWVQbGFuRW50cnlSZXF1ZXN0EgsKA2RheRgBIAEoCRIKCgJpZBgCIAEoBRIMCgRuYW1lGAMgASgJIjwKF1JlbmFtZVBsYW5FbnRyeVJlc3BvbnNlEiEKBWVudHJ5GAEgASgLMhIucGxhbi52MS5QbGFuRW50cnkidAoUTW92ZVBsYW5FbnRyeVJlcXVlc3QSCwoDZGF5GAEgASgJEgoKAmlkGAIgASgFEhkKDHN0YXJ0X21pbnV0ZRgDIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgEIAEoBUIPCg1fc3RhcnRfbWludXRlIjoKFU1vdmVQbGFuRW50cnlSZXNwb25zZRIhCgVlbnRyeRgBIAEoCzISLnBsYW4udjEuUGxhbkVudHJ5IjUKEENsZWFyUGxhblJlcXVlc3QSCwoDZGF5GAEgASgJEhQKDHN0YXJ0X21pbnV0ZRgCIAEoBSJMChFDbGVhclBsYW5SZXNwb25zZRIVCg1kZWxldGVkX2NvdW50GAEgASgFEiAKGHRyaW1tZWRfc3RyYWRkbGluZ19lbnRyeRgCIAEoCDK6BAoLUGxhblNlcnZpY2USVAoPTGlzdFBsYW5FbnRyaWVzEh8ucGxhbi52MS5MaXN0UGxhbkVudHJpZXNSZXF1ZXN0GiAucGxhbi52MS5MaXN0UGxhbkVudHJpZXNSZXNwb25zZRJICgtBZGRQbGFuVGFzaxIbLnBsYW4udjEuQWRkUGxhblRhc2tSZXF1ZXN0GhwucGxhbi52MS5BZGRQbGFuVGFza1Jlc3BvbnNlEksKDEFkZFBsYW5FdmVudBIcLnBsYW4udjEuQWRkUGxhbkV2ZW50UmVxdWVzdBodLnBsYW4udjEuQWRkUGxhbkV2ZW50UmVzcG9uc2USVAoPUmVtb3ZlUGxhbkVudHJ5Eh8ucGxhbi52MS5SZW1vdmVQbGFuRW50cnlSZXF1ZXN0GiAucGxhbi52MS5SZW1vdmVQbGFuRW50cnlSZXNwb25zZRJUCg9SZW5hbWVQbGFuRW50cnkSHy5wbGFuLnYxLlJlbmFtZVBsYW5FbnRyeVJlcXVlc3QaIC5wbGFuLnYxLlJlbmFtZVBsYW5FbnRyeVJlc3BvbnNlEk4KDU1vdmVQbGFuRW50cnkSHS5wbGFuLnYxLk1vdmVQbGFuRW50cnlSZXF1ZXN0Gh4ucGxhbi52MS5Nb3ZlUGxhbkVudHJ5UmVzcG9uc2USQgoJQ2xlYXJQbGFuEhkucGxhbi52MS5DbGVhclBsYW5SZXF1ZXN0GhoucGxhbi52MS5DbGVhclBsYW5SZXNwb25zZUIuWixnaXRodWIuY29tL3Bib3lkL3R3aWcvYXBpL2dlbi9wbGFuL3YxO3BsYW52MWIGcHJvdG8z");
+  fileDesc("ChJwbGFuL3YxL3BsYW4ucHJvdG8SB3BsYW4udjEimwEKCVBsYW5FbnRyeRILCgNkYXkYASABKAkSCgoCaWQYAiABKAUSDwoHdGFza19pZBgDIAEoAxIMCgRuYW1lGAQgASgJEhkKDHN0YXJ0X21pbnV0ZRgFIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgGIAEoBRIRCgljb21wbGV0ZWQYByABKAhCDwoNX3N0YXJ0X21pbnV0ZSIlChZMaXN0UGxhbkVudHJpZXNSZXF1ZXN0EgsKA2RheRgBIAEoCSI+ChdMaXN0UGxhbkVudHJpZXNSZXNwb25zZRIjCgdlbnRyaWVzGAEgAygLMhIucGxhbi52MS5QbGFuRW50cnkidwoSQWRkUGxhblRhc2tSZXF1ZXN0EgsKA2RheRgBIAEoCRIPCgd0YXNrX2lkGAIgASgDEhkKDHN0YXJ0X21pbnV0ZRgDIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgEIAEoBUIPCg1fc3RhcnRfbWludXRlIjgKE0FkZFBsYW5UYXNrUmVzcG9uc2USIQoFZW50cnkYASABKAsyEi5wbGFuLnYxLlBsYW5FbnRyeSJfChNBZGRQbGFuRXZlbnRSZXF1ZXN0EgsKA2RheRgBIAEoCRIMCgRuYW1lGAIgASgJEhQKDHN0YXJ0X21pbnV0ZRgDIAEoBRIXCg9kdXJhdGlvbl9taW51dGUYBCABKAUiOQoUQWRkUGxhbkV2ZW50UmVzcG9uc2USIQoFZW50cnkYASABKAsyEi5wbGFuLnYxLlBsYW5FbnRyeSIxChZSZW1vdmVQbGFuRW50cnlSZXF1ZXN0EgsKA2RheRgBIAEoCRIKCgJpZBgCIAEoBSIZChdSZW1vdmVQbGFuRW50cnlSZXNwb25zZSI/ChZSZW5hbWVQbGFuRW50cnlSZXF1ZXN0EgsKA2RheRgBIAEoCRIKCgJpZBgCIAEoBRIMCgRuYW1lGAMgASgJIjwKF1JlbmFtZVBsYW5FbnRyeVJlc3BvbnNlEiEKBWVudHJ5GAEgASgLMhIucGxhbi52MS5QbGFuRW50cnkidAoUTW92ZVBsYW5FbnRyeVJlcXVlc3QSCwoDZGF5GAEgASgJEgoKAmlkGAIgASgFEhkKDHN0YXJ0X21pbnV0ZRgDIAEoBUgAiAEBEhcKD2R1cmF0aW9uX21pbnV0ZRgEIAEoBUIPCg1fc3RhcnRfbWludXRlIjoKFU1vdmVQbGFuRW50cnlSZXNwb25zZRIhCgVlbnRyeRgBIAEoCzISLnBsYW4udjEuUGxhbkVudHJ5IjUKEENsZWFyUGxhblJlcXVlc3QSCwoDZGF5GAEgASgJEhQKDHN0YXJ0X21pbnV0ZRgCIAEoBSJMChFDbGVhclBsYW5SZXNwb25zZRIVCg1kZWxldGVkX2NvdW50GAEgASgFEiAKGHRyaW1tZWRfc3RyYWRkbGluZ19lbnRyeRgCIAEoCCIsChhMaXN0U2NoZWR1bGVkRGF5c1JlcXVlc3QSEAoIZnJvbV9kYXkYASABKAkiQAoZTGlzdFNjaGVkdWxlZERheXNSZXNwb25zZRIjCgRkYXlzGAEgAygLMhUucGxhbi52MS5TY2hlZHVsZWREYXkiLAoMU2NoZWR1bGVkRGF5Eg8KB3Rhc2tfaWQYASABKAMSCwoDZGF5GAIgASgJMpYFCgtQbGFuU2VydmljZRJUCg9MaXN0UGxhbkVudHJpZXMSHy5wbGFuLnYxLkxpc3RQbGFuRW50cmllc1JlcXVlc3QaIC5wbGFuLnYxLkxpc3RQbGFuRW50cmllc1Jlc3BvbnNlEkgKC0FkZFBsYW5UYXNrEhsucGxhbi52MS5BZGRQbGFuVGFza1JlcXVlc3QaHC5wbGFuLnYxLkFkZFBsYW5UYXNrUmVzcG9uc2USSwoMQWRkUGxhbkV2ZW50EhwucGxhbi52MS5BZGRQbGFuRXZlbnRSZXF1ZXN0Gh0ucGxhbi52MS5BZGRQbGFuRXZlbnRSZXNwb25zZRJUCg9SZW1vdmVQbGFuRW50cnkSHy5wbGFuLnYxLlJlbW92ZVBsYW5FbnRyeVJlcXVlc3QaIC5wbGFuLnYxLlJlbW92ZVBsYW5FbnRyeVJlc3BvbnNlElQKD1JlbmFtZVBsYW5FbnRyeRIfLnBsYW4udjEuUmVuYW1lUGxhbkVudHJ5UmVxdWVzdBogLnBsYW4udjEuUmVuYW1lUGxhbkVudHJ5UmVzcG9uc2USTgoNTW92ZVBsYW5FbnRyeRIdLnBsYW4udjEuTW92ZVBsYW5FbnRyeVJlcXVlc3QaHi5wbGFuLnYxLk1vdmVQbGFuRW50cnlSZXNwb25zZRJCCglDbGVhclBsYW4SGS5wbGFuLnYxLkNsZWFyUGxhblJlcXVlc3QaGi5wbGFuLnYxLkNsZWFyUGxhblJlc3BvbnNlEloKEUxpc3RTY2hlZHVsZWREYXlzEiEucGxhbi52MS5MaXN0U2NoZWR1bGVkRGF5c1JlcXVlc3QaIi5wbGFuLnYxLkxpc3RTY2hlZHVsZWREYXlzUmVzcG9uc2VCLlosZ2l0aHViLmNvbS9wYm95ZC90d2lnL2FwaS9nZW4vcGxhbi92MTtwbGFudjFiBnByb3RvMw");
 
 /**
  * PlanEntry is a single scheduled segment of one day. Identity within a user's
@@ -398,6 +398,71 @@ export const ClearPlanResponseSchema: GenMessage<ClearPlanResponse> = /*@__PURE_
   messageDesc(file_plan_v1_plan, 14);
 
 /**
+ * @generated from message plan.v1.ListScheduledDaysRequest
+ */
+export type ListScheduledDaysRequest = Message<"plan.v1.ListScheduledDaysRequest"> & {
+  /**
+   * The caller's local current day, YYYY-MM-DD. Only days >= from_day are
+   * returned, so callers using their local date get a local "past" cutoff.
+   *
+   * @generated from field: string from_day = 1;
+   */
+  fromDay: string;
+};
+
+/**
+ * Describes the message plan.v1.ListScheduledDaysRequest.
+ * Use `create(ListScheduledDaysRequestSchema)` to create a new message.
+ */
+export const ListScheduledDaysRequestSchema: GenMessage<ListScheduledDaysRequest> = /*@__PURE__*/
+  messageDesc(file_plan_v1_plan, 15);
+
+/**
+ * @generated from message plan.v1.ListScheduledDaysResponse
+ */
+export type ListScheduledDaysResponse = Message<"plan.v1.ListScheduledDaysResponse"> & {
+  /**
+   * Flat list of scheduled (task, day) pairs, sorted by task_id then day asc.
+   *
+   * @generated from field: repeated plan.v1.ScheduledDay days = 1;
+   */
+  days: ScheduledDay[];
+};
+
+/**
+ * Describes the message plan.v1.ListScheduledDaysResponse.
+ * Use `create(ListScheduledDaysResponseSchema)` to create a new message.
+ */
+export const ListScheduledDaysResponseSchema: GenMessage<ListScheduledDaysResponse> = /*@__PURE__*/
+  messageDesc(file_plan_v1_plan, 16);
+
+/**
+ * @generated from message plan.v1.ScheduledDay
+ */
+export type ScheduledDay = Message<"plan.v1.ScheduledDay"> & {
+  /**
+   * The scheduled task. Always non-zero (entries without a task are excluded).
+   *
+   * @generated from field: int64 task_id = 1;
+   */
+  taskId: bigint;
+
+  /**
+   * The scheduled day, YYYY-MM-DD.
+   *
+   * @generated from field: string day = 2;
+   */
+  day: string;
+};
+
+/**
+ * Describes the message plan.v1.ScheduledDay.
+ * Use `create(ScheduledDaySchema)` to create a new message.
+ */
+export const ScheduledDaySchema: GenMessage<ScheduledDay> = /*@__PURE__*/
+  messageDesc(file_plan_v1_plan, 17);
+
+/**
  * PlanService manages day-scoped plan entries for the calling user.
  *
  * @generated from service plan.v1.PlanService
@@ -473,6 +538,19 @@ export const PlanService: GenService<{
     methodKind: "unary";
     input: typeof ClearPlanRequestSchema;
     output: typeof ClearPlanResponseSchema;
+  },
+  /**
+   * ListScheduledDays returns, for every task the caller has scheduled, each
+   * distinct day on or after from_day on which a plan entry links that task.
+   * Untimed entries count. Results are ordered by task_id then day ascending,
+   * with no duplicate (task_id, day) pairs.
+   *
+   * @generated from rpc plan.v1.PlanService.ListScheduledDays
+   */
+  listScheduledDays: {
+    methodKind: "unary";
+    input: typeof ListScheduledDaysRequestSchema;
+    output: typeof ListScheduledDaysResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_plan_v1_plan, 0);

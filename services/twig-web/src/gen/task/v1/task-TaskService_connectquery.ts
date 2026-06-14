@@ -115,3 +115,26 @@ export const completePomodoro = TaskService.method.completePomodoro;
  * @generated from rpc task.v1.TaskService.GetActivePomodoro
  */
 export const getActivePomodoro = TaskService.method.getActivePomodoro;
+
+/**
+ * CountCompletedPomodoros returns how many of the calling user's pomodoros
+ * were completed within the half-open UTC instant range [start, end).
+ * A pomodoro counts when complete = true and start <= end_at < end,
+ * regardless of whether its task is complete.
+ *
+ * @generated from rpc task.v1.TaskService.CountCompletedPomodoros
+ */
+export const countCompletedPomodoros = TaskService.method.countCompletedPomodoros;
+
+/**
+ * SetTaskGoal associates a task (and implicitly its whole subtree) with a
+ * goal, or clears the association when goal_id is unset.
+ *
+ * Errors:
+ *   NotFound           — task or goal missing (for this user)
+ *   FailedPrecondition — an ancestor of the task already has a goal, or
+ *                        (when setting) a descendant has its own goal
+ *
+ * @generated from rpc task.v1.TaskService.SetTaskGoal
+ */
+export const setTaskGoal = TaskService.method.setTaskGoal;

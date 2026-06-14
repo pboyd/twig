@@ -39,6 +39,9 @@ export function AppHeader() {
         <NavLink to="/download" className={navLinkClass}>
           Download
         </NavLink>
+        <NavLink to="/account" className={navLinkClass}>
+          Account
+        </NavLink>
       </div>
       <Button variant="secondary" onClick={handleSignOut} className="text-sm px-3">
         Sign out

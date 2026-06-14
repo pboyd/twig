@@ -1,0 +1,93 @@
+// API contract for Self-Serve Account Management (spec 053-account-management).
+//
+// This file is the source of truth for the AccountService API. During
+// implementation it is copied to api/proto/account/v1/account.proto and code is
+// generated from it by `make proto` (server stubs) and `npm run gen` (web client).
+//
+// Every RPC operates ONLY on the currently authenticated user. The acting
+// account is derived server-side from the session cookie or API key via
+// auth.Middleware (auth.UserID(ctx)); no request message carries an account id.
+
+syntax = "proto3";
+
+package account.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pboyd/twig/api/gen/account/v1;accountv1";
+
+// AccountService lets a signed-in user manage their own credentials.
+// Account creation remains an admin-only server action (not exposed here).
+service AccountService {
+  // ChangePassword verifies the caller's current password and, on success,
+  // replaces it with new_password. Existing sessions and API keys are
+  // unaffected. Repeated wrong current passwords are rate-limited like login.
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+
+  // ListApiKeys returns non-secret metadata for every API key the caller owns.
+  // The secret value is never included.
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+
+  // CreateApiKey mints a new API key for the caller and returns its full secret
+  // value exactly once. The label is optional; a default is stored when omitted.
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+
+  // RevokeApiKey permanently deletes one of the caller's API keys. It is
+  // idempotent: revoking a key that is already gone succeeds as a no-op.
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+}
+
+// ----- ChangePassword -----
+
+message ChangePasswordRequest {
+  // The caller's current password. Must verify before any change is applied.
+  string current_password = 1;
+  // The desired new password. Must be at least 8 characters; no
+  // character-composition rules. Confirmation/match is enforced client-side.
+  string new_password = 2;
+}
+
+message ChangePasswordResponse {}
+
+// ----- ListApiKeys -----
+
+message ListApiKeysRequest {}
+
+message ListApiKeysResponse {
+  repeated ApiKeyMetadata keys = 1;
+}
+
+// ApiKeyMetadata is the non-secret view of an API key. It never contains the
+// secret value or its hash.
+message ApiKeyMetadata {
+  // Stable identifier used to revoke this key.
+  int64 id = 1;
+  // Descriptive, non-unique label. Always present (server applies a default).
+  string label = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+// ----- CreateApiKey -----
+
+message CreateApiKeyRequest {
+  // Optional descriptive label. When empty, the server stores a default label.
+  string label = 1;
+}
+
+message CreateApiKeyResponse {
+  // Non-secret metadata for the freshly created key.
+  ApiKeyMetadata key = 1;
+  // The full secret key value, returned exactly once. It is not stored in
+  // retrievable form and can never be fetched again.
+  string secret = 2;
+}
+
+// ----- RevokeApiKey -----
+
+message RevokeApiKeyRequest {
+  // Id of the caller's key to revoke. A key the caller does not own (or that no
+  // longer exists) yields a successful no-op rather than an error.
+  int64 id = 1;
+}
+
+message RevokeApiKeyResponse {}

@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file task/v1/task.proto.
  */
 export const file_task_v1_task: GenFile = /*@__PURE__*/
-  fileDesc("ChJ0YXNrL3YxL3Rhc2sucHJvdG8SB3Rhc2sudjEirgIKBFRhc2sSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIZXN0aW1hdGUYByABKAUSIAoYY29tcGxldGVkX3BvbW9kb3JvX2NvdW50GAggASgFEhAKCHBvc2l0aW9uGAkgASgDEjAKDHNub296ZV91bnRpbBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCDAoKX3BhcmVudF9pZCKTAQoIUG9tb2Rvcm8SCgoCaWQYASABKAMSDwoHdGFza19pZBgCIAEoAxIsCghzdGFydF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASKgoGZW5kX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjb21wbGV0ZRgFIAEoCCIhChNDb21wbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIjMKFENvbXBsZXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siIwoVVW5jb21wbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIjUKFlVuY29tcGxldGVUYXNrUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzayK3AQoRQ3JlYXRlVGFza1JlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgtkZXNjcmlwdGlvbhgCIAEoCRInCgNkdWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgEIAEoA0gAiAEBEjAKDHNub296ZV91bnRpbBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCDAoKX3BhcmVudF9pZCIxChJDcmVhdGVUYXNrUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzayIcCg5HZXRUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyJ2Cg9HZXRUYXNrUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzaxIgChhjb21wbGV0ZWRfcG9tb2Rvcm9fY291bnQYAiABKAMSJAoJcG9tb2Rvcm9zGAMgAygLMhEudGFzay52MS5Qb21vZG9ybyISChBMaXN0VGFza3NSZXF1ZXN0IjEKEUxpc3RUYXNrc1Jlc3BvbnNlEhwKBXRhc2tzGAEgAygLMg0udGFzay52MS5UYXNrIsMBChFVcGRhdGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAxIMCgRuYW1lGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJEicKA2R1ZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFgoJcGFyZW50X2lkGAUgASgDSACIAQESMAoMc25vb3plX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIMCgpfcGFyZW50X2lkIjEKElVwZGF0ZVRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIh8KEURlbGV0ZVRhc2tSZXF1ZXN0EgoKAmlkGAEgASgDIhQKEkRlbGV0ZVRhc2tSZXNwb25zZSI3ChJTZXRFc3RpbWF0ZVJlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIQCghlc3RpbWF0ZRgCIAEoBSIyChNTZXRFc3RpbWF0ZVJlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siJwoUU3RhcnRQb21vZG9yb1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAyI8ChVTdGFydFBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvIhcKFUNhbmNlbFBvbW9kb3JvUmVxdWVzdCI9ChZDYW5jZWxQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyIZChdDb21wbGV0ZVBvbW9kb3JvUmVxdWVzdCI/ChhDb21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USIwoIcG9tb2Rvcm8YASABKAsyES50YXNrLnYxLlBvbW9kb3JvIhoKGEdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdCJAChlHZXRBY3RpdmVQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyJiChJSZW9yZGVyVGFza1JlcXVlc3QSDwoHdGFza19pZBgBIAEoAxIYCg5iZWZvcmVfdGFza19pZBgCIAEoA0gAEhcKDWFmdGVyX3Rhc2tfaWQYAyABKANIAEIICgZhbmNob3IiNgoTUmVvcmRlclRhc2tSZXNwb25zZRIfCghzaWJsaW5ncxgBIAMoCzINLnRhc2sudjEuVGFzazLwBwoLVGFza1NlcnZpY2USRQoKQ3JlYXRlVGFzaxIaLnRhc2sudjEuQ3JlYXRlVGFza1JlcXVlc3QaGy50YXNrLnYxLkNyZWF0ZVRhc2tSZXNwb25zZRJICgtSZW9yZGVyVGFzaxIbLnRhc2sudjEuUmVvcmRlclRhc2tSZXF1ZXN0GhwudGFzay52MS5SZW9yZGVyVGFza1Jlc3BvbnNlEjwKB0dldFRhc2sSFy50YXNrLnYxLkdldFRhc2tSZXF1ZXN0GhgudGFzay52MS5HZXRUYXNrUmVzcG9uc2USQgoJTGlzdFRhc2tzEhkudGFzay52MS5MaXN0VGFza3NSZXF1ZXN0GhoudGFzay52MS5MaXN0VGFza3NSZXNwb25zZRJFCgpVcGRhdGVUYXNrEhoudGFzay52MS5VcGRhdGVUYXNrUmVxdWVzdBobLnRhc2sudjEuVXBkYXRlVGFza1Jlc3BvbnNlEkUKCkRlbGV0ZVRhc2sSGi50YXNrLnYxLkRlbGV0ZVRhc2tSZXF1ZXN0GhsudGFzay52MS5EZWxldGVUYXNrUmVzcG9uc2USSwoMQ29tcGxldGVUYXNrEhwudGFzay52MS5Db21wbGV0ZVRhc2tSZXF1ZXN0Gh0udGFzay52MS5Db21wbGV0ZVRhc2tSZXNwb25zZRJRCg5VbmNvbXBsZXRlVGFzaxIeLnRhc2sudjEuVW5jb21wbGV0ZVRhc2tSZXF1ZXN0Gh8udGFzay52MS5VbmNvbXBsZXRlVGFza1Jlc3BvbnNlEkgKC1NldEVzdGltYXRlEhsudGFzay52MS5TZXRFc3RpbWF0ZVJlcXVlc3QaHC50YXNrLnYxLlNldEVzdGltYXRlUmVzcG9uc2USTgoNU3RhcnRQb21vZG9ybxIdLnRhc2sudjEuU3RhcnRQb21vZG9yb1JlcXVlc3QaHi50YXNrLnYxLlN0YXJ0UG9tb2Rvcm9SZXNwb25zZRJRCg5DYW5jZWxQb21vZG9ybxIeLnRhc2sudjEuQ2FuY2VsUG9tb2Rvcm9SZXF1ZXN0Gh8udGFzay52MS5DYW5jZWxQb21vZG9yb1Jlc3BvbnNlElcKEENvbXBsZXRlUG9tb2Rvcm8SIC50YXNrLnYxLkNvbXBsZXRlUG9tb2Rvcm9SZXF1ZXN0GiEudGFzay52MS5Db21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USWgoRR2V0QWN0aXZlUG9tb2Rvcm8SIS50YXNrLnYxLkdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdBoiLnRhc2sudjEuR2V0QWN0aXZlUG9tb2Rvcm9SZXNwb25zZUIuWixnaXRodWIuY29tL3Bib3lkL3R3aWcvYXBpL2dlbi90YXNrL3YxO3Rhc2t2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChJ0YXNrL3YxL3Rhc2sucHJvdG8SB3Rhc2sudjEi0AIKBFRhc2sSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBEjAKDGNvbXBsZXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIZXN0aW1hdGUYByABKAUSIAoYY29tcGxldGVkX3BvbW9kb3JvX2NvdW50GAggASgFEhAKCHBvc2l0aW9uGAkgASgDEjAKDHNub296ZV91bnRpbBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoHZ29hbF9pZBgLIAEoA0gBiAEBQgwKCl9wYXJlbnRfaWRCCgoIX2dvYWxfaWQikwEKCFBvbW9kb3JvEgoKAmlkGAEgASgDEg8KB3Rhc2tfaWQYAiABKAMSLAoIc3RhcnRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmVuZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIY29tcGxldGUYBSABKAgiIQoTQ29tcGxldGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyIzChRDb21wbGV0ZVRhc2tSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIiMKFVVuY29tcGxldGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyI1ChZVbmNvbXBsZXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2sitwEKEUNyZWF0ZVRhc2tSZXF1ZXN0EgwKBG5hbWUYASABKAkSEwoLZGVzY3JpcHRpb24YAiABKAkSJwoDZHVlGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIWCglwYXJlbnRfaWQYBCABKANIAIgBARIwCgxzbm9vemVfdW50aWwYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgwKCl9wYXJlbnRfaWQiMQoSQ3JlYXRlVGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2siHAoOR2V0VGFza1JlcXVlc3QSCgoCaWQYASABKAMidgoPR2V0VGFza1Jlc3BvbnNlEhsKBHRhc2sYASABKAsyDS50YXNrLnYxLlRhc2sSIAoYY29tcGxldGVkX3BvbW9kb3JvX2NvdW50GAIgASgDEiQKCXBvbW9kb3JvcxgDIAMoCzIRLnRhc2sudjEuUG9tb2Rvcm8iEgoQTGlzdFRhc2tzUmVxdWVzdCIxChFMaXN0VGFza3NSZXNwb25zZRIcCgV0YXNrcxgBIAMoCzINLnRhc2sudjEuVGFzayLDAQoRVXBkYXRlVGFza1JlcXVlc3QSCgoCaWQYASABKAMSDAoEbmFtZRgCIAEoCRITCgtkZXNjcmlwdGlvbhgDIAEoCRInCgNkdWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhYKCXBhcmVudF9pZBgFIAEoA0gAiAEBEjAKDHNub296ZV91bnRpbBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCDAoKX3BhcmVudF9pZCIxChJVcGRhdGVUYXNrUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzayIfChFEZWxldGVUYXNrUmVxdWVzdBIKCgJpZBgBIAEoAyIUChJEZWxldGVUYXNrUmVzcG9uc2UiNwoSU2V0RXN0aW1hdGVSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMSEAoIZXN0aW1hdGUYAiABKAUiMgoTU2V0RXN0aW1hdGVSZXNwb25zZRIbCgR0YXNrGAEgASgLMg0udGFzay52MS5UYXNrIicKFFN0YXJ0UG9tb2Rvcm9SZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMiPAoVU3RhcnRQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyIXChVDYW5jZWxQb21vZG9yb1JlcXVlc3QiPQoWQ2FuY2VsUG9tb2Rvcm9SZXNwb25zZRIjCghwb21vZG9ybxgBIAEoCzIRLnRhc2sudjEuUG9tb2Rvcm8iGQoXQ29tcGxldGVQb21vZG9yb1JlcXVlc3QiPwoYQ29tcGxldGVQb21vZG9yb1Jlc3BvbnNlEiMKCHBvbW9kb3JvGAEgASgLMhEudGFzay52MS5Qb21vZG9ybyIaChhHZXRBY3RpdmVQb21vZG9yb1JlcXVlc3QiQAoZR2V0QWN0aXZlUG9tb2Rvcm9SZXNwb25zZRIjCghwb21vZG9ybxgBIAEoCzIRLnRhc2sudjEuUG9tb2Rvcm8idAoeQ291bnRDb21wbGV0ZWRQb21vZG9yb3NSZXF1ZXN0EikKBXN0YXJ0GAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBInCgNlbmQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjAKH0NvdW50Q29tcGxldGVkUG9tb2Rvcm9zUmVzcG9uc2USDQoFY291bnQYASABKAMiYgoSUmVvcmRlclRhc2tSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMSGAoOYmVmb3JlX3Rhc2tfaWQYAiABKANIABIXCg1hZnRlcl90YXNrX2lkGAMgASgDSABCCAoGYW5jaG9yIjYKE1Jlb3JkZXJUYXNrUmVzcG9uc2USHwoIc2libGluZ3MYASADKAsyDS50YXNrLnYxLlRhc2siRwoSU2V0VGFza0dvYWxSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAMSFAoHZ29hbF9pZBgCIAEoA0gAiAEBQgoKCF9nb2FsX2lkIjIKE1NldFRhc2tHb2FsUmVzcG9uc2USGwoEdGFzaxgBIAEoCzINLnRhc2sudjEuVGFzazKoCQoLVGFza1NlcnZpY2USRQoKQ3JlYXRlVGFzaxIaLnRhc2sudjEuQ3JlYXRlVGFza1JlcXVlc3QaGy50YXNrLnYxLkNyZWF0ZVRhc2tSZXNwb25zZRJICgtSZW9yZGVyVGFzaxIbLnRhc2sudjEuUmVvcmRlclRhc2tSZXF1ZXN0GhwudGFzay52MS5SZW9yZGVyVGFza1Jlc3BvbnNlEjwKB0dldFRhc2sSFy50YXNrLnYxLkdldFRhc2tSZXF1ZXN0GhgudGFzay52MS5HZXRUYXNrUmVzcG9uc2USQgoJTGlzdFRhc2tzEhkudGFzay52MS5MaXN0VGFza3NSZXF1ZXN0GhoudGFzay52MS5MaXN0VGFza3NSZXNwb25zZRJFCgpVcGRhdGVUYXNrEhoudGFzay52MS5VcGRhdGVUYXNrUmVxdWVzdBobLnRhc2sudjEuVXBkYXRlVGFza1Jlc3BvbnNlEkUKCkRlbGV0ZVRhc2sSGi50YXNrLnYxLkRlbGV0ZVRhc2tSZXF1ZXN0GhsudGFzay52MS5EZWxldGVUYXNrUmVzcG9uc2USSwoMQ29tcGxldGVUYXNrEhwudGFzay52MS5Db21wbGV0ZVRhc2tSZXF1ZXN0Gh0udGFzay52MS5Db21wbGV0ZVRhc2tSZXNwb25zZRJRCg5VbmNvbXBsZXRlVGFzaxIeLnRhc2sudjEuVW5jb21wbGV0ZVRhc2tSZXF1ZXN0Gh8udGFzay52MS5VbmNvbXBsZXRlVGFza1Jlc3BvbnNlEkgKC1NldEVzdGltYXRlEhsudGFzay52MS5TZXRFc3RpbWF0ZVJlcXVlc3QaHC50YXNrLnYxLlNldEVzdGltYXRlUmVzcG9uc2USTgoNU3RhcnRQb21vZG9ybxIdLnRhc2sudjEuU3RhcnRQb21vZG9yb1JlcXVlc3QaHi50YXNrLnYxLlN0YXJ0UG9tb2Rvcm9SZXNwb25zZRJRCg5DYW5jZWxQb21vZG9ybxIeLnRhc2sudjEuQ2FuY2VsUG9tb2Rvcm9SZXF1ZXN0Gh8udGFzay52MS5DYW5jZWxQb21vZG9yb1Jlc3BvbnNlElcKEENvbXBsZXRlUG9tb2Rvcm8SIC50YXNrLnYxLkNvbXBsZXRlUG9tb2Rvcm9SZXF1ZXN0GiEudGFzay52MS5Db21wbGV0ZVBvbW9kb3JvUmVzcG9uc2USWgoRR2V0QWN0aXZlUG9tb2Rvcm8SIS50YXNrLnYxLkdldEFjdGl2ZVBvbW9kb3JvUmVxdWVzdBoiLnRhc2sudjEuR2V0QWN0aXZlUG9tb2Rvcm9SZXNwb25zZRJsChdDb3VudENvbXBsZXRlZFBvbW9kb3JvcxInLnRhc2sudjEuQ291bnRDb21wbGV0ZWRQb21vZG9yb3NSZXF1ZXN0GigudGFzay52MS5Db3VudENvbXBsZXRlZFBvbW9kb3Jvc1Jlc3BvbnNlEkgKC1NldFRhc2tHb2FsEhsudGFzay52MS5TZXRUYXNrR29hbFJlcXVlc3QaHC50YXNrLnYxLlNldFRhc2tHb2FsUmVzcG9uc2VCLlosZ2l0aHViLmNvbS9wYm95ZC90d2lnL2FwaS9nZW4vdGFzay92MTt0YXNrdjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -104,6 +104,16 @@ export type Task = Message<"task.v1.Task"> & {
    * @generated from field: google.protobuf.Timestamp snooze_until = 10;
    */
   snoozeUntil?: Timestamp | undefined;
+
+  /**
+   * Effective only on the association root: the goal this task's subtree
+   * belongs to. Unset when the task is not directly associated with a goal
+   * (descendants inherit the nearest ancestor's goal client-side).
+   * Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
+   *
+   * @generated from field: optional int64 goal_id = 11;
+   */
+  goalId?: bigint | undefined;
 };
 
 /**
@@ -614,6 +624,51 @@ export const GetActivePomodoroResponseSchema: GenMessage<GetActivePomodoroRespon
   messageDesc(file_task_v1_task, 25);
 
 /**
+ * @generated from message task.v1.CountCompletedPomodorosRequest
+ */
+export type CountCompletedPomodorosRequest = Message<"task.v1.CountCompletedPomodorosRequest"> & {
+  /**
+   * Inclusive lower bound (UTC). Required.
+   *
+   * @generated from field: google.protobuf.Timestamp start = 1;
+   */
+  start?: Timestamp | undefined;
+
+  /**
+   * Exclusive upper bound (UTC). Required; must be after start.
+   *
+   * @generated from field: google.protobuf.Timestamp end = 2;
+   */
+  end?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message task.v1.CountCompletedPomodorosRequest.
+ * Use `create(CountCompletedPomodorosRequestSchema)` to create a new message.
+ */
+export const CountCompletedPomodorosRequestSchema: GenMessage<CountCompletedPomodorosRequest> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 26);
+
+/**
+ * @generated from message task.v1.CountCompletedPomodorosResponse
+ */
+export type CountCompletedPomodorosResponse = Message<"task.v1.CountCompletedPomodorosResponse"> & {
+  /**
+   * Number of pomodoros completed in [start, end). 0 when none.
+   *
+   * @generated from field: int64 count = 1;
+   */
+  count: bigint;
+};
+
+/**
+ * Describes the message task.v1.CountCompletedPomodorosResponse.
+ * Use `create(CountCompletedPomodorosResponseSchema)` to create a new message.
+ */
+export const CountCompletedPomodorosResponseSchema: GenMessage<CountCompletedPomodorosResponse> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 27);
+
+/**
  * @generated from message task.v1.ReorderTaskRequest
  */
 export type ReorderTaskRequest = Message<"task.v1.ReorderTaskRequest"> & {
@@ -653,7 +708,7 @@ export type ReorderTaskRequest = Message<"task.v1.ReorderTaskRequest"> & {
  * Use `create(ReorderTaskRequestSchema)` to create a new message.
  */
 export const ReorderTaskRequestSchema: GenMessage<ReorderTaskRequest> = /*@__PURE__*/
-  messageDesc(file_task_v1_task, 26);
+  messageDesc(file_task_v1_task, 28);
 
 /**
  * @generated from message task.v1.ReorderTaskResponse
@@ -673,7 +728,48 @@ export type ReorderTaskResponse = Message<"task.v1.ReorderTaskResponse"> & {
  * Use `create(ReorderTaskResponseSchema)` to create a new message.
  */
 export const ReorderTaskResponseSchema: GenMessage<ReorderTaskResponse> = /*@__PURE__*/
-  messageDesc(file_task_v1_task, 27);
+  messageDesc(file_task_v1_task, 29);
+
+/**
+ * @generated from message task.v1.SetTaskGoalRequest
+ */
+export type SetTaskGoalRequest = Message<"task.v1.SetTaskGoalRequest"> & {
+  /**
+   * @generated from field: int64 task_id = 1;
+   */
+  taskId: bigint;
+
+  /**
+   * Present: associate with this goal. Absent: clear the association.
+   *
+   * @generated from field: optional int64 goal_id = 2;
+   */
+  goalId?: bigint | undefined;
+};
+
+/**
+ * Describes the message task.v1.SetTaskGoalRequest.
+ * Use `create(SetTaskGoalRequestSchema)` to create a new message.
+ */
+export const SetTaskGoalRequestSchema: GenMessage<SetTaskGoalRequest> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 30);
+
+/**
+ * @generated from message task.v1.SetTaskGoalResponse
+ */
+export type SetTaskGoalResponse = Message<"task.v1.SetTaskGoalResponse"> & {
+  /**
+   * @generated from field: task.v1.Task task = 1;
+   */
+  task?: Task | undefined;
+};
+
+/**
+ * Describes the message task.v1.SetTaskGoalResponse.
+ * Use `create(SetTaskGoalResponseSchema)` to create a new message.
+ */
+export const SetTaskGoalResponseSchema: GenMessage<SetTaskGoalResponse> = /*@__PURE__*/
+  messageDesc(file_task_v1_task, 31);
 
 /**
  * TaskService provides CRUD operations over tasks.
@@ -825,6 +921,35 @@ export const TaskService: GenService<{
     methodKind: "unary";
     input: typeof GetActivePomodoroRequestSchema;
     output: typeof GetActivePomodoroResponseSchema;
+  },
+  /**
+   * CountCompletedPomodoros returns how many of the calling user's pomodoros
+   * were completed within the half-open UTC instant range [start, end).
+   * A pomodoro counts when complete = true and start <= end_at < end,
+   * regardless of whether its task is complete.
+   *
+   * @generated from rpc task.v1.TaskService.CountCompletedPomodoros
+   */
+  countCompletedPomodoros: {
+    methodKind: "unary";
+    input: typeof CountCompletedPomodorosRequestSchema;
+    output: typeof CountCompletedPomodorosResponseSchema;
+  },
+  /**
+   * SetTaskGoal associates a task (and implicitly its whole subtree) with a
+   * goal, or clears the association when goal_id is unset.
+   *
+   * Errors:
+   *   NotFound           — task or goal missing (for this user)
+   *   FailedPrecondition — an ancestor of the task already has a goal, or
+   *                        (when setting) a descendant has its own goal
+   *
+   * @generated from rpc task.v1.TaskService.SetTaskGoal
+   */
+  setTaskGoal: {
+    methodKind: "unary";
+    input: typeof SetTaskGoalRequestSchema;
+    output: typeof SetTaskGoalResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_task_v1_task, 0);
