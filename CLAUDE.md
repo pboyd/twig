@@ -157,5 +157,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/054-responsive-header/plan.md`.
+`specs/055-markdown-web-rendering/plan.md`.
 <!-- SPECKIT END -->
