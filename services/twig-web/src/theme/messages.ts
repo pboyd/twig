@@ -22,6 +22,7 @@ export const messages = {
   allCompletedHidden: "All done! Your completed tasks are hiding — reveal them below.",
   allHidden: "Nothing pending right now — some tasks are snoozed or done. Reveal them below.",
   dragHandleLabel: "Drag to reorder",
+  menuTriggerLabel: "Menu",
   reorderError: "Couldn't move that — give it another try?",
   planEmpty: "Nothing planned here yet — a blank slate full of potential.",
   planError: "Couldn't load the plan. Want to try again?",
