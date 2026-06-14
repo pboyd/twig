@@ -216,6 +216,26 @@ func TestChangePassword_RateLimited(t *testing.T) {
 	}
 }
 
+func TestChangePassword_DBError_GetUser(t *testing.T) {
+	q := &stubAccountQuerier{
+		userErr: errors.New("db down"),
+	}
+	h := makeAccountHandler(q)
+	ctx := ctxWithUser(1)
+
+	_, err := h.ChangePassword(ctx, connect.NewRequest(&accountv1.ChangePasswordRequest{
+		CurrentPassword: "any",
+		NewPassword:     "newpassword123",
+	}))
+
+	if err == nil {
+		t.Fatal("expected error on DB failure")
+	}
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Errorf("code = %v, want Internal", connect.CodeOf(err))
+	}
+}
+
 // ---- CreateApiKey tests (US2, FR-010, FR-012) ----
 
 func TestCreateApiKey_ResponseCarriesSecretAndMetadata(t *testing.T) {
@@ -285,6 +305,21 @@ func TestCreateApiKey_StoredHashMatches(t *testing.T) {
 	}
 }
 
+func TestCreateApiKey_DBError(t *testing.T) {
+	q := &stubAccountQuerier{createErr: errors.New("db down")}
+	h := makeAccountHandler(q)
+	ctx := ctxWithUser(1)
+
+	_, err := h.CreateApiKey(ctx, connect.NewRequest(&accountv1.CreateApiKeyRequest{Label: "cli"}))
+
+	if err == nil {
+		t.Fatal("expected error on DB failure")
+	}
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Errorf("code = %v, want Internal", connect.CodeOf(err))
+	}
+}
+
 // ---- ListApiKeys + RevokeApiKey tests (US3, FR-009, FR-014) ----
 
 func TestListApiKeys_ReturnsMetadataOnly(t *testing.T) {
@@ -326,6 +361,21 @@ func TestListApiKeys_Empty(t *testing.T) {
 	}
 	if len(resp.Msg.Keys) != 0 {
 		t.Errorf("expected empty key list, got %d", len(resp.Msg.Keys))
+	}
+}
+
+func TestListApiKeys_DBError(t *testing.T) {
+	q := &stubAccountQuerier{keysErr: errors.New("db down")}
+	h := makeAccountHandler(q)
+	ctx := ctxWithUser(1)
+
+	_, err := h.ListApiKeys(ctx, connect.NewRequest(&accountv1.ListApiKeysRequest{}))
+
+	if err == nil {
+		t.Fatal("expected error on DB failure")
+	}
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Errorf("code = %v, want Internal", connect.CodeOf(err))
 	}
 }
 
