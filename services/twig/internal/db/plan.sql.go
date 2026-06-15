@@ -417,3 +417,39 @@ func (q *Queries) UpdatePlanEntryTime(ctx context.Context, arg UpdatePlanEntryTi
 	)
 	return i, err
 }
+
+const updatePlanEntryTimeAndPosition = `-- name: UpdatePlanEntryTimeAndPosition :one
+UPDATE plan_entries SET start_minute = $4, duration_minute = $5, position = $6 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
+`
+
+type UpdatePlanEntryTimeAndPositionParams struct {
+	UserID         int64
+	Day            pgtype.Date
+	ID             int32
+	StartMinute    pgtype.Int2
+	DurationMinute int16
+	Position       int16
+}
+
+func (q *Queries) UpdatePlanEntryTimeAndPosition(ctx context.Context, arg UpdatePlanEntryTimeAndPositionParams) (PlanEntry, error) {
+	row := q.db.QueryRow(ctx, updatePlanEntryTimeAndPosition,
+		arg.UserID,
+		arg.Day,
+		arg.ID,
+		arg.StartMinute,
+		arg.DurationMinute,
+		arg.Position,
+	)
+	var i PlanEntry
+	err := row.Scan(
+		&i.UserID,
+		&i.Day,
+		&i.ID,
+		&i.TaskID,
+		&i.Name,
+		&i.StartMinute,
+		&i.DurationMinute,
+		&i.Position,
+	)
+	return i, err
+}

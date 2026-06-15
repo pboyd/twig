@@ -437,6 +437,8 @@ func (p *Plan) MovePlanEntry(
 	}
 
 	startParam := pgtype.Int2{Valid: false}
+	var setPosition bool
+	var newPosition int16
 	if isTimed {
 		if req.Msg.GetStartMinute()+dur > 1440 {
 			return nil, connect.NewError(connect.CodeInvalidArgument,
@@ -453,12 +455,25 @@ func (p *Plan) MovePlanEntry(
 		}
 		startParam = pgtype.Int2{Int16: int16(req.Msg.GetStartMinute()), Valid: true}
 	} else {
-		// Clear-start (unschedule): reject if a different untimed entry already exists for this task.
-		if existing.TaskID.Valid {
-			locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
+		// Clear-start (unschedule).
+		locked, err := txq.LockPlanEntriesForDay(ctx, db.LockPlanEntriesForDayParams{UserID: userID, Day: day})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+
+		if existing.StartMinute.Valid {
+			// Timed→untimed transition: append to end of untimed group.
+			var maxPos int16 = -1
+			for _, r := range locked {
+				if r.Position > maxPos {
+					maxPos = r.Position
+				}
 			}
+			newPosition = maxPos + 1
+			setPosition = true
+		}
+
+		if existing.TaskID.Valid {
 			for _, r := range locked {
 				if r.ID == req.Msg.Id {
 					continue
@@ -470,13 +485,25 @@ func (p *Plan) MovePlanEntry(
 		}
 	}
 
-	row, err := txq.UpdatePlanEntryTime(ctx, db.UpdatePlanEntryTimeParams{
-		UserID:         userID,
-		Day:            day,
-		ID:             req.Msg.Id,
-		StartMinute:    startParam,
-		DurationMinute: int16(dur),
-	})
+	var row db.PlanEntry
+	if setPosition {
+		row, err = txq.UpdatePlanEntryTimeAndPosition(ctx, db.UpdatePlanEntryTimeAndPositionParams{
+			UserID:         userID,
+			Day:            day,
+			ID:             req.Msg.Id,
+			StartMinute:    startParam,
+			DurationMinute: int16(dur),
+			Position:       newPosition,
+		})
+	} else {
+		row, err = txq.UpdatePlanEntryTime(ctx, db.UpdatePlanEntryTimeParams{
+			UserID:         userID,
+			Day:            day,
+			ID:             req.Msg.Id,
+			StartMinute:    startParam,
+			DurationMinute: int16(dur),
+		})
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("entry not found"))
 	}

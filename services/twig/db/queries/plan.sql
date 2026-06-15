@@ -26,6 +26,9 @@ UPDATE plan_entries SET name = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RE
 -- name: UpdatePlanEntryTime :one
 UPDATE plan_entries SET start_minute = $4, duration_minute = $5 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING *;
 
+-- name: UpdatePlanEntryTimeAndPosition :one
+UPDATE plan_entries SET start_minute = $4, duration_minute = $5, position = $6 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING *;
+
 -- name: DeletePlanEntry :one
 DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING id;
 

@@ -1582,6 +1582,100 @@ func TestMovePlanEntry_ClearStartAllowedWhenNoOtherUntimed(t *testing.T) {
 	}
 }
 
+// ── Unschedule lands untimed entry at end of group ──────────────────────────
+
+func TestMovePlanEntry_UnscheduleLandsAtEndOfUntimed(t *testing.T) {
+	planH, taskH, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-11-10"
+
+	taskResp, err := taskH.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "sched"}))
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	taskID := taskResp.Msg.Task.Id
+
+	// Insert timed entry T at 09:00, then untimed A, B.
+	timedEntry := insertPlanEntry(t, planH.Queries, userID, day, taskID, "T", 540, 30)
+	a := insertPlanEntryUntimed(t, planH.Queries, userID, day, 0, "A", 30)
+	b := insertPlanEntryUntimed(t, planH.Queries, userID, day, 0, "B", 30)
+
+	// Unschedule T (clear start_minute).
+	_, err = planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: timedEntry.ID,
+	}))
+	if err != nil {
+		t.Fatalf("MovePlanEntry (unschedule): %v", err)
+	}
+
+	// Verify untimed order is A, B, T.
+	listResp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	var untimed []*planv1.PlanEntry
+	for _, e := range listResp.Msg.Entries {
+		if e.StartMinute == nil {
+			untimed = append(untimed, e)
+		}
+	}
+	if len(untimed) != 3 {
+		t.Fatalf("expected 3 untimed entries, got %d", len(untimed))
+	}
+	ids := []int32{untimed[0].Id, untimed[1].Id, untimed[2].Id}
+	if ids[0] != a.ID || ids[1] != b.ID || ids[2] != timedEntry.ID {
+		t.Errorf("expected order [A, B, T], got %v", ids)
+	}
+}
+
+func TestMovePlanEntry_UntimedDurationEditKeepsPosition(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := "2099-11-11"
+
+	// Insert untimed A, B.
+	a := insertPlanEntryUntimed(t, planH.Queries, userID, day, 0, "A", 30)
+	b := insertPlanEntryUntimed(t, planH.Queries, userID, day, 0, "B", 30)
+
+	// Reorder to B, A.
+	_, err := planH.ReorderPlanEntry(ctx, connect.NewRequest(&planv1.ReorderPlanEntryRequest{
+		Day: day, Id: b.ID,
+		Anchor: &planv1.ReorderPlanEntryRequest_BeforeId{BeforeId: a.ID},
+	}))
+	if err != nil {
+		t.Fatalf("ReorderPlanEntry: %v", err)
+	}
+
+	// Edit B's duration (still untimed, no start_minute).
+	_, err = planH.MovePlanEntry(ctx, connect.NewRequest(&planv1.MovePlanEntryRequest{
+		Day: day, Id: b.ID, DurationMinute: 60,
+	}))
+	if err != nil {
+		t.Fatalf("MovePlanEntry (duration edit): %v", err)
+	}
+
+	// Verify order stays B, A and duration updated.
+	listResp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	var untimed []*planv1.PlanEntry
+	for _, e := range listResp.Msg.Entries {
+		if e.StartMinute == nil {
+			untimed = append(untimed, e)
+		}
+	}
+	if len(untimed) != 2 {
+		t.Fatalf("expected 2 untimed entries, got %d", len(untimed))
+	}
+	if untimed[0].Id != b.ID || untimed[1].Id != a.ID {
+		t.Errorf("expected order [B, A], got ids %d, %d", untimed[0].Id, untimed[1].Id)
+	}
+	if untimed[0].DurationMinute != 60 {
+		t.Errorf("B duration = %d, want 60", untimed[0].DurationMinute)
+	}
+}
+
 // ── ListScheduledDays tests (T012/US1, T015/US3, T019/US2) ────────────────────
 
 // TestListScheduledDays_SingleFutureDay (T012a): one task scheduled on a single future day is returned.

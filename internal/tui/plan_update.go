@@ -147,8 +147,8 @@ func removePlanCmd(client planv1connect.PlanServiceClient, day string, id int32)
 	}
 }
 
-// completePlanTaskCmd completes or uncompletes the task behind a plan entry, then
-// reloads the day via the existing planMutatedMsg reload path.
+// reorderPlanEntryCmd moves an untimed entry before/after an anchor untimed entry,
+// then reloads the day via the planMutatedMsg reload path.
 func reorderPlanEntryCmd(client planv1connect.PlanServiceClient, day string, id int32, anchorID int32, insertBefore bool) tea.Cmd {
 	return func() tea.Msg {
 		req := &planv1.ReorderPlanEntryRequest{Day: day, Id: id}
