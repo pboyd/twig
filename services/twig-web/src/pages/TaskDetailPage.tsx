@@ -17,6 +17,7 @@ import { Button } from "../components/Button";
 import { TaskForm } from "../components/TaskForm";
 import { messages } from "../theme/messages";
 import { buildUpdatePayload } from "../lib/updatePayload";
+import { Markdown } from "../components/Markdown";
 
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -162,12 +163,12 @@ export default function TaskDetailPage() {
                         : "text-gray-900 dark:text-gray-100",
                     ].join(" ")}
                   >
-                    {task.name}
+                    <Markdown mode="inline">{task.name}</Markdown>
                   </h1>
                   {task.description && (
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                      {task.description}
-                    </p>
+                    <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      <Markdown mode="block">{task.description}</Markdown>
+                    </div>
                   )}
                   <p className="mt-3 text-xs text-gray-400 dark:text-gray-500">
                     {task.completedAt ? "Completed" : "Incomplete"}

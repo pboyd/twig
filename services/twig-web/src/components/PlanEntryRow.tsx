@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { ResolvedEntry } from "../lib/planView";
+import { Markdown } from "./Markdown";
 
 interface PlanEntryRowProps {
   entry: ResolvedEntry;
@@ -22,7 +23,7 @@ export function PlanEntryRow({
     <span
       className={entry.completed ? "line-through text-gray-400 dark:text-gray-500" : ""}
     >
-      {entry.displayName}
+      <Markdown mode="inline">{entry.displayName}</Markdown>
     </span>
   );
 

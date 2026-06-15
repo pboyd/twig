@@ -480,3 +480,37 @@ describe("PlanPage — remove entry from planner (US5-remove)", () => {
     expect(screen.getByText("Standup")).toBeTruthy();
   });
 });
+
+describe("PlanPage — inline name rendering (US2)", () => {
+  it("renders bold in plan entry name via inline markdown", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, name: "**Bold** task", taskId: 0n, startMinute: 540, durationMinute: 30 })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const { container } = renderPage();
+    expect(container.querySelector("strong")).toBeTruthy();
+  });
+
+  it("does not emit block elements for plan entry name with block syntax", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, name: "# Not a heading", taskId: 0n, startMinute: 540, durationMinute: 30 })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const { container } = renderPage();
+    // The plan entry row should not contain a heading element from inline markdown
+    const entryRow = container.querySelector('[class*="border-b"]');
+    expect(entryRow?.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
+    expect(container.textContent).toContain("Not a heading");
+  });
+});
+

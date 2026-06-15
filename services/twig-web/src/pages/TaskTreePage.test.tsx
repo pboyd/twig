@@ -193,3 +193,32 @@ describe("TaskTreePage — preference persistence (US3)", () => {
     expect(screen.queryByText("Task 1")).not.toBeInTheDocument();
   });
 });
+
+describe("TaskTreePage — inline name rendering (US2)", () => {
+  it("renders bold emphasis in task name via inline markdown", () => {
+    listTasksResult.mockReturnValue({
+      data: { tasks: [{ ...makeTask(1n), name: "**Ship** it" }] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const { container } = renderPage();
+    expect(container.querySelector("strong")).toBeTruthy();
+  });
+
+  it("emits no block element for task name with heading prefix", () => {
+    listTasksResult.mockReturnValue({
+      data: { tasks: [{ ...makeTask(1n), name: "# Not a heading" }] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const { container } = renderPage();
+    // The task row (li) should not contain a heading element from inline markdown
+    const taskRow = container.querySelector("li");
+    expect(taskRow?.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
+    expect(container.textContent).toContain("Not a heading");
+  });
+});

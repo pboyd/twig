@@ -138,6 +138,96 @@ describe("TaskDetailPage — edit mode", () => {
   });
 });
 
+describe("TaskDetailPage — inline name in header (US2)", () => {
+  it("renders bold in task name header via inline markdown", () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: { task: { ...mockTask, name: "**Ship** it" } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = renderDetailPage();
+    expect(container.querySelector("strong")).toBeTruthy();
+  });
+
+  it("does not emit h1 block for name with heading prefix", () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: { task: { ...mockTask, name: "# Not a real heading" } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = renderDetailPage();
+    // The outer h1 wraps the inline markdown; inline mode should not produce nested h1
+    const h1s = container.querySelectorAll("h1");
+    expect(h1s.length).toBe(1); // only the outer wrapper h1
+    expect(container.textContent).toContain("Not a real heading");
+  });
+});
+
+describe("TaskDetailPage — markdown description (US1)", () => {
+  it("renders a heading from description markdown", async () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: {
+        task: {
+          ...mockTask,
+          description: "# My Heading\n\n- item one\n- item two\n\n**bold** and _italic_ and ~~struck~~ and `code`\n\n> a quote\n\n---\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n[link](https://example.com)",
+        },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = renderDetailPage();
+    // Heading should render as an h1 element
+    await waitFor(() => {
+      expect(container.querySelector("h1, h2, h3")).toBeTruthy();
+    });
+    // No raw markdown syntax visible
+    expect(screen.queryByText(/^# My Heading/)).toBeNull();
+  });
+
+  it("renders list items from description", async () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: { task: { ...mockTask, description: "- item one\n- item two" } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = renderDetailPage();
+    await waitFor(() => {
+      expect(container.querySelector("li")).toBeTruthy();
+    });
+  });
+
+  it("renders a clickable link from description", async () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: { task: { ...mockTask, description: "[go here](https://example.com)" } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    const { container } = renderDetailPage();
+    await waitFor(() => {
+      const a = container.querySelector("a");
+      expect(a).toBeTruthy();
+      expect(a?.getAttribute("href")).toBe("https://example.com");
+    });
+  });
+
+  it("renders nothing when description is empty", () => {
+    getTaskResult = vi.fn().mockReturnValue({
+      data: { task: { ...mockTask, description: "" } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    renderDetailPage();
+    // No markdown wrapper should produce any extra DOM
+    expect(screen.queryByRole("article")).toBeNull();
+  });
+});
+
 describe("TaskDetailPage — completion toggle", () => {
   it("shows 'finish sub-tasks first' on FailedPrecondition when completing", async () => {
     mockCompleteTaskFn.mockRejectedValue(

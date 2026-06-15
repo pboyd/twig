@@ -17,6 +17,7 @@ import type { ReorderAnchor } from "../lib/reorderAnchor";
 import { TaskForm } from "./TaskForm";
 import { AddToPlanControl } from "./AddToPlanControl";
 import { messages } from "../theme/messages";
+import { Markdown } from "./Markdown";
 
 interface TreeRowProps {
   node: TaskNode;
@@ -152,7 +153,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
           onClick={() => navigate(`/tasks/${task.id}`)}
         >
           <span className={isComplete ? "line-through text-gray-400 dark:text-gray-500" : ""}>
-            {task.name}
+            <Markdown mode="inline">{task.name}</Markdown>
           </span>
           {isSnoozed && <span className="ml-1 text-base" aria-label="snoozed">💤</span>}
         </button>
