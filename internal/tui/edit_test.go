@@ -58,7 +58,7 @@ func TestNewSubtaskFormSetsParentID(t *testing.T) {
 
 // TestNewRootFormIsBlank verifies all fields start empty for a root form.
 func TestNewRootFormIsBlank(t *testing.T) {
-	f := NewRootForm(1)
+	f := NewRootForm(1, nil)
 
 	if f.taskID != nil {
 		t.Errorf("taskID should be nil for root form")
@@ -74,7 +74,7 @@ func TestNewRootFormIsBlank(t *testing.T) {
 // TestEditFormTabCyclesFocus verifies Tab cycles through all focus positions.
 // When showGoalField is false (NewRootForm), focusGoal is skipped.
 func TestEditFormTabCyclesFocus(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	keys := DefaultKeyMap()
 
 	if f.focusIndex != focusName {
@@ -99,7 +99,7 @@ func TestEditFormTabCyclesFocus(t *testing.T) {
 
 // TestEditFormShiftTabGoesBack verifies Shift-Tab moves focus backwards.
 func TestEditFormShiftTabGoesBack(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	keys := DefaultKeyMap()
 
 	// Shift-Tab from focusName wraps to focusCancel.
@@ -112,7 +112,7 @@ func TestEditFormShiftTabGoesBack(t *testing.T) {
 // TestEditFormEscDoesNotCancel verifies Esc no longer cancels the edit form
 // (users must use the Cancel button to avoid accidentally losing typed work).
 func TestEditFormEscDoesNotCancel(t *testing.T) {
-	f := NewRootForm(5)
+	f := NewRootForm(5, nil)
 	keys := DefaultKeyMap()
 
 	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
@@ -155,7 +155,7 @@ func TestEditFormEscFromAnyField(t *testing.T) {
 	keys := DefaultKeyMap()
 
 	for fi := 0; fi < focusCount; fi++ {
-		f := NewRootForm(0)
+		f := NewRootForm(0, nil)
 		f.focusIndex = fi
 
 		_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
@@ -171,7 +171,7 @@ func TestEditFormEscFromAnyField(t *testing.T) {
 
 // TestEditFormSaveButtonEnter verifies Enter on Save button saves.
 func TestEditFormSaveButtonEnter(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusSave
 	keys := DefaultKeyMap()
 
@@ -186,7 +186,7 @@ func TestEditFormSaveButtonEnter(t *testing.T) {
 
 // TestEditFormCancelButtonEnter verifies Enter on Cancel button cancels.
 func TestEditFormCancelButtonEnter(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusCancel
 	keys := DefaultKeyMap()
 
@@ -203,7 +203,7 @@ func TestEditFormCancelButtonEnter(t *testing.T) {
 
 // TestEditForm_CtrlG_DescriptionFocused verifies ctrl+g on Description returns a non-nil Cmd.
 func TestEditForm_CtrlG_DescriptionFocused(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	keys := DefaultKeyMap()
 
 	// Advance focus to Description.
@@ -268,7 +268,7 @@ func TestEditFormSnooze_BlankSnoozeIsEmpty(t *testing.T) {
 
 // TestEditForm_CtrlG_DueOpensCalendar verifies ctrl+g on Due field opens the calendar.
 func TestEditForm_CtrlG_DueOpensCalendar(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	keys := DefaultKeyMap()
 
@@ -280,7 +280,7 @@ func TestEditForm_CtrlG_DueOpensCalendar(t *testing.T) {
 
 // TestEditForm_CtrlG_SnoozeOpensCalendar verifies ctrl+g on Snooze field opens the calendar.
 func TestEditForm_CtrlG_SnoozeOpensCalendar(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusSnooze
 	keys := DefaultKeyMap()
 
@@ -292,7 +292,7 @@ func TestEditForm_CtrlG_SnoozeOpensCalendar(t *testing.T) {
 
 // TestEditForm_CtrlG_NameNoCalendar verifies ctrl+g on Name does not open the calendar.
 func TestEditForm_CtrlG_NameNoCalendar(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusName
 	keys := DefaultKeyMap()
 
@@ -304,7 +304,7 @@ func TestEditForm_CtrlG_NameNoCalendar(t *testing.T) {
 
 // TestEditForm_Calendar_EnterWritesDate verifies open → move → enter writes YYYY-MM-DD into the Due field.
 func TestEditForm_Calendar_EnterWritesDate(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	keys := DefaultKeyMap()
 
@@ -333,7 +333,7 @@ func TestEditForm_Calendar_EnterWritesDate(t *testing.T) {
 
 // TestEditForm_Calendar_EscLeavesFieldUnchanged verifies open → esc leaves the field byte-for-byte unchanged.
 func TestEditForm_Calendar_EscLeavesFieldUnchanged(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	f.due.SetValue("2026-07-04")
 	keys := DefaultKeyMap()
@@ -362,7 +362,7 @@ func TestEditForm_Calendar_EscLeavesFieldUnchanged(t *testing.T) {
 // TestEditForm_Calendar_SwallowsFormKeys verifies that while the calendar is open,
 // ctrl+s does not immediately save.
 func TestEditForm_Calendar_SwallowsFormKeys(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	keys := DefaultKeyMap()
 
@@ -386,7 +386,7 @@ func TestEditForm_Calendar_SwallowsFormKeys(t *testing.T) {
 // TestEditForm_Calendar_PasteSwallowed verifies pasted text (tea.PasteMsg) cannot
 // reach the date field while the calendar is open, so cancel stays lossless.
 func TestEditForm_Calendar_PasteSwallowed(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	f.due.Focus()
 	f.due.SetValue("2026-07-04")
@@ -409,7 +409,7 @@ func TestEditForm_Calendar_PasteSwallowed(t *testing.T) {
 
 // TestEditForm_Calendar_TabClosesCalendar verifies tab/shift+tab close the calendar unchanged.
 func TestEditForm_Calendar_TabClosesCalendar(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	f.due.SetValue("2026-07-04")
 	keys := DefaultKeyMap()
@@ -444,7 +444,7 @@ func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 	}
 	for _, tc := range otherFields {
 		t.Run(tc.name, func(t *testing.T) {
-			f := NewRootForm(0)
+			f := NewRootForm(0, nil)
 			f.focusIndex = tc.focus
 
 			_, cmd := f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
@@ -469,7 +469,7 @@ func TestEditForm_CtrlG_OtherFieldsNoOp(t *testing.T) {
 // TestEditForm_TextPath_DueFieldTyping verifies that typing into the Due field
 // with the calendar closed works exactly as before — no calendar opens uninvited.
 func TestEditForm_TextPath_DueFieldTyping(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	keys := DefaultKeyMap()
 
@@ -485,7 +485,7 @@ func TestEditForm_TextPath_DueFieldTyping(t *testing.T) {
 
 // TestEditForm_TextPath_SavePreservesTypedValue verifies a typed date flows unchanged to editSavedMsg.
 func TestEditForm_TextPath_SavePreservesTypedValue(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	f.due.SetValue("2026-08-01")
 	keys := DefaultKeyMap()
@@ -508,7 +508,7 @@ func TestEditForm_TextPath_SavePreservesTypedValue(t *testing.T) {
 // TestEditForm_Calendar_ClearAfterPick verifies that picking a date then clearing
 // the field text results in an empty dueStr in editSavedMsg.
 func TestEditForm_Calendar_ClearAfterPick(t *testing.T) {
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	keys := DefaultKeyMap()
 
@@ -549,7 +549,7 @@ func TestEditForm_Calendar_ClearAfterPick(t *testing.T) {
 // TestEditForm_Calendar_NowFuncInjection verifies that a form with nowFunc uses it for calendar opening.
 func TestEditForm_Calendar_NowFuncInjection(t *testing.T) {
 	fixedNow := time.Date(2030, 1, 15, 0, 0, 0, 0, time.UTC)
-	f := NewRootForm(0)
+	f := NewRootForm(0, nil)
 	f.focusIndex = focusDue
 	f.nowFunc = func() time.Time { return fixedNow }
 	keys := DefaultKeyMap()
@@ -789,5 +789,89 @@ func TestEditForm_NameRoundTrip(t *testing.T) {
 	saveMsg := f.buildSaveMsg()().(editSavedMsg)
 	if saveMsg.name != rawName {
 		t.Errorf("editSavedMsg name: want %q, got %q", rawName, saveMsg.name)
+	}
+}
+
+// ── Goal field on new root task form ─────────────────────────────────────────
+
+// TestNewRootForm_GoalField_ShowsWhenGoalsProvided verifies that passing a non-empty
+// goals slice to NewRootForm enables the Goal selector.
+func TestNewRootForm_GoalField_ShowsWhenGoalsProvided(t *testing.T) {
+	f := NewRootForm(0, makeGoals())
+	if !f.showGoalField {
+		t.Error("showGoalField should be true when committed/incubating goals are provided")
+	}
+}
+
+// TestNewRootForm_GoalField_HiddenWhenNilGoals verifies that nil goals keeps the
+// Goal selector hidden.
+func TestNewRootForm_GoalField_HiddenWhenNilGoals(t *testing.T) {
+	f := NewRootForm(0, nil)
+	if f.showGoalField {
+		t.Error("showGoalField should be false when goals is nil")
+	}
+}
+
+// TestNewRootForm_GoalField_HiddenWhenEmptyGoals verifies that an empty (non-nil)
+// goals slice also keeps the Goal selector hidden — there is nothing to select.
+func TestNewRootForm_GoalField_HiddenWhenEmptyGoals(t *testing.T) {
+	f := NewRootForm(0, []*goalv1.Goal{})
+	if f.showGoalField {
+		t.Error("showGoalField should be false when goals slice is empty")
+	}
+}
+
+// TestNewRootForm_GoalField_DefaultNone verifies that the selector starts at
+// "none" (goalIdx == -1) when goals are provided.
+func TestNewRootForm_GoalField_DefaultNone(t *testing.T) {
+	f := NewRootForm(0, makeGoals())
+	if f.goalIdx != -1 {
+		t.Errorf("goalIdx: want -1 (none), got %d", f.goalIdx)
+	}
+}
+
+// TestNewRootForm_GoalField_TabIncludesGoal verifies Tab reaches focusGoal
+// when the Goal selector is enabled on a new root task form.
+func TestNewRootForm_GoalField_TabIncludesGoal(t *testing.T) {
+	f := NewRootForm(0, makeGoals())
+	keys := DefaultKeyMap()
+
+	foundGoal := false
+	for i := 0; i < focusCount; i++ {
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f.focusIndex == focusGoal {
+			foundGoal = true
+			break
+		}
+	}
+	if !foundGoal {
+		t.Errorf("Tab cycling on NewRootForm with goals never reached focusGoal (%d)", focusGoal)
+	}
+}
+
+// TestNewRootForm_GoalField_SaveEmitsGoalChanged verifies that selecting a goal
+// via → on a new root task form produces goalChanged=true and the correct newGoalID.
+func TestNewRootForm_GoalField_SaveEmitsGoalChanged(t *testing.T) {
+	f := NewRootForm(0, makeGoals())
+	f.focusIndex = focusGoal
+	keys := DefaultKeyMap()
+
+	// Select the first goal.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+
+	// Save.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if !saved.goalChanged {
+		t.Error("goalChanged should be true when goal was selected on a new root task")
+	}
+	if saved.newGoalID == nil || *saved.newGoalID != 10 {
+		t.Errorf("newGoalID: want 10 (first goal), got %v", saved.newGoalID)
 	}
 }

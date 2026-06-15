@@ -763,15 +763,16 @@ func TestCreateTaskCmd_RootTaskHighlightsNewTask(t *testing.T) {
 // fakeTaskClient is a minimal TaskServiceClient for unit tests.
 type fakeTaskClient struct {
 	taskv1connect.TaskServiceClient
-	lastUpdateReq     *taskv1.UpdateTaskRequest
-	lastCreateReq     *taskv1.CreateTaskRequest
-	lastCompleteID    int64
-	lastUncompleteID  int64
-	lastPomTaskID     int64
-	completeErr       error
-	uncompleteErr     error
-	pomErr            error
-	setTaskGoalErr    error // if non-nil, SetTaskGoal returns this error
+	lastUpdateReq       *taskv1.UpdateTaskRequest
+	lastCreateReq       *taskv1.CreateTaskRequest
+	lastSetTaskGoalReq  *taskv1.SetTaskGoalRequest // last request received by SetTaskGoal
+	lastCompleteID      int64
+	lastUncompleteID    int64
+	lastPomTaskID       int64
+	completeErr         error
+	uncompleteErr       error
+	pomErr              error
+	setTaskGoalErr      error // if non-nil, SetTaskGoal returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
 	// createTaskID is the ID returned for the newly created task.
@@ -826,6 +827,7 @@ func (f *fakeTaskClient) StartPomodoro(_ context.Context, req *connect.Request[t
 }
 
 func (f *fakeTaskClient) SetTaskGoal(_ context.Context, req *connect.Request[taskv1.SetTaskGoalRequest]) (*connect.Response[taskv1.SetTaskGoalResponse], error) {
+	f.lastSetTaskGoalReq = req.Msg
 	if f.setTaskGoalErr != nil {
 		return nil, f.setTaskGoalErr
 	}
@@ -1855,6 +1857,57 @@ func TestTaskGoalMutationMsg_FailedPrecondition_ShowsServerMessage(t *testing.T)
 
 	if !strings.Contains(nm.notice, serverMsg) {
 		t.Errorf("notice should contain server message %q, got %q", serverMsg, nm.notice)
+	}
+}
+
+// ── Goal field on new root task: create-path ─────────────────────────────────
+
+// TestCreateTaskCmd_WithGoal_CallsSetTaskGoal verifies that when a root task is
+// created with a goal selected (newGoalID non-nil), createTaskCmd issues a
+// follow-up SetTaskGoal RPC to associate the new task with that goal.
+func TestCreateTaskCmd_WithGoal_CallsSetTaskGoal(t *testing.T) {
+	newTaskID := int64(77)
+	goalID := int64(10)
+	fc := &fakeTaskClient{
+		createTaskID:  newTaskID,
+		listTasksResp: []*taskv1.Task{{Id: newTaskID, Name: "new root"}},
+	}
+	msg := editSavedMsg{
+		name:      "new root",
+		newGoalID: &goalID,
+	}
+
+	cmd := ExportCreateTaskCmd(fc, msg)
+	cmd()
+
+	if fc.lastSetTaskGoalReq == nil {
+		t.Fatal("SetTaskGoal was not called — expected follow-up RPC after CreateTask")
+	}
+	if fc.lastSetTaskGoalReq.TaskId != newTaskID {
+		t.Errorf("SetTaskGoal TaskId: want %d, got %d", newTaskID, fc.lastSetTaskGoalReq.TaskId)
+	}
+	if fc.lastSetTaskGoalReq.GoalId == nil || *fc.lastSetTaskGoalReq.GoalId != goalID {
+		t.Errorf("SetTaskGoal GoalId: want %d, got %v", goalID, fc.lastSetTaskGoalReq.GoalId)
+	}
+}
+
+// TestCreateTaskCmd_WithoutGoal_DoesNotCallSetTaskGoal verifies that creating a
+// task with no goal selected does NOT call SetTaskGoal.
+func TestCreateTaskCmd_WithoutGoal_DoesNotCallSetTaskGoal(t *testing.T) {
+	fc := &fakeTaskClient{
+		createTaskID:  int64(88),
+		listTasksResp: []*taskv1.Task{{Id: 88, Name: "ungrouped"}},
+	}
+	msg := editSavedMsg{
+		name:      "ungrouped",
+		newGoalID: nil,
+	}
+
+	cmd := ExportCreateTaskCmd(fc, msg)
+	cmd()
+
+	if fc.lastSetTaskGoalReq != nil {
+		t.Error("SetTaskGoal should not be called when newGoalID is nil")
 	}
 }
 

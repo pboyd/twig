@@ -249,6 +249,15 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			return refreshedMsg{err: err}
 		}
 		newID := resp.Msg.Task.Id
+
+		// If a goal was selected on the new-root-task form, associate via SetTaskGoal.
+		if msg.newGoalID != nil {
+			goalReq := &taskv1.SetTaskGoalRequest{TaskId: newID, GoalId: msg.newGoalID}
+			if _, err := client.SetTaskGoal(context.Background(), connect.NewRequest(goalReq)); err != nil {
+				return taskGoalMutationMsg{err: err}
+			}
+		}
+
 		// For subtasks, keep the parent highlighted so the user can
 		// immediately press 'n' again to add another sibling.
 		if msg.parentID != nil {
@@ -1171,7 +1180,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.GoalNew):
 		m.originalCursor = m.goal.cursor
-		m.edit = NewRootForm(m.goal.cursor)
+		m.edit = NewRootForm(m.goal.cursor, nil)
 		m.edit.isGoal = true
 		m.goal.mode = goalNew
 		m.mode = modeNewRoot
@@ -1246,7 +1255,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// `a`: open a new-task form; on save, create task and link to current goal.
 		if len(visible) > 0 {
 			m.originalCursor = m.goal.cursor
-			m.edit = NewRootForm(m.goal.cursor)
+			m.edit = NewRootForm(m.goal.cursor, nil)
 			m.goal.mode = goalNewTask
 			m.mode = modeNewRoot
 			m.goal.err = nil
@@ -1990,7 +1999,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.NewRoot):
 		m.originalCursor = m.cursor
-		m.edit = NewRootForm(m.cursor)
+		m.edit = NewRootForm(m.cursor, m.goal.goals)
 		m.mode = modeNewRoot
 		m.err = nil
 

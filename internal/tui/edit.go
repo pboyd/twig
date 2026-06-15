@@ -136,8 +136,21 @@ func NewSubtaskForm(parentID int64, originalCursor int) editFormModel {
 }
 
 // NewRootForm creates a blank form for a new root task.
-func NewRootForm(originalCursor int) editFormModel {
-	return newBlankForm(originalCursor)
+// goals, when non-nil and non-empty, enables the Goal selector showing
+// committed/incubating goals. Pass nil (or an empty slice) to hide it.
+func NewRootForm(originalCursor int, goals []*goalv1.Goal) editFormModel {
+	f := newBlankForm(originalCursor)
+	for _, g := range goals {
+		s := g.GetState()
+		if s == goalv1.GoalState_GOAL_STATE_COMMITTED || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
+			f.availableGoals = append(f.availableGoals, g)
+		}
+	}
+	if len(f.availableGoals) > 0 {
+		f.showGoalField = true
+		f.goalIdx = -1 // default: no goal selected
+	}
+	return f
 }
 
 func newBlankForm(originalCursor int) editFormModel {
