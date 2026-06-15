@@ -108,6 +108,23 @@ describe("Markdown — block mode", () => {
       expect(img).toBeNull();
     }
   });
+
+  it("preserves single newlines as line breaks (whitespace-pre-wrap parity)", () => {
+    const { container } = render(<Markdown>{"line one\nline two"}</Markdown>);
+    // The wrapper carries whitespace-pre-wrap so single newlines render as breaks…
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toContain("whitespace-pre-wrap");
+    // …and the newline is not collapsed away in the rendered text.
+    expect(container.textContent).toContain("line one\nline two");
+  });
+
+  it("does not leak react-markdown's node prop onto rendered elements", () => {
+    const { container } = render(<Markdown>{"# Heading\n\n[link](https://example.com)"}</Markdown>);
+    const h1 = container.querySelector("h1");
+    const a = container.querySelector("a");
+    expect(h1?.getAttribute("node")).toBeNull();
+    expect(a?.getAttribute("node")).toBeNull();
+  });
 });
 
 describe("Markdown — inline mode", () => {
@@ -151,5 +168,15 @@ describe("Markdown — inline mode", () => {
       <Markdown mode="inline">{"`code`"}</Markdown>
     );
     expect(container.querySelector("code")).toBeTruthy();
+  });
+
+  it("degrades links to plain text (no anchor in interactive parents)", () => {
+    const { container } = render(
+      <Markdown mode="inline">{"see [the docs](https://example.com)"}</Markdown>
+    );
+    // No <a> is emitted in inline mode, so a name inside a <button>/<a> never
+    // nests interactive content. The link text remains visible.
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("the docs");
   });
 });

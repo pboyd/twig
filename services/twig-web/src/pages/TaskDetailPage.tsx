@@ -226,7 +226,7 @@ export default function TaskDetailPage() {
                                 : "text-gray-900 dark:text-gray-100",
                             ].join(" ")}
                           >
-                            {sub.name}
+                            <Markdown mode="inline">{sub.name}</Markdown>
                           </span>
                           <svg
                             className="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600"
