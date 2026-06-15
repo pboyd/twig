@@ -47,7 +47,7 @@ func (q *Queries) DeletePlanEntry(ctx context.Context, arg DeletePlanEntryParams
 }
 
 const getPlanEntry = `-- name: GetPlanEntry :one
-SELECT user_id, day, id, task_id, name, start_minute, duration_minute FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3
+SELECT user_id, day, id, task_id, name, start_minute, duration_minute, position FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3
 `
 
 type GetPlanEntryParams struct {
@@ -67,14 +67,15 @@ func (q *Queries) GetPlanEntry(ctx context.Context, arg GetPlanEntryParams) (Pla
 		&i.Name,
 		&i.StartMinute,
 		&i.DurationMinute,
+		&i.Position,
 	)
 	return i, err
 }
 
 const insertPlanEntry = `-- name: InsertPlanEntry :one
-INSERT INTO plan_entries (user_id, day, id, task_id, name, start_minute, duration_minute)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING user_id, day, id, task_id, name, start_minute, duration_minute
+INSERT INTO plan_entries (user_id, day, id, task_id, name, start_minute, duration_minute, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE((SELECT MAX(position)+1 FROM plan_entries WHERE user_id = $1 AND day = $2), 0))
+RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
 `
 
 type InsertPlanEntryParams struct {
@@ -106,17 +107,18 @@ func (q *Queries) InsertPlanEntry(ctx context.Context, arg InsertPlanEntryParams
 		&i.Name,
 		&i.StartMinute,
 		&i.DurationMinute,
+		&i.Position,
 	)
 	return i, err
 }
 
 const listPlanEntriesForDay = `-- name: ListPlanEntriesForDay :many
-SELECT plan_entries.user_id, plan_entries.day, plan_entries.id, plan_entries.task_id, plan_entries.name, plan_entries.start_minute, plan_entries.duration_minute,
+SELECT plan_entries.user_id, plan_entries.day, plan_entries.id, plan_entries.task_id, plan_entries.name, plan_entries.start_minute, plan_entries.duration_minute, plan_entries.position,
   (plan_entries.task_id IS NOT NULL AND tasks.completed_at IS NOT NULL) AS completed
 FROM plan_entries
 LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
 WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
-ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC
+ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.position ASC, plan_entries.id ASC
 `
 
 type ListPlanEntriesForDayParams struct {
@@ -132,6 +134,7 @@ type ListPlanEntriesForDayRow struct {
 	Name           pgtype.Text
 	StartMinute    pgtype.Int2
 	DurationMinute int16
+	Position       int16
 	Completed      pgtype.Bool
 }
 
@@ -152,6 +155,7 @@ func (q *Queries) ListPlanEntriesForDay(ctx context.Context, arg ListPlanEntries
 			&i.Name,
 			&i.StartMinute,
 			&i.DurationMinute,
+			&i.Position,
 			&i.Completed,
 		); err != nil {
 			return nil, err
@@ -204,7 +208,7 @@ func (q *Queries) ListScheduledDaysForTasks(ctx context.Context, arg ListSchedul
 }
 
 const lockPlanEntriesForDay = `-- name: LockPlanEntriesForDay :many
-SELECT user_id, day, id, task_id, name, start_minute, duration_minute FROM plan_entries WHERE user_id = $1 AND day = $2 FOR UPDATE
+SELECT user_id, day, id, task_id, name, start_minute, duration_minute, position FROM plan_entries WHERE user_id = $1 AND day = $2 FOR UPDATE
 `
 
 type LockPlanEntriesForDayParams struct {
@@ -229,6 +233,45 @@ func (q *Queries) LockPlanEntriesForDay(ctx context.Context, arg LockPlanEntries
 			&i.Name,
 			&i.StartMinute,
 			&i.DurationMinute,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockUntimedPlanEntriesForDay = `-- name: LockUntimedPlanEntriesForDay :many
+SELECT user_id, day, id, task_id, name, start_minute, duration_minute, position FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute IS NULL ORDER BY position, id FOR UPDATE
+`
+
+type LockUntimedPlanEntriesForDayParams struct {
+	UserID int64
+	Day    pgtype.Date
+}
+
+func (q *Queries) LockUntimedPlanEntriesForDay(ctx context.Context, arg LockUntimedPlanEntriesForDayParams) ([]PlanEntry, error) {
+	rows, err := q.db.Query(ctx, lockUntimedPlanEntriesForDay, arg.UserID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PlanEntry
+	for rows.Next() {
+		var i PlanEntry
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Day,
+			&i.ID,
+			&i.TaskID,
+			&i.Name,
+			&i.StartMinute,
+			&i.DurationMinute,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -257,7 +300,7 @@ func (q *Queries) NextPlanEntryId(ctx context.Context, arg NextPlanEntryIdParams
 }
 
 const trimPlanEntryDuration = `-- name: TrimPlanEntryDuration :one
-UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute
+UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
 `
 
 type TrimPlanEntryDurationParams struct {
@@ -283,12 +326,13 @@ func (q *Queries) TrimPlanEntryDuration(ctx context.Context, arg TrimPlanEntryDu
 		&i.Name,
 		&i.StartMinute,
 		&i.DurationMinute,
+		&i.Position,
 	)
 	return i, err
 }
 
 const updatePlanEntryName = `-- name: UpdatePlanEntryName :one
-UPDATE plan_entries SET name = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute
+UPDATE plan_entries SET name = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
 `
 
 type UpdatePlanEntryNameParams struct {
@@ -314,12 +358,34 @@ func (q *Queries) UpdatePlanEntryName(ctx context.Context, arg UpdatePlanEntryNa
 		&i.Name,
 		&i.StartMinute,
 		&i.DurationMinute,
+		&i.Position,
 	)
 	return i, err
 }
 
+const updatePlanEntryPosition = `-- name: UpdatePlanEntryPosition :exec
+UPDATE plan_entries SET position = $4 WHERE user_id = $1 AND day = $2 AND id = $3
+`
+
+type UpdatePlanEntryPositionParams struct {
+	UserID   int64
+	Day      pgtype.Date
+	ID       int32
+	Position int16
+}
+
+func (q *Queries) UpdatePlanEntryPosition(ctx context.Context, arg UpdatePlanEntryPositionParams) error {
+	_, err := q.db.Exec(ctx, updatePlanEntryPosition,
+		arg.UserID,
+		arg.Day,
+		arg.ID,
+		arg.Position,
+	)
+	return err
+}
+
 const updatePlanEntryTime = `-- name: UpdatePlanEntryTime :one
-UPDATE plan_entries SET start_minute = $4, duration_minute = $5 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute
+UPDATE plan_entries SET start_minute = $4, duration_minute = $5 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
 `
 
 type UpdatePlanEntryTimeParams struct {
@@ -347,6 +413,7 @@ func (q *Queries) UpdatePlanEntryTime(ctx context.Context, arg UpdatePlanEntryTi
 		&i.Name,
 		&i.StartMinute,
 		&i.DurationMinute,
+		&i.Position,
 	)
 	return i, err
 }

@@ -41,6 +41,7 @@ type PlanEntry struct {
 	Name           pgtype.Text
 	StartMinute    pgtype.Int2
 	DurationMinute int16
+	Position       int16
 }
 
 type Pomodoro struct {

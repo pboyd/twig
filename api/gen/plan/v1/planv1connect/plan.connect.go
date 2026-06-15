@@ -52,6 +52,9 @@ const (
 	PlanServiceMovePlanEntryProcedure = "/plan.v1.PlanService/MovePlanEntry"
 	// PlanServiceClearPlanProcedure is the fully-qualified name of the PlanService's ClearPlan RPC.
 	PlanServiceClearPlanProcedure = "/plan.v1.PlanService/ClearPlan"
+	// PlanServiceReorderPlanEntryProcedure is the fully-qualified name of the PlanService's
+	// ReorderPlanEntry RPC.
+	PlanServiceReorderPlanEntryProcedure = "/plan.v1.PlanService/ReorderPlanEntry"
 	// PlanServiceListScheduledDaysProcedure is the fully-qualified name of the PlanService's
 	// ListScheduledDays RPC.
 	PlanServiceListScheduledDaysProcedure = "/plan.v1.PlanService/ListScheduledDays"
@@ -74,6 +77,11 @@ type PlanServiceClient interface {
 	// ClearPlan removes every entry starting at or after start_minute on day; if an
 	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
 	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
+	// ReorderPlanEntry repositions an untimed entry within the day's untimed
+	// group by placing it immediately before or after a sibling untimed anchor.
+	// Both the entry and the anchor must be untimed (no start_minute) and on the
+	// same day. Timed entries cannot be reordered or used as anchors.
+	ReorderPlanEntry(context.Context, *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error)
 	// ListScheduledDays returns, for every task the caller has scheduled, each
 	// distinct day on or after from_day on which a plan entry links that task.
 	// Untimed entries count. Results are ordered by task_id then day ascending,
@@ -134,6 +142,12 @@ func NewPlanServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
 			connect.WithClientOptions(opts...),
 		),
+		reorderPlanEntry: connect.NewClient[v1.ReorderPlanEntryRequest, v1.ReorderPlanEntryResponse](
+			httpClient,
+			baseURL+PlanServiceReorderPlanEntryProcedure,
+			connect.WithSchema(planServiceMethods.ByName("ReorderPlanEntry")),
+			connect.WithClientOptions(opts...),
+		),
 		listScheduledDays: connect.NewClient[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse](
 			httpClient,
 			baseURL+PlanServiceListScheduledDaysProcedure,
@@ -152,6 +166,7 @@ type planServiceClient struct {
 	renamePlanEntry   *connect.Client[v1.RenamePlanEntryRequest, v1.RenamePlanEntryResponse]
 	movePlanEntry     *connect.Client[v1.MovePlanEntryRequest, v1.MovePlanEntryResponse]
 	clearPlan         *connect.Client[v1.ClearPlanRequest, v1.ClearPlanResponse]
+	reorderPlanEntry  *connect.Client[v1.ReorderPlanEntryRequest, v1.ReorderPlanEntryResponse]
 	listScheduledDays *connect.Client[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse]
 }
 
@@ -190,6 +205,11 @@ func (c *planServiceClient) ClearPlan(ctx context.Context, req *connect.Request[
 	return c.clearPlan.CallUnary(ctx, req)
 }
 
+// ReorderPlanEntry calls plan.v1.PlanService.ReorderPlanEntry.
+func (c *planServiceClient) ReorderPlanEntry(ctx context.Context, req *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error) {
+	return c.reorderPlanEntry.CallUnary(ctx, req)
+}
+
 // ListScheduledDays calls plan.v1.PlanService.ListScheduledDays.
 func (c *planServiceClient) ListScheduledDays(ctx context.Context, req *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error) {
 	return c.listScheduledDays.CallUnary(ctx, req)
@@ -212,6 +232,11 @@ type PlanServiceHandler interface {
 	// ClearPlan removes every entry starting at or after start_minute on day; if an
 	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
 	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
+	// ReorderPlanEntry repositions an untimed entry within the day's untimed
+	// group by placing it immediately before or after a sibling untimed anchor.
+	// Both the entry and the anchor must be untimed (no start_minute) and on the
+	// same day. Timed entries cannot be reordered or used as anchors.
+	ReorderPlanEntry(context.Context, *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error)
 	// ListScheduledDays returns, for every task the caller has scheduled, each
 	// distinct day on or after from_day on which a plan entry links that task.
 	// Untimed entries count. Results are ordered by task_id then day ascending,
@@ -268,6 +293,12 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
 		connect.WithHandlerOptions(opts...),
 	)
+	planServiceReorderPlanEntryHandler := connect.NewUnaryHandler(
+		PlanServiceReorderPlanEntryProcedure,
+		svc.ReorderPlanEntry,
+		connect.WithSchema(planServiceMethods.ByName("ReorderPlanEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
 	planServiceListScheduledDaysHandler := connect.NewUnaryHandler(
 		PlanServiceListScheduledDaysProcedure,
 		svc.ListScheduledDays,
@@ -290,6 +321,8 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 			planServiceMovePlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceClearPlanProcedure:
 			planServiceClearPlanHandler.ServeHTTP(w, r)
+		case PlanServiceReorderPlanEntryProcedure:
+			planServiceReorderPlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceListScheduledDaysProcedure:
 			planServiceListScheduledDaysHandler.ServeHTTP(w, r)
 		default:
@@ -327,6 +360,10 @@ func (UnimplementedPlanServiceHandler) MovePlanEntry(context.Context, *connect.R
 
 func (UnimplementedPlanServiceHandler) ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ClearPlan is not implemented"))
+}
+
+func (UnimplementedPlanServiceHandler) ReorderPlanEntry(context.Context, *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ReorderPlanEntry is not implemented"))
 }
 
 func (UnimplementedPlanServiceHandler) ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error) {

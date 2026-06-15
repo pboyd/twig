@@ -28,6 +28,12 @@ service PlanService {
   // entry straddles start_minute, its duration is shortened so it ends at start_minute.
   rpc ClearPlan(ClearPlanRequest) returns (ClearPlanResponse);
 
+  // ReorderPlanEntry repositions an untimed entry within the day's untimed
+  // group by placing it immediately before or after a sibling untimed anchor.
+  // Both the entry and the anchor must be untimed (no start_minute) and on the
+  // same day. Timed entries cannot be reordered or used as anchors.
+  rpc ReorderPlanEntry(ReorderPlanEntryRequest) returns (ReorderPlanEntryResponse);
+
   // ListScheduledDays returns, for every task the caller has scheduled, each
   // distinct day on or after from_day on which a plan entry links that task.
   // Untimed entries count. Results are ordered by task_id then day ascending,
@@ -119,4 +125,28 @@ message ScheduledDay {
   int64 task_id = 1;
   // The scheduled day, YYYY-MM-DD.
   string day = 2;
+}
+
+message ReorderPlanEntryRequest {
+  // The day the entry belongs to (YYYY-MM-DD), matching ListPlanEntriesRequest.day.
+  string day = 1;
+
+  // The untimed entry to move (per-day entry id).
+  int32 id = 2;
+
+  // Where to place it, relative to a sibling untimed anchor on the same day.
+  // Exactly one must be set.
+  oneof anchor {
+    // Place id immediately before this untimed sibling.
+    int32 before_id = 3;
+    // Place id immediately after this untimed sibling.
+    int32 after_id = 4;
+  }
+}
+
+message ReorderPlanEntryResponse {
+  // The day's untimed entries (including the moved one) in their new order,
+  // each carrying its updated position. Ordered as the client should display
+  // them in the untimed pane.
+  repeated PlanEntry untimed = 1;
 }

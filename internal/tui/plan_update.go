@@ -149,6 +149,22 @@ func removePlanCmd(client planv1connect.PlanServiceClient, day string, id int32)
 
 // completePlanTaskCmd completes or uncompletes the task behind a plan entry, then
 // reloads the day via the existing planMutatedMsg reload path.
+func reorderPlanEntryCmd(client planv1connect.PlanServiceClient, day string, id int32, anchorID int32, insertBefore bool) tea.Cmd {
+	return func() tea.Msg {
+		req := &planv1.ReorderPlanEntryRequest{Day: day, Id: id}
+		if insertBefore {
+			req.Anchor = &planv1.ReorderPlanEntryRequest_BeforeId{BeforeId: anchorID}
+		} else {
+			req.Anchor = &planv1.ReorderPlanEntryRequest_AfterId{AfterId: anchorID}
+		}
+		_, err := client.ReorderPlanEntry(context.Background(), connect.NewRequest(req))
+		if err != nil {
+			return planMutatedMsg{err: err}
+		}
+		return planMutatedMsg{highlightID: id}
+	}
+}
+
 func completePlanTaskCmd(taskClient taskv1connect.TaskServiceClient, day string, taskID int64, complete bool, entryID int32, notice string) tea.Cmd {
 	return func() tea.Msg {
 		if complete {

@@ -1786,6 +1786,29 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cancelPomCmd(m.client)
 		}
 
+	// Reorder untimed entries.
+	case key.Matches(msg, m.keys.RankUp):
+		if len(m.plan.entries) > 0 {
+			entry := m.plan.entries[m.plan.cursor]
+			if entry.StartMinute == nil {
+				if prev := prevVisibleUntimed(m.plan.entries, m.plan.cursor); prev != nil {
+					m.err = nil
+					return m, reorderPlanEntryCmd(m.planClient, m.plan.day, entry.Id, prev.Id, true)
+				}
+			}
+		}
+
+	case key.Matches(msg, m.keys.RankDown):
+		if len(m.plan.entries) > 0 {
+			entry := m.plan.entries[m.plan.cursor]
+			if entry.StartMinute == nil {
+				if next := nextVisibleUntimed(m.plan.entries, m.plan.cursor); next != nil {
+					m.err = nil
+					return m, reorderPlanEntryCmd(m.planClient, m.plan.day, entry.Id, next.Id, false)
+				}
+			}
+		}
+
 	// Help.
 	case key.Matches(msg, m.keys.Help):
 		m.mode = modeHelp
@@ -2353,4 +2376,26 @@ func (m Model) nowOrDefault() time.Time {
 		return m.nowFunc()
 	}
 	return time.Now().Local()
+}
+
+// prevVisibleUntimed returns the previous untimed entry before cursor in the
+// displayed (pre-filtered) entry list. Returns nil if none found.
+func prevVisibleUntimed(entries []*planv1.PlanEntry, cursor int) *planv1.PlanEntry {
+	for i := cursor - 1; i >= 0; i-- {
+		if entries[i].StartMinute == nil {
+			return entries[i]
+		}
+	}
+	return nil
+}
+
+// nextVisibleUntimed returns the next untimed entry after cursor in the
+// displayed (pre-filtered) entry list. Returns nil if none found.
+func nextVisibleUntimed(entries []*planv1.PlanEntry, cursor int) *planv1.PlanEntry {
+	for i := cursor + 1; i < len(entries); i++ {
+		if entries[i].StartMinute == nil {
+			return entries[i]
+		}
+	}
+	return nil
 }

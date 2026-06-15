@@ -4,4 +4,9 @@
 *.out
 vendor/
 /twig
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.swp
 

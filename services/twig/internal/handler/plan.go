@@ -490,6 +490,132 @@ func (p *Plan) MovePlanEntry(
 	return connect.NewResponse(&planv1.MovePlanEntryResponse{Entry: dbPlanEntryToProto(row)}), nil
 }
 
+func (p *Plan) ReorderPlanEntry(
+	ctx context.Context,
+	req *connect.Request[planv1.ReorderPlanEntryRequest],
+) (*connect.Response[planv1.ReorderPlanEntryResponse], error) {
+	userID := auth.UserID(ctx)
+
+	day, err := parseDay(req.Msg.Day)
+	if err != nil {
+		return nil, err
+	}
+
+	movedID := req.Msg.Id
+	var anchorID int32
+	var insertBefore bool
+
+	switch a := req.Msg.Anchor.(type) {
+	case *planv1.ReorderPlanEntryRequest_BeforeId:
+		anchorID = a.BeforeId
+		insertBefore = true
+	case *planv1.ReorderPlanEntryRequest_AfterId:
+		anchorID = a.AfterId
+		insertBefore = false
+	case nil:
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("exactly one of before_id or after_id must be set"))
+	}
+
+	if anchorID == movedID {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("anchor must be a different entry than the one being moved"))
+	}
+
+	tx, txq, err := p.beginSerializableTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	moved, err := txq.GetPlanEntry(ctx, db.GetPlanEntryParams{
+		UserID: userID,
+		Day:    day,
+		ID:     movedID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("entry not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	anchor, err := txq.GetPlanEntry(ctx, db.GetPlanEntryParams{
+		UserID: userID,
+		Day:    day,
+		ID:     anchorID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("anchor entry not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Validate both are untimed.
+	if moved.StartMinute.Valid {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("only untimed entries can be reordered"))
+	}
+	if anchor.StartMinute.Valid {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("anchor must be an untimed entry"))
+	}
+
+	// Lock the day's untimed entries and read them.
+	untimed, err := txq.LockUntimedPlanEntriesForDay(ctx, db.LockUntimedPlanEntriesForDayParams{
+		UserID: userID,
+		Day:    day,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Build the ordered slice (excluding the moved entry).
+	ordered := make([]db.PlanEntry, 0, len(untimed))
+	for _, e := range untimed {
+		if e.ID != movedID {
+			ordered = append(ordered, e)
+		}
+	}
+
+	// Find anchor position and insert.
+	insertIdx := len(ordered)
+	for i, e := range ordered {
+		if e.ID == anchorID {
+			if insertBefore {
+				insertIdx = i
+			} else {
+				insertIdx = i + 1
+			}
+			break
+		}
+	}
+
+	ordered = append(ordered, db.PlanEntry{})
+	copy(ordered[insertIdx+1:], ordered[insertIdx:])
+	ordered[insertIdx] = moved
+
+	// Renumber 0..n-1 and persist.
+	for i, e := range ordered {
+		if err := txq.UpdatePlanEntryPosition(ctx, db.UpdatePlanEntryPositionParams{
+			UserID:   userID,
+			Day:      day,
+			ID:       e.ID,
+			Position: int16(i),
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	proto := make([]*planv1.PlanEntry, len(ordered))
+	for i, e := range ordered {
+		proto[i] = dbPlanEntryToProto(e)
+	}
+
+	return connect.NewResponse(&planv1.ReorderPlanEntryResponse{Untimed: proto}), nil
+}
+
 func (p *Plan) ListScheduledDays(
 	ctx context.Context,
 	req *connect.Request[planv1.ListScheduledDaysRequest],

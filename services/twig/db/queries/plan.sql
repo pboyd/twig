@@ -4,7 +4,7 @@ SELECT plan_entries.*,
 FROM plan_entries
 LEFT JOIN tasks ON plan_entries.task_id = tasks.id AND tasks.user_id = plan_entries.user_id
 WHERE plan_entries.user_id = $1 AND plan_entries.day = $2
-ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.id ASC;
+ORDER BY plan_entries.start_minute ASC NULLS FIRST, plan_entries.position ASC, plan_entries.id ASC;
 
 -- name: GetPlanEntry :one
 SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3;
@@ -16,8 +16,8 @@ SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 FOR UPDATE;
 SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM plan_entries WHERE user_id = $1 AND day = $2;
 
 -- name: InsertPlanEntry :one
-INSERT INTO plan_entries (user_id, day, id, task_id, name, start_minute, duration_minute)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO plan_entries (user_id, day, id, task_id, name, start_minute, duration_minute, position)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE((SELECT MAX(position)+1 FROM plan_entries WHERE user_id = $1 AND day = $2), 0))
 RETURNING *;
 
 -- name: UpdatePlanEntryName :one
@@ -34,6 +34,12 @@ DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 
 
 -- name: TrimPlanEntryDuration :one
 UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING *;
+
+-- name: LockUntimedPlanEntriesForDay :many
+SELECT * FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute IS NULL ORDER BY position, id FOR UPDATE;
+
+-- name: UpdatePlanEntryPosition :exec
+UPDATE plan_entries SET position = $4 WHERE user_id = $1 AND day = $2 AND id = $3;
 
 -- name: ListScheduledDaysForTasks :many
 SELECT DISTINCT task_id, day

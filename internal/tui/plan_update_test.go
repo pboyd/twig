@@ -27,6 +27,7 @@ type fakePlanClient struct {
 	removeReq            *planv1.RemovePlanEntryRequest
 	clearReq             *planv1.ClearPlanRequest
 	mutateErr            error
+	reorderReq           *planv1.ReorderPlanEntryRequest
 	scheduledDaysReq     *planv1.ListScheduledDaysRequest
 	scheduledDaysResp    []*planv1.ScheduledDay
 	scheduledDaysErr     error
@@ -94,6 +95,14 @@ func (f *fakePlanClient) ListScheduledDays(_ context.Context, req *connect.Reque
 		return nil, f.scheduledDaysErr
 	}
 	return connect.NewResponse(&planv1.ListScheduledDaysResponse{Days: f.scheduledDaysResp}), nil
+}
+
+func (f *fakePlanClient) ReorderPlanEntry(_ context.Context, req *connect.Request[planv1.ReorderPlanEntryRequest]) (*connect.Response[planv1.ReorderPlanEntryResponse], error) {
+	f.reorderReq = req.Msg
+	if f.mutateErr != nil {
+		return nil, f.mutateErr
+	}
+	return connect.NewResponse(&planv1.ReorderPlanEntryResponse{Untimed: f.entries}), nil
 }
 
 // buildPlanTestModel creates a model ready for planning tab tests.
@@ -2062,3 +2071,142 @@ func TestAutoSchedule_EmptyPlan_NoError(t *testing.T) {
 		t.Error("empty plan: expected nil command, got one")
 	}
 }
+
+// ── T011: Reorder plan entry key tests ──────────────────────────────────
+
+func TestPlanRankUp_UntimedEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+
+	entries := []*planv1.PlanEntry{
+		{Id: 1, DurationMinute: 30},               // untimed A
+		{Id: 2, DurationMinute: 30},               // untimed B
+		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
+	}
+	ExportSetPlanEntries(&m, entries, 1) // cursor on B (index 1)
+
+	m2, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
+	if cmd == nil {
+		t.Fatal("expected a command from RankUp, got nil")
+	}
+
+	// Execute the command to trigger the fake client call.
+	msg := cmd()
+	switch m := msg.(type) {
+	case planMutatedMsg:
+		if m.err != nil {
+			t.Fatalf("expected no error, got %v", m.err)
+		}
+	default:
+		t.Fatalf("expected planMutatedMsg, got %T", msg)
+	}
+
+	if fc.reorderReq == nil {
+		t.Fatal("expected ReorderPlanEntryRequest, got nil")
+	}
+	if fc.reorderReq.Id != 2 {
+		t.Errorf("moved entry id = %d, want 2", fc.reorderReq.Id)
+	}
+	if fc.reorderReq.GetBeforeId() != 1 {
+		t.Errorf("before_id = %d, want 1", fc.reorderReq.GetBeforeId())
+	}
+	_ = m2
+}
+
+func TestPlanRankDown_UntimedEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+
+	entries := []*planv1.PlanEntry{
+		{Id: 1, DurationMinute: 30},               // untimed A
+		{Id: 2, DurationMinute: 30},               // untimed B
+		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
+	}
+	ExportSetPlanEntries(&m, entries, 0) // cursor on A (index 0)
+
+	m2, cmd := m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+	if cmd == nil {
+		t.Fatal("expected a command from RankDown, got nil")
+	}
+
+	msg := cmd()
+	switch m := msg.(type) {
+	case planMutatedMsg:
+		if m.err != nil {
+			t.Fatalf("expected no error, got %v", m.err)
+		}
+	default:
+		t.Fatalf("expected planMutatedMsg, got %T", msg)
+	}
+
+	if fc.reorderReq == nil {
+		t.Fatal("expected ReorderPlanEntryRequest, got nil")
+	}
+	if fc.reorderReq.Id != 1 {
+		t.Errorf("moved entry id = %d, want 1", fc.reorderReq.Id)
+	}
+	if fc.reorderReq.GetAfterId() != 2 {
+		t.Errorf("after_id = %d, want 2", fc.reorderReq.GetAfterId())
+	}
+	_ = m2
+}
+
+func TestPlanReorder_TimedEntryNoop(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+
+	entries := []*planv1.PlanEntry{
+		{Id: 1, DurationMinute: 30},               // untimed
+		{Id: 2, StartMinute: pint32F(480), DurationMinute: 30}, // timed D
+	}
+	ExportSetPlanEntries(&m, entries, 1) // cursor on timed entry
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
+	if cmd != nil {
+		t.Error("timed entry RankUp: expected no command, got one")
+	}
+	if fc.reorderReq != nil {
+		t.Error("timed entry RankUp: expected no request, got one")
+	}
+
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+	if cmd != nil {
+		t.Error("timed entry RankDown: expected no command, got one")
+	}
+	if fc.reorderReq != nil {
+		t.Error("timed entry RankDown: expected no request after RankUp noop", fc.reorderReq)
+	}
+}
+
+func TestPlanReorder_BoundaryNoop(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+
+	entries := []*planv1.PlanEntry{
+		{Id: 1, DurationMinute: 30}, // untimed (first)
+		{Id: 2, DurationMinute: 30}, // untimed
+	}
+	ExportSetPlanEntries(&m, entries, 0) // cursor on first entry
+
+	// RankUp on first untimed entry — no-op
+	_, cmd := m.Update(tea.KeyPressMsg{Code: '{', Text: "{"})
+	if cmd != nil {
+		t.Error("first entry RankUp: expected no command, got one")
+	}
+	if fc.reorderReq != nil {
+		t.Error("first entry RankUp: expected no request, got one")
+	}
+
+	ExportSetPlanEntries(&m, entries, 1) // cursor on last entry
+
+	// RankDown on last untimed entry — no-op
+	_, cmd = m.Update(tea.KeyPressMsg{Code: '}', Text: "}"})
+	if cmd != nil {
+		t.Error("last entry RankDown: expected no command, got one")
+	}
+	if fc.reorderReq != nil {
+		t.Error("last entry RankDown: expected no request, got one")
+	}
+}
+
+func pint32F(v int32) *int32 { return &v }
