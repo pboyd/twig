@@ -143,7 +143,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  report   Activity report (what did I get done?)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Run 'twig help <command>' for command-specific help.")
-	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml (see specs/033-alternate-profiles/contracts/config-schema.md)")
+	fmt.Fprintln(w, "Config file: ~/.config/twig/config.toml")
 }
 
 func runTask(profile string, args []string) int {
