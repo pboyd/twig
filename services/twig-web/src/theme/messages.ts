@@ -60,4 +60,26 @@ export const messages = {
     noKeys: "No API keys yet — create one to use the CLI.",
     createdAt: (date: string) => `Created ${date}`,
   },
+  downloadConfig: {
+    configHeading: "Point twig at your server",
+    configIntro: "Two things needed before launch: the server address and an API key.",
+    serverAddressLabel: "Server address",
+    credentialStep: "Head to your",
+    credentialLinkLabel: "Account page to create one",
+    quickStartHeading: "Quick start (env vars)",
+    quickStartCommand: (origin: string) =>
+      `TWIG_API_KEY=your-api-key TWIG_ADDR=${origin} ./twig`,
+    launchHeading: "Launch the TUI",
+    launchIntro: "Once your config file is in place, just run:",
+    launchCommand: "./twig",
+    launchHint:
+      "Run with no arguments to open the interactive TUI — your tasks and timers are ready to go.",
+    persistHeading: "Persistent setup (config file)",
+    persistIntro:
+      "Prefers a more permanent setup? Drop a config file at ~/.config/twig/config.toml:",
+    persistFileContents: (origin: string) =>
+      `api_key = "your-api-key"\napi_url = "${origin}"`,
+    precedenceNote:
+      "Environment variables always win — if both are set, the config file takes a back seat.",
+  },
 };

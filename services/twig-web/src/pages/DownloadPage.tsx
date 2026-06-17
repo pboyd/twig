@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { AppHeader } from "../components/AppHeader";
 import { Button } from "../components/Button";
 import { Spinner } from "../components/Spinner";
@@ -82,6 +83,78 @@ export default function DownloadPage() {
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
           {messages.downloadPostHint}
         </p>
+
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            {messages.downloadConfig.configHeading}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            {messages.downloadConfig.configIntro}
+          </p>
+
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 space-y-6">
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {messages.downloadConfig.serverAddressLabel}
+              </h3>
+              <pre className="rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100 overflow-x-auto">
+                <code>{window.location.origin}</code>
+              </pre>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {messages.downloadConfig.credentialStep}{" "}
+                <Link
+                  to="/account"
+                  className="text-indigo-600 dark:text-indigo-400 underline hover:no-underline"
+                >
+                  {messages.downloadConfig.credentialLinkLabel}
+                </Link>
+                .
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {messages.downloadConfig.quickStartHeading}
+              </h3>
+              <pre className="rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100 overflow-x-auto">
+                <code>{messages.downloadConfig.quickStartCommand(window.location.origin)}</code>
+              </pre>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {messages.downloadConfig.persistHeading}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                {messages.downloadConfig.persistIntro}
+              </p>
+              <pre className="rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100 overflow-x-auto">
+                <code>{messages.downloadConfig.persistFileContents(window.location.origin)}</code>
+              </pre>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {messages.downloadConfig.precedenceNote}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {messages.downloadConfig.launchHeading}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                {messages.downloadConfig.launchIntro}
+              </p>
+              <pre className="rounded bg-gray-100 dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100 overflow-x-auto">
+                <code>{messages.downloadConfig.launchCommand}</code>
+              </pre>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {messages.downloadConfig.launchHint}
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
