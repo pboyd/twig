@@ -70,9 +70,13 @@ type scheduledDaysResultMsg struct {
 }
 
 // listGoalsResultMsg carries the result of a ListGoals RPC.
+// highlightID, when non-zero, causes the cursor to follow that goal by ID
+// after the list is refreshed (used after a reorder to keep the moved goal
+// highlighted).
 type listGoalsResultMsg struct {
-	goals []*goalv1.Goal
-	err   error
+	goals       []*goalv1.Goal
+	err         error
+	highlightID int64
 }
 
 // goalMutationMsg carries the result of a create or update goal RPC.
@@ -434,7 +438,7 @@ func reorderGoalCmd(client goalv1connect.GoalServiceClient, goalID, anchorID int
 		if err != nil {
 			return listGoalsResultMsg{err: err}
 		}
-		return listGoalsResultMsg{goals: resp.Msg.Goals}
+		return listGoalsResultMsg{goals: resp.Msg.Goals, highlightID: goalID}
 	}
 }
 
@@ -830,7 +834,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.goal.goals = msg.goals
 		}
 		m.goal.loaded = true
-		m.goal.cursor = clampCursor(m.goal.cursor, len(visibleGoals(m.goal.goals, m.goal.showAll)))
+		visible := visibleGoals(m.goal.goals, m.goal.showAll)
+		if msg.highlightID != 0 {
+			for i, g := range visible {
+				if g.Id == msg.highlightID {
+					m.goal.cursor = i
+					return m, nil
+				}
+			}
+		}
+		m.goal.cursor = clampCursor(m.goal.cursor, len(visible))
 		return m, nil
 
 	case goalMutationMsg:

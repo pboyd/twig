@@ -202,6 +202,13 @@ func ExportNewGoalModel(taskClient taskv1connect.TaskServiceClient, goals []*goa
 // ExportGoalCursor returns the current goal cursor.
 func ExportGoalCursor(m Model) int { return m.goal.cursor }
 
+// ExportDispatchListGoalsResult dispatches a listGoalsResultMsg for testing.
+// highlightID of 0 means "no highlight, just clamp".
+func ExportDispatchListGoalsResult(m Model, goals []*goalv1.Goal, highlightID int64) (Model, tea.Cmd) {
+	updated, cmd := m.Update(listGoalsResultMsg{goals: goals, highlightID: highlightID})
+	return updated.(Model), cmd
+}
+
 // ExportGoalShowAll returns the current goal showAll state.
 func ExportGoalShowAll(m Model) bool { return m.goal.showAll }
 

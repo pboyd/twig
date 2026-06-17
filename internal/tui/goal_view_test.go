@@ -411,6 +411,76 @@ func TestGoalRank_CrossGroupBoundaryNoOp(t *testing.T) {
 	}
 }
 
+// TestGoalRank_HighlightFollowsMovedGoalDown verifies that after a listGoalsResultMsg
+// with a highlightID the cursor follows the moved goal to its new position.
+func TestGoalRank_HighlightFollowsMovedGoalDown(t *testing.T) {
+	initial := []*goalv1.Goal{
+		{Id: 1, Name: "Buy a car", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 2, Name: "Sell a kidney", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+		{Id: 3, Name: "Learn French", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 2},
+	}
+	m := ExportNewGoalModel(nil, initial)
+	m.goal.cursor = 0 // "Buy a car" is highlighted
+
+	// Simulate the reload after moving "Buy a car" down one slot.
+	reordered := []*goalv1.Goal{
+		{Id: 2, Name: "Sell a kidney", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 1, Name: "Buy a car", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+		{Id: 3, Name: "Learn French", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 2},
+	}
+	m2, _ := ExportDispatchListGoalsResult(m, reordered, 1 /* "Buy a car" ID */)
+
+	cursor := ExportGoalCursor(m2)
+	if cursor != 1 {
+		t.Errorf("cursor should follow moved goal to index 1, got %d", cursor)
+	}
+}
+
+// TestGoalRank_HighlightFollowsMovedGoalUp verifies that moving a goal up also
+// repositions the cursor to the goal's new index.
+func TestGoalRank_HighlightFollowsMovedGoalUp(t *testing.T) {
+	initial := []*goalv1.Goal{
+		{Id: 1, Name: "Buy a car", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 2, Name: "Sell a kidney", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+		{Id: 3, Name: "Learn French", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 2},
+	}
+	m := ExportNewGoalModel(nil, initial)
+	m.goal.cursor = 1 // "Sell a kidney" is highlighted
+
+	// Simulate the reload after moving "Sell a kidney" up one slot.
+	reordered := []*goalv1.Goal{
+		{Id: 2, Name: "Sell a kidney", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 1, Name: "Buy a car", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+		{Id: 3, Name: "Learn French", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 2},
+	}
+	m2, _ := ExportDispatchListGoalsResult(m, reordered, 2 /* "Sell a kidney" ID */)
+
+	cursor := ExportGoalCursor(m2)
+	if cursor != 0 {
+		t.Errorf("cursor should follow moved goal to index 0, got %d", cursor)
+	}
+}
+
+// TestGoalRank_NoHighlightIDClampsAsBefore verifies that a listGoalsResultMsg
+// with highlightID == 0 (e.g. initial load) still clamps the cursor without
+// repositioning it by ID.
+func TestGoalRank_NoHighlightIDClampsAsBefore(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Buy a car", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 2, Name: "Sell a kidney", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 1},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	m.goal.cursor = 1
+
+	// Simulate a reload that returns only one goal (the other was deleted elsewhere).
+	m2, _ := ExportDispatchListGoalsResult(m, goals[:1], 0 /* no highlight */)
+
+	cursor := ExportGoalCursor(m2)
+	if cursor != 0 {
+		t.Errorf("cursor should be clamped to 0 when list shrinks, got %d", cursor)
+	}
+}
+
 // TestTaskGoalMutation_FailedPreconditionShowsPlayfulNotice verifies that
 // when SetTaskGoal returns FailedPrecondition (nesting conflict), the TUI
 // shows the playful nesting message as a notice rather than a raw error.
