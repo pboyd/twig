@@ -12,6 +12,7 @@ export default defineConfig({
       "/plan.v1": "http://localhost:8080",
       "/cli": "http://localhost:8080",
       "/account.v1": "http://localhost:8080",
+      "/goal.v1": "http://localhost:8080",
     },
   },
 });

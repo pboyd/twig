@@ -24,7 +24,7 @@ description: "Task list for feature: Goals in the Web App"
 
 **Purpose**: Make the goal service reachable in dev.
 
-- [ ] T001 Add `"/goal.v1": "http://localhost:8080"` to the `server.proxy` map in `services/twig-web/vite.config.ts` (keeps goal RPCs same-origin for the SameSite=Strict cookie).
+- [x] T001 Add `"/goal.v1": "http://localhost:8080"` to the `server.proxy` map in `services/twig-web/vite.config.ts` (keeps goal RPCs same-origin for the SameSite=Strict cookie).
 
 ---
 
@@ -34,8 +34,8 @@ description: "Task list for feature: Goals in the Web App"
 
 **⚠️ CRITICAL**: Complete before user-story phases.
 
-- [ ] T002 [P] Create `src/lib/formatTimestamp.ts` (human-readable absolute date/time from a protobuf `Timestamp`, plus a date-only formatter for goal due dates, via `Intl.DateTimeFormat`) and `src/lib/formatTimestamp.test.ts` covering fixed inputs, undefined/empty, and date-only output.
-- [ ] T003 [P] Add goal + status-update user-facing copy to `src/theme/messages.ts` in the warm/playful tone (empty goal list, all-hidden hint, no-status-updates-yet, empty-status-validation, status saved/edited/deleted toasts, delete-update confirm, goal-not-found, generic goal/status load error).
+- [x] T002 [P] Create `src/lib/formatTimestamp.ts` (human-readable absolute date/time from a protobuf `Timestamp`, plus a date-only formatter for goal due dates, via `Intl.DateTimeFormat`) and `src/lib/formatTimestamp.test.ts` covering fixed inputs, undefined/empty, and date-only output.
+- [x] T003 [P] Add goal + status-update user-facing copy to `src/theme/messages.ts` in the warm/playful tone (empty goal list, all-hidden hint, no-status-updates-yet, empty-status-validation, status saved/edited/deleted toasts, delete-update confirm, goal-not-found, generic goal/status load error).
 
 **Checkpoint**: Helpers and copy ready — user-story work can begin.
 
@@ -49,15 +49,15 @@ description: "Task list for feature: Goals in the Web App"
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] Create `src/lib/goalGroups.ts` — pure `goalGroups(goals, showHidden)` returning ordered, non-empty `GoalGroup[]` (Committed, Incubating, then Completed, Archived only when `showHidden`; preserve server position order) — and `src/lib/goalGroups.test.ts`.
-- [ ] T005 [P] [US1] Create `src/lib/showHiddenGoalsPref.ts` (`readShowHiddenGoals`/`writeShowHiddenGoals` backed by `localStorage["twig-show-hidden-goals"]`, exception-guarded, default false) and `src/lib/showHiddenGoalsPref.test.ts`, mirroring `showCompletedPref.ts`.
-- [ ] T006 [P] [US1] Create `src/components/GoalListItem.tsx` (props `{ goal, onOpen }`; name via `<Markdown mode="inline">`, optional due via `formatTimestamp`, no mutation controls) and `src/components/GoalListItem.test.tsx`.
-- [ ] T007 [US1] Create `src/pages/GoalsPage.tsx` — `useQuery(listGoals, {})`, group via `goalGroups`, render group headings + `GoalListItem` rows, show-hidden toggle button (persist via T005), loading `Spinner`, `ErrorBanner` on failure, empty state + "Show all" affordance when only hidden goals exist — and `src/pages/GoalsPage.test.tsx`. (depends on T004, T005, T006)
-- [ ] T008 [US1] Create `src/pages/GoalDetailPage.tsx` skeleton — `useParams` id, `useQuery(getGoal, { id })`, read-only header (name inline-md, description block-md, due via `formatTimestamp`, state label), back button to `/goals`, loading `Spinner`, `NotFound` → friendly not-found with link back, generic `ErrorBanner` — and `src/pages/GoalDetailPage.test.tsx`. (depends on T002, T003)
-- [ ] T009 [US1] In `src/pages/GoalDetailPage.tsx`, add a read-only "Associated tasks" section: `useQuery(listTasks, {})` filtered to `goalId === id`, render names (inline markdown) as links to `/tasks/:id`, hide section when none; extend `GoalDetailPage.test.tsx`. (depends on T008)
-- [ ] T010 [US1] Register routes `"/goals"` → `GoalsPage` and `"/goals/:id"` → `GoalDetailPage` in `src/App.tsx`. (depends on T007, T008)
-- [ ] T011 [P] [US1] Add a "Goals" `NavLink` (to `/goals`, using existing `navLinkClass`) to `src/components/AppHeader.tsx` and update `src/components/AppHeader.test.tsx`.
-- [ ] T012 [P] [US1] Add a "Goals" entry to the mobile menu in `src/components/HeaderMenu.tsx`.
+- [x] T004 [P] [US1] Create `src/lib/goalGroups.ts` — pure `goalGroups(goals, showHidden)` returning ordered, non-empty `GoalGroup[]` (Committed, Incubating, then Completed, Archived only when `showHidden`; preserve server position order) — and `src/lib/goalGroups.test.ts`.
+- [x] T005 [P] [US1] Create `src/lib/showHiddenGoalsPref.ts` (`readShowHiddenGoals`/`writeShowHiddenGoals` backed by `localStorage["twig-show-hidden-goals"]`, exception-guarded, default false) and `src/lib/showHiddenGoalsPref.test.ts`, mirroring `showCompletedPref.ts`.
+- [x] T006 [P] [US1] Create `src/components/GoalListItem.tsx` (props `{ goal, onOpen }`; name via `<Markdown mode="inline">`, optional due via `formatTimestamp`, no mutation controls) and `src/components/GoalListItem.test.tsx`.
+- [x] T007 [US1] Create `src/pages/GoalsPage.tsx` — `useQuery(listGoals, {})`, group via `goalGroups`, render group headings + `GoalListItem` rows, show-hidden toggle button (persist via T005), loading `Spinner`, `ErrorBanner` on failure, empty state + "Show all" affordance when only hidden goals exist — and `src/pages/GoalsPage.test.tsx`. (depends on T004, T005, T006)
+- [x] T008 [US1] Create `src/pages/GoalDetailPage.tsx` skeleton — `useParams` id, `useQuery(getGoal, { id })`, read-only header (name inline-md, description block-md, due via `formatTimestamp`, state label), back button to `/goals`, loading `Spinner`, `NotFound` → friendly not-found with link back, generic `ErrorBanner` — and `src/pages/GoalDetailPage.test.tsx`. (depends on T002, T003)
+- [x] T009 [US1] In `src/pages/GoalDetailPage.tsx`, add a read-only "Associated tasks" section: `useQuery(listTasks, {})` filtered to `goalId === id`, render names (inline markdown) as links to `/tasks/:id`, hide section when none; extend `GoalDetailPage.test.tsx`. (depends on T008)
+- [x] T010 [US1] Register routes `"/goals"` → `GoalsPage` and `"/goals/:id"` → `GoalDetailPage` in `src/App.tsx`. (depends on T007, T008)
+- [x] T011 [P] [US1] Add a "Goals" `NavLink` (to `/goals`, using existing `navLinkClass`) to `src/components/AppHeader.tsx` and update `src/components/AppHeader.test.tsx`.
+- [x] T012 [P] [US1] Add a "Goals" entry to the mobile menu in `src/components/HeaderMenu.tsx`.
 
 **Checkpoint**: Goals are browsable end-to-end (nav → grouped list → detail with fields + linked tasks). MVP shippable.
 
@@ -71,8 +71,8 @@ description: "Task list for feature: Goals in the Web App"
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Create `src/components/StatusUpdateList.tsx` — props `{ updates, onEdit?, onDelete? }`; render newest-first, each item with `formatTimestamp(createdAt)` + body via `<Markdown mode="block">`, wrapping/scrolling with no truncation (edit/delete affordances rendered only when handlers passed) — and `src/components/StatusUpdateList.test.tsx` (read-only rendering + ordering).
-- [ ] T014 [US2] In `src/pages/GoalDetailPage.tsx`, add `useQuery(listGoalStatusUpdates, { goalId: id })`; show `updates[0]` as "Latest status" (timestamp + markdown), render history via `StatusUpdateList`, and the "no status updates yet" empty state when the list is empty; extend `GoalDetailPage.test.tsx`. (depends on T008, T013)
+- [x] T013 [P] [US2] Create `src/components/StatusUpdateList.tsx` — props `{ updates, onEdit?, onDelete? }`; render newest-first, each item with `formatTimestamp(createdAt)` + body via `<Markdown mode="block">`, wrapping/scrolling with no truncation (edit/delete affordances rendered only when handlers passed) — and `src/components/StatusUpdateList.test.tsx` (read-only rendering + ordering).
+- [x] T014 [US2] In `src/pages/GoalDetailPage.tsx`, add `useQuery(listGoalStatusUpdates, { goalId: id })`; show `updates[0]` as "Latest status" (timestamp + markdown), render history via `StatusUpdateList`, and the "no status updates yet" empty state when the list is empty; extend `GoalDetailPage.test.tsx`. (depends on T008, T013)
 
 **Checkpoint**: Goals + reading status updates both work independently.
 
@@ -86,8 +86,8 @@ description: "Task list for feature: Goals in the Web App"
 
 ### Implementation for User Story 3
 
-- [ ] T015 [P] [US3] Create `src/components/StatusUpdateForm.tsx` — props `{ initialBody?, submitLabel, loading?, onSubmit, onCancel }`; single textarea + Save/Cancel; trims and blocks empty/whitespace submit with the validation message from `messages.ts` (no RPC sent) — and `src/components/StatusUpdateForm.test.tsx`.
-- [ ] T016 [US3] In `src/pages/GoalDetailPage.tsx`, add an "Add status update" affordance using `StatusUpdateForm`; wire `useMutation(addGoalStatusUpdate)`, invalidate `listGoalStatusUpdates({ goalId })` + `getGoal({ id })` + `listGoals({})` via `createConnectQueryKey`, show success toast, handle error via `ErrorBanner`; extend `GoalDetailPage.test.tsx`. (depends on T014, T015)
+- [x] T015 [P] [US3] Create `src/components/StatusUpdateForm.tsx` — props `{ initialBody?, submitLabel, loading?, onSubmit, onCancel }`; single textarea + Save/Cancel; trims and blocks empty/whitespace submit with the validation message from `messages.ts` (no RPC sent) — and `src/components/StatusUpdateForm.test.tsx`.
+- [x] T016 [US3] In `src/pages/GoalDetailPage.tsx`, add an "Add status update" affordance using `StatusUpdateForm`; wire `useMutation(addGoalStatusUpdate)`, invalidate `listGoalStatusUpdates({ goalId })` + `getGoal({ id })` + `listGoals({})` via `createConnectQueryKey`, show success toast, handle error via `ErrorBanner`; extend `GoalDetailPage.test.tsx`. (depends on T014, T015)
 
 **Checkpoint**: Users can read and record updates.
 
@@ -101,8 +101,8 @@ description: "Task list for feature: Goals in the Web App"
 
 ### Implementation for User Story 4
 
-- [ ] T017 [US4] Wire edit in `src/pages/GoalDetailPage.tsx`: pass an `onEdit` handler to `StatusUpdateList` that opens `StatusUpdateForm` seeded with the update's body; `useMutation(updateGoalStatusUpdate)` + same invalidation set; success toast; extend `GoalDetailPage.test.tsx` (incl. empty-edit rejection). (depends on T016)
-- [ ] T018 [US4] Wire delete in `src/pages/GoalDetailPage.tsx`: pass an `onDelete` handler to `StatusUpdateList` that confirms (warm/measured copy), `useMutation(deleteGoalStatusUpdate)` + same invalidation set, success toast, and falls back to the empty state when the last update is removed; extend `GoalDetailPage.test.tsx`. (depends on T014; integrates with T016)
+- [x] T017 [US4] Wire edit in `src/pages/GoalDetailPage.tsx`: pass an `onEdit` handler to `StatusUpdateList` that opens `StatusUpdateForm` seeded with the update's body; `useMutation(updateGoalStatusUpdate)` + same invalidation set; success toast; extend `GoalDetailPage.test.tsx` (incl. empty-edit rejection). (depends on T016)
+- [x] T018 [US4] Wire delete in `src/pages/GoalDetailPage.tsx`: pass an `onDelete` handler to `StatusUpdateList` that confirms (warm/measured copy), `useMutation(deleteGoalStatusUpdate)` + same invalidation set, success toast, and falls back to the empty state when the last update is removed; extend `GoalDetailPage.test.tsx`. (depends on T014; integrates with T016)
 
 **Checkpoint**: Full status-update management (read/write/edit/delete) complete.
 
@@ -110,9 +110,9 @@ description: "Task list for feature: Goals in the Web App"
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T019 [P] Review all new copy added in T003 (and any inline strings) for Principle IV tone compliance; confirm no raw/dry system text leaked into pages or components.
-- [ ] T020 Run `cd services/twig-web && npm test` (all green) and `npm run build` (tsc + vite type-check clean).
-- [ ] T021 Execute `specs/058-add-web-goals/quickstart.md` end-to-end against `make dev` + `npm run dev`, including the cross-interface consistency check (web ↔ TUI) and error/not-found paths.
+- [x] T019 [P] Review all new copy added in T003 (and any inline strings) for Principle IV tone compliance; confirm no raw/dry system text leaked into pages or components.
+- [x] T020 Run `cd services/twig-web && npm test` (all green) and `npm run build` (tsc + vite type-check clean).
+- [x] T021 Execute `specs/058-add-web-goals/quickstart.md` end-to-end against `make dev` + `npm run dev`, including the cross-interface consistency check (web ↔ TUI) and error/not-found paths.
 
 ---
 

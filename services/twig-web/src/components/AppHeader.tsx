@@ -33,6 +33,9 @@ export function AppHeader() {
         <NavLink to="/plan" className={navLinkClass}>
           Plan
         </NavLink>
+        <NavLink to="/goals" className={navLinkClass}>
+          Goals
+        </NavLink>
 
         {/* Download and Account: wide viewports only (C5) */}
         <NavLink
