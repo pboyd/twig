@@ -58,6 +58,11 @@ describe("AppHeader — US1: primary navigation", () => {
     expect(screen.getByRole("link", { name: /plan/i })).toBeTruthy();
   });
 
+  it("renders Goals link", () => {
+    renderHeader();
+    expect(screen.getByRole("link", { name: /goals/i })).toBeTruthy();
+  });
+
   it("Tasks link has active styling when on /tasks", () => {
     renderHeader("/tasks");
     const tasksLink = screen.getByRole("link", { name: /tasks/i });

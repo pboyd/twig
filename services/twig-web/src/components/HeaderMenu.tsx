@@ -77,6 +77,13 @@ export function HeaderMenu() {
           className="absolute right-0 mt-1 w-44 rounded-md border border-gray-200 bg-white shadow-md dark:border-gray-700 dark:bg-gray-800 z-50"
         >
           <NavLink
+            to="/goals"
+            className={menuItemClass}
+            onClick={() => setOpen(false)}
+          >
+            Goals
+          </NavLink>
+          <NavLink
             to="/account"
             className={menuItemClass}
             onClick={() => setOpen(false)}
