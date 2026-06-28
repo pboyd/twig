@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
@@ -763,16 +763,16 @@ func TestCreateTaskCmd_RootTaskHighlightsNewTask(t *testing.T) {
 // fakeTaskClient is a minimal TaskServiceClient for unit tests.
 type fakeTaskClient struct {
 	taskv1connect.TaskServiceClient
-	lastUpdateReq       *taskv1.UpdateTaskRequest
-	lastCreateReq       *taskv1.CreateTaskRequest
-	lastSetTaskGoalReq  *taskv1.SetTaskGoalRequest // last request received by SetTaskGoal
-	lastCompleteID      int64
-	lastUncompleteID    int64
-	lastPomTaskID       int64
-	completeErr         error
-	uncompleteErr       error
-	pomErr              error
-	setTaskGoalErr      error // if non-nil, SetTaskGoal returns this error
+	lastUpdateReq      *taskv1.UpdateTaskRequest
+	lastCreateReq      *taskv1.CreateTaskRequest
+	lastSetTaskGoalReq *taskv1.SetTaskGoalRequest // last request received by SetTaskGoal
+	lastCompleteID     int64
+	lastUncompleteID   int64
+	lastPomTaskID      int64
+	completeErr        error
+	uncompleteErr      error
+	pomErr             error
+	setTaskGoalErr     error // if non-nil, SetTaskGoal returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
 	// createTaskID is the ID returned for the newly created task.
@@ -1284,6 +1284,122 @@ func TestQuitConfirm_OnPlanning_Esc(t *testing.T) {
 
 	if m2.confirmingQuit {
 		t.Error("esc while confirmingQuit on Planning: should clear confirmingQuit")
+	}
+}
+
+// ── Discard confirmation tests (T015) ────────────────────────────────────────
+
+// TestDiscardConfirm_EditFormEscOnDirtySetsConfirmingDiscard verifies that Esc
+// on a dirty edit form dispatches editDiscardRequestedMsg which sets
+// confirmingDiscard true.
+func TestDiscardConfirm_EditFormEscOnDirtySetsConfirmingDiscard(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit.name.SetValue("changed!")
+
+	// First keypress: Esc on dirty form → cmd returning editDiscardRequestedMsg
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("Esc on dirty form: expected a cmd, got nil")
+	}
+	msg := cmd()
+	// Feed the msg back to the model
+	m2, _ := m.Update(msg)
+	nm := m2.(Model)
+
+	if !nm.ConfirmingDiscard() {
+		t.Error("Esc on dirty edit form: expecting confirmingDiscard=true")
+	}
+	if nm.mode != modeEdit {
+		t.Error("should remain in modeEdit while confirming discard")
+	}
+}
+
+// TestDiscardConfirm_YDiscardsChanges verifies that 'y' while confirmingDiscard
+// closes the form (goes back to modeList) by emitting editCancelledMsg.
+func TestDiscardConfirm_YDiscardsChanges(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.SetConfirmingDiscard(true)
+
+	m2, cmd := m.Update(tea.KeyPressMsg{Text: "y", Code: 'y'})
+	nm := m2.(Model)
+
+	if nm.mode != modeList {
+		t.Error("after y: should return to modeList")
+	}
+	if nm.ConfirmingDiscard() {
+		t.Error("after y: confirmingDiscard should be false")
+	}
+	if cmd == nil {
+		t.Fatal("after y: expected a cmd (editCancelledMsg), got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editCancelledMsg); !ok {
+		t.Fatalf("after y: expected editCancelledMsg, got %T", msg)
+	}
+}
+
+// TestDiscardConfirm_NCancelsDiscard verifies that 'n' while confirmingDiscard
+// clears the flag and stays in the form.
+func TestDiscardConfirm_NCancelsDiscard(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.SetConfirmingDiscard(true)
+
+	m2, cmd := m.Update(tea.KeyPressMsg{Text: "n", Code: 'n'})
+	nm := m2.(Model)
+
+	if nm.ConfirmingDiscard() {
+		t.Error("after n: confirmingDiscard should be false")
+	}
+	if cmd != nil {
+		t.Errorf("after n: expected nil cmd, got %v", cmd)
+	}
+	if nm.mode != modeEdit {
+		t.Error("after n: should stay in modeEdit")
+	}
+}
+
+// TestDiscardConfirm_EscCancelsDiscard verifies that Esc while confirmingDiscard
+// clears the flag and stays in the form.
+func TestDiscardConfirm_EscCancelsDiscard(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.SetConfirmingDiscard(true)
+
+	m2, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	nm := m2.(Model)
+
+	if nm.ConfirmingDiscard() {
+		t.Error("Esc while confirmingDiscard: should clear confirmingDiscard")
+	}
+	if cmd != nil {
+		t.Errorf("Esc while confirmingDiscard: expected nil cmd, got %v", cmd)
+	}
+	if nm.mode != modeEdit {
+		t.Error("Esc while confirmingDiscard: should stay in modeEdit")
+	}
+}
+
+// TestDiscardConfirm_EscOnCleanFormClosesDirectly verifies that Esc on a clean
+// edit form emits editCancelledMsg immediately (no discard confirmation).
+func TestDiscardConfirm_EscOnCleanFormClosesDirectly(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeEdit
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("Esc on clean form: expected a cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editCancelledMsg); !ok {
+		t.Fatalf("Esc on clean form: expected editCancelledMsg, got %T", msg)
 	}
 }
 

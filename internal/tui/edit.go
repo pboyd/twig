@@ -38,12 +38,19 @@ type editFormModel struct {
 	originalCursor   int
 	calendar         *calendarModel
 	nowFunc          func() time.Time
-	isGoal bool // true when this form edits/creates a Goal, not a Task
+	isGoal           bool // true when this form edits/creates a Goal, not a Task
 	// Goal selector (task edit forms only; hidden when showGoalField is false).
 	availableGoals []*goalv1.Goal // committed + incubating goals
 	goalIdx        int            // -1 = none, 0..N-1 = index into availableGoals
 	showGoalField  bool
 	originalGoalID *int64
+	// Opened-state snapshot for dirty detection.
+	origName        string
+	origDescription string
+	origDue         string
+	origEstimate    string
+	origSnooze      string
+	origGoalIdx     int
 }
 
 // editSavedMsg is dispatched when the user confirms the edit form.
@@ -63,6 +70,12 @@ type editSavedMsg struct {
 
 // editCancelledMsg is dispatched when the user cancels the edit form.
 type editCancelledMsg struct {
+	originalCursor int
+}
+
+// editDiscardRequestedMsg is dispatched when the user presses Esc on a dirty
+// edit form, requesting a discard-confirmation overlay.
+type editDiscardRequestedMsg struct {
 	originalCursor int
 }
 
@@ -125,6 +138,14 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) ed
 		}
 	}
 
+	// Capture opened-state snapshot for dirty detection.
+	f.origName = f.name.Value()
+	f.origDescription = f.description.Value()
+	f.origDue = f.due.Value()
+	f.origEstimate = f.pomodoroEstimate.Value()
+	f.origSnooze = f.snooze.Value()
+	f.origGoalIdx = f.goalIdx
+
 	return f
 }
 
@@ -181,6 +202,7 @@ func newBlankForm(originalCursor int) editFormModel {
 		snooze:           snooze,
 		focusIndex:       focusName,
 		originalCursor:   originalCursor,
+		origGoalIdx:      -1,
 	}
 }
 
@@ -190,6 +212,32 @@ func (f editFormModel) now() time.Time {
 		return f.nowFunc()
 	}
 	return time.Now()
+}
+
+// isDirty returns true when any form field differs from its
+// opened-state snapshot (after trimming whitespace). Only meaningful
+// for edit forms (taskID != nil); create forms skip the check.
+// Goal selector is only compared when showGoalField is true.
+func (f editFormModel) isDirty() bool {
+	if strings.TrimSpace(f.name.Value()) != f.origName {
+		return true
+	}
+	if strings.TrimSpace(f.description.Value()) != f.origDescription {
+		return true
+	}
+	if strings.TrimSpace(f.due.Value()) != f.origDue {
+		return true
+	}
+	if strings.TrimSpace(f.pomodoroEstimate.Value()) != f.origEstimate {
+		return true
+	}
+	if strings.TrimSpace(f.snooze.Value()) != f.origSnooze {
+		return true
+	}
+	if f.showGoalField && f.goalIdx != f.origGoalIdx {
+		return true
+	}
+	return false
 }
 
 // openCalendar creates and attaches a calendarModel for the focused date field.
@@ -266,6 +314,16 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	case key.Matches(keyMsg, keys.Calendar) && (f.focusIndex == focusDue || f.focusIndex == focusSnooze):
 		f = f.openCalendar()
 		return f, nil
+
+	case key.Matches(keyMsg, keys.Cancel):
+		if f.isDirty() {
+			return f, func() tea.Msg {
+				return editDiscardRequestedMsg{originalCursor: f.originalCursor}
+			}
+		}
+		return f, func() tea.Msg {
+			return editCancelledMsg{originalCursor: f.originalCursor}
+		}
 
 	case key.Matches(keyMsg, keys.Save):
 		return f, f.buildSaveMsg()
@@ -467,7 +525,7 @@ func (f editFormModel) View(width int) string {
 		cancelStyle = "[>Cancel<]"
 	}
 	sb.WriteString(saveStyle + "  " + cancelStyle + "\n")
-	sb.WriteString("\nCtrl+S: save  Tab: next field")
+	sb.WriteString("\nCtrl+S: save  Tab: next field  Esc: cancel")
 
 	return sb.String()
 }

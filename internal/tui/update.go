@@ -767,6 +767,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mode = modeList
 		m.cursor = msg.originalCursor
 		m.err = nil
+		m.confirmingDiscard = false
+		return m, nil
+
+	case editDiscardRequestedMsg:
+		m.confirmingDiscard = true
 		return m, nil
 
 	case planEntriesMsg:
@@ -978,6 +983,31 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.notice = "" // clear transient notice on every user action
+
+	// Discard confirmation overlay intercept.
+	if m.confirmingDiscard {
+		switch msg.String() {
+		case "y":
+			m.confirmingDiscard = false
+			if m.activeTab == tabPlanning {
+				m.plan.mode = planList
+				m.plan.err = nil
+				return m, nil
+			}
+			m.mode = modeList
+			m.err = nil
+			if m.activeTab == tabGoals {
+				m.goal.mode = goalList
+			}
+			return m, func() tea.Msg {
+				return editCancelledMsg{originalCursor: m.edit.originalCursor}
+			}
+		case "n", "esc":
+			m.confirmingDiscard = false
+		}
+		return m, nil
+	}
+
 	if m.activeTab == tabGoals {
 		return m.handleGoalsKey(msg)
 	}
@@ -1890,6 +1920,14 @@ func (m Model) handlePlanFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.ShiftTab):
 		m.cyclePlanFormFocus(-1)
+		return m, nil
+	case key.Matches(msg, m.keys.Cancel):
+		if planFormDirty(m.plan.form) {
+			m.confirmingDiscard = true
+			return m, nil
+		}
+		m.plan.mode = planList
+		m.plan.err = nil
 		return m, nil
 	}
 
