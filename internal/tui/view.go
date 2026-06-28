@@ -353,7 +353,11 @@ func (m Model) viewWithDatePrompt() string {
 	promptWidth := m.width - listWidth
 
 	var promptContent string
-	promptContent = fmt.Sprintf("  Which day? (YYYY-MM-DD)\n\n  > Date: %s\n\n  [enter] confirm  [esc] cancel\n", m.datePromptInput.View())
+	if m.datePromptCalendar != nil {
+		promptContent = fmt.Sprintf("  Which day? (YYYY-MM-DD)\n\n  > Date: %s\n\n%s  enter: pick  esc: never mind  t: today  [/]: month  {/}: year\n", m.datePromptInput.View(), m.datePromptCalendar.View())
+	} else {
+		promptContent = fmt.Sprintf("  Which day? (YYYY-MM-DD)\n\n  > Date: %s\n\n  ctrl+g: summon the calendar\n\n  [enter] confirm  [esc] cancel\n", m.datePromptInput.View())
+	}
 
 	if m.styled {
 		innerH := m.height - 2 - m.statusHeight() - tabBarHeight

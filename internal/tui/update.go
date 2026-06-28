@@ -974,6 +974,11 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		m.edit = newEdit
 		return m, cmd
 	case modeDatePrompt:
+		// While the calendar is open, drop paste messages so the text field
+		// can't change out from under it (mirrors editFormModel behaviour).
+		if m.datePromptCalendar != nil {
+			return m, nil
+		}
 		var cmd tea.Cmd
 		m.datePromptInput, cmd = m.datePromptInput.Update(msg)
 		return m, cmd
@@ -2118,6 +2123,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			ti.SetValue(tomorrow)
 			ti.Focus()
 			m.datePromptInput = ti
+			m.datePromptCalendar = nil
 			m.err = nil
 			m.mode = modeDatePrompt
 		}
@@ -2194,10 +2200,37 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // handleDatePromptKey handles key events while the Tasks-tab date prompt is open.
 func (m Model) handleDatePromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// When the calendar is open, route all keys to it first.
+	if m.datePromptCalendar != nil {
+		switch {
+		case msg.Code == tea.KeyEscape:
+			// Close calendar; leave text field unchanged.
+			m.datePromptCalendar = nil
+			return m, nil
+		case msg.Code == tea.KeyEnter || key.Matches(msg, m.keys.Save):
+			// Confirm selection: write date into the text input, close calendar.
+			m.datePromptInput.SetValue(m.datePromptCalendar.confirm())
+			m.datePromptCalendar = nil
+			return m, nil
+		case msg.Code == tea.KeyTab:
+			// Tab: close calendar without changing the field.
+			m.datePromptCalendar = nil
+			return m, nil
+		default:
+			m.datePromptCalendar.handleKey(msg)
+			return m, nil
+		}
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Cancel):
 		m.mode = modeList
+		m.datePromptCalendar = nil
 		m.err = nil
+		return m, nil
+	case key.Matches(msg, m.keys.Calendar):
+		// Open the calendar pre-seeded with the current field value.
+		m.datePromptCalendar = newCalendar(m.datePromptInput.Value(), time.Now(), false)
 		return m, nil
 	case key.Matches(msg, m.keys.Save) || msg.Code == tea.KeyEnter:
 		dateStr := strings.TrimSpace(m.datePromptInput.Value())
@@ -2206,6 +2239,7 @@ func (m Model) handleDatePromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.mode = modeList
+		m.datePromptCalendar = nil
 		m.err = nil
 		notice := fmt.Sprintf("Tucked '%s' into %s's plan.", m.datePromptTaskName, dateStr)
 		return m, addPlanTaskCmd(m.planClient, dateStr, m.datePromptTaskID, 0, 0, false, notice)

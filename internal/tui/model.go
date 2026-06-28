@@ -169,6 +169,7 @@ type Model struct {
 	confirmingDiscard bool
 	// date prompt state (modeDatePrompt): used when ctrl+p is pressed on Tasks tab
 	datePromptInput    textinput.Model
+	datePromptCalendar *calendarModel // nil when closed
 	datePromptTaskID   int64
 	datePromptTaskName string
 	// scheduledDays maps task id → ascending YYYY-MM-DD days (today-or-future).

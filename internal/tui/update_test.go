@@ -2072,6 +2072,176 @@ func TestTaskGoalMutationMsg_GenericError_SurfacesOnTasksTab(t *testing.T) {
 // TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached verifies that when a task
 // is linked to a goal that is not in m.goal.goals (e.g. completed/archived),
 // effectiveGoalName returns something containing the goal ID rather than "".
+// TestDatePromptCalendar_CtrlG_OpensCalendar verifies that pressing ctrl+g in the
+// date prompt opens the calendar widget.
+func TestDatePromptCalendar_CtrlG_OpensCalendar(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	nm := m2.(Model)
+	if nm.mode != modeDatePrompt {
+		t.Fatalf("setup: expected modeDatePrompt, got %v", nm.mode)
+	}
+	nm.datePromptInput.SetValue("2026-07-10")
+
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	result := nm2.(Model)
+
+	if result.datePromptCalendar == nil {
+		t.Error("ctrl+g in date prompt: calendar should be open (non-nil), got nil")
+	}
+	if result.mode != modeDatePrompt {
+		t.Errorf("ctrl+g in date prompt: mode should stay modeDatePrompt, got %v", result.mode)
+	}
+}
+
+// TestDatePromptCalendar_Enter_ConfirmsSelection verifies that pressing enter
+// while the calendar is open writes the selected date into the text input and
+// closes the calendar.
+func TestDatePromptCalendar_Enter_ConfirmsSelection(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	nm := m2.(Model)
+	nm.datePromptInput.SetValue("2026-07-10")
+
+	// Open calendar
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	withCal := nm2.(Model)
+	if withCal.datePromptCalendar == nil {
+		t.Fatal("calendar should be open after ctrl+g")
+	}
+
+	// Confirm selection with Enter
+	nm3, _ := withCal.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	result := nm3.(Model)
+
+	if result.datePromptCalendar != nil {
+		t.Error("enter: calendar should be closed (nil) after confirmation")
+	}
+	if result.datePromptInput.Value() == "" {
+		t.Error("enter: date input should have a value after calendar confirmation")
+	}
+	// The selected date should be a valid YYYY-MM-DD.
+	if _, err := time.Parse("2006-01-02", result.datePromptInput.Value()); err != nil {
+		t.Errorf("enter: date input value %q is not YYYY-MM-DD: %v", result.datePromptInput.Value(), err)
+	}
+}
+
+// TestDatePromptCalendar_Esc_ClosesCalendarFieldUnchanged verifies that pressing
+// esc while the calendar is open closes it without modifying the text field.
+func TestDatePromptCalendar_Esc_ClosesCalendarFieldUnchanged(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	nm := m2.(Model)
+	const originalDate = "2026-07-10"
+	nm.datePromptInput.SetValue(originalDate)
+
+	// Open calendar
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	withCal := nm2.(Model)
+	if withCal.datePromptCalendar == nil {
+		t.Fatal("calendar should be open after ctrl+g")
+	}
+
+	// Dismiss with Esc
+	nm3, _ := withCal.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	result := nm3.(Model)
+
+	if result.datePromptCalendar != nil {
+		t.Error("esc: calendar should be closed (nil)")
+	}
+	if result.datePromptInput.Value() != originalDate {
+		t.Errorf("esc: date field changed — want %q, got %q", originalDate, result.datePromptInput.Value())
+	}
+	// The prompt should still be open (esc closes calendar, not prompt).
+	if result.mode != modeDatePrompt {
+		t.Errorf("esc: mode should stay modeDatePrompt, got %v", result.mode)
+	}
+}
+
+// TestDatePromptCalendar_Navigation_MovesSelection verifies that arrow-key
+// navigation updates the calendar's selected date while it is open.
+func TestDatePromptCalendar_Navigation_MovesSelection(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	nm := m2.(Model)
+	nm.datePromptInput.SetValue("2026-07-10")
+
+	// Open calendar
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	withCal := nm2.(Model)
+	initialSelected := withCal.datePromptCalendar.selected
+
+	// Navigate right (next day)
+	nm3, _ := withCal.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	after := nm3.(Model)
+
+	if after.datePromptCalendar == nil {
+		t.Fatal("calendar should still be open after navigation")
+	}
+	if !after.datePromptCalendar.selected.After(initialSelected) {
+		t.Errorf("right arrow: expected selected date to advance, got %v (was %v)",
+			after.datePromptCalendar.selected, initialSelected)
+	}
+}
+
+// TestDatePromptCalendar_Paste_DroppedWhenCalendarOpen verifies that pasting
+// text is ignored while the calendar is open.
+func TestDatePromptCalendar_Paste_DroppedWhenCalendarOpen(t *testing.T) {
+	m := buildTestModel()
+	m.mode = modeDatePrompt
+	m.datePromptInput = newPlanInput("YYYY-MM-DD")
+	m.datePromptInput.Focus()
+	m.datePromptInput.SetValue("2026-07-10")
+	m.datePromptCalendar = newCalendar("2026-07-10", time.Now(), false)
+
+	m2, _ := m.Update(tea.PasteMsg{Content: "2026-12-25"})
+	result := m2.(Model)
+
+	// The paste should have been swallowed; the field should be unchanged.
+	if result.datePromptInput.Value() != "2026-07-10" {
+		t.Errorf("paste with calendar open: field should be unchanged, got %q", result.datePromptInput.Value())
+	}
+}
+
+// TestDatePromptCalendar_ClearOnReopen verifies that re-opening the date prompt
+// does not carry over a stale calendar from a previous session.
+func TestDatePromptCalendar_ClearOnReopen(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildTasksModelWithPlan(fc)
+	m.cursor = 0
+
+	// First open: open prompt and the calendar, then dismiss both.
+	m2, _ := m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	nm := m2.(Model)
+	nm2, _ := nm.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	withCal := nm2.(Model)
+	if withCal.datePromptCalendar == nil {
+		t.Fatal("calendar should be open")
+	}
+	// Cancel the whole prompt (Esc at prompt level when calendar is closed).
+	withCalEsc, _ := withCal.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	// That esc closes the calendar; press Esc again to close the prompt.
+	afterFirst, _ := withCalEsc.(Model).Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if afterFirst.(Model).mode != modeList {
+		t.Fatalf("should be back in modeList, got %v", afterFirst.(Model).mode)
+	}
+
+	// Reopen the prompt.
+	m3, _ := afterFirst.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	reopened := m3.(Model)
+	if reopened.datePromptCalendar != nil {
+		t.Error("reopen: datePromptCalendar should be nil on fresh open")
+	}
+}
+
 func TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached(t *testing.T) {
 	goalID := int64(42)
 	tasks := []*taskv1.Task{{Id: 1, Name: "task", GoalId: &goalID}}
