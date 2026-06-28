@@ -77,9 +77,6 @@ func TestGoalStatus_DetailPaneWithLatest(t *testing.T) {
 	if !strings.Contains(out, "ago") {
 		t.Errorf("expected relative timestamp, got:\n%s", out)
 	}
-	if !strings.Contains(out, "[s] status history") {
-		t.Errorf("expected history hint, got:\n%s", out)
-	}
 }
 
 // TestGoalStatus_SKeyStartsCompose verifies pressing `S` activates compose.

@@ -381,12 +381,6 @@ func (m Model) renderGoalDetail(width int) string {
 		}
 		sb.WriteByte('\n')
 		sb.WriteString(m.md.Render(su.GetBody(), markdown.Options{Width: width, Styled: m.styled}))
-		hint := "[s] status history"
-		if m.styled {
-			sb.WriteString(dimStyle.Render(hint))
-		} else {
-			sb.WriteString(hint)
-		}
 		sb.WriteByte('\n')
 	} else {
 		noStatus := "No status yet — how's it going?"
