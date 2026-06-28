@@ -298,6 +298,15 @@ func (m Model) viewWithForm() string {
 
 		listContent := m.renderList(innerListW)
 		formContent := m.edit.View(innerFormW)
+		if m.confirmingDiscard {
+			overlay := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				Padding(1, 2).
+				Width(innerFormW - 6).
+				Align(lipgloss.Center).
+				Render("Toss your edits?\n\n [y]es  [n]o — keep editing")
+			formContent = lipgloss.Place(innerFormW, innerH, lipgloss.Center, lipgloss.Center, overlay)
+		}
 
 		listPane := paneBox(listContent, listWidth, innerH, "", false)
 		formPane := paneBox(formContent, formWidth, innerH, "", true)
@@ -314,6 +323,9 @@ func (m Model) viewWithForm() string {
 
 	list := m.renderList(listWidth)
 	form := m.edit.View(formWidth)
+	if m.confirmingDiscard {
+		form = "Toss your edits? [y]es  [n]o — keep editing"
+	}
 
 	listLines := splitLines(list, maxLines)
 	formLines := splitLines(form, maxLines)

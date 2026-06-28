@@ -109,18 +109,19 @@ func TestEditFormShiftTabGoesBack(t *testing.T) {
 	}
 }
 
-// TestEditFormEscDoesNotCancel verifies Esc no longer cancels the edit form
-// (users must use the Cancel button to avoid accidentally losing typed work).
-func TestEditFormEscDoesNotCancel(t *testing.T) {
+// TestEditFormEscCancelsCleanForm verifies that Esc on a clean (create) form
+// dispatches editCancelledMsg immediately.
+func TestEditFormEscCancelsCleanForm(t *testing.T) {
 	f := NewRootForm(5, nil)
 	keys := DefaultKeyMap()
 
 	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
-	if cmd != nil {
-		msg := cmd()
-		if _, ok := msg.(editCancelledMsg); ok {
-			t.Fatal("Esc should not produce editCancelledMsg; use the Cancel button instead")
-		}
+	if cmd == nil {
+		t.Fatal("Esc on clean form: expected editCancelledMsg cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editCancelledMsg); !ok {
+		t.Fatalf("Esc on clean form: expected editCancelledMsg, got %T", msg)
 	}
 }
 
@@ -150,8 +151,9 @@ func TestEditFormCtrlSSaves(t *testing.T) {
 	}
 }
 
-// TestEditFormEscFromAnyField verifies Esc does not cancel the form from any field.
-func TestEditFormEscFromAnyField(t *testing.T) {
+// TestEditFormEscFromAnyFieldOnCleanForm verifies Esc cancels the form from any
+// field when the form is clean (create form — all originals are empty).
+func TestEditFormEscFromAnyFieldOnCleanForm(t *testing.T) {
 	keys := DefaultKeyMap()
 
 	for fi := 0; fi < focusCount; fi++ {
@@ -160,11 +162,12 @@ func TestEditFormEscFromAnyField(t *testing.T) {
 
 		_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
 		if cmd == nil {
+			t.Errorf("focusIndex=%d: Esc should produce a cmd (editCancelledMsg), got nil", fi)
 			continue
 		}
 		msg := cmd()
-		if _, ok := msg.(editCancelledMsg); ok {
-			t.Errorf("focusIndex=%d: Esc should not produce editCancelledMsg", fi)
+		if _, ok := msg.(editCancelledMsg); !ok {
+			t.Errorf("focusIndex=%d: Esc should produce editCancelledMsg, got %T", fi, msg)
 		}
 	}
 }
@@ -379,6 +382,37 @@ func TestEditForm_Calendar_SwallowsFormKeys(t *testing.T) {
 			if _, ok := msg.(editSavedMsg); ok {
 				t.Error("ctrl+s while calendar open: should be swallowed, but got editSavedMsg")
 			}
+		}
+	}
+}
+
+// TestEditForm_Calendar_EscDoesNotCancelForm verifies that Esc while the
+// calendar is open only closes the calendar and does NOT cancel/close the form
+// (calendar takes priority over the form-level Esc handler).
+func TestEditForm_Calendar_EscDoesNotCancelForm(t *testing.T) {
+	f := NewEditForm(&taskv1.Task{Id: 1, Name: "task"}, 0, nil)
+	f.focusIndex = focusDue
+	f.name.SetValue("changed") // make the form dirty
+	keys := DefaultKeyMap()
+
+	// Open calendar.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("calendar did not open")
+	}
+
+	// Esc while calendar open: should close calendar, NOT emit any message.
+	f2, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+	if f2.calendar != nil {
+		t.Error("after esc: calendar should be closed")
+	}
+	if cmd != nil {
+		msg := cmd()
+		switch msg.(type) {
+		case editCancelledMsg:
+			t.Error("Esc while calendar open: should not emit editCancelledMsg")
+		case editDiscardRequestedMsg:
+			t.Error("Esc while calendar open: should not emit editDiscardRequestedMsg")
 		}
 	}
 }
@@ -873,5 +907,181 @@ func TestNewRootForm_GoalField_SaveEmitsGoalChanged(t *testing.T) {
 	}
 	if saved.newGoalID == nil || *saved.newGoalID != 10 {
 		t.Errorf("newGoalID: want 10 (first goal), got %v", saved.newGoalID)
+	}
+}
+
+// ── isDirty tests (T005) ─────────────────────────────────────────────────────
+
+// TestEditForm_IsDirty_BlankFormReturnsFalse verifies a blank create form is not dirty.
+func TestEditForm_IsDirty_BlankFormReturnsFalse(t *testing.T) {
+	f := NewRootForm(0, nil)
+	if ExportEditFormIsDirty(f) {
+		t.Error("blank root form: isDirty should be false")
+	}
+	f2 := NewSubtaskForm(1, 0)
+	if ExportEditFormIsDirty(f2) {
+		t.Error("blank subtask form: isDirty should be false")
+	}
+}
+
+// TestEditForm_IsDirty_EditFormUnchangedReturnsFalse verifies a pre-filled edit
+// form with no changes is not dirty.
+func TestEditForm_IsDirty_EditFormUnchangedReturnsFalse(t *testing.T) {
+	task := makeTask(10, "buy milk")
+	f := NewEditForm(task, 0, nil)
+	if ExportEditFormIsDirty(f) {
+		t.Error("unchanged edit form: isDirty should be false")
+	}
+}
+
+// TestEditForm_IsDirty_NameChange verifies that changing the name makes the form dirty.
+func TestEditForm_IsDirty_NameChange(t *testing.T) {
+	task := makeTask(10, "buy milk")
+	f := NewEditForm(task, 0, nil)
+	f.name.SetValue("buy oat milk")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after name change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_DescriptionChange verifies that changing the description makes the form dirty.
+func TestEditForm_IsDirty_DescriptionChange(t *testing.T) {
+	task := makeTask(10, "task")
+	task.Description = "original"
+	f := NewEditForm(task, 0, nil)
+	f.description.SetValue("changed")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after description change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_DueChange verifies that changing the due date makes the form dirty.
+func TestEditForm_IsDirty_DueChange(t *testing.T) {
+	task := makeTask(10, "task")
+	task.Due = timestamppb.New(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	f := NewEditForm(task, 0, nil)
+	f.due.SetValue("2026-07-04")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after due change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_EstimateChange verifies that changing the estimate makes the form dirty.
+func TestEditForm_IsDirty_EstimateChange(t *testing.T) {
+	task := makeTask(10, "task")
+	task.Estimate = 3
+	f := NewEditForm(task, 0, nil)
+	f.pomodoroEstimate.SetValue("5")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after estimate change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_SnoozeChange verifies that changing the snooze makes the form dirty.
+func TestEditForm_IsDirty_SnoozeChange(t *testing.T) {
+	task := makeTask(10, "task")
+	task.SnoozeUntil = timestamppb.New(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	f := NewEditForm(task, 0, nil)
+	f.snooze.SetValue("2026-10-01")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after snooze change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_BlankFormTypedBecomesDirty verifies that typing into a
+// blank create form makes it dirty (isDirty returns true).
+func TestEditForm_IsDirty_BlankFormTypedBecomesDirty(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.name.SetValue("hello")
+	if !ExportEditFormIsDirty(f) {
+		t.Error("blank form with typed name: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_WhitespaceOnlyNotDirty verifies that whitespace-only
+// input on a blank create form does not make the form dirty.
+func TestEditForm_IsDirty_WhitespaceOnlyNotDirty(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.name.SetValue("  ")
+	if ExportEditFormIsDirty(f) {
+		t.Error("whitespace-only on blank form: isDirty should be false")
+	}
+}
+
+// TestEditForm_IsDirty_GoalFieldChange verifies that cycling the goal selector
+// on an edit form makes it dirty.
+func TestEditForm_IsDirty_GoalFieldChange(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, makeGoals())
+	// Select first goal with →
+	f.focusIndex = focusGoal
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, DefaultKeyMap())
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after goal change: isDirty should be true")
+	}
+}
+
+// TestEditForm_IsDirty_GoalFieldUnchangedNotDirty verifies the goal selector
+// does not make the form dirty when unchanged.
+func TestEditForm_IsDirty_GoalFieldUnchangedNotDirty(t *testing.T) {
+	id20 := int64(20)
+	task := &taskv1.Task{Id: 1, Name: "task", GoalId: &id20}
+	f := NewEditForm(task, 0, makeGoals())
+	if ExportEditFormIsDirty(f) {
+		t.Error("unchanged goal field: isDirty should be false")
+	}
+}
+
+// ── Dirty Esc tests (T016) ────────────────────────────────────────────────────
+
+// TestEditForm_EscOnDirtyEditFormEmitsDiscardRequested verifies that Esc on a
+// dirty edit form emits editDiscardRequestedMsg, not editCancelledMsg.
+func TestEditForm_EscOnDirtyEditFormEmitsDiscardRequested(t *testing.T) {
+	task := makeTask(10, "buy milk")
+	f := NewEditForm(task, 0, nil)
+	f.name.SetValue("buy oat milk") // make it dirty
+	keys := DefaultKeyMap()
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+	if cmd == nil {
+		t.Fatal("Esc on dirty edit form: expected cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editDiscardRequestedMsg); !ok {
+		t.Fatalf("Esc on dirty edit form: expected editDiscardRequestedMsg, got %T", msg)
+	}
+}
+
+// TestEditForm_EscOnCleanEditFormEmitsCancelled verifies that Esc on a clean
+// edit form (no changes) emits editCancelledMsg immediately.
+func TestEditForm_EscOnCleanEditFormEmitsCancelled(t *testing.T) {
+	task := makeTask(10, "buy milk")
+	f := NewEditForm(task, 0, nil)
+	keys := DefaultKeyMap()
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+	if cmd == nil {
+		t.Fatal("Esc on clean edit form: expected cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editCancelledMsg); !ok {
+		t.Fatalf("Esc on clean edit form: expected editCancelledMsg, got %T", msg)
+	}
+}
+
+// TestEditForm_EscOnDirtyBlankFormEmitsDiscardRequested verifies that Esc on a
+// dirty blank (create) form emits editDiscardRequestedMsg.
+func TestEditForm_EscOnDirtyBlankFormEmitsDiscardRequested(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.name.SetValue("typed something")
+	keys := DefaultKeyMap()
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: tea.KeyEscape}, keys)
+	if cmd == nil {
+		t.Fatal("Esc on dirty blank form: expected cmd, got nil")
+	}
+	msg := cmd()
+	if _, ok := msg.(editDiscardRequestedMsg); !ok {
+		t.Fatalf("Esc on dirty blank form: expected editDiscardRequestedMsg, got %T", msg)
 	}
 }

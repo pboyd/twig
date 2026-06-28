@@ -2,12 +2,14 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -17,20 +19,20 @@ import (
 // fakePlanClient is a minimal PlanServiceClient for unit tests.
 type fakePlanClient struct {
 	planv1connect.PlanServiceClient
-	entries              []*planv1.PlanEntry
-	lastListDay          string
-	listErr              error
-	addTaskReq           *planv1.AddPlanTaskRequest
-	addEventReq          *planv1.AddPlanEventRequest
-	renameReq            *planv1.RenamePlanEntryRequest
-	moveReq              *planv1.MovePlanEntryRequest
-	removeReq            *planv1.RemovePlanEntryRequest
-	clearReq             *planv1.ClearPlanRequest
-	mutateErr            error
-	reorderReq           *planv1.ReorderPlanEntryRequest
-	scheduledDaysReq     *planv1.ListScheduledDaysRequest
-	scheduledDaysResp    []*planv1.ScheduledDay
-	scheduledDaysErr     error
+	entries           []*planv1.PlanEntry
+	lastListDay       string
+	listErr           error
+	addTaskReq        *planv1.AddPlanTaskRequest
+	addEventReq       *planv1.AddPlanEventRequest
+	renameReq         *planv1.RenamePlanEntryRequest
+	moveReq           *planv1.MovePlanEntryRequest
+	removeReq         *planv1.RemovePlanEntryRequest
+	clearReq          *planv1.ClearPlanRequest
+	mutateErr         error
+	reorderReq        *planv1.ReorderPlanEntryRequest
+	scheduledDaysReq  *planv1.ListScheduledDaysRequest
+	scheduledDaysResp []*planv1.ScheduledDay
+	scheduledDaysErr  error
 }
 
 func (f *fakePlanClient) ListPlanEntries(_ context.Context, req *connect.Request[planv1.ListPlanEntriesRequest]) (*connect.Response[planv1.ListPlanEntriesResponse], error) {
@@ -128,6 +130,30 @@ func pressKeyStr(m Model, k string) (Model, tea.Cmd) {
 func pressSpecialKey(m Model, msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd
+}
+
+// initEditFormEntry initialises the plan edit form as though an entry with the
+// given id, name, startMinute, and durationMinute is being edited. This is a
+// test convenience that avoids populating m.plan.entries.
+func (m *Model) initEditFormEntry(id int32, name string, startMinute *int32, durationMinute int32) {
+	n := newPlanInput("Name")
+	n.SetValue(name)
+	n.Focus()
+	start := newPlanInput("e.g. 09:00")
+	if startMinute != nil {
+		start.SetValue(fmt.Sprintf("%02d:%02d", int(*startMinute)/60, int(*startMinute)%60))
+	}
+	dur := newPlanInput("e.g. 30m")
+	if durationMinute > 0 {
+		dur.SetValue(fmt.Sprintf("%dm", durationMinute))
+	}
+	m.plan.form = planFormState{
+		fields:  []textinput.Model{n, start, dur},
+		focus:   0,
+		entryID: id,
+	}
+	m.plan.form.origFields = PlanFormFieldValues(m.plan.form)
+	m.plan.mode = planEdit
 }
 
 // ── US1: tab switching ──────────────────────────────────────────────────────
@@ -387,9 +413,8 @@ func TestAddEvent_FormOpensOnE(t *testing.T) {
 	}
 }
 
-// TestAddEvent_EscDoesNotCancel checks that Esc in planEventForm no longer
-// returns to planList (use the Cancel button to avoid losing in-progress work).
-func TestAddEvent_EscDoesNotCancel(t *testing.T) {
+// TestAddEvent_EscCancels verifies Esc on a clean add-event form returns to planList.
+func TestAddEvent_EscCancels(t *testing.T) {
 	fc := &fakePlanClient{}
 	m := buildPlanTestModel(fc)
 	m.plan.mode = planEventForm
@@ -397,8 +422,135 @@ func TestAddEvent_EscDoesNotCancel(t *testing.T) {
 
 	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 
-	if m2.plan.mode == planList {
-		t.Errorf("esc from event form: should stay in form mode, not return to planList")
+	if m2.plan.mode != planList {
+		t.Errorf("esc from clean event form: expected planList, got %d", m2.plan.mode)
+	}
+}
+
+// TestPlanEdit_EscOnDirtySetsConfirmingDiscard verifies Esc on a dirty plan edit
+// form sets confirmingDiscard instead of closing immediately.
+func TestPlanEdit_EscOnDirtySetsConfirmingDiscard(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEdit
+	m.initEditFormEntry(1, "Original", nil, 0)
+	m.plan.form.fields[0].SetValue("Changed!")
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if !m2.ConfirmingDiscard() {
+		t.Error("Esc on dirty plan edit form: expecting confirmingDiscard=true")
+	}
+	if m2.plan.mode != planEdit {
+		t.Error("should remain in planEdit while confirming discard")
+	}
+}
+
+// TestPlanEdit_EscOnCleanCloses verifies Esc on a clean plan edit form closes immediately.
+func TestPlanEdit_EscOnCleanCloses(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEdit
+	m.initEditFormEntry(1, "Original", nil, 0)
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if m2.plan.mode != planList {
+		t.Errorf("Esc on clean plan edit form: expected planList, got %d", m2.plan.mode)
+	}
+	if m2.ConfirmingDiscard() {
+		t.Error("Esc on clean plan edit form: confirmingDiscard should be false")
+	}
+}
+
+// TestPlanEdit_DirtyHasOrigFields verifies that the plan edit form snapshot captures
+// the original field values.
+func TestPlanEdit_DirtyHasOrigFields(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEdit
+	m.initEditFormEntry(1, "Meeting", nil, 0)
+
+	vals := PlanFormFieldValues(m.plan.form)
+	// The snapshot should match the entry "Meeting"
+	if vals[0] != "Meeting" {
+		t.Errorf("orig field 0: want 'Meeting', got %q", vals[0])
+	}
+}
+
+// TestPlanFormDirty_Unchanged verifies that an unchanged plan form is not dirty.
+func TestPlanFormDirty_Unchanged(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEdit
+	m.initEditFormEntry(1, "Meeting", nil, 0)
+
+	if PlanFormDirty(m.plan.form) {
+		t.Error("unchanged plan edit form: should not be dirty")
+	}
+}
+
+// TestPlanFormDirty_Changed verifies that a changed plan form is dirty.
+func TestPlanFormDirty_Changed(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEdit
+	m.initEditFormEntry(1, "Meeting", nil, 0)
+	m.plan.form.fields[0].SetValue("Workshop")
+
+	if !PlanFormDirty(m.plan.form) {
+		t.Error("changed plan edit form: should be dirty")
+	}
+}
+
+// TestPlanFormDirty_WhitespaceOnlyUnchanged verifies that whitespace-only input
+// on a blank field does not make a plan form dirty.
+func TestPlanFormDirty_WhitespaceOnlyUnchanged(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEventForm
+	m.initAddEventForm()
+	m.plan.form.fields[0].SetValue("   ")
+
+	if PlanFormDirty(m.plan.form) {
+		t.Error("whitespace-only on blank field: should not be dirty")
+	}
+}
+
+// TestAddEvent_EscOnDirtySetsConfirmingDiscard verifies that Esc on a dirty
+// add-event form sets confirmingDiscard instead of closing immediately.
+func TestAddEvent_EscOnDirtySetsConfirmingDiscard(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planEventForm
+	m.initAddEventForm()
+	m.plan.form.fields[0].SetValue("Meeting")
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if !m2.ConfirmingDiscard() {
+		t.Error("Esc on dirty event form: expecting confirmingDiscard=true")
+	}
+	if m2.plan.mode != planEventForm {
+		t.Error("should remain in planEventForm while confirming discard")
+	}
+}
+
+// TestTaskTimeForm_EscOnDirtySetsConfirmingDiscard verifies that Esc on a dirty
+// task-time form sets confirmingDiscard instead of closing immediately.
+func TestTaskTimeForm_EscOnDirtySetsConfirmingDiscard(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.initTaskTimeForm(5)
+	m.plan.form.fields[0].SetValue("10:00")
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if !m2.ConfirmingDiscard() {
+		t.Error("Esc on dirty task-time form: expecting confirmingDiscard=true")
+	}
+	if m2.plan.mode != planTaskTime {
+		t.Error("should remain in planTaskTime while confirming discard")
 	}
 }
 
@@ -2079,8 +2231,8 @@ func TestPlanRankUp_UntimedEntry(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},               // untimed A
-		{Id: 2, DurationMinute: 30},               // untimed B
+		{Id: 1, DurationMinute: 30},                            // untimed A
+		{Id: 2, DurationMinute: 30},                            // untimed B
 		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
 	}
 	ExportSetPlanEntries(&m, entries, 1) // cursor on B (index 1)
@@ -2118,8 +2270,8 @@ func TestPlanRankDown_UntimedEntry(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},               // untimed A
-		{Id: 2, DurationMinute: 30},               // untimed B
+		{Id: 1, DurationMinute: 30},                            // untimed A
+		{Id: 2, DurationMinute: 30},                            // untimed B
 		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
 	}
 	ExportSetPlanEntries(&m, entries, 0) // cursor on A (index 0)
@@ -2156,7 +2308,7 @@ func TestPlanReorder_TimedEntryNoop(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},               // untimed
+		{Id: 1, DurationMinute: 30},                            // untimed
 		{Id: 2, StartMinute: pint32F(480), DurationMinute: 30}, // timed D
 	}
 	ExportSetPlanEntries(&m, entries, 1) // cursor on timed entry

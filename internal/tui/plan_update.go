@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
@@ -225,6 +225,29 @@ func newPlanInput(placeholder string) textinput.Model {
 	return ti
 }
 
+// planFormFieldValues returns the current value of each text field in the form.
+func planFormFieldValues(f planFormState) []string {
+	vals := make([]string, len(f.fields))
+	for i := range f.fields {
+		vals[i] = f.fields[i].Value()
+	}
+	return vals
+}
+
+// planFormDirty returns true when any field has been changed from its original
+// snapshot (using trimmed comparison).
+func planFormDirty(f planFormState) bool {
+	if len(f.origFields) != len(f.fields) {
+		return false
+	}
+	for i := range f.fields {
+		if strings.TrimSpace(f.fields[i].Value()) != strings.TrimSpace(f.origFields[i]) {
+			return true
+		}
+	}
+	return false
+}
+
 // initAddTaskForm opens the task picker (step 1 of add-task flow).
 // The actual picker state is set via planTasksMsg.
 func (m *Model) initAddTaskForm() {
@@ -243,6 +266,7 @@ func (m *Model) initAddEventForm() {
 		fields: []textinput.Model{name, start, dur},
 		focus:  0,
 	}
+	m.plan.form.origFields = planFormFieldValues(m.plan.form)
 	m.plan.mode = planEventForm
 }
 
@@ -257,6 +281,7 @@ func (m *Model) initTaskTimeForm(taskID int64) {
 		focus:  0,
 		taskID: taskID,
 	}
+	m.plan.form.origFields = planFormFieldValues(m.plan.form)
 	m.plan.mode = planTaskTime
 }
 
@@ -287,6 +312,7 @@ func (m *Model) initEditForm() {
 		focus:   0,
 		entryID: entry.Id,
 	}
+	m.plan.form.origFields = planFormFieldValues(m.plan.form)
 	m.plan.mode = planEdit
 }
 

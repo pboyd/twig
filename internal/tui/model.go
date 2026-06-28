@@ -41,7 +41,7 @@ const (
 type goalViewMode int
 
 const (
-	goalList          goalViewMode = iota
+	goalList goalViewMode = iota
 	goalEdit
 	goalNew
 	goalConfirmDelete
@@ -103,10 +103,11 @@ type pickerState struct {
 }
 
 type planFormState struct {
-	fields  []textinput.Model
-	focus   int
-	taskID  int64
-	entryID int32
+	fields     []textinput.Model
+	focus      int
+	taskID     int64
+	entryID    int32
+	origFields []string // snapshot of field values when form was opened
 }
 
 type planState struct {
@@ -123,8 +124,8 @@ type planState struct {
 
 // reportState holds all state for the Report tab.
 type reportState struct {
-	presetIdx int             // index into report.PresetOrder()
-	period    report.Period   // resolved period for presetIdx
+	presetIdx int           // index into report.PresetOrder()
+	period    report.Period // resolved period for presetIdx
 	dayGroups []report.DayGroup
 	finished  []report.AccomplishmentGroup
 	ongoing   []report.AccomplishmentGroup
@@ -165,6 +166,7 @@ type Model struct {
 	hasDarkBackground bool
 	pom               *activePom
 	confirmingQuit    bool
+	confirmingDiscard bool
 	// date prompt state (modeDatePrompt): used when ctrl+p is pressed on Tasks tab
 	datePromptInput    textinput.Model
 	datePromptTaskID   int64

@@ -173,6 +173,31 @@ func ExportNotice(m Model) string {
 	return m.notice
 }
 
+// ExportEditFormIsDirty exposes editFormModel.isDirty for tests.
+func ExportEditFormIsDirty(f editFormModel) bool {
+	return f.isDirty()
+}
+
+// SetConfirmingDiscard sets m.confirmingDiscard for tests.
+func (m *Model) SetConfirmingDiscard(v bool) {
+	m.confirmingDiscard = v
+}
+
+// ConfirmingDiscard returns m.confirmingDiscard for tests.
+func (m *Model) ConfirmingDiscard() bool {
+	return m.confirmingDiscard
+}
+
+// PlanFormDirty exposes planFormDirty for tests.
+func PlanFormDirty(f planFormState) bool {
+	return planFormDirty(f)
+}
+
+// PlanFormFieldValues returns the current field values for tests.
+func PlanFormFieldValues(f planFormState) []string {
+	return planFormFieldValues(f)
+}
+
 // ExportTabReport is the tabReport constant for tests.
 const ExportTabReport = int(tabReport)
 
