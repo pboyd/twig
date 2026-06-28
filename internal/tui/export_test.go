@@ -140,7 +140,7 @@ func ExportRenderList(m Model, width int) string {
 
 // ExportRenderDetails exposes renderDetails for unit tests.
 func ExportRenderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
-	return renderDetails(task, md, width, styled, scheduledDays, effectiveGoalName)
+	return renderDetails(task, md, width, styled, scheduledDays, effectiveGoalName, time.Now())
 }
 
 // ExportSplitPlanEntries exposes splitPlanEntries for tests.

@@ -33,7 +33,7 @@ func TestRenderDetails_CompletedTaskNoStrikethrough(t *testing.T) {
 		CompletedAt: timestamppb.New(now),
 	}
 
-	out := renderDetails(task, nil, 80, false, nil, "")
+	out := renderDetails(task, nil, 80, false, nil, "", time.Now())
 
 	if strings.Contains(out, "\x1b[9m") {
 		t.Errorf("renderDetails: name must not have strikethrough (\\x1b[9m); got:\n%q", out)
@@ -129,7 +129,7 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 		CompletedAt: timestamppb.New(now),
 	}
 
-	out := renderDetails(task, nil, 60, true, nil, "")
+	out := renderDetails(task, nil, 60, true, nil, "", time.Now())
 
 	// Name must appear.
 	if !strings.Contains(out, "my task") {
@@ -146,7 +146,7 @@ func TestRenderDetails_StyledHeader(t *testing.T) {
 		t.Errorf("renderDetails styled: want 3 glyphs for estimate=3; got:\n%q", out)
 	}
 	// Unstyled path: no ANSI codes on name (this checks styled=false, not styled=true).
-	plain := renderDetails(task, nil, 60, false, nil, "")
+	plain := renderDetails(task, nil, 60, false, nil, "", time.Now())
 	if strings.Contains(plain, "\x1b[") {
 		t.Errorf("renderDetails unstyled: must not emit ANSI codes; got:\n%q", plain)
 	}
@@ -159,7 +159,7 @@ func TestRenderDetails_ScheduledOneFutureDay(t *testing.T) {
 	task := &taskv1.Task{Id: 1, Name: "work item"}
 	days := []string{"2026-06-10"}
 
-	styled := renderDetails(task, nil, 80, true, days, "")
+	styled := renderDetails(task, nil, 80, true, days, "", time.Now())
 	if !strings.Contains(styled, "Scheduled for:") {
 		t.Errorf("styled: expected 'Scheduled for:' line; got:\n%q", styled)
 	}
@@ -167,7 +167,7 @@ func TestRenderDetails_ScheduledOneFutureDay(t *testing.T) {
 		t.Errorf("styled: expected date in output; got:\n%q", styled)
 	}
 
-	plain := renderDetails(task, nil, 80, false, days, "")
+	plain := renderDetails(task, nil, 80, false, days, "", time.Now())
 	if !strings.Contains(plain, "Scheduled for:") {
 		t.Errorf("plain: expected 'Scheduled for:' line; got:\n%q", plain)
 	}
@@ -181,7 +181,7 @@ func TestRenderDetails_UnscheduledNoLine(t *testing.T) {
 	task := &taskv1.Task{Id: 2, Name: "todo"}
 
 	for _, styled := range []bool{true, false} {
-		out := renderDetails(task, nil, 80, styled, nil, "")
+		out := renderDetails(task, nil, 80, styled, nil, "", time.Now())
 		if strings.Contains(out, "Scheduled for:") {
 			t.Errorf("styled=%v: unexpected 'Scheduled for:' line for unscheduled task; got:\n%q", styled, out)
 		}
@@ -193,7 +193,7 @@ func TestRenderDetails_EmptySliceNoLine(t *testing.T) {
 	task := &taskv1.Task{Id: 3, Name: "past task"}
 
 	for _, styled := range []bool{true, false} {
-		out := renderDetails(task, nil, 80, styled, []string{}, "")
+		out := renderDetails(task, nil, 80, styled, []string{}, "", time.Now())
 		if strings.Contains(out, "Scheduled for:") {
 			t.Errorf("styled=%v: unexpected 'Scheduled for:' for empty slice; got:\n%q", styled, out)
 		}
@@ -206,7 +206,7 @@ func TestRenderDetails_MultiDayCommaSep(t *testing.T) {
 	days := []string{"2026-06-07", "2026-06-08"}
 
 	for _, styled := range []bool{true, false} {
-		out := renderDetails(task, nil, 80, styled, days, "")
+		out := renderDetails(task, nil, 80, styled, days, "", time.Now())
 		if !strings.Contains(out, "2026-06-07, 2026-06-08") {
 			t.Errorf("styled=%v: expected '2026-06-07, 2026-06-08'; got:\n%q", styled, out)
 		}
@@ -220,7 +220,7 @@ func TestRenderDetails_MultiDayCommaSep(t *testing.T) {
 func TestRenderDetails_GoalLine(t *testing.T) {
 	task := &taskv1.Task{Id: 1, Name: "focus task"}
 	for _, styled := range []bool{true, false} {
-		out := renderDetails(task, nil, 80, styled, nil, "Ship the feature")
+		out := renderDetails(task, nil, 80, styled, nil, "Ship the feature", time.Now())
 		if !strings.Contains(out, "Goal:") {
 			t.Errorf("styled=%v: expected 'Goal:' label; got:\n%q", styled, out)
 		}
@@ -235,7 +235,7 @@ func TestRenderDetails_GoalLine(t *testing.T) {
 func TestRenderDetails_GoalLineAbsentWhenEmpty(t *testing.T) {
 	task := &taskv1.Task{Id: 2, Name: "solo task"}
 	for _, styled := range []bool{true, false} {
-		out := renderDetails(task, nil, 80, styled, nil, "")
+		out := renderDetails(task, nil, 80, styled, nil, "", time.Now())
 		if strings.Contains(out, "Goal:") {
 			t.Errorf("styled=%v: unexpected 'Goal:' line when effectiveGoalName is empty; got:\n%q", styled, out)
 		}
@@ -266,7 +266,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 				CompletedPomodoroCount: tc.completed,
 			}
 			// Styled path.
-			out := renderDetails(task, nil, 60, true, nil, "")
+			out := renderDetails(task, nil, 60, true, nil, "", time.Now())
 			n := countPomodoroGlyphs(out)
 			if n != tc.wantN {
 				t.Errorf("styled: glyph count=%d, want %d; %q", n, tc.wantN, out)
@@ -276,7 +276,7 @@ func TestRenderDetails_GlyphRow(t *testing.T) {
 				t.Errorf("styled: must not contain 'Est:' label; got %q", out)
 			}
 			// Plain path.
-			plain := renderDetails(task, nil, 60, false, nil, "")
+			plain := renderDetails(task, nil, 60, false, nil, "", time.Now())
 			np := countPomodoroGlyphs(plain)
 			if np != tc.wantN {
 				t.Errorf("plain: glyph count=%d, want %d; %q", np, tc.wantN, plain)
@@ -318,6 +318,44 @@ func TestRenderDetails_DescriptionPlainNoEscape(t *testing.T) {
 
 	if strings.ContainsRune(out, '\x1b') {
 		t.Errorf("renderDetails plain+markdown: expected no ANSI escapes; got:\n%q", out)
+	}
+}
+
+// ── Snooze display tests ─────────────────────────────────────────────────────
+
+// TestRenderDetails_SnoozeShownWhenFuture asserts that a task snoozed until a
+// future date shows the Snooze line (with 💤) in both styled and plain paths.
+func TestRenderDetails_SnoozeShownWhenFuture(t *testing.T) {
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	futureSnooze := timestamppb.New(now.Add(48 * time.Hour)) // 2026-06-03
+	task := &taskv1.Task{Id: 1, Name: "snoozed task", SnoozeUntil: futureSnooze}
+
+	for _, styled := range []bool{true, false} {
+		out := renderDetails(task, nil, 80, styled, nil, "", now)
+		if !strings.Contains(out, "Snooze") {
+			t.Errorf("styled=%v: expected 'Snooze' line for future snooze; got:\n%q", styled, out)
+		}
+		if !strings.Contains(out, "💤") {
+			t.Errorf("styled=%v: expected 💤 for future snooze; got:\n%q", styled, out)
+		}
+	}
+}
+
+// TestRenderDetails_SnoozeHiddenWhenExpired asserts that a task whose snooze
+// date is in the past does NOT show the Snooze line in either path.
+func TestRenderDetails_SnoozeHiddenWhenExpired(t *testing.T) {
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	pastSnooze := timestamppb.New(now.Add(-48 * time.Hour)) // 2026-05-30
+	task := &taskv1.Task{Id: 2, Name: "was snoozed", SnoozeUntil: pastSnooze}
+
+	for _, styled := range []bool{true, false} {
+		out := renderDetails(task, nil, 80, styled, nil, "", now)
+		if strings.Contains(out, "Snooze") {
+			t.Errorf("styled=%v: unexpected 'Snooze' line for expired snooze; got:\n%q", styled, out)
+		}
+		if strings.Contains(out, "💤") {
+			t.Errorf("styled=%v: unexpected 💤 for expired snooze; got:\n%q", styled, out)
+		}
 	}
 }
 

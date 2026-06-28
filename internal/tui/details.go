@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -16,7 +17,7 @@ import (
 // and labels are dim and column-aligned. scheduledDays is the task's scheduled
 // days slice (ascending YYYY-MM-DD, today-or-future); nil or empty omits the line.
 // effectiveGoalName, when non-empty, adds a "Goal:" line (from own or inherited goal).
-func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled bool, scheduledDays []string, effectiveGoalName string) string {
+func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled bool, scheduledDays []string, effectiveGoalName string, now time.Time) string {
 	if task == nil {
 		return ""
 	}
@@ -70,7 +71,7 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 			fmt.Fprintf(&sb, "\nCompleted: %s\n", cat)
 		}
 
-		if task.SnoozeUntil != nil {
+		if taskIsSnoozed(task, now) {
 			snoozeDay := task.SnoozeUntil.AsTime().UTC().Format("2006-01-02")
 			fmt.Fprintf(&sb, "Snooze:   %s 💤\n", snoozeDay)
 		}
@@ -116,7 +117,7 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 		fmt.Fprintf(&sb, "\n%s %s\n", labelStyle.Render("Completed:"), completedStyle.Render(cat))
 	}
 
-	if task.SnoozeUntil != nil {
+	if taskIsSnoozed(task, now) {
 		snoozeDay := task.SnoozeUntil.AsTime().UTC().Format("2006-01-02")
 		fmt.Fprintf(&sb, "%s %s 💤\n", labelStyle.Render("Snooze:  "), snoozeDay)
 	}

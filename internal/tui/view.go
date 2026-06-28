@@ -490,7 +490,7 @@ func (m Model) renderDetailPane(width int) string {
 	}
 	task := m.visible[m.cursor].node.Task
 	goalName := m.effectiveGoalName(task.Id)
-	return renderDetails(task, m.md, width, m.styled, m.scheduledDays[task.Id], goalName)
+	return renderDetails(task, m.md, width, m.styled, m.scheduledDays[task.Id], goalName, m.nowOrDefault())
 }
 
 // effectiveGoalName returns the display name of the nearest self-or-ancestor goal
