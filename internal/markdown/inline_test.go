@@ -129,3 +129,68 @@ func TestRenderInlineNodes_PlainTextPassthrough(t *testing.T) {
 	}
 }
 
+// TestRenderInlineNodes_BareURLNotDropped verifies that a bare URL embedded in
+// text is not silently dropped. Regression for: GFM Linkify turns bare URLs
+// into AutoLink AST nodes that have no child text; without an explicit case the
+// renderer returned "" for the node.
+func TestRenderInlineNodes_BareURLNotDropped(t *testing.T) {
+	doc, src := parseInline(t, "Google: https://google.com end")
+	para := doc.FirstChild()
+	if para == nil {
+		t.Fatal("expected a paragraph node, got nil")
+	}
+	result := renderInlineNodes(para, src, inlineTestTheme, false)
+	if !strings.Contains(result, "https://google.com") {
+		t.Errorf("plain bare URL: expected URL in result, got %q", result)
+	}
+}
+
+// TestRenderInlineNodes_BareURLNoDuplicationOrEscapes verifies that a bare URL
+// in plain mode appears exactly once and contains no ANSI escape sequences.
+func TestRenderInlineNodes_BareURLNoDuplicationOrEscapes(t *testing.T) {
+	const url = "https://google.com"
+	doc, src := parseInline(t, "prefix "+url+" suffix")
+	para := doc.FirstChild()
+	if para == nil {
+		t.Fatal("expected a paragraph node, got nil")
+	}
+	result := renderInlineNodes(para, src, inlineTestTheme, false)
+	if strings.Count(result, url) != 1 {
+		t.Errorf("plain bare URL: expected exactly one occurrence of URL, got %q", result)
+	}
+	if strings.ContainsRune(result, '\x1b') {
+		t.Errorf("plain bare URL: expected no ANSI escapes, got %q", result)
+	}
+}
+
+// TestRenderInlineNodes_BareURLStyledEmitsOSC8 verifies that a bare URL in
+// styled mode is rendered as an OSC 8 hyperlink.
+func TestRenderInlineNodes_BareURLStyledEmitsOSC8(t *testing.T) {
+	doc, src := parseInline(t, "Visit https://example.com now")
+	para := doc.FirstChild()
+	if para == nil {
+		t.Fatal("expected a paragraph node, got nil")
+	}
+	result := renderInlineNodes(para, src, inlineTestTheme, true)
+	if !strings.Contains(result, "\x1b]8;;") {
+		t.Errorf("styled bare URL: expected OSC 8 sequence, got %q", result)
+	}
+	if !strings.Contains(stripAnsi(result), "https://example.com") {
+		t.Errorf("styled bare URL: expected visible URL text in stripped output, got raw %q", result)
+	}
+}
+
+// TestRenderInlineNodes_AngleBracketAutolink verifies that angle-bracket
+// autolinks (<https://example.com>) are also rendered correctly.
+func TestRenderInlineNodes_AngleBracketAutolink(t *testing.T) {
+	doc, src := parseInline(t, "See <https://example.com> for details")
+	para := doc.FirstChild()
+	if para == nil {
+		t.Fatal("expected a paragraph node, got nil")
+	}
+	result := renderInlineNodes(para, src, inlineTestTheme, false)
+	if !strings.Contains(result, "https://example.com") {
+		t.Errorf("angle-bracket autolink: expected URL in result, got %q", result)
+	}
+}
+

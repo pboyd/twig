@@ -66,6 +66,18 @@ func renderInlineNode(node gast.Node, src []byte, theme Theme, styled bool) stri
 		url := string(link.Destination)
 		return renderLink(text, url, theme, styled)
 
+	case gast.KindAutoLink:
+		al := node.(*gast.AutoLink)
+		label := string(al.Label(src))
+		if !styled {
+			// Plain mode: emit the URL as-is. renderLink would produce
+			// "url (url)" because label==url for bare URLs, so we return
+			// the label directly.
+			return label
+		}
+		url := string(al.URL(src))
+		return renderLink(label, url, theme, styled)
+
 	default:
 		// For any other node type, walk children and emit their content
 		// without extra markup.
