@@ -24,10 +24,6 @@ service PlanService {
   // MovePlanEntry changes start_minute and optionally duration_minute.
   rpc MovePlanEntry(MovePlanEntryRequest) returns (MovePlanEntryResponse);
 
-  // ClearPlan removes every entry starting at or after start_minute on day; if an
-  // entry straddles start_minute, its duration is shortened so it ends at start_minute.
-  rpc ClearPlan(ClearPlanRequest) returns (ClearPlanResponse);
-
   // ReorderPlanEntry repositions an untimed entry within the day's untimed
   // group by placing it immediately before or after a sibling untimed anchor.
   // Both the entry and the anchor must be untimed (no start_minute) and on the
@@ -100,14 +96,6 @@ message MovePlanEntryRequest {
   int32 duration_minute = 4;
 }
 message MovePlanEntryResponse { PlanEntry entry = 1; }
-
-message ClearPlanRequest { string day = 1; int32 start_minute = 2; }
-message ClearPlanResponse {
-  // Number of entries deleted outright (not counting the one that was trimmed, if any).
-  int32 deleted_count = 1;
-  // True iff exactly one entry was shortened to end at start_minute.
-  bool trimmed_straddling_entry = 2;
-}
 
 message ListScheduledDaysRequest {
   // The caller's local current day, YYYY-MM-DD. Only days >= from_day are

@@ -11,24 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deletePlanEntriesFromMinute = `-- name: DeletePlanEntriesFromMinute :execrows
-DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND start_minute >= $3 AND task_id IS NOT NULL
-`
-
-type DeletePlanEntriesFromMinuteParams struct {
-	UserID      int64
-	Day         pgtype.Date
-	StartMinute pgtype.Int2
-}
-
-func (q *Queries) DeletePlanEntriesFromMinute(ctx context.Context, arg DeletePlanEntriesFromMinuteParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deletePlanEntriesFromMinute, arg.UserID, arg.Day, arg.StartMinute)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deletePlanEntry = `-- name: DeletePlanEntry :one
 DELETE FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING id
 `
@@ -297,38 +279,6 @@ func (q *Queries) NextPlanEntryId(ctx context.Context, arg NextPlanEntryIdParams
 	var next_id int32
 	err := row.Scan(&next_id)
 	return next_id, err
-}
-
-const trimPlanEntryDuration = `-- name: TrimPlanEntryDuration :one
-UPDATE plan_entries SET duration_minute = $4 WHERE user_id = $1 AND day = $2 AND id = $3 RETURNING user_id, day, id, task_id, name, start_minute, duration_minute, position
-`
-
-type TrimPlanEntryDurationParams struct {
-	UserID         int64
-	Day            pgtype.Date
-	ID             int32
-	DurationMinute int16
-}
-
-func (q *Queries) TrimPlanEntryDuration(ctx context.Context, arg TrimPlanEntryDurationParams) (PlanEntry, error) {
-	row := q.db.QueryRow(ctx, trimPlanEntryDuration,
-		arg.UserID,
-		arg.Day,
-		arg.ID,
-		arg.DurationMinute,
-	)
-	var i PlanEntry
-	err := row.Scan(
-		&i.UserID,
-		&i.Day,
-		&i.ID,
-		&i.TaskID,
-		&i.Name,
-		&i.StartMinute,
-		&i.DurationMinute,
-		&i.Position,
-	)
-	return i, err
 }
 
 const updatePlanEntryName = `-- name: UpdatePlanEntryName :one

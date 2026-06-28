@@ -27,7 +27,6 @@ type fakePlanClient struct {
 	renameReq         *planv1.RenamePlanEntryRequest
 	moveReq           *planv1.MovePlanEntryRequest
 	removeReq         *planv1.RemovePlanEntryRequest
-	clearReq          *planv1.ClearPlanRequest
 	mutateErr         error
 	reorderReq        *planv1.ReorderPlanEntryRequest
 	scheduledDaysReq  *planv1.ListScheduledDaysRequest
@@ -81,14 +80,6 @@ func (f *fakePlanClient) RemovePlanEntry(_ context.Context, req *connect.Request
 		return nil, f.mutateErr
 	}
 	return connect.NewResponse(&planv1.RemovePlanEntryResponse{}), nil
-}
-
-func (f *fakePlanClient) ClearPlan(_ context.Context, req *connect.Request[planv1.ClearPlanRequest]) (*connect.Response[planv1.ClearPlanResponse], error) {
-	f.clearReq = req.Msg
-	if f.mutateErr != nil {
-		return nil, f.mutateErr
-	}
-	return connect.NewResponse(&planv1.ClearPlanResponse{}), nil
 }
 
 func (f *fakePlanClient) ListScheduledDays(_ context.Context, req *connect.Request[planv1.ListScheduledDaysRequest]) (*connect.Response[planv1.ListScheduledDaysResponse], error) {

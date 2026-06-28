@@ -26,9 +26,8 @@ type fakePlanService struct {
 	entries      map[string][]*planv1.PlanEntry // key: day
 	nextIDPerDay map[string]int32
 	// Captured request fields for assertion.
-	lastListDay      string
-	lastClearRequest *planv1.ClearPlanRequest
-	lastMvRequest    *planv1.MovePlanEntryRequest
+	lastListDay   string
+	lastMvRequest *planv1.MovePlanEntryRequest
 }
 
 func newFakePlanService() *fakePlanService {
@@ -124,13 +123,6 @@ func (s *fakePlanService) MovePlanEntry(_ context.Context, req *connect.Request[
 		}
 	}
 	return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("entry not found"))
-}
-
-func (s *fakePlanService) ClearPlan(_ context.Context, req *connect.Request[planv1.ClearPlanRequest]) (*connect.Response[planv1.ClearPlanResponse], error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.lastClearRequest = req.Msg
-	return connect.NewResponse(&planv1.ClearPlanResponse{DeletedCount: 2, TrimmedStraddlingEntry: true}), nil
 }
 
 // planTestHarness wraps a fake plan service in an httptest server.
@@ -382,40 +374,6 @@ func TestRunPlanMv_DurationOmitted_Forwards_Zero(t *testing.T) {
 	}
 }
 
-// ---- T043: runPlanClear CLI tests ----
-
-func TestRunPlanClear_ExplicitStart(t *testing.T) {
-	h := newPlanTestHarness(t)
-	day := "2026-05-21"
-	stdout, stderr, code := runPlanCmd(runPlanClear, h.client, day, []string{"9:00am"})
-	if code != 0 {
-		t.Fatalf("expected exit 0, got %d; stderr: %s", code, stderr)
-	}
-	if !strings.Contains(stdout, "08:00") {
-		t.Errorf("expected plan grid in output, got: %q", stdout)
-	}
-	h.svc.mu.Lock()
-	defer h.svc.mu.Unlock()
-	if h.svc.lastClearRequest.StartMinute != 540 {
-		t.Errorf("start_minute = %d, want 540 (9:00am)", h.svc.lastClearRequest.StartMinute)
-	}
-}
-
-func TestRunPlanClear_NoArg_UsesCurrentTime(t *testing.T) {
-	h := newPlanTestHarness(t)
-	day := "2026-05-21"
-	runPlanCmd(runPlanClear, h.client, day, nil)
-	h.svc.mu.Lock()
-	defer h.svc.mu.Unlock()
-	if h.svc.lastClearRequest == nil {
-		t.Fatal("no clear request captured")
-	}
-	// Just verify it's a valid minute (0-1439); exact value depends on clock.
-	m := h.svc.lastClearRequest.StartMinute
-	if m < 0 || m >= 1440 {
-		t.Errorf("start_minute %d out of valid range", m)
-	}
-}
 
 // ---- T017: Untimed CLI add/show tests ----
 

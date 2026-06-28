@@ -746,112 +746,6 @@ func (x *MovePlanEntryResponse) GetEntry() *PlanEntry {
 	return nil
 }
 
-type ClearPlanRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Day           string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
-	StartMinute   int32                  `protobuf:"varint,2,opt,name=start_minute,json=startMinute,proto3" json:"start_minute,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ClearPlanRequest) Reset() {
-	*x = ClearPlanRequest{}
-	mi := &file_plan_v1_plan_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClearPlanRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClearPlanRequest) ProtoMessage() {}
-
-func (x *ClearPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClearPlanRequest.ProtoReflect.Descriptor instead.
-func (*ClearPlanRequest) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *ClearPlanRequest) GetDay() string {
-	if x != nil {
-		return x.Day
-	}
-	return ""
-}
-
-func (x *ClearPlanRequest) GetStartMinute() int32 {
-	if x != nil {
-		return x.StartMinute
-	}
-	return 0
-}
-
-type ClearPlanResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Number of entries deleted outright (not counting the one that was trimmed, if any).
-	DeletedCount int32 `protobuf:"varint,1,opt,name=deleted_count,json=deletedCount,proto3" json:"deleted_count,omitempty"`
-	// True iff exactly one entry was shortened to end at start_minute.
-	TrimmedStraddlingEntry bool `protobuf:"varint,2,opt,name=trimmed_straddling_entry,json=trimmedStraddlingEntry,proto3" json:"trimmed_straddling_entry,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
-}
-
-func (x *ClearPlanResponse) Reset() {
-	*x = ClearPlanResponse{}
-	mi := &file_plan_v1_plan_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClearPlanResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClearPlanResponse) ProtoMessage() {}
-
-func (x *ClearPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClearPlanResponse.ProtoReflect.Descriptor instead.
-func (*ClearPlanResponse) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *ClearPlanResponse) GetDeletedCount() int32 {
-	if x != nil {
-		return x.DeletedCount
-	}
-	return 0
-}
-
-func (x *ClearPlanResponse) GetTrimmedStraddlingEntry() bool {
-	if x != nil {
-		return x.TrimmedStraddlingEntry
-	}
-	return false
-}
-
 type ListScheduledDaysRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The caller's local current day, YYYY-MM-DD. Only days >= from_day are
@@ -863,7 +757,7 @@ type ListScheduledDaysRequest struct {
 
 func (x *ListScheduledDaysRequest) Reset() {
 	*x = ListScheduledDaysRequest{}
-	mi := &file_plan_v1_plan_proto_msgTypes[15]
+	mi := &file_plan_v1_plan_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -875,7 +769,7 @@ func (x *ListScheduledDaysRequest) String() string {
 func (*ListScheduledDaysRequest) ProtoMessage() {}
 
 func (x *ListScheduledDaysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[15]
+	mi := &file_plan_v1_plan_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -888,7 +782,7 @@ func (x *ListScheduledDaysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduledDaysRequest.ProtoReflect.Descriptor instead.
 func (*ListScheduledDaysRequest) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{15}
+	return file_plan_v1_plan_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListScheduledDaysRequest) GetFromDay() string {
@@ -908,7 +802,7 @@ type ListScheduledDaysResponse struct {
 
 func (x *ListScheduledDaysResponse) Reset() {
 	*x = ListScheduledDaysResponse{}
-	mi := &file_plan_v1_plan_proto_msgTypes[16]
+	mi := &file_plan_v1_plan_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -920,7 +814,7 @@ func (x *ListScheduledDaysResponse) String() string {
 func (*ListScheduledDaysResponse) ProtoMessage() {}
 
 func (x *ListScheduledDaysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[16]
+	mi := &file_plan_v1_plan_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -933,7 +827,7 @@ func (x *ListScheduledDaysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListScheduledDaysResponse.ProtoReflect.Descriptor instead.
 func (*ListScheduledDaysResponse) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{16}
+	return file_plan_v1_plan_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListScheduledDaysResponse) GetDays() []*ScheduledDay {
@@ -955,7 +849,7 @@ type ScheduledDay struct {
 
 func (x *ScheduledDay) Reset() {
 	*x = ScheduledDay{}
-	mi := &file_plan_v1_plan_proto_msgTypes[17]
+	mi := &file_plan_v1_plan_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -967,7 +861,7 @@ func (x *ScheduledDay) String() string {
 func (*ScheduledDay) ProtoMessage() {}
 
 func (x *ScheduledDay) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[17]
+	mi := &file_plan_v1_plan_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -980,7 +874,7 @@ func (x *ScheduledDay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduledDay.ProtoReflect.Descriptor instead.
 func (*ScheduledDay) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{17}
+	return file_plan_v1_plan_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ScheduledDay) GetTaskId() int64 {
@@ -1017,7 +911,7 @@ type ReorderPlanEntryRequest struct {
 
 func (x *ReorderPlanEntryRequest) Reset() {
 	*x = ReorderPlanEntryRequest{}
-	mi := &file_plan_v1_plan_proto_msgTypes[18]
+	mi := &file_plan_v1_plan_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +923,7 @@ func (x *ReorderPlanEntryRequest) String() string {
 func (*ReorderPlanEntryRequest) ProtoMessage() {}
 
 func (x *ReorderPlanEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[18]
+	mi := &file_plan_v1_plan_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +936,7 @@ func (x *ReorderPlanEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReorderPlanEntryRequest.ProtoReflect.Descriptor instead.
 func (*ReorderPlanEntryRequest) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{18}
+	return file_plan_v1_plan_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ReorderPlanEntryRequest) GetDay() string {
@@ -1114,7 +1008,7 @@ type ReorderPlanEntryResponse struct {
 
 func (x *ReorderPlanEntryResponse) Reset() {
 	*x = ReorderPlanEntryResponse{}
-	mi := &file_plan_v1_plan_proto_msgTypes[19]
+	mi := &file_plan_v1_plan_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1020,7 @@ func (x *ReorderPlanEntryResponse) String() string {
 func (*ReorderPlanEntryResponse) ProtoMessage() {}
 
 func (x *ReorderPlanEntryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plan_v1_plan_proto_msgTypes[19]
+	mi := &file_plan_v1_plan_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1033,7 @@ func (x *ReorderPlanEntryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReorderPlanEntryResponse.ProtoReflect.Descriptor instead.
 func (*ReorderPlanEntryResponse) Descriptor() ([]byte, []int) {
-	return file_plan_v1_plan_proto_rawDescGZIP(), []int{19}
+	return file_plan_v1_plan_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ReorderPlanEntryResponse) GetUntimed() []*PlanEntry {
@@ -1199,13 +1093,7 @@ const file_plan_v1_plan_proto_rawDesc = "" +
 	"\x0fduration_minute\x18\x04 \x01(\x05R\x0edurationMinuteB\x0f\n" +
 	"\r_start_minute\"A\n" +
 	"\x15MovePlanEntryResponse\x12(\n" +
-	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"G\n" +
-	"\x10ClearPlanRequest\x12\x10\n" +
-	"\x03day\x18\x01 \x01(\tR\x03day\x12!\n" +
-	"\fstart_minute\x18\x02 \x01(\x05R\vstartMinute\"r\n" +
-	"\x11ClearPlanResponse\x12#\n" +
-	"\rdeleted_count\x18\x01 \x01(\x05R\fdeletedCount\x128\n" +
-	"\x18trimmed_straddling_entry\x18\x02 \x01(\bR\x16trimmedStraddlingEntry\"5\n" +
+	"\x05entry\x18\x01 \x01(\v2\x12.plan.v1.PlanEntryR\x05entry\"5\n" +
 	"\x18ListScheduledDaysRequest\x12\x19\n" +
 	"\bfrom_day\x18\x01 \x01(\tR\afromDay\"F\n" +
 	"\x19ListScheduledDaysResponse\x12)\n" +
@@ -1220,15 +1108,14 @@ const file_plan_v1_plan_proto_rawDesc = "" +
 	"\bafter_id\x18\x04 \x01(\x05H\x00R\aafterIdB\b\n" +
 	"\x06anchor\"H\n" +
 	"\x18ReorderPlanEntryResponse\x12,\n" +
-	"\auntimed\x18\x01 \x03(\v2\x12.plan.v1.PlanEntryR\auntimed2\xef\x05\n" +
+	"\auntimed\x18\x01 \x03(\v2\x12.plan.v1.PlanEntryR\auntimed2\xab\x05\n" +
 	"\vPlanService\x12T\n" +
 	"\x0fListPlanEntries\x12\x1f.plan.v1.ListPlanEntriesRequest\x1a .plan.v1.ListPlanEntriesResponse\x12H\n" +
 	"\vAddPlanTask\x12\x1b.plan.v1.AddPlanTaskRequest\x1a\x1c.plan.v1.AddPlanTaskResponse\x12K\n" +
 	"\fAddPlanEvent\x12\x1c.plan.v1.AddPlanEventRequest\x1a\x1d.plan.v1.AddPlanEventResponse\x12T\n" +
 	"\x0fRemovePlanEntry\x12\x1f.plan.v1.RemovePlanEntryRequest\x1a .plan.v1.RemovePlanEntryResponse\x12T\n" +
 	"\x0fRenamePlanEntry\x12\x1f.plan.v1.RenamePlanEntryRequest\x1a .plan.v1.RenamePlanEntryResponse\x12N\n" +
-	"\rMovePlanEntry\x12\x1d.plan.v1.MovePlanEntryRequest\x1a\x1e.plan.v1.MovePlanEntryResponse\x12B\n" +
-	"\tClearPlan\x12\x19.plan.v1.ClearPlanRequest\x1a\x1a.plan.v1.ClearPlanResponse\x12W\n" +
+	"\rMovePlanEntry\x12\x1d.plan.v1.MovePlanEntryRequest\x1a\x1e.plan.v1.MovePlanEntryResponse\x12W\n" +
 	"\x10ReorderPlanEntry\x12 .plan.v1.ReorderPlanEntryRequest\x1a!.plan.v1.ReorderPlanEntryResponse\x12Z\n" +
 	"\x11ListScheduledDays\x12!.plan.v1.ListScheduledDaysRequest\x1a\".plan.v1.ListScheduledDaysResponseB.Z,github.com/pboyd/twig/api/gen/plan/v1;planv1b\x06proto3"
 
@@ -1244,7 +1131,7 @@ func file_plan_v1_plan_proto_rawDescGZIP() []byte {
 	return file_plan_v1_plan_proto_rawDescData
 }
 
-var file_plan_v1_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_plan_v1_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_plan_v1_plan_proto_goTypes = []any{
 	(*PlanEntry)(nil),                 // 0: plan.v1.PlanEntry
 	(*ListPlanEntriesRequest)(nil),    // 1: plan.v1.ListPlanEntriesRequest
@@ -1259,13 +1146,11 @@ var file_plan_v1_plan_proto_goTypes = []any{
 	(*RenamePlanEntryResponse)(nil),   // 10: plan.v1.RenamePlanEntryResponse
 	(*MovePlanEntryRequest)(nil),      // 11: plan.v1.MovePlanEntryRequest
 	(*MovePlanEntryResponse)(nil),     // 12: plan.v1.MovePlanEntryResponse
-	(*ClearPlanRequest)(nil),          // 13: plan.v1.ClearPlanRequest
-	(*ClearPlanResponse)(nil),         // 14: plan.v1.ClearPlanResponse
-	(*ListScheduledDaysRequest)(nil),  // 15: plan.v1.ListScheduledDaysRequest
-	(*ListScheduledDaysResponse)(nil), // 16: plan.v1.ListScheduledDaysResponse
-	(*ScheduledDay)(nil),              // 17: plan.v1.ScheduledDay
-	(*ReorderPlanEntryRequest)(nil),   // 18: plan.v1.ReorderPlanEntryRequest
-	(*ReorderPlanEntryResponse)(nil),  // 19: plan.v1.ReorderPlanEntryResponse
+	(*ListScheduledDaysRequest)(nil),  // 13: plan.v1.ListScheduledDaysRequest
+	(*ListScheduledDaysResponse)(nil), // 14: plan.v1.ListScheduledDaysResponse
+	(*ScheduledDay)(nil),              // 15: plan.v1.ScheduledDay
+	(*ReorderPlanEntryRequest)(nil),   // 16: plan.v1.ReorderPlanEntryRequest
+	(*ReorderPlanEntryResponse)(nil),  // 17: plan.v1.ReorderPlanEntryResponse
 }
 var file_plan_v1_plan_proto_depIdxs = []int32{
 	0,  // 0: plan.v1.ListPlanEntriesResponse.entries:type_name -> plan.v1.PlanEntry
@@ -1273,7 +1158,7 @@ var file_plan_v1_plan_proto_depIdxs = []int32{
 	0,  // 2: plan.v1.AddPlanEventResponse.entry:type_name -> plan.v1.PlanEntry
 	0,  // 3: plan.v1.RenamePlanEntryResponse.entry:type_name -> plan.v1.PlanEntry
 	0,  // 4: plan.v1.MovePlanEntryResponse.entry:type_name -> plan.v1.PlanEntry
-	17, // 5: plan.v1.ListScheduledDaysResponse.days:type_name -> plan.v1.ScheduledDay
+	15, // 5: plan.v1.ListScheduledDaysResponse.days:type_name -> plan.v1.ScheduledDay
 	0,  // 6: plan.v1.ReorderPlanEntryResponse.untimed:type_name -> plan.v1.PlanEntry
 	1,  // 7: plan.v1.PlanService.ListPlanEntries:input_type -> plan.v1.ListPlanEntriesRequest
 	3,  // 8: plan.v1.PlanService.AddPlanTask:input_type -> plan.v1.AddPlanTaskRequest
@@ -1281,20 +1166,18 @@ var file_plan_v1_plan_proto_depIdxs = []int32{
 	7,  // 10: plan.v1.PlanService.RemovePlanEntry:input_type -> plan.v1.RemovePlanEntryRequest
 	9,  // 11: plan.v1.PlanService.RenamePlanEntry:input_type -> plan.v1.RenamePlanEntryRequest
 	11, // 12: plan.v1.PlanService.MovePlanEntry:input_type -> plan.v1.MovePlanEntryRequest
-	13, // 13: plan.v1.PlanService.ClearPlan:input_type -> plan.v1.ClearPlanRequest
-	18, // 14: plan.v1.PlanService.ReorderPlanEntry:input_type -> plan.v1.ReorderPlanEntryRequest
-	15, // 15: plan.v1.PlanService.ListScheduledDays:input_type -> plan.v1.ListScheduledDaysRequest
-	2,  // 16: plan.v1.PlanService.ListPlanEntries:output_type -> plan.v1.ListPlanEntriesResponse
-	4,  // 17: plan.v1.PlanService.AddPlanTask:output_type -> plan.v1.AddPlanTaskResponse
-	6,  // 18: plan.v1.PlanService.AddPlanEvent:output_type -> plan.v1.AddPlanEventResponse
-	8,  // 19: plan.v1.PlanService.RemovePlanEntry:output_type -> plan.v1.RemovePlanEntryResponse
-	10, // 20: plan.v1.PlanService.RenamePlanEntry:output_type -> plan.v1.RenamePlanEntryResponse
-	12, // 21: plan.v1.PlanService.MovePlanEntry:output_type -> plan.v1.MovePlanEntryResponse
-	14, // 22: plan.v1.PlanService.ClearPlan:output_type -> plan.v1.ClearPlanResponse
-	19, // 23: plan.v1.PlanService.ReorderPlanEntry:output_type -> plan.v1.ReorderPlanEntryResponse
-	16, // 24: plan.v1.PlanService.ListScheduledDays:output_type -> plan.v1.ListScheduledDaysResponse
-	16, // [16:25] is the sub-list for method output_type
-	7,  // [7:16] is the sub-list for method input_type
+	16, // 13: plan.v1.PlanService.ReorderPlanEntry:input_type -> plan.v1.ReorderPlanEntryRequest
+	13, // 14: plan.v1.PlanService.ListScheduledDays:input_type -> plan.v1.ListScheduledDaysRequest
+	2,  // 15: plan.v1.PlanService.ListPlanEntries:output_type -> plan.v1.ListPlanEntriesResponse
+	4,  // 16: plan.v1.PlanService.AddPlanTask:output_type -> plan.v1.AddPlanTaskResponse
+	6,  // 17: plan.v1.PlanService.AddPlanEvent:output_type -> plan.v1.AddPlanEventResponse
+	8,  // 18: plan.v1.PlanService.RemovePlanEntry:output_type -> plan.v1.RemovePlanEntryResponse
+	10, // 19: plan.v1.PlanService.RenamePlanEntry:output_type -> plan.v1.RenamePlanEntryResponse
+	12, // 20: plan.v1.PlanService.MovePlanEntry:output_type -> plan.v1.MovePlanEntryResponse
+	17, // 21: plan.v1.PlanService.ReorderPlanEntry:output_type -> plan.v1.ReorderPlanEntryResponse
+	14, // 22: plan.v1.PlanService.ListScheduledDays:output_type -> plan.v1.ListScheduledDaysResponse
+	15, // [15:23] is the sub-list for method output_type
+	7,  // [7:15] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1308,7 +1191,7 @@ func file_plan_v1_plan_proto_init() {
 	file_plan_v1_plan_proto_msgTypes[0].OneofWrappers = []any{}
 	file_plan_v1_plan_proto_msgTypes[3].OneofWrappers = []any{}
 	file_plan_v1_plan_proto_msgTypes[11].OneofWrappers = []any{}
-	file_plan_v1_plan_proto_msgTypes[18].OneofWrappers = []any{
+	file_plan_v1_plan_proto_msgTypes[16].OneofWrappers = []any{
 		(*ReorderPlanEntryRequest_BeforeId)(nil),
 		(*ReorderPlanEntryRequest_AfterId)(nil),
 	}
@@ -1318,7 +1201,7 @@ func file_plan_v1_plan_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plan_v1_plan_proto_rawDesc), len(file_plan_v1_plan_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

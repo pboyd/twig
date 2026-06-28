@@ -50,8 +50,6 @@ const (
 	// PlanServiceMovePlanEntryProcedure is the fully-qualified name of the PlanService's MovePlanEntry
 	// RPC.
 	PlanServiceMovePlanEntryProcedure = "/plan.v1.PlanService/MovePlanEntry"
-	// PlanServiceClearPlanProcedure is the fully-qualified name of the PlanService's ClearPlan RPC.
-	PlanServiceClearPlanProcedure = "/plan.v1.PlanService/ClearPlan"
 	// PlanServiceReorderPlanEntryProcedure is the fully-qualified name of the PlanService's
 	// ReorderPlanEntry RPC.
 	PlanServiceReorderPlanEntryProcedure = "/plan.v1.PlanService/ReorderPlanEntry"
@@ -74,9 +72,6 @@ type PlanServiceClient interface {
 	RenamePlanEntry(context.Context, *connect.Request[v1.RenamePlanEntryRequest]) (*connect.Response[v1.RenamePlanEntryResponse], error)
 	// MovePlanEntry changes start_minute and optionally duration_minute.
 	MovePlanEntry(context.Context, *connect.Request[v1.MovePlanEntryRequest]) (*connect.Response[v1.MovePlanEntryResponse], error)
-	// ClearPlan removes every entry starting at or after start_minute on day; if an
-	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
-	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
 	// ReorderPlanEntry repositions an untimed entry within the day's untimed
 	// group by placing it immediately before or after a sibling untimed anchor.
 	// Both the entry and the anchor must be untimed (no start_minute) and on the
@@ -136,12 +131,6 @@ func NewPlanServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(planServiceMethods.ByName("MovePlanEntry")),
 			connect.WithClientOptions(opts...),
 		),
-		clearPlan: connect.NewClient[v1.ClearPlanRequest, v1.ClearPlanResponse](
-			httpClient,
-			baseURL+PlanServiceClearPlanProcedure,
-			connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
-			connect.WithClientOptions(opts...),
-		),
 		reorderPlanEntry: connect.NewClient[v1.ReorderPlanEntryRequest, v1.ReorderPlanEntryResponse](
 			httpClient,
 			baseURL+PlanServiceReorderPlanEntryProcedure,
@@ -165,7 +154,6 @@ type planServiceClient struct {
 	removePlanEntry   *connect.Client[v1.RemovePlanEntryRequest, v1.RemovePlanEntryResponse]
 	renamePlanEntry   *connect.Client[v1.RenamePlanEntryRequest, v1.RenamePlanEntryResponse]
 	movePlanEntry     *connect.Client[v1.MovePlanEntryRequest, v1.MovePlanEntryResponse]
-	clearPlan         *connect.Client[v1.ClearPlanRequest, v1.ClearPlanResponse]
 	reorderPlanEntry  *connect.Client[v1.ReorderPlanEntryRequest, v1.ReorderPlanEntryResponse]
 	listScheduledDays *connect.Client[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse]
 }
@@ -200,11 +188,6 @@ func (c *planServiceClient) MovePlanEntry(ctx context.Context, req *connect.Requ
 	return c.movePlanEntry.CallUnary(ctx, req)
 }
 
-// ClearPlan calls plan.v1.PlanService.ClearPlan.
-func (c *planServiceClient) ClearPlan(ctx context.Context, req *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error) {
-	return c.clearPlan.CallUnary(ctx, req)
-}
-
 // ReorderPlanEntry calls plan.v1.PlanService.ReorderPlanEntry.
 func (c *planServiceClient) ReorderPlanEntry(ctx context.Context, req *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error) {
 	return c.reorderPlanEntry.CallUnary(ctx, req)
@@ -229,9 +212,6 @@ type PlanServiceHandler interface {
 	RenamePlanEntry(context.Context, *connect.Request[v1.RenamePlanEntryRequest]) (*connect.Response[v1.RenamePlanEntryResponse], error)
 	// MovePlanEntry changes start_minute and optionally duration_minute.
 	MovePlanEntry(context.Context, *connect.Request[v1.MovePlanEntryRequest]) (*connect.Response[v1.MovePlanEntryResponse], error)
-	// ClearPlan removes every entry starting at or after start_minute on day; if an
-	// entry straddles start_minute, its duration is shortened so it ends at start_minute.
-	ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error)
 	// ReorderPlanEntry repositions an untimed entry within the day's untimed
 	// group by placing it immediately before or after a sibling untimed anchor.
 	// Both the entry and the anchor must be untimed (no start_minute) and on the
@@ -287,12 +267,6 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(planServiceMethods.ByName("MovePlanEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
-	planServiceClearPlanHandler := connect.NewUnaryHandler(
-		PlanServiceClearPlanProcedure,
-		svc.ClearPlan,
-		connect.WithSchema(planServiceMethods.ByName("ClearPlan")),
-		connect.WithHandlerOptions(opts...),
-	)
 	planServiceReorderPlanEntryHandler := connect.NewUnaryHandler(
 		PlanServiceReorderPlanEntryProcedure,
 		svc.ReorderPlanEntry,
@@ -319,8 +293,6 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 			planServiceRenamePlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceMovePlanEntryProcedure:
 			planServiceMovePlanEntryHandler.ServeHTTP(w, r)
-		case PlanServiceClearPlanProcedure:
-			planServiceClearPlanHandler.ServeHTTP(w, r)
 		case PlanServiceReorderPlanEntryProcedure:
 			planServiceReorderPlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceListScheduledDaysProcedure:
@@ -356,10 +328,6 @@ func (UnimplementedPlanServiceHandler) RenamePlanEntry(context.Context, *connect
 
 func (UnimplementedPlanServiceHandler) MovePlanEntry(context.Context, *connect.Request[v1.MovePlanEntryRequest]) (*connect.Response[v1.MovePlanEntryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.MovePlanEntry is not implemented"))
-}
-
-func (UnimplementedPlanServiceHandler) ClearPlan(context.Context, *connect.Request[v1.ClearPlanRequest]) (*connect.Response[v1.ClearPlanResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ClearPlan is not implemented"))
 }
 
 func (UnimplementedPlanServiceHandler) ReorderPlanEntry(context.Context, *connect.Request[v1.ReorderPlanEntryRequest]) (*connect.Response[v1.ReorderPlanEntryResponse], error) {

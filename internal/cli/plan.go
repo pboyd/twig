@@ -64,8 +64,6 @@ func runPlan(profile string, args []string) int {
 		return runPlanRename(client, day, args[1:])
 	case "mv":
 		return runPlanMv(client, day, args[1:])
-	case "clear":
-		return runPlanClear(client, day, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown plan subcommand: %s\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'twig help plan' for usage.")
@@ -83,7 +81,6 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "  rm <n>                              Remove entry n")
 	fmt.Fprintln(w, "  rename <n> <name>                   Rename entry n")
 	fmt.Fprintln(w, "  mv <n> [start|null] [dur|end]        Move entry n (omit start or 'null' to unschedule)")
-	fmt.Fprintln(w, "  clear [start]                       Clear entries from start (default: now)")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
@@ -308,30 +305,6 @@ func runPlanMv(client planv1connect.PlanServiceClient, day string, args []string
 	// If no start arg given: unschedule (StartMinute remains nil).
 
 	_, err = client.MovePlanEntry(context.Background(), connect.NewRequest(req))
-	if err != nil {
-		return printPlanError(err)
-	}
-	return runPlanShow(client, day)
-}
-
-func runPlanClear(client planv1connect.PlanServiceClient, day string, args []string) int {
-	var startMinute int
-	if len(args) >= 1 {
-		m, err := timeparse.ParseStart(args[0])
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			return 1
-		}
-		startMinute = m
-	} else {
-		now := time.Now()
-		startMinute = now.Hour()*60 + now.Minute()
-	}
-
-	_, err := client.ClearPlan(context.Background(), connect.NewRequest(&planv1.ClearPlanRequest{
-		Day:         day,
-		StartMinute: int32(startMinute),
-	}))
 	if err != nil {
 		return printPlanError(err)
 	}
