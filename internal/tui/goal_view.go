@@ -262,7 +262,7 @@ func (m Model) renderGoalList(width int) string {
 	visible := visibleGoals(m.goal.goals, m.goal.showAll)
 
 	if len(visible) == 0 {
-		empty := "A blank canvas! Press 'n' to plant your first goal."
+		empty := "A blank canvas! Press 'ctrl+n' to plant your first goal."
 		if m.styled {
 			return dimStyle.Render(empty)
 		}

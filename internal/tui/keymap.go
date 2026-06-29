@@ -243,8 +243,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("→/l", "next period"),
 		),
 		GoalNew: key.NewBinding(
-			key.WithKeys("n"),
-			key.WithHelp("n", "new goal"),
+			key.WithKeys("ctrl+n"),
+			key.WithHelp("ctrl+n", "new goal"),
 		),
 		GoalEdit: key.NewBinding(
 			key.WithKeys("e", "enter"),
@@ -283,8 +283,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("}", "rank lower"),
 		),
 		GoalAddTask: key.NewBinding(
-			key.WithKeys("a"),
-			key.WithHelp("a", "add task"),
+			key.WithKeys("n"),
+			key.WithHelp("n", "add task"),
 		),
 		GoalLinkTask: key.NewBinding(
 			key.WithKeys("L"),
@@ -316,7 +316,7 @@ func DefaultKeyMap() KeyMap {
 // ShortHelp returns the short help for the key map (used by the bubbles help component).
 func (k KeyMap) ShortHelp() []key.Binding {
 	if k.GoalMode {
-		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalEdit, k.GoalStatusHistory, k.GoalAddStatus, k.Help, k.Quit}
+		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalAddTask, k.GoalEdit, k.GoalStatusHistory, k.GoalAddStatus, k.Help, k.Quit}
 	}
 	if k.ReportMode {
 		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}

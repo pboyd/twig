@@ -136,7 +136,7 @@ func TestGoal_EmptyStateCopyWhenNoVisibleGoals(t *testing.T) {
 
 	out := m.renderGoalList(40)
 
-	want := "A blank canvas! Press 'n' to plant your first goal."
+	want := "A blank canvas! Press 'ctrl+n' to plant your first goal."
 	if !strings.Contains(out, want) {
 		t.Errorf("empty-state copy: want %q in output, got:\n%q", want, out)
 	}
@@ -153,7 +153,7 @@ func TestGoal_EmptyStateCopyWhenAllGoalsHidden(t *testing.T) {
 
 	out := m.renderGoalList(40)
 
-	want := "A blank canvas! Press 'n' to plant your first goal."
+	want := "A blank canvas! Press 'ctrl+n' to plant your first goal."
 	if !strings.Contains(out, want) {
 		t.Errorf("empty-state copy with all-hidden goals: want %q in output, got:\n%q", want, out)
 	}
@@ -287,12 +287,12 @@ func TestGoal_AddTaskFormVisible(t *testing.T) {
 	m.width = 80
 	m.height = 24
 
-	// Press 'a' to open the new-task form.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	// Press 'n' to open the new-task form.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
 	m2 := next.(Model)
 
 	if m2.goal.mode != goalNewTask {
-		t.Fatalf("after 'a': want goalNewTask (%d), got %d", int(goalNewTask), int(m2.goal.mode))
+		t.Fatalf("after 'n': want goalNewTask (%d), got %d", int(goalNewTask), int(m2.goal.mode))
 	}
 
 	// The view must render the form (Save button) so the user sees it.
