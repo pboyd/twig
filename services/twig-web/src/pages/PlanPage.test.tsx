@@ -14,6 +14,7 @@ vi.mock("../gen/plan/v1/plan-PlanService_connectquery", () => ({
 vi.mock("../gen/task/v1/task-TaskService_connectquery", () => ({
   listTasks: "schema:listTasks",
   completeTask: "schema:completeTask",
+  uncompleteTask: "schema:uncompleteTask",
 }));
 
 vi.mock("../components/AppHeader", () => ({
@@ -91,7 +92,7 @@ beforeEach(() => {
   });
 });
 
-// ─── US1: Check today's plan on the go ───────────────────────────────────────
+// ─── US1: Loading state ───────────────────────────────────────
 
 describe("PlanPage — US1: loading state", () => {
   it("renders a spinner when loading", () => {
@@ -129,8 +130,10 @@ describe("PlanPage — US1: empty state", () => {
   });
 });
 
-describe("PlanPage — US1: timed entries render in order with time labels", () => {
-  it("renders timed entries in the order returned by the server", () => {
+// ─── US1: Timed entries render with timeline ───────────────────
+
+describe("PlanPage — US1: timed entries render in the timeline", () => {
+  it("renders timed entries with names visible", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
@@ -146,9 +149,24 @@ describe("PlanPage — US1: timed entries render in order with time labels", () 
     renderPage();
     expect(screen.getByText("Morning meeting")).toBeTruthy();
     expect(screen.getByText("Code review")).toBeTruthy();
-    // Time labels
-    expect(screen.getByText("9:00 am – 9:30 am")).toBeTruthy();
-    expect(screen.getByText("10:00 am – 11:00 am")).toBeTruthy();
+    expect(screen.getByTestId("timed-section")).toBeTruthy();
+  });
+
+  it("renders hour labels in the timeline", () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [
+          makePlanEntry({ id: 1, name: "Meeting", startMinute: 540, durationMinute: 30 }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByText("8:00 am")).toBeTruthy();
+    expect(screen.getByText("9:00 am")).toBeTruthy();
   });
 });
 
@@ -209,10 +227,10 @@ describe("PlanPage — US1: event vs task visual distinction", () => {
   });
 });
 
-// ─── US2: Understand each entry at a glance ──────────────────────────────────
+// ─── US2: Untimed entries in separate section (above timeline) ─
 
-describe("PlanPage — US2: untimed entries in separate section", () => {
-  it("renders untimed entries in a separate section", () => {
+describe("PlanPage — US2: untimed entries in separate section above timeline", () => {
+  it("renders untimed entries before timed entries in DOM order", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
@@ -228,14 +246,13 @@ describe("PlanPage — US2: untimed entries in separate section", () => {
     renderPage();
     expect(screen.getByText("Timed task")).toBeTruthy();
     expect(screen.getByText("Untimed task")).toBeTruthy();
-    // Both sections are present
-    expect(screen.getByTestId("timed-section")).toBeTruthy();
     expect(screen.getByTestId("untimed-section")).toBeTruthy();
+    expect(screen.getByTestId("timed-section")).toBeTruthy();
   });
 });
 
 describe("PlanPage — US2: completed task entries marked done", () => {
-  it("marks completed task entries visually", () => {
+  it("marks completed task entries with CompletionToggle filled state", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
@@ -248,7 +265,7 @@ describe("PlanPage — US2: completed task entries marked done", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    expect(screen.getByTestId("completed-marker")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark incomplete/i })).toBeTruthy();
   });
 });
 
@@ -285,13 +302,12 @@ describe("PlanPage — US2: event entries are non-interactive", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    // There should be no link for the event entry
     expect(screen.queryByRole("link", { name: /lunch break/i })).toBeNull();
     expect(screen.getByText("Lunch break")).toBeTruthy();
   });
 });
 
-// ─── US3: Look at another day's plan ─────────────────────────────────────────
+// ─── US3: Day navigation ───────────────────────────────────────
 
 describe("PlanPage — US3: day navigation", () => {
   it("renders prev/next/today controls", () => {
@@ -303,7 +319,6 @@ describe("PlanPage — US3: day navigation", () => {
 
   it("shows a date label", () => {
     renderPage();
-    // Today's label includes 'Today'
     expect(screen.getByRole("heading", { name: /today/i })).toBeTruthy();
   });
 
@@ -315,10 +330,10 @@ describe("PlanPage — US3: day navigation", () => {
   });
 });
 
-// ─── US4 (this spec): Complete task from planner ──────────────────────────────
+// ─── Complete / uncomplete toggle ──────────────────────────────
 
-describe("PlanPage — complete task from planner (US4-complete)", () => {
-  it("renders a complete button for an incomplete task entry", () => {
+describe("PlanPage — toggle complete (US2 two-way toggle)", () => {
+  it("renders a toggle for an incomplete task entry", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
@@ -331,14 +346,14 @@ describe("PlanPage — complete task from planner (US4-complete)", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    expect(screen.getByTestId("complete-btn")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
   });
 
-  it("does not render a complete button for event entries (taskId == 0)", () => {
+  it("does not render a toggle for event entries (taskId == 0)", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
-          makePlanEntry({ id: 1, taskId: 0n, name: "Standup", startMinute: 540, durationMinute: 30, completed: false }),
+          makePlanEntry({ id: 1, taskId: 0n, name: "Standup", startMinute: undefined, completed: false }),
         ],
       },
       isLoading: false,
@@ -347,14 +362,14 @@ describe("PlanPage — complete task from planner (US4-complete)", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    expect(screen.queryByTestId("complete-btn")).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark (complete|incomplete)/i })).toBeNull();
   });
 
-  it("does not render a complete button for already-completed task entries", () => {
+  it("renders a filled toggle for completed task entries", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [
-          makePlanEntry({ id: 1, taskId: 3n, name: "Done", startMinute: 540, durationMinute: 30, completed: true }),
+          makePlanEntry({ id: 1, taskId: 3n, name: "Done", startMinute: 540, durationMinute: 60, completed: true }),
         ],
       },
       isLoading: false,
@@ -363,10 +378,10 @@ describe("PlanPage — complete task from planner (US4-complete)", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    expect(screen.queryByTestId("complete-btn")).toBeNull();
+    expect(screen.getByRole("button", { name: /mark incomplete/i })).toBeTruthy();
   });
 
-  it("calls completeTask and invalidates plan + tasks queries on success", async () => {
+  it("calls completeTask on incomplete entry and invalidates queries", async () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
         entries: [makePlanEntry({ id: 1, taskId: 5n, name: "My task", startMinute: undefined, completed: false })],
@@ -377,12 +392,28 @@ describe("PlanPage — complete task from planner (US4-complete)", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    fireEvent.click(screen.getByTestId("complete-btn"));
+    fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith({ id: 5n }));
     expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
   });
 
-  it("shows inline blocked-by-subtasks message on FailedPrecondition", async () => {
+  it("calls uncompleteTask on completed entry and invalidates queries", async () => {
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 5n, name: "My task", startMinute: 540, durationMinute: 60, completed: true })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /mark incomplete/i }));
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith({ id: 5n }));
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows inline complete-blocked message on FailedPrecondition", async () => {
     mockMutateAsync.mockRejectedValue(new ConnectError("blocked", Code.FailedPrecondition));
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
@@ -394,14 +425,30 @@ describe("PlanPage — complete task from planner (US4-complete)", () => {
       refetch: vi.fn(),
     });
     renderPage();
-    fireEvent.click(screen.getByTestId("complete-btn"));
+    fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
     await waitFor(() => expect(screen.getByText(/sub-tasks/i)).toBeTruthy());
+  });
+
+  it("shows inline reopen-blocked message on FailedPrecondition for completed entry", async () => {
+    mockMutateAsync.mockRejectedValue(new ConnectError("parent-blocked", Code.FailedPrecondition));
+    listPlanEntriesResult = vi.fn().mockReturnValue({
+      data: {
+        entries: [makePlanEntry({ id: 1, taskId: 5n, name: "My task", startMinute: 540, durationMinute: 60, completed: true })],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /mark incomplete/i }));
+    await waitFor(() => expect(screen.getByText(/parent/i)).toBeTruthy());
   });
 });
 
-// ─── US5 (this spec): Remove entry from planner ───────────────────────────────
+// ─── Remove entry ──────────────────────────────────────────────
 
-describe("PlanPage — remove entry from planner (US5-remove)", () => {
+describe("PlanPage — remove entry from planner", () => {
   it("renders a remove button for timed task entries", () => {
     listPlanEntriesResult = vi.fn().mockReturnValue({
       data: {
@@ -476,7 +523,6 @@ describe("PlanPage — remove entry from planner (US5-remove)", () => {
     renderPage();
     fireEvent.click(screen.getByTestId("remove-btn"));
     await waitFor(() => expect(screen.getByText(/couldn't reach/i)).toBeTruthy());
-    // Entry still rendered
     expect(screen.getByText("Standup")).toBeTruthy();
   });
 });
@@ -507,10 +553,8 @@ describe("PlanPage — inline name rendering (US2)", () => {
       refetch: vi.fn(),
     });
     const { container } = renderPage();
-    // The plan entry row should not contain a heading element from inline markdown
-    const entryRow = container.querySelector('[class*="border-b"]');
-    expect(entryRow?.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
+    const timelineSection = container.querySelector('[data-testid="timed-section"]');
+    expect(timelineSection?.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
     expect(container.textContent).toContain("Not a heading");
   });
 });
-

@@ -97,3 +97,66 @@ export function groupPlan(entries: ResolvedEntry[]): GroupedPlan {
   const untimed = entries.filter((e) => !e.timed && !e.completed);
   return { timed, untimed, isEmpty: timed.length === 0 && untimed.length === 0 };
 }
+
+export const SLOT_MINUTES = 15;
+export const SLOT_PX = 44;
+
+export function snapDown15(min: number): number {
+  return Math.floor(min / SLOT_MINUTES) * SLOT_MINUTES;
+}
+
+export function snapUp15(min: number): number {
+  return Math.ceil(min / SLOT_MINUTES) * SLOT_MINUTES;
+}
+
+export interface TimelineWindow {
+  startMinute: number;
+  endMinute: number;
+}
+
+const DEFAULT_WINDOW_START = 480;
+const DEFAULT_WINDOW_END = 1020;
+
+export function computeWindow(timed: ResolvedEntry[]): TimelineWindow {
+  if (timed.length === 0) {
+    return { startMinute: DEFAULT_WINDOW_START, endMinute: DEFAULT_WINDOW_END };
+  }
+
+  let start = Infinity;
+  let end = -Infinity;
+
+  for (const entry of timed) {
+    if (entry.startMinute !== undefined && entry.endMinute !== undefined) {
+      const s = snapDown15(entry.startMinute);
+      const e = snapUp15(entry.endMinute);
+      if (s < start) start = s;
+      if (e > end) end = e;
+    }
+  }
+
+  start = Math.min(start, DEFAULT_WINDOW_START);
+  end = Math.max(end, DEFAULT_WINDOW_END);
+
+  start = Math.floor(start / 60) * 60;
+  end = Math.ceil(end / 60) * 60;
+
+  return { startMinute: start, endMinute: end };
+}
+
+export function slotIndex(window: TimelineWindow, minute: number): number {
+  return Math.floor((minute - window.startMinute) / SLOT_MINUTES);
+}
+
+export function slotCount(window: TimelineWindow): number {
+  return Math.floor((window.endMinute - window.startMinute) / SLOT_MINUTES);
+}
+
+export function hourLabels(
+  window: TimelineWindow
+): { minute: number; label: string }[] {
+  const labels: { minute: number; label: string }[] = [];
+  for (let m = window.startMinute; m < window.endMinute; m += 60) {
+    labels.push({ minute: m, label: formatMinute(m) });
+  }
+  return labels;
+}

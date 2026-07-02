@@ -16,6 +16,7 @@ import type { TaskNode } from "../lib/tree";
 import type { ReorderAnchor } from "../lib/reorderAnchor";
 import { TaskForm } from "./TaskForm";
 import { AddToPlanControl } from "./AddToPlanControl";
+import { CompletionToggle } from "./CompletionToggle";
 import { messages } from "../theme/messages";
 import { Markdown } from "./Markdown";
 
@@ -60,8 +61,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
     setShowSubForm(false);
   }
 
-  async function handleToggleComplete(e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleToggleComplete() {
     setToggleError(null);
     try {
       if (task.completedAt) {
@@ -118,34 +118,11 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
         </button>
 
         {/* Completion toggle — 44px touch target */}
-        <button
-          aria-label={isComplete ? "Mark incomplete" : "Mark complete"}
+        <CompletionToggle
+          completed={isComplete}
           disabled={isToggling}
-          className={[
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded",
-            isToggling ? "opacity-50" : "",
-          ].join(" ")}
-          onClick={handleToggleComplete}
-        >
-          <span
-            className={[
-              "flex h-5 w-5 items-center justify-center rounded-full border-2",
-              isComplete
-                ? "border-green-500 bg-green-500 text-white"
-                : "border-gray-400 dark:border-gray-500",
-            ].join(" ")}
-          >
-            {isComplete && (
-              <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-          </span>
-        </button>
+          onToggle={handleToggleComplete}
+        />
 
         {/* Task name — tappable, wraps rather than truncates */}
         <button

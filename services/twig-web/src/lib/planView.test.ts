@@ -8,7 +8,16 @@ import {
   formatTimeRange,
   resolveEntries,
   groupPlan,
+  SLOT_MINUTES,
+  SLOT_PX,
+  snapDown15,
+  snapUp15,
+  computeWindow,
+  slotIndex,
+  slotCount,
+  hourLabels,
 } from "./planView";
+import type { ResolvedEntry, TimelineWindow } from "./planView";
 import type { PlanEntry } from "../gen/plan/v1/plan_pb";
 
 function makeEntry(overrides: Partial<PlanEntry> = {}): PlanEntry {
@@ -266,5 +275,238 @@ describe("groupPlan", () => {
     const grouped = groupPlan(entries);
     expect(grouped.untimed).toHaveLength(1);
     expect(grouped.untimed[0].id).toBe(1);
+  });
+});
+
+describe("SLOT_MINUTES / SLOT_PX", () => {
+  it("SLOT_MINUTES is 15", () => {
+    expect(SLOT_MINUTES).toBe(15);
+  });
+
+  it("SLOT_PX is 44", () => {
+    expect(SLOT_PX).toBe(44);
+  });
+});
+
+describe("snapDown15", () => {
+  it("snaps 0 to 0", () => {
+    expect(snapDown15(0)).toBe(0);
+  });
+
+  it("snaps 14 down to 0", () => {
+    expect(snapDown15(14)).toBe(0);
+  });
+
+  it("snaps 15 to 15", () => {
+    expect(snapDown15(15)).toBe(15);
+  });
+
+  it("snaps 540 to 540", () => {
+    expect(snapDown15(540)).toBe(540);
+  });
+
+  it("snaps 541 down to 540", () => {
+    expect(snapDown15(541)).toBe(540);
+  });
+
+  it("snaps 554 down to 540", () => {
+    expect(snapDown15(554)).toBe(540);
+  });
+});
+
+describe("snapUp15", () => {
+  it("snaps 0 up to 0", () => {
+    expect(snapUp15(0)).toBe(0);
+  });
+
+  it("snaps 1 up to 15", () => {
+    expect(snapUp15(1)).toBe(15);
+  });
+
+  it("snaps 15 up to 15", () => {
+    expect(snapUp15(15)).toBe(15);
+  });
+
+  it("snaps 30 up to 30", () => {
+    expect(snapUp15(30)).toBe(30);
+  });
+
+  it("snaps 541 up to 555 (ceiling behavior)", () => {
+    // floor(541/15) = 36, 36*15=540, so ceil(541/15)=37, 37*15=555
+    const result = snapUp15(541);
+    expect(result).toBe(555);
+  });
+
+  it("snaps 539 up to 540", () => {
+    expect(snapUp15(539)).toBe(540);
+  });
+});
+
+describe("computeWindow", () => {
+  const window9to5: TimelineWindow = { startMinute: 480, endMinute: 1020 };
+
+  it("returns default window on empty day", () => {
+    expect(computeWindow([])).toEqual(window9to5);
+  });
+
+  it("returns default window when all entries are untimed", () => {
+    const entry: ResolvedEntry = {
+      id: 1,
+      displayName: "Untimed",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: false,
+      durationMinute: 60,
+    };
+    expect(computeWindow([entry])).toEqual(window9to5);
+  });
+
+  it("hour-aligns entry start", () => {
+    const entry: ResolvedEntry = {
+      id: 1,
+      displayName: "Plan",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: true,
+      startMinute: 540,
+      endMinute: 570,
+      durationMinute: 30,
+    };
+    const window = computeWindow([entry]);
+    expect(window.startMinute).toBe(480);
+    expect(window.endMinute).toBe(1020);
+    // min of 540 and 480 is 480 (default), start floors to 480
+    // max of 570 and 1020 is 1020
+  });
+
+  it("extends default window when entry starts before 8:00", () => {
+    const entry: ResolvedEntry = {
+      id: 1,
+      displayName: "Early",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: true,
+      startMinute: 420,
+      endMinute: 480,
+      durationMinute: 60,
+    };
+    const window = computeWindow([entry]);
+    expect(window.startMinute).toBe(420); // 7:00 (floor to hour)
+    expect(window.endMinute).toBe(1020); // default
+  });
+
+  it("extends default window when entry ends after 17:00", () => {
+    const entry: ResolvedEntry = {
+      id: 1,
+      displayName: "Late",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: true,
+      startMinute: 1020,
+      endMinute: 1080,
+      durationMinute: 60,
+    };
+    const window = computeWindow([entry]);
+    expect(window.startMinute).toBe(480);
+    expect(window.endMinute).toBe(1080); // 18:00
+  });
+
+  it("unions entries outside default on both sides", () => {
+    const early: ResolvedEntry = {
+      id: 1,
+      displayName: "Early",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: true,
+      startMinute: 360,
+      endMinute: 420,
+      durationMinute: 60,
+    };
+    const late: ResolvedEntry = {
+      id: 2,
+      displayName: "Late",
+      kind: "task",
+      taskId: 2n,
+      completed: false,
+      timed: true,
+      startMinute: 1080,
+      endMinute: 1140,
+      durationMinute: 60,
+    };
+    const window = computeWindow([early, late]);
+    expect(window.startMinute).toBe(360); // 6:00
+    expect(window.endMinute).toBe(1140); // 19:00
+  });
+
+  it("snaps entry start down and end up before computing window", () => {
+    const entry: ResolvedEntry = {
+      id: 1,
+      displayName: "Weird",
+      kind: "task",
+      taskId: 1n,
+      completed: false,
+      timed: true,
+      startMinute: 541,
+      endMinute: 554,
+      durationMinute: 13,
+    };
+    const window = computeWindow([entry]);
+    // snapDown15(541)=540, within default. snapUp15(554)=555, within default
+    expect(window.startMinute).toBe(480);
+    expect(window.endMinute).toBe(1020);
+  });
+});
+
+describe("slotIndex", () => {
+  const window: TimelineWindow = { startMinute: 480, endMinute: 1020 };
+
+  it("returns 0 for the window start minute", () => {
+    expect(slotIndex(window, 480)).toBe(0);
+  });
+
+  it("returns 1 for 495 (15 min later)", () => {
+    expect(slotIndex(window, 495)).toBe(1);
+  });
+
+  it("returns 4 for 540 (9:00 = 4 slots from 8:00)", () => {
+    expect(slotIndex(window, 540)).toBe(4);
+  });
+
+  it("handles non-aligned minute", () => {
+    expect(slotIndex(window, 541)).toBe(4);
+  });
+});
+
+describe("slotCount", () => {
+  it("returns 36 for default 8:00-17:00 window (9h = 36 slots)", () => {
+    const window: TimelineWindow = { startMinute: 480, endMinute: 1020 };
+    expect(slotCount(window)).toBe(36);
+  });
+
+  it("returns 4 for a 1-hour window", () => {
+    const window: TimelineWindow = { startMinute: 540, endMinute: 600 };
+    expect(slotCount(window)).toBe(4);
+  });
+});
+
+describe("hourLabels", () => {
+  it("returns labels for each hour in window", () => {
+    const window: TimelineWindow = { startMinute: 480, endMinute: 600 };
+    const labels = hourLabels(window);
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).toEqual({ minute: 480, label: "8:00 am" });
+    expect(labels[1]).toEqual({ minute: 540, label: "9:00 am" });
+  });
+
+  it("reuses formatMinute for label text", () => {
+    const window: TimelineWindow = { startMinute: 720, endMinute: 840 };
+    const labels = hourLabels(window);
+    expect(labels[0].label).toBe("12:00 pm");
+    expect(labels[1].label).toBe("1:00 pm");
   });
 });

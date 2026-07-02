@@ -4,11 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createConnectQueryKey } from "@connectrpc/connect-query";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { listPlanEntries, removePlanEntry } from "../gen/plan/v1/plan-PlanService_connectquery";
-import { listTasks, completeTask } from "../gen/task/v1/task-TaskService_connectquery";
+import { listTasks, completeTask, uncompleteTask } from "../gen/task/v1/task-TaskService_connectquery";
 import { AppHeader } from "../components/AppHeader";
 import { Spinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PlanEntryRow } from "../components/PlanEntryRow";
+import { PlanTimeline } from "../components/PlanTimeline";
 import { messages } from "../theme/messages";
 import {
   todayString,
@@ -34,6 +35,7 @@ export default function PlanPage() {
   const tasksQuery = useQuery(listTasks, {});
 
   const { mutateAsync: doComplete } = useMutation(completeTask);
+  const { mutateAsync: doUncomplete } = useMutation(uncompleteTask);
   const { mutateAsync: doRemove } = useMutation(removePlanEntry);
 
   const planQueryKey = createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" });
@@ -58,18 +60,24 @@ export default function PlanPage() {
     });
   }
 
-  async function handleComplete(entry: ResolvedEntry) {
+  async function handleToggleComplete(entry: ResolvedEntry) {
     if (entry.taskId === undefined) return;
     clearEntryError(entry.id);
     setCompletingIds((prev) => new Set(prev).add(entry.id));
     try {
-      await doComplete({ id: entry.taskId });
+      if (entry.completed) {
+        await doUncomplete({ id: entry.taskId });
+      } else {
+        await doComplete({ id: entry.taskId });
+      }
       await queryClient.invalidateQueries({ queryKey: planQueryKey });
       await queryClient.invalidateQueries({ queryKey: tasksQueryKey });
     } catch (err) {
       const msg =
         err instanceof ConnectError && err.code === Code.FailedPrecondition
-          ? messages.completeBlockedBySubtasks
+          ? entry.completed
+            ? messages.reopenBlockedByParent
+            : messages.completeBlockedBySubtasks
           : messages.connectivityError;
       setEntryErrors((prev) => new Map(prev).set(entry.id, msg));
     } finally {
@@ -159,14 +167,17 @@ export default function PlanPage() {
 
         {!isLoading && !isError && !grouped.isEmpty && (
           <>
-            {grouped.timed.length > 0 && (
-              <section data-testid="timed-section">
+            {grouped.untimed.length > 0 && (
+              <section data-testid="untimed-section">
+                <h2 className="px-4 pb-1 mt-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  Untimed
+                </h2>
                 <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
-                  {grouped.timed.map((entry) => (
+                  {grouped.untimed.map((entry) => (
                     <li key={entry.id}>
                       <PlanEntryRow
                         entry={entry}
-                        onComplete={handleComplete}
+                        onToggleComplete={handleToggleComplete}
                         onRemove={handleRemove}
                         completing={completingIds.has(entry.id)}
                         removing={removingIds.has(entry.id)}
@@ -178,25 +189,16 @@ export default function PlanPage() {
               </section>
             )}
 
-            {grouped.untimed.length > 0 && (
-              <section data-testid="untimed-section" className="mt-4">
-                <h2 className="px-4 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                  Untimed
-                </h2>
-                <ul className="list-none p-0 m-0 border-t border-gray-100 dark:border-gray-800/60">
-                  {grouped.untimed.map((entry) => (
-                    <li key={entry.id}>
-                      <PlanEntryRow
-                        entry={entry}
-                        onComplete={handleComplete}
-                        onRemove={handleRemove}
-                        completing={completingIds.has(entry.id)}
-                        removing={removingIds.has(entry.id)}
-                        actionError={entryErrors.get(entry.id)}
-                      />
-                    </li>
-                  ))}
-                </ul>
+            {grouped.timed.length > 0 && (
+              <section data-testid="timed-section" className="mt-4">
+                <PlanTimeline
+                  entries={grouped.timed}
+                  day={day}
+                  onToggleComplete={handleToggleComplete}
+                  onRemove={handleRemove}
+                  pendingIds={new Set([...completingIds, ...removingIds])}
+                  entryErrors={entryErrors}
+                />
               </section>
             )}
           </>

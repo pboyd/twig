@@ -1,10 +1,11 @@
 import { Link } from "react-router";
 import type { ResolvedEntry } from "../lib/planView";
 import { Markdown } from "./Markdown";
+import { CompletionToggle } from "./CompletionToggle";
 
 interface PlanEntryRowProps {
   entry: ResolvedEntry;
-  onComplete?: (entry: ResolvedEntry) => void;
+  onToggleComplete?: (entry: ResolvedEntry) => void;
   onRemove?: (entry: ResolvedEntry) => void;
   completing?: boolean;
   removing?: boolean;
@@ -13,7 +14,7 @@ interface PlanEntryRowProps {
 
 export function PlanEntryRow({
   entry,
-  onComplete,
+  onToggleComplete,
   onRemove,
   completing,
   removing,
@@ -27,59 +28,27 @@ export function PlanEntryRow({
     </span>
   );
 
-  const showComplete =
-    onComplete !== undefined &&
-    entry.kind === "task" &&
-    entry.taskId !== undefined &&
-    !entry.completed;
-
   return (
     <div className="flex flex-col gap-0.5 py-2 px-4 border-b border-gray-100 dark:border-gray-800/60 last:border-0">
-      {entry.timed && entry.timeLabel && (
-        <span className="text-xs text-gray-500 dark:text-gray-400 font-mono tabular-nums">
-          {entry.timeLabel}
-        </span>
-      )}
       <div className="flex items-center gap-2">
-        {entry.completed && (
-          <span
-            data-testid="completed-marker"
-            aria-label="Completed"
-            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-xs shrink-0"
-          >
-            ✓
-          </span>
-        )}
         {entry.kind === "task" && entry.taskId !== undefined ? (
-          <Link
-            to={`/tasks/${entry.taskId}`}
-            className="flex-1 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline"
-          >
-            {nameContent}
-          </Link>
+          <>
+            <CompletionToggle
+              completed={entry.completed}
+              disabled={completing}
+              onToggle={() => onToggleComplete?.(entry)}
+            />
+            <Link
+              to={`/tasks/${entry.taskId}`}
+              className="flex-1 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline"
+            >
+              {nameContent}
+            </Link>
+          </>
         ) : (
           <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 italic">
             {nameContent}
           </span>
-        )}
-
-        {showComplete && (
-          <button
-            aria-label="Complete task"
-            title="Complete task"
-            disabled={completing}
-            data-testid="complete-btn"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-gray-400 hover:text-green-500 dark:hover:text-green-400 disabled:opacity-50"
-            onClick={() => onComplete(entry)}
-          >
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path
-                fillRule="evenodd"
-                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
         )}
 
         {onRemove !== undefined && (

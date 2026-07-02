@@ -147,7 +147,7 @@ Key frontend source paths:
 - `src/lib/cliInfo.ts` — typed `fetchCliInfo()` wrapper for `GET /cli/info`
 - `src/theme/messages.ts` — all user-facing copy (warm/playful tone)
 - `src/theme/tokens.ts` — color/spacing design tokens
-- `src/components/` — Button, Field, Spinner, ErrorBanner, AppHeader, TaskForm, TreeRow, EmptyState
+- `src/components/` — Button, Field, Spinner, ErrorBanner, AppHeader, TaskForm, TreeRow, EmptyState, CompletionToggle, PlanTimeline
 - `src/pages/` — LoginPage, TaskTreePage, TaskDetailPage, DownloadPage (`/download` route)
 
 The server exposes two plain-HTTP authenticated endpoints consumed by the web app:
@@ -157,5 +157,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/060-unscheduled-task-list/plan.md`.
+`specs/061-web-plan-redesign/plan.md`.
 <!-- SPECKIT END -->
