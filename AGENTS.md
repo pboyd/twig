@@ -157,5 +157,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/059-esc-cancel-form/plan.md`.
+`specs/060-unscheduled-task-list/plan.md`.
 <!-- SPECKIT END -->

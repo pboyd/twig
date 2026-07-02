@@ -679,7 +679,7 @@ func TestSeparator_PresentWhenUntimedEntriesExist(t *testing.T) {
 	m.plan.day = "2026-06-01"
 	m.plan.loaded = true
 	m.plan.entries = []*planv1.PlanEntry{
-		{Id: 1, Name: "Untimed task", DurationMinute: 30}, // untimed
+		{Id: 1, Name: "Untimed task", DurationMinute: 30},                      // untimed
 		{Id: 2, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30}, // timed
 	}
 
@@ -926,6 +926,43 @@ func TestPlanningView_NonToday_TopTruncate(t *testing.T) {
 	// Non-today: must start at the default 08:00 top.
 	if !strings.Contains(out, "08:00") {
 		t.Errorf("TOP-TRUNCATE non-today: expected 08:00 default start; got:\n%s", out)
+	}
+}
+
+// TestPlanningView_UntimedListComposition checks that the Plan tab composes
+// untimed list rows, then the divider, then the grid (US1 T006).
+func TestPlanningView_UntimedListComposition(t *testing.T) {
+	day := "2026-05-27"
+	m := ExportNewModel(nil, nil)
+	m.width = 80
+	m.height = 40
+	m.plan.day = day
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "UntimedTask", DurationMinute: 30},                       // untimed
+		{Id: 2, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30}, // timed
+	}
+
+	now := time.Date(2026, 5, 27, 7, 0, 0, 0, time.UTC) // before 08:00 → TOP-TRUNCATE
+	out := m.renderPlanningView(80, 40, now)
+
+	untimedPos := strings.Index(out, "UntimedTask")
+	gridPos := strings.Index(out, "Standup")
+	if untimedPos < 0 {
+		t.Fatal("untimed task 'UntimedTask' not found in output")
+	}
+	if gridPos < 0 {
+		t.Fatal("timed entry 'Standup' not found in output")
+	}
+	// Untimed comes before grid.
+	if untimedPos > gridPos {
+		t.Errorf("untimed list must appear before the grid; untimedPos=%d gridPos=%d", untimedPos, gridPos)
+	}
+
+	// Separator between untimed list and grid.
+	between := out[untimedPos:gridPos]
+	if !strings.Contains(between, "─") {
+		t.Errorf("expected separator (─) between untimed list and grid; between=%q", between)
 	}
 }
 

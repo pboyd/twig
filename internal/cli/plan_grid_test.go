@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"charm.land/lipgloss/v2"
 
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -990,7 +993,141 @@ func TestRenderUntimed_EmptyReturnsEmpty(t *testing.T) {
 	}
 }
 
-// TestRenderUntimed_SingleEntry15min checks that a 15-minute entry renders as one line.
+// TestRenderUntimed_EmptySliceReturnsEmpty checks that an empty slice (not nil) also returns "".
+func TestRenderUntimed_EmptySliceReturnsEmpty(t *testing.T) {
+	out := cli.RenderUntimed([]*planv1.PlanEntry{}, 80, false, cli.GridOptions{})
+	if out != "" {
+		t.Errorf("empty slice: expected empty string, got %q", out)
+	}
+}
+
+// ── US1: New list row format tests (T003-T005) ────────────────────────────
+
+// TestRenderUntimed_ListRowFormat_Simple checks that untimed entries render as
+// "  ☐ name" / "  ☑ name" rows (C2/C3/C5), one per line, no [id] prefix.
+func TestRenderUntimed_ListRowFormat_Simple(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Task A"},                  // incomplete
+		{Id: 2, Name: "Task B", Completed: true}, // completed
+	}
+	out := cli.RenderUntimed(entries, 80, true, cli.GridOptions{})
+	lines := rowsOf(out)
+
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d:\n%s", len(lines), out)
+	}
+
+	// C3: "  ☐ name" for incomplete, "  ☑ name" for completed.
+	want0 := "  ☐ Task A"
+	if lines[0] != want0 {
+		t.Errorf("row 0:\n  got  %q\n  want %q", lines[0], want0)
+	}
+	want1 := "  ☑ " + cli.DimStrike("Task B")
+	if lines[1] != want1 {
+		t.Errorf("row 1:\n  got  %q\n  want %q", lines[1], want1)
+	}
+
+	// C5: no [id] prefix.
+	if strings.Contains(out, "[1]") || strings.Contains(out, "[2]") {
+		t.Error("C5: [id] prefix must not appear in untimed rows")
+	}
+}
+
+// TestRenderUntimed_ListRowFormat_SingleLine asserts each untimed entry is
+// exactly one line regardless of DurationMinute (C2).
+func TestRenderUntimed_ListRowFormat_SingleLine(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Quick task", DurationMinute: 15},
+		{Id: 2, Name: "Long task", DurationMinute: 120},
+	}
+	out := cli.RenderUntimed(entries, 80, true, cli.GridOptions{})
+	lines := rowsOf(out)
+	if len(lines) != 2 {
+		t.Errorf("C2: expected 2 lines (one per entry), got %d:\n%s", len(lines), out)
+	}
+	if !strings.Contains(lines[0], "Quick task") {
+		t.Errorf("entry 1 name missing: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "Long task") {
+		t.Errorf("entry 2 name missing: %q", lines[1])
+	}
+}
+
+// TestRenderUntimed_ListSelectionStyle verifies selection highlighting per C3.1:
+//   - SelectionStyle wraps the matching row's content
+//   - Non-selected rows are unstyled
+//   - nil SelectionStyle falls back to applySelection
+func TestRenderUntimed_ListSelectionStyle(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Alpha"},
+		{Id: 2, Name: "Beta"},
+	}
+
+	// With SelectionStyle: selected row gets markers, unselected does not.
+	opts := cli.GridOptions{SelectedID: 1, SelectionStyle: styleMarker}
+	out := cli.RenderUntimed(entries, 80, true, opts)
+	lines := rowsOf(out)
+	if !strings.Contains(lines[0], "<<") {
+		t.Errorf("C3.1: selected row should have SelectionStyle markers; got %q", lines[0])
+	}
+	if strings.Contains(lines[1], "<<") {
+		t.Errorf("C3.1: non-selected row must not have markers; got %q", lines[1])
+	}
+
+	// With SelectionStyle: nil — applySelection fallback.
+	optsNil := cli.GridOptions{SelectedID: 1}
+	outNil := cli.RenderUntimed(entries, 80, true, optsNil)
+	linesNil := rowsOf(outNil)
+	if !strings.Contains(linesNil[0], "\x1b[") {
+		t.Errorf("C3.1: selected row should have ANSI codes via applySelection; got %q", linesNil[0])
+	}
+	if strings.Contains(linesNil[1], "\x1b[") {
+		t.Errorf("C3.1: non-selected row must not have ANSI codes; got %q", linesNil[1])
+	}
+}
+
+// TestRenderUntimed_ListPlainMode checks plain/non-TTY output per C4:
+// no checkbox glyphs, no selection styling, completed names unstyled.
+func TestRenderUntimed_ListPlainMode(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Task A"},
+		{Id: 2, Name: "Task B", Completed: true},
+	}
+
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
+	lines := rowsOf(out)
+
+	// C4: no checkbox glyphs.
+	if strings.Contains(out, "☐") || strings.Contains(out, "☑") {
+		t.Error("C4: no checkbox glyphs in plain mode")
+	}
+	// C4: name-only rows with leading indent.
+	if !strings.Contains(lines[0], "Task A") {
+		t.Errorf("C4: expected 'Task A' in row; got %q", lines[0])
+	}
+	// C4: no ANSI escape codes.
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("C4: expected no ANSI codes in plain mode; got %q", out)
+	}
+	// Completed name must still appear (Strike is no-op unstyled).
+	if !strings.Contains(lines[1], "Task B") {
+		t.Errorf("C4: completed name must appear; got %q", lines[1])
+	}
+}
+
+// TestRenderUntimed_ListSelectionPlainMode checks no selection styling in plain mode.
+func TestRenderUntimed_ListSelectionPlainMode(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Task A"},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{SelectedID: 1})
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("C4: no ANSI codes expected in plain mode even with SelectedID; got %q", out)
+	}
+}
+
+// TestRenderUntimed_SingleEntry15min checks that any entry (regardless of
+// DurationMinute) renders as exactly one line in the new list format.
 func TestRenderUntimed_SingleEntry15min(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Quick task", DurationMinute: 15},
@@ -999,76 +1136,50 @@ func TestRenderUntimed_SingleEntry15min(t *testing.T) {
 	lines := rowsOf(out)
 
 	if len(lines) != 1 {
-		t.Errorf("15min entry: expected 1 line, got %d:\n%s", len(lines), out)
+		t.Errorf("expected 1 line, got %d:\n%s", len(lines), out)
 	}
 	if !strings.Contains(lines[0], "Quick task") {
-		t.Errorf("15min entry: expected name in output; got %q", lines[0])
+		t.Errorf("expected name in output; got %q", lines[0])
+	}
+	// No box-drawing chars in list mode.
+	if strings.ContainsAny(out, "┏┓┗┛┣┫┃━") {
+		t.Error("list format must not contain box-drawing characters")
 	}
 }
 
-// TestRenderUntimed_Entry30min checks that a 30-minute entry renders with correct box geometry:
-// ┏┓ top border, one interior content line (with label), and ┗┛ bottom border.
-func TestRenderUntimed_Entry30min(t *testing.T) {
-	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Medium task", DurationMinute: 30},
-	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	lines := rowsOf(out)
-
-	// ┏┓ top + 1 interior + ┗┛ bottom = 3 lines.
-	if len(lines) != 3 {
-		t.Errorf("30min entry: expected 3 lines (┏┓ + interior + ┗┛), got %d:\n%s", len(lines), out)
-	}
-	// Row 0: top border ┏━━━┓ (title must NOT be on this line).
-	if !strings.Contains(lines[0], "┏") || !strings.Contains(lines[0], "┓") {
-		t.Errorf("30min entry row 0: expected ┏...┓ top border; got %q", lines[0])
-	}
-	if strings.Contains(lines[0], "Medium task") {
-		t.Errorf("30min entry row 0: title must not appear on the top border line; got %q", lines[0])
-	}
-	// Row 1: interior — contains the label.
-	if !strings.Contains(lines[1], "Medium task") {
-		t.Errorf("30min entry row 1: expected name in interior; got %q", lines[1])
-	}
-	// Row 2: bottom border ┗━━━┛.
-	if !strings.Contains(lines[2], "┗") || !strings.Contains(lines[2], "┛") {
-		t.Errorf("30min entry row 2: expected ┗...┛ bottom border; got %q", lines[2])
+// TestRenderUntimed_DurationIgnored checks that DurationMinute does not affect
+// the number of lines (always 1 per entry, by contract C2).
+func TestRenderUntimed_DurationIgnored(t *testing.T) {
+	for _, dur := range []int32{15, 30, 60, 120} {
+		entries := []*planv1.PlanEntry{
+			{Id: 1, Name: "Task", DurationMinute: dur},
+		}
+		out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
+		lines := rowsOf(out)
+		if len(lines) != 1 {
+			t.Errorf("DurationMinute=%d: expected 1 line, got %d", dur, len(lines))
+		}
 	}
 }
 
-// TestRenderUntimed_Entry60min checks that a 60-minute entry renders as five lines:
-// ┏┓ top + 3 interior + ┗┛ bottom.
-func TestRenderUntimed_Entry60min(t *testing.T) {
-	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Long task", DurationMinute: 60},
-	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	lines := rowsOf(out)
-
-	if len(lines) != 5 {
-		t.Errorf("60min entry: expected 5 lines (┏┓ + 3 interior + ┗┛), got %d:\n%s", len(lines), out)
-	}
-}
-
-// TestRenderUntimed_MultipleEntries checks that multiple entries stack vertically.
-func TestRenderUntimed_MultipleEntries(t *testing.T) {
+// TestRenderUntimed_MultipleEntries_ListFormat checks that multiple entries stack
+// vertically as single lines.
+func TestRenderUntimed_MultipleEntries_ListFormat(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Task A", DurationMinute: 15},
 		{Id: 2, Name: "Task B", DurationMinute: 30},
 	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
 	lines := rowsOf(out)
 
-	// Task A: 1 line (single-row); Task B: 3 lines (┏┓ + interior + ┗┛) → total 4.
-	if len(lines) != 4 {
-		t.Errorf("2 entries (15+30min): expected 4 lines, got %d:\n%s", len(lines), out)
+	if len(lines) != 2 {
+		t.Errorf("2 entries: expected 2 lines, got %d:\n%s", len(lines), out)
 	}
 	if !strings.Contains(lines[0], "Task A") {
-		t.Errorf("first entry line: expected 'Task A'; got %q", lines[0])
+		t.Errorf("first entry: expected 'Task A'; got %q", lines[0])
 	}
-	// Task B appears on the interior line (row 2 = index 2).
-	if !strings.Contains(out, "Task B") {
-		t.Errorf("second entry: expected 'Task B' somewhere in output; got:\n%s", out)
+	if !strings.Contains(lines[1], "Task B") {
+		t.Errorf("second entry: expected 'Task B'; got %q", lines[1])
 	}
 }
 
@@ -1082,100 +1193,103 @@ func TestRenderUntimed_SelectedIDHighlights(t *testing.T) {
 	out := cli.RenderUntimed(entries, 80, true, opts)
 	lines := rowsOf(out)
 
-	// Line 0 (Unselected) must NOT have markers.
 	if strings.Contains(lines[0], "<<") {
 		t.Errorf("unselected entry must not have selection markers; got %q", lines[0])
 	}
-	// Line 1 (Selected) must have markers.
 	if !strings.Contains(lines[1], "<<") {
 		t.Errorf("selected entry must have selection markers; got %q", lines[1])
 	}
-}
-
-// ---- T006: US3 rendering fix tests ----
-
-// TestRenderUntimed_TopBorderAboveTitle asserts that a multi-row untimed entry has a
-// ┏━━━┓ top border line with the title on the NEXT line (not on the border itself).
-func TestRenderUntimed_TopBorderAboveTitle(t *testing.T) {
-	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "My task", DurationMinute: 30},
-	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	lines := rowsOf(out)
-
-	if len(lines) < 2 {
-		t.Fatalf("expected at least 2 lines, got %d:\n%s", len(lines), out)
-	}
-	// First line must contain ┏ and ┓.
-	if !strings.Contains(lines[0], "┏") || !strings.Contains(lines[0], "┓") {
-		t.Errorf("row 0: expected ┏...┓ top border; got %q", lines[0])
-	}
-	// Title must NOT appear on the top border line.
-	if strings.Contains(lines[0], "My task") {
-		t.Errorf("row 0: title must not be on the top border; got %q", lines[0])
-	}
-	// Title MUST appear on a subsequent interior line.
-	found := false
-	for _, l := range lines[1:] {
-		if strings.Contains(l, "My task") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("title 'My task' not found on any interior line:\n%s", out)
+	// With list format, markers wrap checkbox + name, not the whole line.
+	if !strings.Contains(lines[1], "<<☐ Selected>>") && !strings.Contains(lines[1], "<<☐ Selected") {
+		t.Errorf("selected entry: expected markers around checkbox+name; got %q", lines[1])
 	}
 }
 
-// TestRenderUntimed_SharedBorderBetweenAdjacentEntries checks that two adjacent
-// multi-row untimed entries share a single ┣━━━┫ boundary instead of ┗┛ + ┏┓.
-func TestRenderUntimed_SharedBorderBetweenAdjacentEntries(t *testing.T) {
+// TestRenderUntimed_ListTruncation checks that a long name is truncated to
+// available width in both styled and plain modes.
+func TestRenderUntimed_ListTruncation(t *testing.T) {
+	longName := "AReallyReallyLongTaskNameThatExceedsAvailableWidth"
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Alpha", DurationMinute: 30},
-		{Id: 2, Name: "Beta", DurationMinute: 30},
+		{Id: 1, Name: longName},
 	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	lines := rowsOf(out)
 
-	// Two 30-min multi-row entries sharing a boundary: ┏┓ + label-A + ┣┫ + label-B + ┗┛ = 5 lines.
-	if len(lines) != 5 {
-		t.Errorf("two adjacent 30min entries: expected 5 lines (sharing boundary), got %d:\n%s", len(lines), out)
+	// Plain mode: width=20, prefixLen=2, avail=18.
+	out := cli.RenderUntimed(entries, 20, false, cli.GridOptions{})
+	lines := rowsOf(out)
+	// Remove the leading "  " to get the visible content.
+	content := strings.TrimPrefix(lines[0], "  ")
+	// Content should be at most 18 runes, possibly truncated with "..."
+	if utf8.RuneCountInString(content) > 18+3 {
+		t.Errorf("plain truncation: content is %d runes, expected ≤21; got %q", utf8.RuneCountInString(content), content)
 	}
-	// The shared boundary line must contain ┣ and ┫ but not ┗ or ┏.
-	sharedLine := lines[2]
-	if !strings.Contains(sharedLine, "┣") || !strings.Contains(sharedLine, "┫") {
-		t.Errorf("shared boundary line: expected ┣...┫; got %q", sharedLine)
-	}
-	if strings.ContainsAny(sharedLine, "┗┏") {
-		t.Errorf("shared boundary line must not have corner chars; got %q", sharedLine)
-	}
-	// Alpha label on line 1.
-	if !strings.Contains(lines[1], "Alpha") {
-		t.Errorf("line 1: expected 'Alpha'; got %q", lines[1])
-	}
-	// Beta label on line 3.
-	if !strings.Contains(lines[3], "Beta") {
-		t.Errorf("line 3: expected 'Beta'; got %q", lines[3])
+
+	// Styled mode: width=20, prefixLen=4, avail=16.
+	outSty := cli.RenderUntimed(entries, 20, true, cli.GridOptions{})
+	styLines := rowsOf(outSty)
+	// Remove the "  ☐ " prefix.
+	if utf8.RuneCountInString(styLines[0]) > 20 {
+		t.Errorf("styled truncation: line is %d runes, expected ≤20; got %q", utf8.RuneCountInString(styLines[0]), styLines[0])
 	}
 }
 
-// TestRenderUntimed_LastLineColorMatchesInterior checks that the last line of a
-// multi-row untimed entry (the ┗┛ bottom) receives SelectionStyle markers just
-// like the interior lines (standalone-border fix).
-func TestRenderUntimed_LastLineColorMatchesInterior(t *testing.T) {
+// TestRenderUntimed_ListWideRuneTruncation checks that names containing wide
+// (double-column) runes are truncated by display width, not rune count, so the
+// row's visible width never exceeds the available width. A rune-count-based
+// truncation would let CJK/emoji names overflow onto a second terminal line.
+// Uses lipgloss.Width (rather than the test package's rune-counting visWidth
+// helper) because it correctly accounts for double-width runes.
+func TestRenderUntimed_ListWideRuneTruncation(t *testing.T) {
+	wideName := strings.Repeat("宽", 30) // each rune renders at 2 columns
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Style test", DurationMinute: 30},
+		{Id: 1, Name: wideName},
 	}
-	opts := cli.GridOptions{HideID: true, SelectedID: 1, SelectionStyle: styleMarker}
-	out := cli.RenderUntimed(entries, 80, true, opts)
-	lines := rowsOf(out)
 
-	lastLine := lines[len(lines)-1]
-	if !strings.Contains(lastLine, "┗") && !strings.Contains(lastLine, "┛") {
-		t.Fatalf("last line is not the bottom border; got %q", lastLine)
+	// Plain mode: width=20, prefixLen=2, avail=18 columns.
+	out := cli.RenderUntimed(entries, 20, false, cli.GridOptions{})
+	lines := rowsOf(out)
+	content := strings.TrimPrefix(lines[0], "  ")
+	if w := lipgloss.Width(content); w > 18 {
+		t.Errorf("plain wide-rune truncation: content display width = %d, expected ≤18; got %q", w, content)
 	}
-	if !strings.Contains(lastLine, "<<") {
-		t.Errorf("selected entry bottom border must carry SelectionStyle markers; got %q", lastLine)
+
+	// Styled mode: width=20, prefixLen=4, avail=16 columns.
+	outSty := cli.RenderUntimed(entries, 20, true, cli.GridOptions{})
+	styLines := rowsOf(outSty)
+	if w := lipgloss.Width(styLines[0]); w > 20 {
+		t.Errorf("styled wide-rune truncation: line display width = %d, expected ≤20; got %q", w, styLines[0])
+	}
+}
+
+// TestRenderUntimed_ListCompletedStyling checks that completed entries get ☑ + struck name.
+func TestRenderUntimed_ListCompletedStyling(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Done task", Completed: true},
+	}
+	out := cli.RenderUntimed(entries, 80, true, cli.GridOptions{})
+	lines := rowsOf(out)
+	if !strings.Contains(lines[0], "☑") {
+		t.Errorf("completed: expected ☑ checkbox; got %q", lines[0])
+	}
+	if !strings.Contains(lines[0], cli.DimStrike("Done task")) {
+		t.Errorf("completed: expected dim+strikethrough name; got %q", lines[0])
+	}
+}
+
+// TestRenderUntimed_ListPlainCompleted checks that completed entries in plain mode
+// show the name without glyphs or ANSI codes.
+func TestRenderUntimed_ListPlainCompleted(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Done task", Completed: true},
+	}
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
+	if strings.Contains(out, "☐") || strings.Contains(out, "☑") {
+		t.Error("plain mode: no checkbox glyphs expected")
+	}
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("plain mode: no ANSI codes expected; got %q", out)
+	}
+	if !strings.Contains(out, "Done task") {
+		t.Errorf("plain mode: name must appear; got %q", out)
 	}
 }
 
@@ -1184,8 +1298,8 @@ func TestRenderUntimed_LastLineColorMatchesInterior(t *testing.T) {
 // lines carry SelectionStyle markers and the hour gutter is left unstyled.
 func TestSelectionStyle_StandaloneBorders_GapBeforeAfter(t *testing.T) {
 	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Early", StartMinute: pint32(480), DurationMinute: 60},  // 08:00–09:00
-		{Id: 2, Name: "Later", StartMinute: pint32(660), DurationMinute: 60},  // 11:00–12:00
+		{Id: 1, Name: "Early", StartMinute: pint32(480), DurationMinute: 60}, // 08:00–09:00
+		{Id: 2, Name: "Later", StartMinute: pint32(660), DurationMinute: 60}, // 11:00–12:00
 	}
 	opts := cli.GridOptions{HideID: true, SelectedID: 2, Styled: true, SelectionStyle: styleMarker}
 	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(6, 0), 80, true, opts)
@@ -1220,42 +1334,27 @@ func TestSelectionStyle_StandaloneBorders_GapBeforeAfter(t *testing.T) {
 	}
 }
 
-// TestRenderUntimed_ParityWithGridBox checks that a 30-min untimed entry produces
-// output that is byte-for-byte identical to what the grid would produce for the
-// interior portion (┃content┃) of an equivalent 30-min entry box.
-func TestRenderUntimed_ParityWithGridBox(t *testing.T) {
-	entries := []*planv1.PlanEntry{
-		{Id: 1, Name: "Parity check", DurationMinute: 30},
-	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	lines := rowsOf(out)
-
-	// The interior line must be flanked by ┃ chars (matching grid interior).
-	interiorLine := lines[1]
-	if !strings.HasPrefix(strings.TrimPrefix(interiorLine, "       │ "), "┃") {
-		t.Errorf("interior line: expected ┃ after gutter+rail+pad; got %q", interiorLine)
-	}
-	if !strings.HasSuffix(interiorLine, "┃ │") {
-		t.Errorf("interior line: expected ┃ │ suffix; got %q", interiorLine)
-	}
-}
-
-// TestRenderUntimed_LineWidthMatchesGrid checks that each line has the same
-// visual width as a grid row (no wider, no narrower).
-func TestRenderUntimed_LineWidthMatchesGrid(t *testing.T) {
+// TestRenderUntimed_ListLineWidth checks that each line's visible width does not
+// exceed the given width in both styled and plain modes.
+func TestRenderUntimed_ListLineWidth(t *testing.T) {
 	entries := []*planv1.PlanEntry{
 		{Id: 1, Name: "Task", DurationMinute: 30},
 	}
-	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{HideID: true})
-	gridOut := cli.RenderGrid(nil, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{})
+	// Plain mode: no ANSI, width should be exactly width.
+	out := cli.RenderUntimed(entries, 80, false, cli.GridOptions{})
+	lines := rowsOf(out)
+	for i, l := range lines {
+		if w := visWidth(l); w > 80 {
+			t.Errorf("RenderUntimed line %d (plain): width = %d, exceeds 80; line: %q", i, w, l)
+		}
+	}
 
-	untimedLines := rowsOf(out)
-	gridLines := rowsOf(gridOut)
-
-	wantWidth := visWidth(gridLines[0])
-	for i, l := range untimedLines {
-		if w := visWidth(l); w != wantWidth {
-			t.Errorf("RenderUntimed line %d: width = %d, want %d (grid width); line: %q", i, w, wantWidth, l)
+	// Styled mode: ANSI codes make raw string longer, but visible width ≤ width.
+	outSty := cli.RenderUntimed(entries, 80, true, cli.GridOptions{})
+	styLines := rowsOf(outSty)
+	for i, l := range styLines {
+		if w := visWidth(l); w > 80 {
+			t.Errorf("RenderUntimed line %d (styled): visible width = %d, exceeds 80; line: %q", i, w, l)
 		}
 	}
 }
@@ -1562,7 +1661,7 @@ func TestRenderGrid_ConflictStyle_PreviewTopAtInteriorRow_PlainFallback(t *testi
 func TestRenderGrid_GapVisibility_PreviewWithGap(t *testing.T) {
 	const previewID int32 = -1
 	entries := []*planv1.PlanEntry{
-		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120}, // 08:00–10:00
+		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120},        // 08:00–10:00
 		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(630), DurationMinute: 30}, // 10:30–11:00
 	}
 	opts := cli.GridOptions{HideID: true, PreviewID: previewID}
@@ -1844,7 +1943,7 @@ func TestAutoScheduleSlot_NoFit(t *testing.T) {
 func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {
 	const previewID int32 = -1
 	entries := []*planv1.PlanEntry{
-		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120}, // 08:00–10:00
+		{Day: "2026-05-27", Id: 1, Name: "Morning", StartMinute: pint32(480), DurationMinute: 120},        // 08:00–10:00
 		{Day: "2026-05-27", Id: previewID, Name: "Preview", StartMinute: pint32(600), DurationMinute: 30}, // 10:00–10:30
 	}
 	opts := cli.GridOptions{HideID: true, PreviewID: previewID}

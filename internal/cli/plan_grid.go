@@ -6,6 +6,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 )
 
@@ -403,134 +406,64 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 	return sb.String()
 }
 
-// renderBoxLine renders a single line of an entry's box (interior ┃content┃ row)
-// with completion and selection styling applied. Used by both RenderGrid and RenderUntimed.
-func renderBoxLine(content string, e *planv1.PlanEntry, isTTY bool, opts GridOptions) string {
-	content = applyCompletion(content, e, isTTY)
-	if isTTY && opts.SelectedID != 0 && e.Id == opts.SelectedID && opts.SelectionStyle != nil {
-		return opts.SelectionStyle("┃" + content + "┃")
-	}
-	return "┃" + content + "┃"
-}
-
-// RenderUntimed renders untimed plan entries as stacked boxes above the day grid,
-// using the same box geometry as RenderGrid (┏┓ top, ┃┃ interior, ┣┫ shared boundary,
-// ┗┛ bottom). Adjacent multi-row entries share a ┣┫ boundary. Returns an empty string
-// when entries is empty.
+// RenderUntimed renders untimed plan entries as checkbox+name list rows above the
+// day grid. Each entry produces exactly one line:
+//
+//	styled (isTTY=true):  "  ☐ name" / "  ☑ name"
+//	plain (isTTY=false):  "  name" (no glyph)
+//
+// Returns "" when entries is empty.
 func RenderUntimed(entries []*planv1.PlanEntry, width int, isTTY bool, opts GridOptions) string {
 	if len(entries) == 0 {
 		return ""
 	}
 
-	// Same geometry constants as RenderGrid.
-	boxWidth := width - 11 // gutter(7)+leftRail(1)+leftPad(1)+rightPad(1)+rightRail(1)
-	if boxWidth < 1 {
-		boxWidth = 1
-	}
-	contentWidth := boxWidth - 2
-	if contentWidth < 0 {
-		contentWidth = 0
-	}
-	hHeavy := strings.Repeat("━", contentWidth)
-	const gutter = "       "
-
 	var sb strings.Builder
-	skipTop := false // true when the previous multi-row entry emitted a shared ┣┫ as our top
-
-	for i, e := range entries {
-		rows := int(e.DurationMinute) / 15
-		if rows < 1 {
-			rows = 1
+	for _, e := range entries {
+		prefixLen := 2 // "  "
+		if isTTY {
+			prefixLen = 4 // "  ☐ "
 		}
-		isMulti := rows > 1
-		isLast := i == len(entries)-1
+		availWidth := width - prefixLen
+		if availWidth < 1 {
+			availWidth = 1
+		}
+
+		// Truncate by display width (not rune count) to match the Tasks tab's
+		// renderList, so wide runes (CJK, emoji) can't push the row past width.
+		name := e.Name
+		if lipgloss.Width(name) > availWidth {
+			name = ansi.Truncate(name, availWidth, "")
+		}
+		// Note: applyCompletion's DimStrike embeds a trailing \x1b[0m reset. That's
+		// safe today because name is always the last element wrapped by
+		// SelectionStyle below; if a trailing marker is ever appended after name,
+		// the reset would need to move outside the selection wrap first.
+		name = applyCompletion(name, e, isTTY)
+
+		var checkbox string
+		if isTTY {
+			if e.Completed {
+				checkbox = "☑"
+			} else {
+				checkbox = "☐"
+			}
+		}
+
+		content := name
+		if isTTY {
+			content = checkbox + " " + name
+		}
+
 		isSelected := isTTY && opts.SelectedID != 0 && e.Id == opts.SelectedID
-
-		var labelText string
-		if opts.HideID {
-			labelText = e.Name
+		var line string
+		if isSelected && opts.SelectionStyle != nil {
+			line = "  " + opts.SelectionStyle(content)
 		} else {
-			labelText = fmt.Sprintf("[%d] %s", e.Id, e.Name)
+			line = applySelection("  "+content, e.Id, opts, isTTY)
 		}
 
-		if !isMulti {
-			// Single-row: ┣label━━━┫ (same as grid's single-row entry).
-			skipTop = false
-			label := singleLabelContent([]string{labelText}, contentWidth)
-			label = applyCompletion(label, e, isTTY)
-			var line string
-			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + "│ ┣" + opts.SelectionStyle(label) + "┫ │"
-			} else {
-				line = gutter + "│ ┣" + label + "┫ │"
-				line = applySelection(line, e.Id, opts, isTTY)
-			}
-			sb.WriteString(line + "\n")
-			continue
-		}
-
-		// Multi-row entry: ┏┓ top + (rows-1) interior rows + ┗┛/┣┫ bottom.
-
-		// Top border (skipped when the previous entry's shared bottom serves as our top).
-		if !skipTop {
-			if isSelected && opts.SelectionStyle != nil {
-				line := gutter + "│ " + opts.SelectionStyle("┏"+hHeavy+"┓") + " │"
-				sb.WriteString(line + "\n")
-			} else {
-				line := gutter + "│ ┏" + hHeavy + "┓ │"
-				line = applySelection(line, e.Id, opts, isTTY)
-				sb.WriteString(line + "\n")
-			}
-		}
-		skipTop = false
-
-		// Interior rows (rows-1 of them); label wrapped across as many as fit.
-		labelRows := wrapLabel(labelText, contentWidth, rows-1)
-		for r := 0; r < rows-1; r++ {
-			lbl := ""
-			if r < len(labelRows) {
-				lbl = labelRows[r]
-			}
-			content := padRight(lbl, contentWidth)
-			boxed := renderBoxLine(content, e, isTTY, opts)
-			var line string
-			if isSelected && opts.SelectionStyle != nil {
-				line = gutter + "│ " + boxed + " │"
-			} else {
-				line = gutter + "│ " + boxed + " │"
-				line = applySelection(line, e.Id, opts, isTTY)
-			}
-			sb.WriteString(line + "\n")
-		}
-
-		// Bottom border: ┗┛ standalone, or ┣┫ shared with the next multi-row entry.
-		nextIsMulti := !isLast && int(entries[i+1].DurationMinute)/15 > 1
-		if nextIsMulti {
-			nextE := entries[i+1]
-			nextSelected := isTTY && opts.SelectedID != 0 && nextE.Id == opts.SelectedID
-			isEitherSelected := isSelected || nextSelected
-			var line string
-			if isEitherSelected && opts.SelectionStyle != nil {
-				line = gutter + "│ " + opts.SelectionStyle("┣"+hHeavy+"┫") + " │"
-			} else {
-				line = gutter + "│ ┣" + hHeavy + "┫ │"
-				if isEitherSelected {
-					line = accentOpen(opts) + line + "\x1b[0m"
-				}
-			}
-			sb.WriteString(line + "\n")
-			skipTop = true // next entry's top is already provided by this ┣┫
-		} else {
-			if isSelected && opts.SelectionStyle != nil {
-				line := gutter + "│ " + opts.SelectionStyle("┗"+hHeavy+"┛") + " │"
-				sb.WriteString(line + "\n")
-			} else {
-				line := gutter + "│ ┗" + hHeavy + "┛ │"
-				line = applySelection(line, e.Id, opts, isTTY)
-				sb.WriteString(line + "\n")
-			}
-			skipTop = false
-		}
+		sb.WriteString(line + "\n")
 	}
 	return sb.String()
 }
