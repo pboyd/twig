@@ -39,6 +39,7 @@ type KeyMap struct {
 	PlanNextDay      key.Binding
 	PlanToday        key.Binding
 	PlanAutoSchedule key.Binding
+	PlanUnschedule   key.Binding
 	// Rank ordering (Tasks tab)
 	RankUp   key.Binding
 	RankDown key.Binding
@@ -194,6 +195,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("a"),
 			key.WithHelp("a", "auto-schedule"),
 		),
+		PlanUnschedule: key.NewBinding(
+			key.WithKeys("u"),
+			key.WithHelp("u", "unschedule"),
+		),
 		RankUp: key.NewBinding(
 			key.WithKeys("{"),
 			key.WithHelp("{", "rank higher"),
@@ -322,7 +327,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}
 	}
 	if k.PlanningMode {
-		return []key.Binding{k.Up, k.Down, k.Complete, k.PomStart, k.PlanAddTask, k.PlanAutoSchedule, k.Help, k.Quit}
+		return []key.Binding{k.Up, k.Down, k.Complete, k.PomStart, k.PlanAddTask, k.PlanAutoSchedule, k.PlanUnschedule, k.Help, k.Quit}
 	}
 	return []key.Binding{k.Up, k.Down, k.Edit, k.Complete, k.Help, k.Quit}
 }
@@ -350,7 +355,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		return [][]key.Binding{
 			{k.Up, k.Down, k.PlanPrevDay, k.PlanNextDay},
 			{k.PlanAddTask, k.PlanAddEvent, k.PlanEdit, k.PlanRemove, k.PlanGoToTask},
-			{k.PlanAutoSchedule, k.Complete, k.PomStart, k.PomCancel, k.NextTab},
+			{k.PlanAutoSchedule, k.PlanUnschedule, k.Complete, k.PomStart, k.PomCancel, k.NextTab},
 			{k.PlanToday, k.Refresh, k.Help, k.Quit},
 		}
 	}

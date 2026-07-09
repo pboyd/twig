@@ -1827,6 +1827,22 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, movePlanCmd(m.planClient, m.plan.day, entry.Id, startMin, int(entry.DurationMinute), true)
 
+	// Unschedule: clear the highlighted task's start time, keeping it on the day.
+	case key.Matches(msg, m.keys.PlanUnschedule):
+		if len(m.plan.entries) == 0 {
+			return m, nil
+		}
+		entry := m.plan.entries[m.plan.cursor]
+		if entry.TaskId == 0 {
+			m.notice = "Unschedule is for tasks only — events keep their time."
+			return m, nil
+		}
+		if entry.StartMinute == nil {
+			m.notice = "That task is already unscheduled."
+			return m, nil
+		}
+		return m, movePlanCmd(m.planClient, m.plan.day, entry.Id, 0, int(entry.DurationMinute), false)
+
 	// Pomodoro cancel — mirrors the Tasks tab handler.
 	case key.Matches(msg, m.keys.PomCancel):
 		if m.pom != nil && !m.pom.completed {
