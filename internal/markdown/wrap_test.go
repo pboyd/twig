@@ -36,3 +36,30 @@ func TestWrapText_StyledEmphasisDoesNotWrapPrematurely(t *testing.T) {
 		t.Errorf("wrapText introduced a newline in an 11-visible-column line within width=15:\n%q", wrapped)
 	}
 }
+
+// TestRender_SoftLineBreakJoinsWithSpace guards against editor-wrapped source
+// text (a bare newline within a paragraph = CommonMark soft line break) being
+// fused into a single word on render. Before the fix, goldmark's Text nodes
+// were concatenated with no separator, so "words but\ndon't say" rendered as
+// "words butdon't say".
+func TestRender_SoftLineBreakJoinsWithSpace(t *testing.T) {
+	r := NewRenderer(Theme{})
+	got := r.Render("words but\ndon't say", Options{Width: 80})
+	if strings.Contains(got, "butdon't") {
+		t.Errorf("soft line break was fused without a space: %q", got)
+	}
+	if !strings.Contains(got, "but don't") {
+		t.Errorf("expected \"but don't\" in output, got: %q", got)
+	}
+}
+
+// TestRender_HardLineBreakPreservesNewline guards that an explicit hard line
+// break (trailing two spaces before the newline) still renders as a newline,
+// not a fused word or a plain space.
+func TestRender_HardLineBreakPreservesNewline(t *testing.T) {
+	r := NewRenderer(Theme{})
+	got := r.Render("line one  \nline two", Options{Width: 80})
+	if !strings.Contains(got, "line one\nline two") {
+		t.Errorf("expected hard line break to render as a newline between \"line one\" and \"line two\", got: %q", got)
+	}
+}

@@ -24,7 +24,15 @@ func renderInlineNode(node gast.Node, src []byte, theme Theme, styled bool) stri
 	switch node.Kind() {
 	case gast.KindText:
 		t := node.(*gast.Text)
-		return string(t.Segment.Value(src))
+		s := string(t.Segment.Value(src))
+		switch {
+		case t.HardLineBreak():
+			return s + "\n"
+		case t.SoftLineBreak():
+			return s + " "
+		default:
+			return s
+		}
 
 	case gast.KindString:
 		s := node.(*gast.String)
