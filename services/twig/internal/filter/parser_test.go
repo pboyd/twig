@@ -287,6 +287,110 @@ func TestParseUnknownField(t *testing.T) {
 	}
 }
 
+func TestParseFieldConditions(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantTyp string // "bool", "date", "rel", or "" for error
+		wantErr bool
+	}{
+		// Bool conditions
+		{"completed true", "completed=true", "bool", false},
+		{"completed false", "completed=false", "bool", false},
+		{"completed ne true", "completed!=true", "bool", false},
+		{"snoozed true", "snoozed=true", "bool", false},
+		{"snoozed false", "snoozed=false", "bool", false},
+		{"snoozed ne false", "snoozed!=false", "bool", false},
+
+		// Date conditions on completed
+		{"completed lt date", "completed < 2026-01-01", "date", false},
+		{"completed le date", "completed <= 2026-06-15", "date", false},
+		{"completed gt date", "completed > 2025-12-31", "date", false},
+		{"completed ge date", "completed >= 2026-01-01", "date", false},
+
+		// Rel conditions
+		{"parent_id eq", "parent_id=1", "rel", false},
+		{"parent_id ne", "parent_id!=1", "rel", false},
+		{"goal_id eq", "goal_id=5", "rel", false},
+		{"transitive parent_id", "^parent_id=1", "rel", false},
+		{"transitive goal_id", "^goal_id=1", "rel", false},
+
+		// Operator spacing (optional whitespace around op)
+		{"spaced completed", "completed = true", "bool", false},
+		{"spaced parent_id", "parent_id = 1", "rel", false},
+
+		// Mixed with AND
+		{"bool AND rel", "completed=true AND parent_id=1", "", false},
+		{"text AND bool", "groceries AND completed=false", "", false},
+
+		// Error: unknown field followed by = (lexes as text then = is unexpected)
+		{"unknown field eq", "bogus=true", "", true},
+
+		// Error: wrong op for snoozed (bool only accepts = !=)
+		{"snoozed lt", "snoozed < 2026-01-01", "", true},
+
+		// Error: wrong op for parent_id (rel only accepts = !=)
+		{"parent_id lt", "parent_id<5", "", true},
+
+		// Error: hat on non-rel field
+		{"hat on completed", "^completed=true", "", true},
+
+		// Error: hat on text term
+		{"hat on bareword", "^foo", "", true},
+
+		// Error: non-integer id
+		{"parent_id non-int", "parent_id=abc", "", true},
+
+		// Error: completed with != and date value (expects bool after !=)
+		{"completed ne date", "completed!=2026-01-01", "", true},
+
+		// Error: incomplete bool (no value after =)
+		{"completed eq incomplete", "completed=", "", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			expr, err := Parse(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q, got nil (conditions: %d)", tc.input, len(expr.Conditions))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", tc.input, err)
+			}
+			if tc.wantTyp == "" {
+				// Just verifying it parses without error; check condition count
+				if len(expr.Conditions) < 1 {
+					t.Errorf("expected at least 1 condition, got %d", len(expr.Conditions))
+				}
+				return
+			}
+			if len(expr.Conditions) != 1 {
+				t.Fatalf("expected 1 condition for %q, got %d", tc.input, len(expr.Conditions))
+			}
+			switch tc.wantTyp {
+			case "bool":
+				_, ok := expr.Conditions[0].(*BoolCondition)
+				if !ok {
+					t.Errorf("expected *BoolCondition, got %T", expr.Conditions[0])
+				}
+			case "date":
+				_, ok := expr.Conditions[0].(*DateCondition)
+				if !ok {
+					t.Errorf("expected *DateCondition, got %T", expr.Conditions[0])
+				}
+			case "rel":
+				_, ok := expr.Conditions[0].(*RelCondition)
+				if !ok {
+					t.Errorf("expected *RelCondition, got %T", expr.Conditions[0])
+				}
+			}
+		})
+	}
+}
+
 func TestParseRelWithHat(t *testing.T) {
 	expr, err := Parse(`^goal_id=3`)
 	if err != nil {

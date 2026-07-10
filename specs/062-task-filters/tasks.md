@@ -31,8 +31,8 @@ Three Go modules (per plan.md):
 
 **Purpose**: Land the API contract both the server and TUI compile against.
 
-- [ ] T001 Add the `FilterTasks` RPC plus `FilterTasksRequest` (`expression`, `show_all`, `today`) and `FilterTasksResponse` (`repeated int64 task_ids`) to `api/proto/task/v1/task.proto`, exactly per `specs/062-task-filters/contracts/filter-tasks.md` (leave all existing RPCs untouched).
-- [ ] T002 Regenerate stubs with `make proto` and confirm `api/gen/` now exposes `FilterTasks` on `task.v1.TaskService` (do not hand-edit generated code).
+- [X] T001 Add the `FilterTasks` RPC plus `FilterTasksRequest` (`expression`, `show_all`, `today`) and `FilterTasksResponse` (`repeated int64 task_ids`) to `api/proto/task/v1/task.proto`, exactly per `specs/062-task-filters/contracts/filter-tasks.md` (leave all existing RPCs untouched).
+- [X] T002 Regenerate stubs with `make proto` and confirm `api/gen/` now exposes `FilterTasks` on `task.v1.TaskService` (do not hand-edit generated code).
 
 ---
 
@@ -42,8 +42,8 @@ Three Go modules (per plan.md):
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Create the `services/twig/internal/filter` package with the AST + token type definitions from `data-model.md` in `services/twig/internal/filter/ast.go`: `Expression`, the `Condition` interface, and the `TextCondition`, `BoolCondition`, `DateCondition`, `RelCondition` structs with their field/operator enums; add package-level `Parse(expr string) (Expression, error)` and `Evaluate(e Expression, tasks []db.Task, showAll bool, today civil.Date) ([]int64, error)` signatures as stubs in `services/twig/internal/filter/filter.go`.
-- [ ] T004 Implement the `FilterTasks` handler in `services/twig/internal/handler/task.go`: load the caller's tasks via the existing `Queries.ListTasks`, parse `today`, call `filter.Parse` then `filter.Evaluate`, return `FilterTasksResponse` with ascending `task_ids`, and map any `filter.Parse`/validation error to `connect.NewError(connect.CodeInvalidArgument, …)` with a human-readable message (never any other code for expression problems). Depends on T002, T003.
+- [X] T003 [P] Create the `services/twig/internal/filter` package with the AST + token type definitions from `data-model.md` in `services/twig/internal/filter/ast.go`: `Expression`, the `Condition` interface, and the `TextCondition`, `BoolCondition`, `DateCondition`, `RelCondition` structs with their field/operator enums; add package-level `Parse(expr string) (Expression, error)` and `Evaluate(e Expression, tasks []db.Task, showAll bool, today civil.Date) ([]int64, error)` signatures as stubs in `services/twig/internal/filter/filter.go`.
+- [X] T004 Implement the `FilterTasks` handler in `services/twig/internal/handler/task.go`: load the caller's tasks via the existing `Queries.ListTasks`, parse `today`, call `filter.Parse` then `filter.Evaluate`, return `FilterTasksResponse` with ascending `task_ids`, and map any `filter.Parse`/validation error to `connect.NewError(connect.CodeInvalidArgument, …)` with a human-readable message (never any other code for expression problems). Depends on T002, T003.
 
 **Checkpoint**: Both modules build; `FilterTasks` returns (empty) results through the real request path.
 
@@ -57,24 +57,24 @@ Three Go modules (per plan.md):
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T005 [P] [US1] Table-driven lexer + text-term/`AND`/quoting parser tests (bare word, quoted `"AND review"`, multi-word bareword, empty expression → error) in `services/twig/internal/filter/parser_test.go`.
-- [ ] T006 [P] [US1] Evaluator tests for text matching (case-insensitive substring across name + description) and FR-008 default visibility with `show_all` on/off (worked-examples rows `foo`/off and `foo`/on), asserting ascending id output, in `services/twig/internal/filter/eval_test.go`.
-- [ ] T007 [P] [US1] `FilterTasks` handler test (valid text expression returns sorted matched ids; malformed expression → `CodeInvalidArgument`; empty result on no match) using the `export_test.go` shim convention in `services/twig/internal/handler/task_test.go`.
-- [ ] T008 [P] [US1] TUI behavior test: `/` opens the filter bar, per-keystroke input yields a `FilterTasks` command, matched ids render with ancestor chains (non-matching descendants hidden), `Esc` restores the full list, `Enter` returns focus to the list with the filter still applied, in `internal/tui/update_test.go`.
+- [X] T005 [P] [US1] Table-driven lexer + text-term/`AND`/quoting parser tests (bare word, quoted `"AND review"`, multi-word bareword, empty expression → error) in `services/twig/internal/filter/parser_test.go`.
+- [X] T006 [P] [US1] Evaluator tests for text matching (case-insensitive substring across name + description) and FR-008 default visibility with `show_all` on/off (worked-examples rows `foo`/off and `foo`/on), asserting ascending id output, in `services/twig/internal/filter/eval_test.go`.
+- [X] T007 [P] [US1] `FilterTasks` handler test (valid text expression returns sorted matched ids; malformed expression → `CodeInvalidArgument`; empty result on no match) using the `export_test.go` shim convention in `services/twig/internal/handler/task_test.go`.
+- [X] T008 [P] [US1] TUI behavior test: `/` opens the filter bar, per-keystroke input yields a `FilterTasks` command, matched ids render with ancestor chains (non-matching descendants hidden), `Esc` restores the full list, `Enter` returns focus to the list with the filter still applied, in `internal/tui/update_test.go`.
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Implement the full tokenizer (identifiers, quoted strings, `AND` keyword, `^`, `=` `!=` `<` `<=` `>` `>=`, `YYYY-MM-DD` dates, integers, `true`/`false`, whitespace) in `services/twig/internal/filter/lexer.go`. Depends on T003.
-- [ ] T010 [US1] Implement the recursive-descent parser for a text term and `AND`-joined conditions producing `TextCondition`s, with quoting forcing text interpretation and empty/unterminated-string → error, in `services/twig/internal/filter/parser.go`. Depends on T009.
-- [ ] T011 [US1] Implement the evaluator: case-insensitive text match over name + description, FR-008 implicit `completed=false`/`snoozed=false` when `show_all` is off (no explicit conditions yet), returning the ascending matched-id set, in `services/twig/internal/filter/eval.go`. Depends on T009.
-- [ ] T012 [P] [US1] Add filter state fields (`filterInput`, `filterFocused`, `filterExpr`, `filterMatches`, `filterInvalid`, `filterGen`) per data-model.md to the model in `internal/tui/model.go`.
-- [ ] T013 [P] [US1] Add a `FilterTasks` client call helper (sends `expression`, `show_all`, `today`) in `internal/tui/client.go`.
-- [ ] T014 [US1] Register the `/` binding and filter-mode bindings and document them in `internal/tui/keymap.go` and `internal/tui/help.go`.
-- [ ] T015 [US1] Handle filter-mode key/message flow in `internal/tui/update.go`: `/` opens the bar (pre-filled with `filterExpr` when a filter is applied), printable keys route to the input, each change fires a `FilterTasks` command tagged with an incremented `filterGen` (discard responses from a stale generation), a successful response stores `filterMatches`, an `InvalidArgument` response sets `filterInvalid` while retaining the previous matches, `Enter` applies and returns focus to the list, and `Esc` clears the filter. Depends on T012, T013.
-- [ ] T016 [US1] Extend `buildVisible` with a filtered mode that emits exactly the matched tasks plus every ancestor of a match, preserving tree order and indentation, ignoring collapse/expansion state, in `internal/tui/tree.go`. Depends on T012.
-- [ ] T017 [US1] Render the filter bar (active expression always visible, invalid indicator when `filterInvalid`) and the distinct no-matches empty state in `internal/tui/view.go`. Depends on T012.
-- [ ] T018 [US1] Re-fire the active filter after task mutations (complete, snooze, edit, create) and after a `show_all` toggle so the filtered view stays consistent (FR-013), in `internal/tui/update.go`. Depends on T015.
-- [ ] T019 [US1] Add the playful user-facing copy from quickstart.md (no-matches empty state, invalid-expression indicator, filter-bar placeholder) in `internal/tui/view.go`, honoring Principle IV.
+- [X] T009 [US1] Implement the full tokenizer (identifiers, quoted strings, `AND` keyword, `^`, `=` `!=` `<` `<=` `>` `>=`, `YYYY-MM-DD` dates, integers, `true`/`false`, whitespace) in `services/twig/internal/filter/lexer.go`. Depends on T003.
+- [X] T010 [US1] Implement the recursive-descent parser for a text term and `AND`-joined conditions producing `TextCondition`s, with quoting forcing text interpretation and empty/unterminated-string → error, in `services/twig/internal/filter/parser.go`. Depends on T009.
+- [X] T011 [US1] Implement the evaluator: case-insensitive text match over name + description, FR-008 implicit `completed=false`/`snoozed=false` when `show_all` is off (no explicit conditions yet), returning the ascending matched-id set, in `services/twig/internal/filter/eval.go`. Depends on T009.
+- [X] T012 [P] [US1] Add filter state fields (`filterInput`, `filterFocused`, `filterExpr`, `filterMatches`, `filterInvalid`, `filterGen`) per data-model.md to the model in `internal/tui/model.go`.
+- [X] T013 [P] [US1] Add a `FilterTasks` client call helper (sends `expression`, `show_all`, `today`) in `internal/tui/client.go`.
+- [X] T014 [US1] Register the `/` binding and filter-mode bindings and document them in `internal/tui/keymap.go` and `internal/tui/help.go`.
+- [X] T015 [US1] Handle filter-mode key/message flow in `internal/tui/update.go`: `/` opens the bar (pre-filled with `filterExpr` when a filter is applied), printable keys route to the input, each change fires a `FilterTasks` command tagged with an incremented `filterGen` (discard responses from a stale generation), a successful response stores `filterMatches`, an `InvalidArgument` response sets `filterInvalid` while retaining the previous matches, `Enter` applies and returns focus to the list, and `Esc` clears the filter. Depends on T012, T013.
+- [X] T016 [US1] Extend `buildVisible` with a filtered mode that emits exactly the matched tasks plus every ancestor of a match, preserving tree order and indentation, ignoring collapse/expansion state, in `internal/tui/tree.go`. Depends on T012.
+- [X] T017 [US1] Render the filter bar (active expression always visible, invalid indicator when `filterInvalid`) and the distinct no-matches empty state in `internal/tui/view.go`. Depends on T012.
+- [X] T018 [US1] Re-fire the active filter after task mutations (complete, snooze, edit, create) and after a `show_all` toggle so the filtered view stays consistent (FR-013), in `internal/tui/update.go`. Depends on T015.
+- [X] T019 [US1] Add the playful user-facing copy from quickstart.md (no-matches empty state, invalid-expression indicator, filter-bar placeholder) in `internal/tui/view.go`, honoring Principle IV.
 
 **Checkpoint**: Text search is fully functional end-to-end — the MVP is shippable on its own.
 
@@ -88,13 +88,13 @@ Three Go modules (per plan.md):
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T020 [P] [US2] Parser tests for field conditions (bool `completed`/`snoozed`, date `completed`, integer `parent_id`/`goal_id`), operator/type validation (unknown field, wrong op for type, malformed date `2026-13-45`, non-integer id, `!=` forms) → `InvalidArgument`, in `services/twig/internal/filter/parser_test.go`.
-- [ ] T021 [P] [US2] Evaluator tests for the attribute worked-examples rows (`completed=true AND parent_id=1`/off, `completed < 2026-01-01`/off, `snoozed=true`/off, `parent_id=1`/off) plus per-attribute FR-008 override (explicit `completed=true` still excludes snoozed when show-all off) and date-implies-completed, in `services/twig/internal/filter/eval_test.go`.
+- [X] T020 [P] [US2] Parser tests for field conditions (bool `completed`/`snoozed`, date `completed`, integer `parent_id`/`goal_id`), operator/type validation (unknown field, wrong op for type, malformed date `2026-13-45`, non-integer id, `!=` forms) → `InvalidArgument`, in `services/twig/internal/filter/parser_test.go`.
+- [X] T021 [P] [US2] Evaluator tests for the attribute worked-examples rows (`completed=true AND parent_id=1`/off, `completed < 2026-01-01`/off, `snoozed=true`/off, `parent_id=1`/off) plus per-attribute FR-008 override (explicit `completed=true` still excludes snoozed when show-all off) and date-implies-completed, in `services/twig/internal/filter/eval_test.go`.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Extend the parser to build `BoolCondition`, `DateCondition` (on `completed`), and direct `RelCondition` (`parent_id`, `goal_id`) with the type/operator rules from `contracts/filter-grammar.md`, in `services/twig/internal/filter/parser.go`. Depends on T010.
-- [ ] T023 [US2] Extend the evaluator to satisfy bool (`completed`/`snoozed` vs `today`), date (`completed_at` vs `D@00:00 UTC`, implying completed), and direct `parent_id`/`goal_id` conditions, and to apply the FR-008 default only for attributes the expression does not mention, in `services/twig/internal/filter/eval.go`. Depends on T011.
+- [X] T022 [US2] Extend the parser to build `BoolCondition`, `DateCondition` (on `completed`), and direct `RelCondition` (`parent_id`, `goal_id`) with the type/operator rules from `contracts/filter-grammar.md`, in `services/twig/internal/filter/parser.go`. Depends on T010.
+- [X] T023 [US2] Extend the evaluator to satisfy bool (`completed`/`snoozed` vs `today`), date (`completed_at` vs `D@00:00 UTC`, implying completed), and direct `parent_id`/`goal_id` conditions, and to apply the FR-008 default only for attributes the expression does not mention, in `services/twig/internal/filter/eval.go`. Depends on T011.
 
 **Checkpoint**: Text search (US1) and attribute filters both work independently.
 
@@ -108,13 +108,13 @@ Three Go modules (per plan.md):
 
 ### Tests for User Story 3 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T024 [P] [US3] Parser tests: `^` accepted only on `parent_id`/`goal_id` (any other field or a text term with `^` → `InvalidArgument`), in `services/twig/internal/filter/parser_test.go`.
-- [ ] T025 [P] [US3] Evaluator tests for the transitive worked-examples rows (`completed=false AND ^parent_id=1` returns descendants at any depth excluding N; `completed=false AND snoozed=false AND ^goal_id=1` returns the whole subtree incl. roots; `groceries AND ^goal_id=2`) and nonexistent-id → empty, in `services/twig/internal/filter/eval_test.go`.
+- [X] T024 [P] [US3] Parser tests: `^` accepted only on `parent_id`/`goal_id` (any other field or a text term with `^` → `InvalidArgument`), in `services/twig/internal/filter/parser_test.go`.
+- [X] T025 [P] [US3] Evaluator tests for the transitive worked-examples rows (`completed=false AND ^parent_id=1` returns descendants at any depth excluding N; `completed=false AND snoozed=false AND ^goal_id=1` returns the whole subtree incl. roots; `groceries AND ^goal_id=2`) and nonexistent-id → empty, in `services/twig/internal/filter/eval_test.go`.
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Extend the parser to accept and validate the `^` transitive prefix on `parent_id`/`goal_id`, setting `RelCondition.Transitive`, in `services/twig/internal/filter/parser.go`. Depends on T022.
-- [ ] T027 [US3] Extend the evaluator to build the derived `children`, `byID`, and goal-roots maps and resolve `^parent_id` (all descendants) and `^goal_id` (association roots + their subtrees), in `services/twig/internal/filter/eval.go`. Depends on T023.
+- [X] T026 [US3] Extend the parser to accept and validate the `^` transitive prefix on `parent_id`/`goal_id`, setting `RelCondition.Transitive`, in `services/twig/internal/filter/parser.go`. Depends on T022.
+- [X] T027 [US3] Extend the evaluator to build the derived `children`, `byID`, and goal-roots maps and resolve `^parent_id` (all descendants) and `^goal_id` (association roots + their subtrees), in `services/twig/internal/filter/eval.go`. Depends on T023.
 
 **Checkpoint**: All three query forms work independently and compose.
 
@@ -124,9 +124,9 @@ Three Go modules (per plan.md):
 
 **Purpose**: Validate the whole feature against the spec's success criteria.
 
-- [ ] T028 [P] Review/finalize the playful copy strings against Principle IV (empty state, invalid indicator, placeholder) and the constitution's UI/UX tone, in `internal/tui/view.go`.
-- [ ] T029 Run `go test ./...` at the repo root and `cd services/twig && go test ./...`; confirm the `internal/filter` suite covers every row of the worked-examples table in `contracts/filter-grammar.md` (SC-003) and no keystroke sequence blanks/crashes the TUI (SC-004).
-- [ ] T030 Run the quickstart.md `curl` against `FilterTasks` to confirm identical results via the backend directly (SC-005) and that an invalid expression returns HTTP 400 `invalid_argument`.
+- [X] T028 [P] Review/finalize the playful copy strings against Principle IV (empty state, invalid indicator, placeholder) and the constitution's UI/UX tone, in `internal/tui/view.go`.
+- [X] T029 Run `go test ./...` at the repo root and `cd services/twig && go test ./...`; confirm the `internal/filter` suite covers every row of the worked-examples table in `contracts/filter-grammar.md` (SC-003) and no keystroke sequence blanks/crashes the TUI (SC-004).
+- [X] T030 Run the quickstart.md `curl` against `FilterTasks` to confirm identical results via the backend directly (SC-005) and that an invalid expression returns HTTP 400 `invalid_argument`.
 
 ---
 
