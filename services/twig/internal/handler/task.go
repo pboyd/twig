@@ -661,7 +661,7 @@ func (t *Task) FilterTasks(
 
 	today, err := time.Parse("2006-01-02", req.Msg.Today)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid today value: must be YYYY-MM-DD"))
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid today value: must be YYYY-MM-DD"))
 	}
 
 	tasks := make([]filter.Task, len(rows))

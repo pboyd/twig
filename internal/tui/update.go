@@ -170,10 +170,10 @@ func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
 
 	default:
+		// Any other key just edits the input; the expression is only
+		// evaluated on Enter (see the "enter" case above).
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
-		// If the expression changed and is non-empty, auto-validate after a short delay.
-		// For MVP we only validate on Enter; the input just captures text.
 		return m, cmd
 	}
 }

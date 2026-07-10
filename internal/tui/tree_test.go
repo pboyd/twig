@@ -415,3 +415,55 @@ func TestBuildVisible_SnoozedParentHidesSubtree(t *testing.T) {
 		t.Fatalf("expected 0 rows (parent + child hidden), got %d", len(rows))
 	}
 }
+
+func TestBuildVisibleFiltered_OnlyTrueAncestorsIncluded(t *testing.T) {
+	// Two sibling subtrees: A(1) → A-child(2); B(3) → B-child(4).
+	// A match deep in subtree B must not pull in subtree A's rows.
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "subtree A"},
+		{Id: 2, Name: "A-child", ParentId: ptr64(1)},
+		{Id: 3, Name: "subtree B"},
+		{Id: 4, Name: "B-child match", ParentId: ptr64(3)},
+	}
+	tree := cli.BuildTree(tasks)
+	filteredIDs := map[int64]bool{4: true}
+
+	rows := buildVisibleFiltered(tree, map[int64]bool{}, false, nil, time.Now().Local(), filteredIDs)
+
+	gotIDs := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		gotIDs[r.node.Task.Id] = true
+	}
+
+	// Only the match and its true ancestor (3) should appear.
+	if len(gotIDs) != 2 || !gotIDs[3] || !gotIDs[4] {
+		t.Fatalf("rows = %v, want {3, 4} (match + true ancestor only, not subtree A)", gotIDs)
+	}
+	if gotIDs[1] || gotIDs[2] {
+		t.Errorf("rows unexpectedly include unrelated subtree A: %v", gotIDs)
+	}
+}
+
+func TestBuildVisibleFiltered_IgnoresCollapsedState(t *testing.T) {
+	// Parent(1) → Child(2) → Grandchild-match(3). Parent is collapsed.
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "parent"},
+		{Id: 2, Name: "child", ParentId: ptr64(1)},
+		{Id: 3, Name: "grandchild match", ParentId: ptr64(2)},
+	}
+	tree := cli.BuildTree(tasks)
+	filteredIDs := map[int64]bool{3: true}
+
+	// expanded is empty — everything is collapsed.
+	rows := buildVisibleFiltered(tree, map[int64]bool{}, false, nil, time.Now().Local(), filteredIDs)
+
+	gotIDs := make(map[int64]bool, len(rows))
+	for _, r := range rows {
+		gotIDs[r.node.Task.Id] = true
+	}
+
+	// The match and both its ancestors must appear despite being collapsed.
+	if len(gotIDs) != 3 || !gotIDs[1] || !gotIDs[2] || !gotIDs[3] {
+		t.Fatalf("rows = %v, want {1, 2, 3} (match visible despite collapsed ancestors)", gotIDs)
+	}
+}

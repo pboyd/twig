@@ -33,7 +33,7 @@ Condition (interface) — one of:
 │   └── Value  bool
 ├── DateCondition                 # only field: completed
 │   ├── Op     {=, !=, <, <=, >, >=}
-│   └── Day    civil date (YYYY-MM-DD, compared at UTC midnight)
+│   └── Day    civil date (YYYY-MM-DD, compared to completed_at's UTC calendar date — day granularity, not exact timestamp)
 └── RelCondition
     ├── Field      {parent_id, goal_id}
     ├── Transitive bool           # true when prefixed with ^

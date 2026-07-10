@@ -50,7 +50,7 @@ A task matches the expression when it satisfies **every** condition (explicit an
 |-----------|---------------------------|
 | text term `T` | `T` occurs case-insensitively in the task's name or description |
 | `completed=true` / `false` | `completed_at` is set / unset |
-| `completed <op> D` | `completed_at` is set **and** `completed_at <op> D@00:00 UTC` |
+| `completed <op> D` | `completed_at` is set **and**, comparing at day granularity (`completed_at`'s UTC calendar date `<op>` `D`), the comparison holds |
 | `snoozed=true` | `snooze_until` is set **and** its day is strictly after the request's `today` |
 | `snoozed=false` | not `snoozed=true` |
 | `parent_id=N` | the task's direct parent is task N |

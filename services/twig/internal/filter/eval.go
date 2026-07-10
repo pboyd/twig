@@ -19,10 +19,22 @@ type Task struct {
 	GoalID      pgtype.Int8
 }
 
+// evalCtx carries per-evaluation lookup structures needed by transitive
+// relation matching (^parent_id, ^goal_id).
+type evalCtx struct {
+	byID map[int64]*Task
+}
+
 // Evaluate evaluates the expression against the given tasks and returns
 // the matching task IDs in ascending order.
 func Evaluate(e Expression, tasks []Task, showAll bool, today time.Time) ([]int64, error) {
 	todayDay := todayToDay(today)
+
+	byID := make(map[int64]*Task, len(tasks))
+	for i := range tasks {
+		byID[tasks[i].ID] = &tasks[i]
+	}
+	ctx := &evalCtx{byID: byID}
 
 	// Determine implicit visibility conditions (FR-008).
 	hasCompleted := false
@@ -50,7 +62,7 @@ func Evaluate(e Expression, tasks []Task, showAll bool, today time.Time) ([]int6
 		t := &tasks[i]
 
 		// Apply explicit conditions.
-		if !matchAll(e.Conditions, t, todayDay) {
+		if !matchAll(ctx, e.Conditions, t, todayDay) {
 			continue
 		}
 
@@ -71,16 +83,16 @@ func Evaluate(e Expression, tasks []Task, showAll bool, today time.Time) ([]int6
 	return result, nil
 }
 
-func matchAll(conditions []Condition, t *Task, todayDay day) bool {
+func matchAll(ctx *evalCtx, conditions []Condition, t *Task, todayDay day) bool {
 	for _, c := range conditions {
-		if !matchCondition(c, t, todayDay) {
+		if !matchCondition(ctx, c, t, todayDay) {
 			return false
 		}
 	}
 	return true
 }
 
-func matchCondition(c Condition, t *Task, todayDay day) bool {
+func matchCondition(ctx *evalCtx, c Condition, t *Task, todayDay day) bool {
 	switch cc := c.(type) {
 	case *TextCondition:
 		return matchText(cc.Term, t)
@@ -89,7 +101,7 @@ func matchCondition(c Condition, t *Task, todayDay day) bool {
 	case *DateCondition:
 		return matchDate(cc, t)
 	case *RelCondition:
-		return matchRel(cc, t)
+		return matchRel(ctx, cc, t)
 	}
 	return false
 }
@@ -127,7 +139,21 @@ func matchDate(c *DateCondition, t *Task) bool {
 	return false
 }
 
-func matchRel(c *RelCondition, t *Task) bool {
+func matchRel(ctx *evalCtx, c *RelCondition, t *Task) bool {
+	if c.Transitive {
+		var eq bool
+		switch c.Field {
+		case RelFieldParentID:
+			eq = hasAncestor(ctx, t, c.ID)
+		case RelFieldGoalID:
+			eq = hasGoalInLineage(ctx, t, c.ID)
+		}
+		if c.Op == OpNe {
+			return !eq
+		}
+		return eq
+	}
+
 	switch c.Field {
 	case RelFieldParentID:
 		if !t.ParentID.Valid {
@@ -141,6 +167,54 @@ func matchRel(c *RelCondition, t *Task) bool {
 		return applyIntOp(t.GoalID.Int64, c.Op, c.ID)
 	}
 	return false
+}
+
+// hasAncestor reports whether task id appears anywhere on t's parent chain
+// (t itself does not count). Guards against cycles with a visited set.
+func hasAncestor(ctx *evalCtx, t *Task, id int64) bool {
+	visited := make(map[int64]bool)
+	cur := t
+	for cur.ParentID.Valid {
+		pid := cur.ParentID.Int64
+		if visited[pid] {
+			return false // cycle guard
+		}
+		visited[pid] = true
+		if pid == id {
+			return true
+		}
+		parent, ok := ctx.byID[pid]
+		if !ok {
+			return false
+		}
+		cur = parent
+	}
+	return false
+}
+
+// hasGoalInLineage reports whether t or any of its ancestors is the
+// association root for goal id.
+func hasGoalInLineage(ctx *evalCtx, t *Task, id int64) bool {
+	visited := make(map[int64]bool)
+	cur := t
+	for {
+		if cur.GoalID.Valid && cur.GoalID.Int64 == id {
+			return true
+		}
+		if !cur.ParentID.Valid {
+			return false
+		}
+		pid := cur.ParentID.Int64
+		if visited[pid] {
+			return false // cycle guard
+		}
+		visited[pid] = true
+		parent, ok := ctx.byID[pid]
+		if !ok {
+			return false
+		}
+		cur = parent
+	}
 }
 
 func isCompleted(t *Task) bool {

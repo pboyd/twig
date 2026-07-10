@@ -225,6 +225,51 @@ func TestEvalDateCompleted(t *testing.T) {
 	}
 }
 
+func TestEvalDateCompletedSameDayGranularity(t *testing.T) {
+	// completed_at is 2026-01-01 12:00 UTC (midday, not midnight). Day-granularity
+	// comparison means this task should match both <= and >= 2026-01-01, since its
+	// UTC calendar date equals the comparison day.
+	tasks := []Task{
+		{ID: 1, Name: "Task A", CompletedAt: ts(2026, 1, 1)},
+	}
+
+	leExpr, err := Parse(`completed <= 2026-01-01`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := Evaluate(leExpr, tasks, false, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != 1 {
+		t.Errorf("<=: ids = %v, want [1] (same calendar day matches)", ids)
+	}
+
+	geExpr, err := Parse(`completed >= 2026-01-01`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = Evaluate(geExpr, tasks, false, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != 1 {
+		t.Errorf(">=: ids = %v, want [1] (same calendar day matches)", ids)
+	}
+
+	gtExpr, err := Parse(`completed > 2026-01-01`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err = Evaluate(gtExpr, tasks, false, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 0 {
+		t.Errorf(">: ids = %v, want [] (same calendar day is not strictly after)", ids)
+	}
+}
+
 func TestEvalRelParentId(t *testing.T) {
 	tasks := []Task{
 		{ID: 1, Name: "Parent"},
@@ -290,6 +335,78 @@ func TestEvalNoMatch(t *testing.T) {
 
 	if len(ids) != 0 {
 		t.Errorf("expected empty result, got %v", ids)
+	}
+}
+
+func TestEvalTransitiveParentId(t *testing.T) {
+	tasks := []Task{
+		{ID: 1, Name: "Root"},
+		{ID: 2, Name: "Child", ParentID: pgtype.Int8{Int64: 1, Valid: true}},
+		{ID: 3, Name: "Grandchild", ParentID: pgtype.Int8{Int64: 2, Valid: true}},
+		{ID: 4, Name: "Other"},
+	}
+
+	expr, err := Parse(`^parent_id=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := Evaluate(expr, tasks, true, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Task 1 itself does not match; 2 (direct child) and 3 (grandchild) do.
+	if len(ids) != 2 || ids[0] != 2 || ids[1] != 3 {
+		t.Errorf("ids = %v, want [2 3]", ids)
+	}
+}
+
+func TestEvalTransitiveParentIdNe(t *testing.T) {
+	tasks := []Task{
+		{ID: 1, Name: "Root"},
+		{ID: 2, Name: "Child", ParentID: pgtype.Int8{Int64: 1, Valid: true}},
+		{ID: 3, Name: "Grandchild", ParentID: pgtype.Int8{Int64: 2, Valid: true}},
+		{ID: 4, Name: "Other"},
+	}
+
+	expr, err := Parse(`^parent_id!=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := Evaluate(expr, tasks, true, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Complement of {2, 3}: {1, 4}.
+	if len(ids) != 2 || ids[0] != 1 || ids[1] != 4 {
+		t.Errorf("ids = %v, want [1 4]", ids)
+	}
+}
+
+func TestEvalTransitiveGoalId(t *testing.T) {
+	tasks := []Task{
+		{ID: 1, Name: "Goal root", GoalID: pgtype.Int8{Int64: 1, Valid: true}},
+		{ID: 2, Name: "Child", ParentID: pgtype.Int8{Int64: 1, Valid: true}},
+		{ID: 3, Name: "Grandchild", ParentID: pgtype.Int8{Int64: 2, Valid: true}},
+		{ID: 4, Name: "Unrelated"},
+	}
+
+	expr, err := Parse(`^goal_id=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := Evaluate(expr, tasks, true, today(2026, 7, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The association root and both descendants match; task 4 does not.
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
+		t.Errorf("ids = %v, want [1 2 3]", ids)
 	}
 }
 

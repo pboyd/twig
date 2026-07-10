@@ -102,41 +102,43 @@ func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, p
 	return rows
 }
 
-// buildVisibleFiltered builds the visible row list for filter mode. It flattens
-// the tree with showAll=true (to include completed/snoozed tasks), then keeps
-// only rows whose task ID is in the filtered set. Ancestor nodes of matched
-// tasks are also retained so the tree structure is preserved.
+// buildVisibleFiltered builds the visible row list for filter mode. Per the
+// display contract, collapsed/expansion state is ignored while a filter is
+// active, so it flattens the tree fully expanded (and with showAll=true, to
+// include completed/snoozed tasks), then keeps only matched rows plus the
+// true ancestors of each matched row (walked via each task's actual
+// parent_id), preserving tree order.
 func buildVisibleFiltered(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, today time.Time, filteredIDs map[int64]bool) []*visibleRow {
-	// First flatten with showAll to include everything.
-	all := buildVisible(tree, expanded, true, pendingComplete, today)
+	// Flatten ignoring expansion/collapse state so every descendant is
+	// present regardless of the caller's expanded map.
+	allExpanded := make(map[int64]bool)
+	markAllExpanded(tree, allExpanded)
+	all := buildVisible(tree, allExpanded, true, pendingComplete, today)
 
-	// Mark which IDs are in the filter set.
-	include := make(map[int64]bool, len(all))
+	byID := make(map[int64]*visibleRow, len(all))
 	for _, row := range all {
-		if filteredIDs[row.node.Task.Id] {
-			include[row.node.Task.Id] = true
-		}
+		byID[row.node.Task.Id] = row
 	}
 
-	// Also include ancestor nodes so matched tasks keep their tree context.
-	// Walk each filtered row's parent chain.
+	include := make(map[int64]bool, len(all))
 	for _, row := range all {
-		if !include[row.node.Task.Id] {
+		if !filteredIDs[row.node.Task.Id] {
 			continue
 		}
-		for _, other := range all {
-			if other == row {
-				continue
+		// Include the matched row itself, then walk its true ancestor chain
+		// via parent_id (not depth), stopping once we hit an already-included
+		// ancestor or run out of parents.
+		id := row.node.Task.Id
+		for {
+			if include[id] {
+				break
 			}
-			// other is an ancestor if its depth is less and it appears before
-			// this row and the depth gap is exactly the position in the chain.
-			if other.depth < row.depth {
-				// Walk up from row to see if other is on the parent path.
-				// Since the list is depth-first, any shallower row between the
-				// start and this row that shares the same prefix is an ancestor.
-				// Simplified: just include all shallower rows up to the root.
-				include[other.node.Task.Id] = true
+			include[id] = true
+			r, ok := byID[id]
+			if !ok || r.node.Task.ParentId == nil {
+				break
 			}
+			id = *r.node.Task.ParentId
 		}
 	}
 
@@ -147,6 +149,15 @@ func buildVisibleFiltered(tree []*cli.TreeNode, expanded map[int64]bool, showAll
 		}
 	}
 	return rows
+}
+
+// markAllExpanded sets expanded[id]=true for every node in the tree so a
+// flatten pass visits every descendant regardless of collapse state.
+func markAllExpanded(tree []*cli.TreeNode, expanded map[int64]bool) {
+	for _, node := range tree {
+		expanded[node.Task.Id] = true
+		markAllExpanded(node.Children, expanded)
+	}
 }
 
 func emitNode(
