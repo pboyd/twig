@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
@@ -17,6 +18,7 @@ import (
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
+	"github.com/pboyd/twig/services/twig/internal/filter"
 )
 
 type Task struct {
@@ -639,4 +641,46 @@ func (t *Task) SetTaskGoal(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: dbTaskToProto(row)}), nil
+}
+
+func (t *Task) FilterTasks(
+	ctx context.Context,
+	req *connect.Request[taskv1.FilterTasksRequest],
+) (*connect.Response[taskv1.FilterTasksResponse], error) {
+	userID := auth.UserID(ctx)
+
+	rows, err := t.Queries.ListTasks(ctx, userID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	expr, err := filter.Parse(req.Msg.Expression)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	today, err := time.Parse("2006-01-02", req.Msg.Today)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid today value: must be YYYY-MM-DD"))
+	}
+
+	tasks := make([]filter.Task, len(rows))
+	for i, r := range rows {
+		tasks[i] = filter.Task{
+			ID:          r.ID,
+			Name:        r.Name,
+			Description: r.Description,
+			CompletedAt: r.CompletedAt,
+			SnoozeUntil: r.SnoozeUntil,
+			ParentID:    r.ParentID,
+			GoalID:      r.GoalID,
+		}
+	}
+
+	ids, err := filter.Evaluate(expr, tasks, req.Msg.ShowAll, today)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	return connect.NewResponse(&taskv1.FilterTasksResponse{TaskIds: ids}), nil
 }

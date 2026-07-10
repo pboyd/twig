@@ -51,6 +51,8 @@ func (m Model) View() tea.View {
 			body = m.viewWithMove()
 		case modeDatePrompt:
 			body = m.viewWithDatePrompt()
+		case modeFilter:
+			body = m.viewWithFilter()
 		default:
 			body = m.viewList()
 		}
@@ -402,6 +404,69 @@ func (m Model) viewWithDatePrompt() string {
 	}
 
 	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
+}
+
+func (m Model) viewWithFilter() string {
+	if m.width == 0 {
+		return "loading..."
+	}
+
+	// Build filter status line.
+	var filterStatus string
+	if m.filterInvalid {
+		filterStatus = "hmm, that's not quite a filter yet\u2026  esc: cancel"
+	} else if len(m.filterMatches) == 0 && m.filterExpr != "" {
+		filterStatus = "Nothing matches that filter \u2014 even the twigs came up bare.  esc: cancel"
+	}
+
+	if m.styled {
+		innerH := m.height - 2 - m.statusHeight() - tabBarHeight
+		if innerH < 1 {
+			innerH = 1
+		}
+		innerW := m.width - 2
+		if innerW < 0 {
+			innerW = 0
+		}
+
+		listContent := m.renderList(innerW)
+		listPane := paneBox(listContent, m.width, innerH, "", false)
+
+		var parts []string
+		parts = append(parts, m.renderTabBar(m.width))
+		parts = append(parts, listPane)
+		if filterStatus != "" {
+			parts = append(parts, filterStatus)
+		}
+		parts = append(parts, m.filterInput.View())
+		parts = append(parts, m.renderStatus())
+		return strings.Join(parts, "\n")
+	}
+
+	// Plain mode.
+	maxLines := m.height - 1 - m.statusHeight() - tabBarHeight
+	if maxLines < 1 {
+		maxLines = 1
+	}
+
+	list := m.renderList(m.width - 2)
+	listLines := splitLines(list, maxLines)
+
+	var rows []string
+	for i := 0; i < maxLines; i++ {
+		l := padRightAnsi(listLines[i], m.width-2)
+		rows = append(rows, l)
+	}
+
+	var parts []string
+	parts = append(parts, m.renderTabBar(m.width))
+	parts = append(parts, strings.Join(rows, "\n"))
+	if filterStatus != "" {
+		parts = append(parts, filterStatus)
+	}
+	parts = append(parts, m.filterInput.View())
+	parts = append(parts, m.renderStatus())
+	return strings.Join(parts, "\n")
 }
 
 func (m Model) renderList(width int) string {

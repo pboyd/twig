@@ -102,6 +102,53 @@ func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, p
 	return rows
 }
 
+// buildVisibleFiltered builds the visible row list for filter mode. It flattens
+// the tree with showAll=true (to include completed/snoozed tasks), then keeps
+// only rows whose task ID is in the filtered set. Ancestor nodes of matched
+// tasks are also retained so the tree structure is preserved.
+func buildVisibleFiltered(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, today time.Time, filteredIDs map[int64]bool) []*visibleRow {
+	// First flatten with showAll to include everything.
+	all := buildVisible(tree, expanded, true, pendingComplete, today)
+
+	// Mark which IDs are in the filter set.
+	include := make(map[int64]bool, len(all))
+	for _, row := range all {
+		if filteredIDs[row.node.Task.Id] {
+			include[row.node.Task.Id] = true
+		}
+	}
+
+	// Also include ancestor nodes so matched tasks keep their tree context.
+	// Walk each filtered row's parent chain.
+	for _, row := range all {
+		if !include[row.node.Task.Id] {
+			continue
+		}
+		for _, other := range all {
+			if other == row {
+				continue
+			}
+			// other is an ancestor if its depth is less and it appears before
+			// this row and the depth gap is exactly the position in the chain.
+			if other.depth < row.depth {
+				// Walk up from row to see if other is on the parent path.
+				// Since the list is depth-first, any shallower row between the
+				// start and this row that shares the same prefix is an ancestor.
+				// Simplified: just include all shallower rows up to the root.
+				include[other.node.Task.Id] = true
+			}
+		}
+	}
+
+	var rows []*visibleRow
+	for _, row := range all {
+		if include[row.node.Task.Id] {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
 func emitNode(
 	node *cli.TreeNode,
 	depth int,

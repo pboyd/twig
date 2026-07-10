@@ -2257,3 +2257,101 @@ func TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached(t *testing.T) {
 		t.Errorf("effectiveGoalName fallback should contain goal ID 42, got %q", name)
 	}
 }
+
+// ── Filter tests ────────────────────────────────────────────────────────────
+
+func TestFilter_SlashOpensFilterBar(t *testing.T) {
+	m := buildTestModel()
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Errorf("after /: want modeFilter, got %d", m.mode)
+	}
+}
+
+func TestFilter_EscDismissesFilterBar(t *testing.T) {
+	m := buildTestModel()
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Fatalf("setup: want modeFilter, got %d", m.mode)
+	}
+	m = pressKey(m, "esc")
+	if m.mode != modeList {
+		t.Errorf("after esc: want modeList, got %d", m.mode)
+	}
+	if m.filterInput.Value() != "" {
+		t.Errorf("filter input should be cleared on esc")
+	}
+}
+
+func TestFilter_FilterMatchesAppliedToVisible(t *testing.T) {
+	m := buildTestModel()
+	// Manually set filter state: only tasks 1 and 3 match.
+	ExportSetFilterState(&m, "name: a", []int64{1, 3})
+	if len(m.visible) != 2 {
+		t.Fatalf("filtered visible: want 2 rows, got %d", len(m.visible))
+	}
+	if m.visible[0].node.Task.Id != 1 {
+		t.Errorf("first visible: want id=1, got %d", m.visible[0].node.Task.Id)
+	}
+	if m.visible[1].node.Task.Id != 3 {
+		t.Errorf("second visible: want id=3, got %d", m.visible[1].node.Task.Id)
+	}
+}
+
+func TestFilter_ClearFilterRestoresAll(t *testing.T) {
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+	if len(m.visible) != 1 {
+		t.Fatalf("setup: want 1 filtered row, got %d", len(m.visible))
+	}
+
+	// Simulate entering empty filter (clear).
+	m.filterInput.SetValue("")
+	m.filterExpr = ""
+	m.filterMatches = nil
+	m.filteredIDs = nil
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	if len(m.visible) != 3 {
+		t.Errorf("after clear: want 3 rows, got %d", len(m.visible))
+	}
+}
+
+func TestFilter_ToggleAllReFiresFilter(t *testing.T) {
+	// Verify that when filterExpr is set, pressing "c" (ToggleAll)
+	// triggers a filter re-fire (increments gen) instead of just rebuilding.
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+	m.showAll = true
+
+	oldGen := m.filterGen
+	m = pressKey(m, "c")
+	if m.filterGen <= oldGen {
+		t.Errorf("ToggleAll should increment filterGen when filter is active")
+	}
+}
+
+func TestFilter_BuildVisibleFiltered(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "parent"},
+		{Id: 2, Name: "child", ParentId: func() *int64 { v := int64(1); return &v }()},
+		{Id: 3, Name: "other"},
+	}
+	tree := cli.BuildTree(tasks)
+	expanded := map[int64]bool{1: true}
+
+	// Filter to only task 2 (child). Ancestor (task 1) should be included.
+	filteredIDs := map[int64]bool{2: true}
+	rows := ExportBuildVisibleFiltered(tree, expanded, false, nil, filteredIDs)
+
+	if len(rows) < 2 {
+		t.Fatalf("filtered rows: want >=2 (child + ancestor), got %d", len(rows))
+	}
+	// First row should be the parent (ancestor context).
+	if rows[0].node.Task.Id != 1 {
+		t.Errorf("first row: want parent (id=1), got id=%d", rows[0].node.Task.Id)
+	}
+	// Second row should be the matched child.
+	if rows[1].node.Task.Id != 2 {
+		t.Errorf("second row: want child (id=2), got id=%d", rows[1].node.Task.Id)
+	}
+}

@@ -27,6 +27,7 @@ const (
 	modeHelp
 	modeMove
 	modeDatePrompt // Tasks-tab date picker for ctrl+p send-to-plan
+	modeFilter     // Tasks-tab filter bar
 )
 
 type tab int
@@ -187,6 +188,13 @@ type Model struct {
 	goal goalState
 	// md renders Markdown to terminal-styled text.
 	md *markdown.Renderer
+	// Filter state (Task Filters feature).
+	filterInput   textinput.Model // filter bar text input
+	filterExpr    string          // the last-submitted filter expression
+	filterMatches []int64         // task IDs matching the active filter (nil = no filter)
+	filterInvalid bool            // true when the current expression is invalid
+	filterGen     int             // generation counter to discard stale FilterTasks responses
+	filteredIDs   map[int64]bool  // set of task IDs in filterMatches for O(1) lookup
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {
@@ -209,6 +217,7 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		plan: planState{
 			day: time.Now().Format("2006-01-02"),
 		},
-		md: markdown.NewRenderer(buildMarkdownTheme()),
+		md:          markdown.NewRenderer(buildMarkdownTheme()),
+		filterInput: newPlanInput("search, or try completed=false AND ^goal_id=1"),
 	}
 }

@@ -318,3 +318,30 @@ func ExportSetGoalStatusUpdates(m *Model, updates []*goalv1.StatusUpdate, mode i
 func ExportSetGoalCompose(m *Model, goalID, editingID int64) {
 	m.goal.compose = statusCompose{goalID: goalID, editingID: editingID, active: true}
 }
+
+// ExportBuildVisibleFiltered exposes buildVisibleFiltered for tests.
+func ExportBuildVisibleFiltered(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, filteredIDs map[int64]bool) []*visibleRow {
+	return buildVisibleFiltered(tree, expanded, showAll, pendingComplete, time.Now().Local(), filteredIDs)
+}
+
+// ExportSetFilterState seeds the filter state on a model for tests.
+func ExportSetFilterState(m *Model, expr string, matches []int64) {
+	m.filterExpr = expr
+	m.filterMatches = matches
+	m.filteredIDs = make(map[int64]bool, len(matches))
+	for _, id := range matches {
+		m.filteredIDs[id] = true
+	}
+	m.visible = buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local(), m.filteredIDs)
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+}
+
+// ExportFilterExpr returns the active filter expression.
+func ExportFilterExpr(m Model) string {
+	return m.filterExpr
+}
+
+// ExportFilterMatches returns the matched task IDs.
+func ExportFilterMatches(m Model) []int64 {
+	return m.filterMatches
+}
