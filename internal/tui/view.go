@@ -415,8 +415,6 @@ func (m Model) viewWithFilter() string {
 	var filterStatus string
 	if m.filterInvalid {
 		filterStatus = "hmm, that's not quite a filter yet\u2026  esc: cancel"
-	} else if len(m.filterMatches) == 0 && m.filterExpr != "" {
-		filterStatus = "Nothing matches that filter \u2014 even the twigs came up bare.  esc: cancel"
 	}
 
 	if m.styled {
@@ -471,6 +469,9 @@ func (m Model) viewWithFilter() string {
 
 func (m Model) renderList(width int) string {
 	if len(m.visible) == 0 {
+		if m.filterExpr != "" && !m.filterInvalid {
+			return "Nothing matches that filter — even the twigs came up bare."
+		}
 		return "(no tasks)"
 	}
 

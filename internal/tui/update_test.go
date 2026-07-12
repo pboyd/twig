@@ -2330,6 +2330,44 @@ func TestFilter_EscClearsNonMatchingFilter(t *testing.T) {
 	}
 }
 
+// TestFilter_NoMatchMessageShownInListNotOnReentry is a regression test:
+// previously the "Nothing matches that filter" message was rendered only
+// while re-editing the filter bar (mode == modeFilter), so it appeared one
+// step late — interrupting a fresh "/" filter attempt instead of showing
+// right after the search that produced no matches.
+func TestFilter_NoMatchMessageShownInListNotOnReentry(t *testing.T) {
+	m := buildTestModel()
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = mm.(Model)
+
+	// A valid filter that matched nothing, applied and back in modeList (as
+	// handleFilterResult leaves it).
+	ExportSetFilterState(&m, "asdf", []int64{})
+	if m.mode != modeList {
+		t.Fatalf("setup: want modeList, got %d", m.mode)
+	}
+
+	out := stripANSI(m.View().Content)
+	want := "Nothing matches that filter"
+	if !strings.Contains(out, want) {
+		t.Errorf("after no-match search: want %q in list view, got:\n%s", want, out)
+	}
+
+	// Reopening the filter bar should not show the interrupting no-match
+	// status line (the list pane may still show the message as passive
+	// background content — that's fine, it's not a status line blocking
+	// input).
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Fatalf("setup: want modeFilter, got %d", m.mode)
+	}
+	out = stripANSI(m.View().Content)
+	dontWant := "Nothing matches that filter — even the twigs came up bare.  esc: cancel"
+	if strings.Contains(out, dontWant) {
+		t.Errorf("after reopening filter: interrupting status line %q should not appear, got:\n%s", dontWant, out)
+	}
+}
+
 func TestFilter_FilterMatchesAppliedToVisible(t *testing.T) {
 	m := buildTestModel()
 	// Manually set filter state: only tasks 1 and 3 match.
