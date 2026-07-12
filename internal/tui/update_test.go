@@ -2268,6 +2268,21 @@ func TestFilter_SlashOpensFilterBar(t *testing.T) {
 	}
 }
 
+// TestFilter_PlaceholderFullyRendered guards against the Width==0 bug where
+// textinput.placeholderView truncates the placeholder to a single character.
+func TestFilter_PlaceholderFullyRendered(t *testing.T) {
+	m := buildTestModel()
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = mm.(Model)
+	m = pressKey(m, "/")
+
+	out := stripANSI(m.View().Content)
+	want := "search, or try completed=false AND ^goal_id=1"
+	if !strings.Contains(out, want) {
+		t.Errorf("filter placeholder not fully rendered: want %q in:\n%s", want, out)
+	}
+}
+
 func TestFilter_EscDismissesFilterBar(t *testing.T) {
 	m := buildTestModel()
 	m = pressKey(m, "/")
@@ -2280,6 +2295,38 @@ func TestFilter_EscDismissesFilterBar(t *testing.T) {
 	}
 	if m.filterInput.Value() != "" {
 		t.Errorf("filter input should be cleared on esc")
+	}
+}
+
+// TestFilter_EscClearsNonMatchingFilter is a regression test: previously,
+// pressing esc while re-editing a filter that matched nothing (via "/") left
+// filterExpr/filterMatches/filteredIDs/m.visible stale, so the task list
+// stayed empty forever with no way back short of quitting.
+func TestFilter_EscClearsNonMatchingFilter(t *testing.T) {
+	m := buildTestModel()
+	// A valid filter that matched nothing.
+	ExportSetFilterState(&m, "asdf", []int64{})
+	if len(m.visible) != 0 {
+		t.Fatalf("setup: want 0 filtered rows, got %d", len(m.visible))
+	}
+
+	m = pressKey(m, "/")   // reopen, input pre-filled with "asdf"
+	m = pressKey(m, "esc") // must fully clear
+
+	if m.mode != modeList {
+		t.Errorf("after esc: want modeList, got %d", m.mode)
+	}
+	if m.filterExpr != "" {
+		t.Errorf("after esc: filterExpr should be cleared, got %q", m.filterExpr)
+	}
+	if m.filteredIDs != nil {
+		t.Errorf("after esc: filteredIDs should be nil")
+	}
+	if m.filterInput.Value() != "" {
+		t.Errorf("after esc: filter input should be cleared")
+	}
+	if len(m.visible) != 3 {
+		t.Errorf("after esc: full list should be restored, want 3 rows, got %d", len(m.visible))
 	}
 }
 

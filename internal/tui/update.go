@@ -141,29 +141,31 @@ func (m Model) persistTreeStateCmd() tea.Cmd {
 	}
 }
 
+// clearFilter removes any active filter (applied or in-progress) and
+// restores the unfiltered task list.
+func (m Model) clearFilter() Model {
+	m.mode = modeList
+	m.filterInput.SetValue("")
+	m.filterInput.Blur()
+	m.filterExpr = ""
+	m.filterMatches = nil
+	m.filteredIDs = nil
+	m.filterInvalid = false
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+	return m
+}
+
 // handleFilterKey handles key events while the filter bar is active.
 func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.mode = modeList
-		m.filterInput.SetValue("")
-		m.filterInput.Blur()
-		m.filterInvalid = false
-		return m, nil
+		return m.clearFilter(), nil
 
 	case "enter":
 		expr := strings.TrimSpace(m.filterInput.Value())
 		if expr == "" {
-			// Clear the filter.
-			m.mode = modeList
-			m.filterExpr = ""
-			m.filterMatches = nil
-			m.filteredIDs = nil
-			m.filterInvalid = false
-			m.filterInput.Blur()
-			m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
-			m.cursor = clampCursor(m.cursor, len(m.visible))
-			return m, nil
+			return m.clearFilter(), nil
 		}
 		m.filterGen++
 		m.filterInput.Blur()
@@ -717,6 +719,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.help.SetWidth(msg.Width)
 		m.plainHelp.SetWidth(msg.Width)
+		// Give the filter input a real width; textinput's placeholderView
+		// truncates the placeholder to a single character when Width == 0.
+		filterW := msg.Width - 4
+		if filterW < 1 {
+			filterW = 1
+		}
+		m.filterInput.SetWidth(filterW)
 		return m, nil
 
 	case listTasksResultMsg:
