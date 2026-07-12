@@ -33,6 +33,8 @@ func goalStateToString(s goalv1.GoalState) (string, error) {
 		return "completed", nil
 	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
 		return "archived", nil
+	case goalv1.GoalState_GOAL_STATE_HOLD:
+		return "hold", nil
 	default:
 		return "", connect.NewError(connect.CodeInvalidArgument, errors.New("state must not be GOAL_STATE_UNSPECIFIED"))
 	}
@@ -49,6 +51,8 @@ func goalStateFromString(s string) goalv1.GoalState {
 		return goalv1.GoalState_GOAL_STATE_COMPLETED
 	case "archived":
 		return goalv1.GoalState_GOAL_STATE_ARCHIVED
+	case "hold":
+		return goalv1.GoalState_GOAL_STATE_HOLD
 	default:
 		return goalv1.GoalState_GOAL_STATE_UNSPECIFIED
 	}

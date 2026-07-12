@@ -13,16 +13,59 @@ import (
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
+// goalStates defines the cycling order for the goal state selector in the edit form.
+var goalStates = []goalv1.GoalState{
+	goalv1.GoalState_GOAL_STATE_COMMITTED,
+	goalv1.GoalState_GOAL_STATE_INCUBATING,
+	goalv1.GoalState_GOAL_STATE_HOLD,
+	goalv1.GoalState_GOAL_STATE_COMPLETED,
+	goalv1.GoalState_GOAL_STATE_ARCHIVED,
+}
+
+// goalStateIndex returns the index of the given state in goalStates.
+func goalStateIndex(s goalv1.GoalState) int {
+	for i, gs := range goalStates {
+		if gs == s {
+			return i
+		}
+	}
+	return 0
+}
+
+// goalStateName returns the display label for a goal state in the edit form.
+func goalEditStateName(s goalv1.GoalState) string {
+	switch s {
+	case goalv1.GoalState_GOAL_STATE_COMMITTED:
+		return "Committed"
+	case goalv1.GoalState_GOAL_STATE_INCUBATING:
+		return "Incubating"
+	case goalv1.GoalState_GOAL_STATE_HOLD:
+		return "Hold"
+	case goalv1.GoalState_GOAL_STATE_COMPLETED:
+		return "Completed"
+	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
+		return "Archived"
+	default:
+		return "Unknown"
+	}
+}
+
+// pgMsgGoalStateToggle is sent when the user cycles the state field in the goal edit form.
+type pgMsgGoalStateToggle struct {
+	delta int
+}
+
 const (
 	focusName        = 0
 	focusDescription = 1
 	focusDue         = 2
 	focusEstimate    = 3
 	focusSnooze      = 4
-	focusGoal        = 5
-	focusSave        = 6
-	focusCancel      = 7
-	focusCount       = 8
+	focusState       = 5
+	focusGoal        = 6
+	focusSave        = 7
+	focusCancel      = 8
+	focusCount       = 9
 )
 
 // editFormModel holds the state of the task edit/create form.
@@ -44,6 +87,9 @@ type editFormModel struct {
 	goalIdx        int            // -1 = none, 0..N-1 = index into availableGoals
 	showGoalField  bool
 	originalGoalID *int64
+	// Goal state selector (goal edit forms only; hidden when !isGoal || taskID == nil).
+	goalStateIdx    int // index into goalStates cycle
+	origGoalStateIdx int
 	// Opened-state snapshot for dirty detection.
 	origName        string
 	origDescription string
@@ -66,6 +112,9 @@ type editSavedMsg struct {
 	// Goal association: populated only when showGoalField was true.
 	newGoalID   *int64 // nil = clear association; non-nil = associate with this goal
 	goalChanged bool   // true if goal differs from the task's original goal_id
+	// Goal state: populated only when editing an existing goal (isGoal && taskID != nil).
+	goalState     goalv1.GoalState // the cycling selector value
+	goalStateChanged bool          // true if state differs from original
 }
 
 // editCancelledMsg is dispatched when the user cancels the edit form.
@@ -82,7 +131,8 @@ type editDiscardRequestedMsg struct {
 // NewEditForm creates a form pre-filled with an existing task's values.
 // goals, when non-nil, enables the Goal selector field showing committed/incubating goals.
 // Pass nil (e.g. when editing a goal via its fake-task) to hide the Goal field.
-func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) editFormModel {
+// goalState, when non-empty, sets the goal state cycling field (for goal edit forms).
+func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal, goalState goalv1.GoalState) editFormModel {
 	f := newBlankForm(originalCursor)
 	f.taskID = &task.Id
 	if task.ParentId != nil {
@@ -138,6 +188,11 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) ed
 		}
 	}
 
+	// Initialize goal state cycling field when goalState is provided (goal edit forms).
+	if goalState != goalv1.GoalState_GOAL_STATE_UNSPECIFIED {
+		f.goalStateIdx = goalStateIndex(goalState)
+	}
+
 	// Capture opened-state snapshot for dirty detection.
 	f.origName = f.name.Value()
 	f.origDescription = f.description.Value()
@@ -145,6 +200,7 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal) ed
 	f.origEstimate = f.pomodoroEstimate.Value()
 	f.origSnooze = f.snooze.Value()
 	f.origGoalIdx = f.goalIdx
+	f.origGoalStateIdx = f.goalStateIdx
 
 	return f
 }
@@ -235,6 +291,9 @@ func (f editFormModel) isDirty() bool {
 		return true
 	}
 	if f.showGoalField && f.goalIdx != f.origGoalIdx {
+		return true
+	}
+	if f.isGoal && f.taskID != nil && f.goalStateIdx != f.origGoalStateIdx {
 		return true
 	}
 	return false
@@ -349,6 +408,18 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		}
 	}
 
+	// Handle goal state field key events (left/right cycle state).
+	if f.focusIndex == focusState && f.isGoal && f.taskID != nil {
+		switch keyMsg.Code {
+		case tea.KeyLeft:
+			f.goalStateIdx = (f.goalStateIdx - 1 + len(goalStates)) % len(goalStates)
+			return f, nil
+		case tea.KeyRight:
+			f.goalStateIdx = (f.goalStateIdx + 1) % len(goalStates)
+			return f, nil
+		}
+	}
+
 	// Enter on Save/Cancel buttons.
 	if keyMsg.Code == tea.KeyEnter {
 		switch f.focusIndex {
@@ -357,7 +428,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		case focusCancel:
 			return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
 		// Enter on single-line fields advances focus.
-		case focusName, focusDue, focusEstimate, focusSnooze, focusGoal:
+		case focusName, focusDue, focusEstimate, focusSnooze, focusState, focusGoal:
 			f = f.cycleFocus(1)
 			return f, nil
 		}
@@ -390,6 +461,10 @@ func (f editFormModel) buildSaveMsg() func() tea.Msg {
 			msg.goalChanged = (orig == nil) != (newGoalID == nil) ||
 				(orig != nil && newGoalID != nil && *orig != *newGoalID)
 		}
+		if f.isGoal && f.taskID != nil {
+			msg.goalState = goalStates[f.goalStateIdx]
+			msg.goalStateChanged = f.goalStateIdx != f.origGoalStateIdx
+		}
 		return msg
 	}
 }
@@ -415,6 +490,9 @@ func (f editFormModel) cycleFocus(delta int) editFormModel {
 	for {
 		idx = (idx + delta + focusCount) % focusCount
 		if idx == focusGoal && !f.showGoalField {
+			continue
+		}
+		if idx == focusState && (!f.isGoal || f.taskID == nil) {
 			continue
 		}
 		break
@@ -502,6 +580,16 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
 
 	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
+
+	if f.isGoal && f.taskID != nil {
+		stateName := goalEditStateName(goalStates[f.goalStateIdx])
+		sb.WriteString(fieldLabel("State", f.focusIndex == focusState))
+		sb.WriteString(stateName + "\n")
+		if f.focusIndex == focusState {
+			sb.WriteString("  ←/→: change  tab: next field\n")
+		}
+		sb.WriteString("\n")
+	}
 
 	if f.showGoalField {
 		goalName := "none"

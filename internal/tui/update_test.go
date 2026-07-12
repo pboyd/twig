@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"connectrpc.com/connect"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
@@ -1295,7 +1296,7 @@ func TestQuitConfirm_OnPlanning_Esc(t *testing.T) {
 func TestDiscardConfirm_EditFormEscOnDirtySetsConfirmingDiscard(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.edit.name.SetValue("changed!")
 
 	// First keypress: Esc on dirty form → cmd returning editDiscardRequestedMsg
@@ -1321,7 +1322,7 @@ func TestDiscardConfirm_EditFormEscOnDirtySetsConfirmingDiscard(t *testing.T) {
 func TestDiscardConfirm_YDiscardsChanges(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.SetConfirmingDiscard(true)
 
 	m2, cmd := m.Update(tea.KeyPressMsg{Text: "y", Code: 'y'})
@@ -1347,7 +1348,7 @@ func TestDiscardConfirm_YDiscardsChanges(t *testing.T) {
 func TestDiscardConfirm_NCancelsDiscard(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.SetConfirmingDiscard(true)
 
 	m2, cmd := m.Update(tea.KeyPressMsg{Text: "n", Code: 'n'})
@@ -1369,7 +1370,7 @@ func TestDiscardConfirm_NCancelsDiscard(t *testing.T) {
 func TestDiscardConfirm_EscCancelsDiscard(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.SetConfirmingDiscard(true)
 
 	m2, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -1391,7 +1392,7 @@ func TestDiscardConfirm_EscCancelsDiscard(t *testing.T) {
 func TestDiscardConfirm_EscOnCleanFormClosesDirectly(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if cmd == nil {
@@ -1443,7 +1444,7 @@ func TestHelp_DismissOnPlanning(t *testing.T) {
 func TestEditorFinished_SuccessUpdatesDescription(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.err = errForTest("old error")
 
 	next, cmd := m.Update(editorFinishedMsg{content: "new content"})
@@ -1465,7 +1466,7 @@ func TestEditorFinished_SuccessUpdatesDescription(t *testing.T) {
 func TestEditorFinished_ErrorPreservesDescription(t *testing.T) {
 	m := buildTestModel()
 	m.mode = modeEdit
-	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil)
+	m.edit = NewEditForm(&taskv1.Task{Id: 1, Name: "t", Description: "original"}, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	m.err = nil
 
 	next, cmd := m.Update(editorFinishedMsg{err: errForTest("editor failed")})

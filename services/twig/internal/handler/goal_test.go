@@ -731,3 +731,115 @@ func TestGoalStatusUpdate_CrossUserIsolation(t *testing.T) {
 	})
 }
 
+func TestSetGoalState_Hold_RoundTrip(t *testing.T) {
+	gh, userID := newGoalTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Create an incubating goal.
+	createResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Hold me"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := createResp.Msg.Goal.Id
+	if createResp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_INCUBATING {
+		t.Fatalf("initial state = %v, want INCUBATING", createResp.Msg.Goal.State)
+	}
+
+	// incubating → hold
+	resp, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_HOLD,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState incubating→hold: %v", err)
+	}
+	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_HOLD {
+		t.Errorf("state = %v, want HOLD", resp.Msg.Goal.State)
+	}
+
+	// hold → committed
+	resp, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState hold→committed: %v", err)
+	}
+	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_COMMITTED {
+		t.Errorf("state = %v, want COMMITTED", resp.Msg.Goal.State)
+	}
+
+	// committed → hold (re-enter hold from committed)
+	resp, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_HOLD,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState committed→hold: %v", err)
+	}
+	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_HOLD {
+		t.Errorf("state = %v, want HOLD", resp.Msg.Goal.State)
+	}
+}
+
+func TestSetGoalState_Hold_TwoGoals(t *testing.T) {
+	gh, userID := newGoalTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	ra, _ := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Alpha"}))
+	rb, _ := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Beta"}))
+
+	// Move both to hold — second one should be ranked below the first.
+	_, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    ra.Msg.Goal.Id,
+		State: goalv1.GoalState_GOAL_STATE_HOLD,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState Alpha→hold: %v", err)
+	}
+
+	_, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    rb.Msg.Goal.Id,
+		State: goalv1.GoalState_GOAL_STATE_HOLD,
+	}))
+	if err != nil {
+		t.Fatalf("SetGoalState Beta→hold: %v", err)
+	}
+
+	// List goals and verify hold group ordering.
+	listResp, err := gh.ListGoals(ctx, connect.NewRequest(&goalv1.ListGoalsRequest{}))
+	if err != nil {
+		t.Fatalf("ListGoals: %v", err)
+	}
+
+	// Find the two hold goals and check their relative positions.
+	var holdGoals []*goalv1.Goal
+	for _, g := range listResp.Msg.Goals {
+		if g.State == goalv1.GoalState_GOAL_STATE_HOLD {
+			holdGoals = append(holdGoals, g)
+		}
+	}
+	if len(holdGoals) != 2 {
+		t.Fatalf("expected 2 hold goals, got %d", len(holdGoals))
+	}
+	if holdGoals[0].Position >= holdGoals[1].Position {
+		t.Errorf("hold group order wrong: first pos=%d, second pos=%d", holdGoals[0].Position, holdGoals[1].Position)
+	}
+}
+
+func TestSetGoalState_Unspecified_Rejected(t *testing.T) {
+	gh, userID := newGoalTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	resp, _ := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Test"}))
+	goalID := resp.Msg.Goal.Id
+
+	_, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+		Id:    goalID,
+		State: goalv1.GoalState_GOAL_STATE_UNSPECIFIED,
+	}))
+	if err == nil {
+		t.Fatal("SetGoalState(UNSPECIFIED): expected error, got nil")
+	}
+}
+

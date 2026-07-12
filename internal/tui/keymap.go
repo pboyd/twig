@@ -61,10 +61,6 @@ type KeyMap struct {
 	GoalNew           key.Binding
 	GoalEdit          key.Binding
 	GoalDelete        key.Binding
-	GoalSetIncubate   key.Binding
-	GoalSetCommit     key.Binding
-	GoalSetComplete   key.Binding
-	GoalSetArchive    key.Binding
 	GoalToggleAll     key.Binding
 	GoalRankUp        key.Binding
 	GoalRankDown      key.Binding
@@ -264,22 +260,6 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+d"),
 			key.WithHelp("ctrl+d", "delete goal"),
 		),
-		GoalSetIncubate: key.NewBinding(
-			key.WithKeys("i"),
-			key.WithHelp("i", "incubating"),
-		),
-		GoalSetCommit: key.NewBinding(
-			key.WithKeys("o"),
-			key.WithHelp("o", "commit"),
-		),
-		GoalSetComplete: key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "done"),
-		),
-		GoalSetArchive: key.NewBinding(
-			key.WithKeys("v"),
-			key.WithHelp("v", "archive"),
-		),
 		GoalToggleAll: key.NewBinding(
 			key.WithKeys("c"),
 			key.WithHelp("c", "toggle show all"),
@@ -326,7 +306,7 @@ func DefaultKeyMap() KeyMap {
 // ShortHelp returns the short help for the key map (used by the bubbles help component).
 func (k KeyMap) ShortHelp() []key.Binding {
 	if k.GoalMode {
-		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalAddTask, k.GoalEdit, k.GoalStatusHistory, k.GoalAddStatus, k.Help, k.Quit}
+		return []key.Binding{k.Up, k.Down, k.GoalNew, k.GoalAddTask, k.GoalEdit, k.Complete, k.GoalStatusHistory, k.GoalAddStatus, k.Help, k.Quit}
 	}
 	if k.ReportMode {
 		return []key.Binding{k.ReportPrevPreset, k.ReportNextPreset, k.Up, k.Down, k.Refresh, k.Help, k.Quit}
@@ -341,9 +321,8 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	if k.GoalMode {
 		return [][]key.Binding{
-			{k.Up, k.Down, k.GoalNew, k.GoalEdit},
-			{k.GoalDelete, k.GoalSetIncubate, k.GoalSetCommit},
-			{k.GoalSetComplete, k.GoalSetArchive, k.GoalRankUp, k.GoalRankDown},
+			{k.Up, k.Down, k.GoalNew, k.GoalEdit, k.Complete},
+			{k.GoalDelete, k.GoalRankUp, k.GoalRankDown},
 			{k.GoalAddTask, k.GoalLinkTask, k.GoalUnlinkTask, k.GoalToggleAll},
 			{k.GoalStatusHistory, k.GoalAddStatus, k.GoalStatusEdit, k.GoalStatusDelete},
 			{k.Help, k.Quit},

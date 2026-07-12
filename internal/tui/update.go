@@ -495,6 +495,29 @@ func setGoalStateCmd(client goalv1connect.GoalServiceClient, id int64, state goa
 	}
 }
 
+// updateGoalThenSetStateCmd updates a goal's fields then sets its state in a single chain.
+func updateGoalThenSetStateCmd(client goalv1connect.GoalServiceClient, id int64, name, desc string, due *timestamppb.Timestamp, state goalv1.GoalState) tea.Cmd {
+	return func() tea.Msg {
+		_, err := client.UpdateGoal(context.Background(), connect.NewRequest(&goalv1.UpdateGoalRequest{
+			Id:          id,
+			Name:        name,
+			Description: desc,
+			Due:         due,
+		}))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		resp, err := client.SetGoalState(context.Background(), connect.NewRequest(&goalv1.SetGoalStateRequest{
+			Id:    id,
+			State: state,
+		}))
+		if err != nil {
+			return goalMutationMsg{err: err}
+		}
+		return goalMutationMsg{goal: resp.Msg.Goal}
+	}
+}
+
 func deleteGoalCmd(client goalv1connect.GoalServiceClient, id int64) tea.Cmd {
 	return func() tea.Msg {
 		_, err := client.DeleteGoal(context.Background(), connect.NewRequest(&goalv1.DeleteGoalRequest{Id: id}))
@@ -1344,6 +1367,20 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.goal.showAll = !m.goal.showAll
 		m.goal.cursor = clampCursor(m.goal.cursor, len(visibleGoals(m.goal.goals, m.goal.showAll)))
 
+	// Space: toggle complete for goals (Active → Completed, Completed → Active).
+	case key.Matches(msg, m.keys.Complete):
+		if len(visible) > 0 {
+			g := visible[m.goal.cursor]
+			id := g.Id
+			switch g.GetState() {
+			case goalv1.GoalState_GOAL_STATE_COMMITTED, goalv1.GoalState_GOAL_STATE_INCUBATING, goalv1.GoalState_GOAL_STATE_HOLD:
+				m.notice = "Goal achieved — take a bow!"
+				return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMPLETED)
+			case goalv1.GoalState_GOAL_STATE_COMPLETED:
+				return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMMITTED)
+			}
+		}
+
 	case key.Matches(msg, m.keys.GoalNew):
 		m.originalCursor = m.goal.cursor
 		m.edit = NewRootForm(m.goal.cursor, nil)
@@ -1358,7 +1395,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Build a fake task to reuse the edit form.
 			fakeTask := goalToFakeTask(g)
 			m.originalCursor = m.goal.cursor
-			m.edit = NewEditForm(fakeTask, m.goal.cursor, nil)
+			m.edit = NewEditForm(fakeTask, m.goal.cursor, nil, g.GetState())
 			m.edit.isGoal = true
 			m.goal.mode = goalEdit
 			m.mode = modeEdit
@@ -1369,32 +1406,6 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(visible) > 0 {
 			m.goal.mode = goalConfirmDelete
 			m.notice = "Delete this goal? Tasks attached to it will stick around. [y]es [n]o"
-		}
-
-	case key.Matches(msg, m.keys.GoalSetIncubate):
-		if len(visible) > 0 {
-			id := visible[m.goal.cursor].Id
-			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_INCUBATING)
-		}
-
-	case key.Matches(msg, m.keys.GoalSetCommit):
-		if len(visible) > 0 {
-			id := visible[m.goal.cursor].Id
-			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMMITTED)
-		}
-
-	case key.Matches(msg, m.keys.GoalSetComplete):
-		if len(visible) > 0 {
-			id := visible[m.goal.cursor].Id
-			m.notice = "Goal achieved — take a bow! 🎉"
-			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMPLETED)
-		}
-
-	case key.Matches(msg, m.keys.GoalSetArchive):
-		if len(visible) > 0 {
-			id := visible[m.goal.cursor].Id
-			m.notice = "Tucked away. It'll be here if you change your mind."
-			return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_ARCHIVED)
 		}
 
 	case key.Matches(msg, m.keys.GoalRankUp):
@@ -1706,6 +1717,9 @@ func (m Model) handleGoalEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 		visible := visibleGoals(m.goal.goals, m.goal.showAll)
 		if len(visible) > 0 && m.goal.cursor < len(visible) {
 			id := visible[m.goal.cursor].Id
+			if msg.goalStateChanged {
+				return m, updateGoalThenSetStateCmd(m.goalClient, id, msg.name, msg.description, due, msg.goalState)
+			}
 			return m, updateGoalCmd(m.goalClient, id, msg.name, msg.description, due)
 		}
 	}
@@ -2196,7 +2210,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.visible) > 0 {
 			task := m.visible[m.cursor].node.Task
 			m.originalCursor = m.cursor
-			m.edit = NewEditForm(task, m.cursor, m.goal.goals)
+			m.edit = NewEditForm(task, m.cursor, m.goal.goals, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 			m.mode = modeEdit
 			m.err = nil
 		}

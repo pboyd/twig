@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	tea "charm.land/bubbletea/v2"
+	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/internal/cli"
@@ -463,7 +464,7 @@ func TestView_PomTimerInModeEdit(t *testing.T) {
 		startAt:  time.Now().Add(-5 * time.Minute),
 	}
 	m.mode = modeEdit
-	m.edit = NewEditForm(tasks[0], 0, nil)
+	m.edit = NewEditForm(tasks[0], 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
 	out := m.viewWithForm()
 	if !contains(out, "task-one") {
 		t.Errorf("modeEdit view should show timer; got:\n%q", out[:min(len(out), 200)])
