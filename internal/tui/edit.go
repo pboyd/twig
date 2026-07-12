@@ -32,24 +32,6 @@ func goalStateIndex(s goalv1.GoalState) int {
 	return 0
 }
 
-// goalStateName returns the display label for a goal state in the edit form.
-func goalEditStateName(s goalv1.GoalState) string {
-	switch s {
-	case goalv1.GoalState_GOAL_STATE_COMMITTED:
-		return "Committed"
-	case goalv1.GoalState_GOAL_STATE_INCUBATING:
-		return "Incubating"
-	case goalv1.GoalState_GOAL_STATE_HOLD:
-		return "Hold"
-	case goalv1.GoalState_GOAL_STATE_COMPLETED:
-		return "Completed"
-	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
-		return "Archived"
-	default:
-		return "Unknown"
-	}
-}
-
 // pgMsgGoalStateToggle is sent when the user cycles the state field in the goal edit form.
 type pgMsgGoalStateToggle struct {
 	delta int
@@ -88,7 +70,7 @@ type editFormModel struct {
 	showGoalField  bool
 	originalGoalID *int64
 	// Goal state selector (goal edit forms only; hidden when !isGoal || taskID == nil).
-	goalStateIdx    int // index into goalStates cycle
+	goalStateIdx     int // index into goalStates cycle
 	origGoalStateIdx int
 	// Opened-state snapshot for dirty detection.
 	origName        string
@@ -113,8 +95,8 @@ type editSavedMsg struct {
 	newGoalID   *int64 // nil = clear association; non-nil = associate with this goal
 	goalChanged bool   // true if goal differs from the task's original goal_id
 	// Goal state: populated only when editing an existing goal (isGoal && taskID != nil).
-	goalState     goalv1.GoalState // the cycling selector value
-	goalStateChanged bool          // true if state differs from original
+	goalState        goalv1.GoalState // the cycling selector value
+	goalStateChanged bool             // true if state differs from original
 }
 
 // editCancelledMsg is dispatched when the user cancels the edit form.
@@ -582,7 +564,7 @@ func (f editFormModel) View(width int) string {
 	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
 
 	if f.isGoal && f.taskID != nil {
-		stateName := goalEditStateName(goalStates[f.goalStateIdx])
+		stateName := goalStateName(goalStates[f.goalStateIdx])
 		sb.WriteString(fieldLabel("State", f.focusIndex == focusState))
 		sb.WriteString(stateName + "\n")
 		if f.focusIndex == focusState {

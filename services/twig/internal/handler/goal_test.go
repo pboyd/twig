@@ -842,4 +842,3 @@ func TestSetGoalState_Unspecified_Rejected(t *testing.T) {
 		t.Fatal("SetGoalState(UNSPECIFIED): expected error, got nil")
 	}
 }
-
