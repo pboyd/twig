@@ -2257,3 +2257,186 @@ func TestEffectiveGoalName_FallsBackToIDWhenGoalNotCached(t *testing.T) {
 		t.Errorf("effectiveGoalName fallback should contain goal ID 42, got %q", name)
 	}
 }
+
+// ── Filter tests ────────────────────────────────────────────────────────────
+
+func TestFilter_SlashOpensFilterBar(t *testing.T) {
+	m := buildTestModel()
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Errorf("after /: want modeFilter, got %d", m.mode)
+	}
+}
+
+// TestFilter_PlaceholderFullyRendered guards against the Width==0 bug where
+// textinput.placeholderView truncates the placeholder to a single character.
+func TestFilter_PlaceholderFullyRendered(t *testing.T) {
+	m := buildTestModel()
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = mm.(Model)
+	m = pressKey(m, "/")
+
+	out := stripANSI(m.View().Content)
+	want := "search, or try completed=false AND ^goal_id=1"
+	if !strings.Contains(out, want) {
+		t.Errorf("filter placeholder not fully rendered: want %q in:\n%s", want, out)
+	}
+}
+
+func TestFilter_EscDismissesFilterBar(t *testing.T) {
+	m := buildTestModel()
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Fatalf("setup: want modeFilter, got %d", m.mode)
+	}
+	m = pressKey(m, "esc")
+	if m.mode != modeList {
+		t.Errorf("after esc: want modeList, got %d", m.mode)
+	}
+	if m.filterInput.Value() != "" {
+		t.Errorf("filter input should be cleared on esc")
+	}
+}
+
+// TestFilter_EscClearsNonMatchingFilter is a regression test: previously,
+// pressing esc while re-editing a filter that matched nothing (via "/") left
+// filterExpr/filterMatches/filteredIDs/m.visible stale, so the task list
+// stayed empty forever with no way back short of quitting.
+func TestFilter_EscClearsNonMatchingFilter(t *testing.T) {
+	m := buildTestModel()
+	// A valid filter that matched nothing.
+	ExportSetFilterState(&m, "asdf", []int64{})
+	if len(m.visible) != 0 {
+		t.Fatalf("setup: want 0 filtered rows, got %d", len(m.visible))
+	}
+
+	m = pressKey(m, "/")   // reopen, input pre-filled with "asdf"
+	m = pressKey(m, "esc") // must fully clear
+
+	if m.mode != modeList {
+		t.Errorf("after esc: want modeList, got %d", m.mode)
+	}
+	if m.filterExpr != "" {
+		t.Errorf("after esc: filterExpr should be cleared, got %q", m.filterExpr)
+	}
+	if m.filteredIDs != nil {
+		t.Errorf("after esc: filteredIDs should be nil")
+	}
+	if m.filterInput.Value() != "" {
+		t.Errorf("after esc: filter input should be cleared")
+	}
+	if len(m.visible) != 3 {
+		t.Errorf("after esc: full list should be restored, want 3 rows, got %d", len(m.visible))
+	}
+}
+
+// TestFilter_NoMatchMessageShownInListNotOnReentry is a regression test:
+// previously the "Nothing matches that filter" message was rendered only
+// while re-editing the filter bar (mode == modeFilter), so it appeared one
+// step late — interrupting a fresh "/" filter attempt instead of showing
+// right after the search that produced no matches.
+func TestFilter_NoMatchMessageShownInListNotOnReentry(t *testing.T) {
+	m := buildTestModel()
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = mm.(Model)
+
+	// A valid filter that matched nothing, applied and back in modeList (as
+	// handleFilterResult leaves it).
+	ExportSetFilterState(&m, "asdf", []int64{})
+	if m.mode != modeList {
+		t.Fatalf("setup: want modeList, got %d", m.mode)
+	}
+
+	out := stripANSI(m.View().Content)
+	want := "Nothing matches that filter"
+	if !strings.Contains(out, want) {
+		t.Errorf("after no-match search: want %q in list view, got:\n%s", want, out)
+	}
+
+	// Reopening the filter bar should not show the interrupting no-match
+	// status line (the list pane may still show the message as passive
+	// background content — that's fine, it's not a status line blocking
+	// input).
+	m = pressKey(m, "/")
+	if m.mode != modeFilter {
+		t.Fatalf("setup: want modeFilter, got %d", m.mode)
+	}
+	out = stripANSI(m.View().Content)
+	dontWant := "Nothing matches that filter — even the twigs came up bare.  esc: cancel"
+	if strings.Contains(out, dontWant) {
+		t.Errorf("after reopening filter: interrupting status line %q should not appear, got:\n%s", dontWant, out)
+	}
+}
+
+func TestFilter_FilterMatchesAppliedToVisible(t *testing.T) {
+	m := buildTestModel()
+	// Manually set filter state: only tasks 1 and 3 match.
+	ExportSetFilterState(&m, "name: a", []int64{1, 3})
+	if len(m.visible) != 2 {
+		t.Fatalf("filtered visible: want 2 rows, got %d", len(m.visible))
+	}
+	if m.visible[0].node.Task.Id != 1 {
+		t.Errorf("first visible: want id=1, got %d", m.visible[0].node.Task.Id)
+	}
+	if m.visible[1].node.Task.Id != 3 {
+		t.Errorf("second visible: want id=3, got %d", m.visible[1].node.Task.Id)
+	}
+}
+
+func TestFilter_ClearFilterRestoresAll(t *testing.T) {
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+	if len(m.visible) != 1 {
+		t.Fatalf("setup: want 1 filtered row, got %d", len(m.visible))
+	}
+
+	// Simulate entering empty filter (clear).
+	m.filterInput.SetValue("")
+	m.filterExpr = ""
+	m.filterMatches = nil
+	m.filteredIDs = nil
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	if len(m.visible) != 3 {
+		t.Errorf("after clear: want 3 rows, got %d", len(m.visible))
+	}
+}
+
+func TestFilter_ToggleAllReFiresFilter(t *testing.T) {
+	// Verify that when filterExpr is set, pressing "c" (ToggleAll)
+	// triggers a filter re-fire (increments gen) instead of just rebuilding.
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+	m.showAll = true
+
+	oldGen := m.filterGen
+	m = pressKey(m, "c")
+	if m.filterGen <= oldGen {
+		t.Errorf("ToggleAll should increment filterGen when filter is active")
+	}
+}
+
+func TestFilter_BuildVisibleFiltered(t *testing.T) {
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "parent"},
+		{Id: 2, Name: "child", ParentId: func() *int64 { v := int64(1); return &v }()},
+		{Id: 3, Name: "other"},
+	}
+	tree := cli.BuildTree(tasks)
+	expanded := map[int64]bool{1: true}
+
+	// Filter to only task 2 (child). Ancestor (task 1) should be included.
+	filteredIDs := map[int64]bool{2: true}
+	rows := ExportBuildVisibleFiltered(tree, expanded, false, nil, filteredIDs)
+
+	if len(rows) < 2 {
+		t.Fatalf("filtered rows: want >=2 (child + ancestor), got %d", len(rows))
+	}
+	// First row should be the parent (ancestor context).
+	if rows[0].node.Task.Id != 1 {
+		t.Errorf("first row: want parent (id=1), got id=%d", rows[0].node.Task.Id)
+	}
+	// Second row should be the matched child.
+	if rows[1].node.Task.Id != 2 {
+		t.Errorf("second row: want child (id=2), got id=%d", rows[1].node.Task.Id)
+	}
+}

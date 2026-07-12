@@ -23,6 +23,7 @@ type KeyMap struct {
 	PomCancel    key.Binding
 	Move         key.Binding
 	Filter       key.Binding
+	ToggleAll    key.Binding
 	Refresh      key.Binding
 	Help         key.Binding
 	Quit         key.Binding
@@ -136,6 +137,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("m", "move (change parent)"),
 		),
 		Filter: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "filter"),
+		),
+		ToggleAll: key.NewBinding(
 			key.WithKeys("c"),
 			key.WithHelp("c", "toggle show all"),
 		),

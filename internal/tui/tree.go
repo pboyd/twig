@@ -102,6 +102,64 @@ func buildVisible(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, p
 	return rows
 }
 
+// buildVisibleFiltered builds the visible row list for filter mode. Per the
+// display contract, collapsed/expansion state is ignored while a filter is
+// active, so it flattens the tree fully expanded (and with showAll=true, to
+// include completed/snoozed tasks), then keeps only matched rows plus the
+// true ancestors of each matched row (walked via each task's actual
+// parent_id), preserving tree order.
+func buildVisibleFiltered(tree []*cli.TreeNode, expanded map[int64]bool, showAll bool, pendingComplete *int64, today time.Time, filteredIDs map[int64]bool) []*visibleRow {
+	// Flatten ignoring expansion/collapse state so every descendant is
+	// present regardless of the caller's expanded map.
+	allExpanded := make(map[int64]bool)
+	markAllExpanded(tree, allExpanded)
+	all := buildVisible(tree, allExpanded, true, pendingComplete, today)
+
+	byID := make(map[int64]*visibleRow, len(all))
+	for _, row := range all {
+		byID[row.node.Task.Id] = row
+	}
+
+	include := make(map[int64]bool, len(all))
+	for _, row := range all {
+		if !filteredIDs[row.node.Task.Id] {
+			continue
+		}
+		// Include the matched row itself, then walk its true ancestor chain
+		// via parent_id (not depth), stopping once we hit an already-included
+		// ancestor or run out of parents.
+		id := row.node.Task.Id
+		for {
+			if include[id] {
+				break
+			}
+			include[id] = true
+			r, ok := byID[id]
+			if !ok || r.node.Task.ParentId == nil {
+				break
+			}
+			id = *r.node.Task.ParentId
+		}
+	}
+
+	var rows []*visibleRow
+	for _, row := range all {
+		if include[row.node.Task.Id] {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+// markAllExpanded sets expanded[id]=true for every node in the tree so a
+// flatten pass visits every descendant regardless of collapse state.
+func markAllExpanded(tree []*cli.TreeNode, expanded map[int64]bool) {
+	for _, node := range tree {
+		expanded[node.Task.Id] = true
+		markAllExpanded(node.Children, expanded)
+	}
+}
+
 func emitNode(
 	node *cli.TreeNode,
 	depth int,

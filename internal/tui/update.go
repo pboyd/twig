@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"connectrpc.com/connect"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
@@ -113,6 +114,13 @@ type goalStatusMutationMsg struct {
 	err    error
 }
 
+// filterResultMsg carries the result of a FilterTasks RPC.
+type filterResultMsg struct {
+	gen int     // generation counter to discard stale responses
+	ids []int64 // matched task IDs (nil on error)
+	err error   // parse/validation error
+}
+
 // ── command factories ───────────────────────────────────────────────────────
 
 // persistTreeStateCmd snapshots the current expanded set and saves it
@@ -131,6 +139,79 @@ func (m Model) persistTreeStateCmd() tea.Cmd {
 		}
 		return nil
 	}
+}
+
+// clearFilter removes any active filter (applied or in-progress) and
+// restores the unfiltered task list.
+func (m Model) clearFilter() Model {
+	m.mode = modeList
+	m.filterInput.SetValue("")
+	m.filterInput.Blur()
+	m.filterExpr = ""
+	m.filterMatches = nil
+	m.filteredIDs = nil
+	m.filterInvalid = false
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+	return m
+}
+
+// handleFilterKey handles key events while the filter bar is active.
+func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return m.clearFilter(), nil
+
+	case "enter":
+		expr := strings.TrimSpace(m.filterInput.Value())
+		if expr == "" {
+			return m.clearFilter(), nil
+		}
+		m.filterGen++
+		m.filterInput.Blur()
+		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+
+	default:
+		// Any other key just edits the input; the expression is only
+		// evaluated on Enter (see the "enter" case above).
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		return m, cmd
+	}
+}
+
+// handleFilterResult handles the response from FilterTasks.
+func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
+	// Discard stale responses.
+	if msg.gen != m.filterGen {
+		return m, nil
+	}
+
+	if msg.err != nil {
+		m.filterInvalid = true
+		m.filterMatches = nil
+		m.filteredIDs = nil
+		m.err = msg.err
+		return m, nil
+	}
+
+	m.filterInvalid = false
+	m.filterMatches = msg.ids
+	m.filterExpr = m.filterInput.Value()
+	m.err = nil
+
+	// Build the set for O(1) lookup.
+	m.filteredIDs = make(map[int64]bool, len(msg.ids))
+	for _, id := range msg.ids {
+		m.filteredIDs[id] = true
+	}
+
+	// Rebuild visible list in filter mode.
+	m.visible = buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault(), m.filteredIDs)
+	m.cursor = clampCursor(m.cursor, len(m.visible))
+
+	m.mode = modeList
+	return m, nil
 }
 
 // saveAndQuitCmd saves the tree state synchronously and then signals bubbletea
@@ -543,12 +624,32 @@ func createAndLinkTaskCmd(taskClient taskv1connect.TaskServiceClient, msg editSa
 	}
 }
 
+// fetchAfterMutation calls ListTasks and returns a refreshedMsg.
 func fetchAfterMutation(client taskv1connect.TaskServiceClient, highlightID int64) tea.Msg {
 	resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 	if err != nil {
 		return refreshedMsg{err: err}
 	}
 	return refreshedMsg{tree: cli.BuildTree(resp.Msg.Tasks), highlightID: highlightID}
+}
+
+// filterCmd calls FilterTasks on the server and returns a filterResultMsg.
+func filterCmd(client taskv1connect.TaskServiceClient, expr string, showAll bool, now time.Time, gen int) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.FilterTasks(context.Background(), connect.NewRequest(&taskv1.FilterTasksRequest{
+			Expression: expr,
+			ShowAll:    showAll,
+			Today:      now.Format("2006-01-02"),
+		}))
+		if err != nil {
+			var ce *connect.Error
+			if errors.As(err, &ce) && ce.Code() == connect.CodeInvalidArgument {
+				return filterResultMsg{gen: gen, err: ce}
+			}
+			return filterResultMsg{gen: gen, err: err}
+		}
+		return filterResultMsg{gen: gen, ids: resp.Msg.TaskIds}
+	}
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
@@ -618,6 +719,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.help.SetWidth(msg.Width)
 		m.plainHelp.SetWidth(msg.Width)
+		// Give the filter input a real width; textinput's placeholderView
+		// truncates the placeholder to a single character when Width == 0.
+		filterW := msg.Width - 4
+		if filterW < 1 {
+			filterW = 1
+		}
+		m.filterInput.SetWidth(filterW)
 		return m, nil
 
 	case listTasksResultMsg:
@@ -660,6 +768,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			m.cursor = clampCursor(prevCursor, len(m.visible))
+		}
+		// Re-fire filter after mutation so results stay consistent.
+		if m.filterExpr != "" {
+			m.filterGen++
+			return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
 		}
 		return m, nil
 
@@ -742,6 +855,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case moveTaskResultMsg:
 		return m.handleMoveTaskResult(msg)
+
+	case filterResultMsg:
+		return m.handleFilterResult(msg)
 
 	case editSavedMsg:
 		return m.handleEditSaved(msg)
@@ -1033,6 +1149,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleMoveKey(msg)
 	case modeDatePrompt:
 		return m.handleDatePromptKey(msg)
+	case modeFilter:
+		return m.handleFilterKey(msg)
 	}
 	return m, nil
 }
@@ -2189,7 +2307,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		return m, tea.Batch(listTasksCmd(m.client), listScheduledDaysCmd(m.planClient))
 
-	case key.Matches(msg, m.keys.Filter):
+	case key.Matches(msg, m.keys.ToggleAll):
 		m.showAll = !m.showAll
 		var curID int64
 		if len(m.visible) > 0 {
@@ -2197,6 +2315,17 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, curID)
+		// Re-fire the active filter so the filtered view stays consistent.
+		if m.filterExpr != "" {
+			m.filterGen++
+			return m, filterCmd(m.client, m.filterExpr, m.showAll, time.Now(), m.filterGen)
+		}
+
+	case key.Matches(msg, m.keys.Filter):
+		m.mode = modeFilter
+		m.filterInput.SetValue(m.filterExpr)
+		m.filterInput.Focus()
+		return m, textinput.Blink
 
 	case key.Matches(msg, m.keys.Help):
 		m.mode = modeHelp
@@ -2360,6 +2489,11 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 		m.cursor = findCursor(m.visible, msg.taskID)
 	} else {
 		m.cursor = clampCursor(m.cursor, len(m.visible))
+	}
+	// Re-fire filter after move mutation.
+	if m.filterExpr != "" {
+		m.filterGen++
+		return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
 	}
 	return m, nil
 }

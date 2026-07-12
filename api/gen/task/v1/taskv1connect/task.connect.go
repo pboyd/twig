@@ -76,6 +76,8 @@ const (
 	TaskServiceCountCompletedPomodorosProcedure = "/task.v1.TaskService/CountCompletedPomodoros"
 	// TaskServiceSetTaskGoalProcedure is the fully-qualified name of the TaskService's SetTaskGoal RPC.
 	TaskServiceSetTaskGoalProcedure = "/task.v1.TaskService/SetTaskGoal"
+	// TaskServiceFilterTasksProcedure is the fully-qualified name of the TaskService's FilterTasks RPC.
+	TaskServiceFilterTasksProcedure = "/task.v1.TaskService/FilterTasks"
 )
 
 // TaskServiceClient is a client for the task.v1.TaskService service.
@@ -137,6 +139,17 @@ type TaskServiceClient interface {
 	//	FailedPrecondition — an ancestor of the task already has a goal, or
 	//	                     (when setting) a descendant has its own goal
 	SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error)
+	// FilterTasks evaluates a filter expression (see the filter grammar
+	// contract) against the calling user's tasks and returns the ids of the
+	// tasks that match. It never returns ancestor-context rows — deciding how
+	// to display matches is the client's job.
+	//
+	// Errors:
+	//
+	//	InvalidArgument — the expression does not parse or fails validation
+	//	                  (unknown field, bad operator, malformed date, ...).
+	//	                  The message is human-readable and safe to display.
+	FilterTasks(context.Context, *connect.Request[v1.FilterTasksRequest]) (*connect.Response[v1.FilterTasksResponse], error)
 }
 
 // NewTaskServiceClient constructs a client for the task.v1.TaskService service. By default, it uses
@@ -240,6 +253,12 @@ func NewTaskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(taskServiceMethods.ByName("SetTaskGoal")),
 			connect.WithClientOptions(opts...),
 		),
+		filterTasks: connect.NewClient[v1.FilterTasksRequest, v1.FilterTasksResponse](
+			httpClient,
+			baseURL+TaskServiceFilterTasksProcedure,
+			connect.WithSchema(taskServiceMethods.ByName("FilterTasks")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -260,6 +279,7 @@ type taskServiceClient struct {
 	getActivePomodoro       *connect.Client[v1.GetActivePomodoroRequest, v1.GetActivePomodoroResponse]
 	countCompletedPomodoros *connect.Client[v1.CountCompletedPomodorosRequest, v1.CountCompletedPomodorosResponse]
 	setTaskGoal             *connect.Client[v1.SetTaskGoalRequest, v1.SetTaskGoalResponse]
+	filterTasks             *connect.Client[v1.FilterTasksRequest, v1.FilterTasksResponse]
 }
 
 // CreateTask calls task.v1.TaskService.CreateTask.
@@ -337,6 +357,11 @@ func (c *taskServiceClient) SetTaskGoal(ctx context.Context, req *connect.Reques
 	return c.setTaskGoal.CallUnary(ctx, req)
 }
 
+// FilterTasks calls task.v1.TaskService.FilterTasks.
+func (c *taskServiceClient) FilterTasks(ctx context.Context, req *connect.Request[v1.FilterTasksRequest]) (*connect.Response[v1.FilterTasksResponse], error) {
+	return c.filterTasks.CallUnary(ctx, req)
+}
+
 // TaskServiceHandler is an implementation of the task.v1.TaskService service.
 type TaskServiceHandler interface {
 	// CreateTask stores a new task and returns it with its assigned id.
@@ -396,6 +421,17 @@ type TaskServiceHandler interface {
 	//	FailedPrecondition — an ancestor of the task already has a goal, or
 	//	                     (when setting) a descendant has its own goal
 	SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error)
+	// FilterTasks evaluates a filter expression (see the filter grammar
+	// contract) against the calling user's tasks and returns the ids of the
+	// tasks that match. It never returns ancestor-context rows — deciding how
+	// to display matches is the client's job.
+	//
+	// Errors:
+	//
+	//	InvalidArgument — the expression does not parse or fails validation
+	//	                  (unknown field, bad operator, malformed date, ...).
+	//	                  The message is human-readable and safe to display.
+	FilterTasks(context.Context, *connect.Request[v1.FilterTasksRequest]) (*connect.Response[v1.FilterTasksResponse], error)
 }
 
 // NewTaskServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -495,6 +531,12 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(taskServiceMethods.ByName("SetTaskGoal")),
 		connect.WithHandlerOptions(opts...),
 	)
+	taskServiceFilterTasksHandler := connect.NewUnaryHandler(
+		TaskServiceFilterTasksProcedure,
+		svc.FilterTasks,
+		connect.WithSchema(taskServiceMethods.ByName("FilterTasks")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/task.v1.TaskService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TaskServiceCreateTaskProcedure:
@@ -527,6 +569,8 @@ func NewTaskServiceHandler(svc TaskServiceHandler, opts ...connect.HandlerOption
 			taskServiceCountCompletedPomodorosHandler.ServeHTTP(w, r)
 		case TaskServiceSetTaskGoalProcedure:
 			taskServiceSetTaskGoalHandler.ServeHTTP(w, r)
+		case TaskServiceFilterTasksProcedure:
+			taskServiceFilterTasksHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -594,4 +638,8 @@ func (UnimplementedTaskServiceHandler) CountCompletedPomodoros(context.Context, 
 
 func (UnimplementedTaskServiceHandler) SetTaskGoal(context.Context, *connect.Request[v1.SetTaskGoalRequest]) (*connect.Response[v1.SetTaskGoalResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.SetTaskGoal is not implemented"))
+}
+
+func (UnimplementedTaskServiceHandler) FilterTasks(context.Context, *connect.Request[v1.FilterTasksRequest]) (*connect.Response[v1.FilterTasksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("task.v1.TaskService.FilterTasks is not implemented"))
 }

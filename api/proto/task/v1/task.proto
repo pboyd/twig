@@ -83,6 +83,17 @@ service TaskService {
   //   FailedPrecondition — an ancestor of the task already has a goal, or
   //                        (when setting) a descendant has its own goal
   rpc SetTaskGoal(SetTaskGoalRequest) returns (SetTaskGoalResponse);
+
+  // FilterTasks evaluates a filter expression (see the filter grammar
+  // contract) against the calling user's tasks and returns the ids of the
+  // tasks that match. It never returns ancestor-context rows — deciding how
+  // to display matches is the client's job.
+  //
+  // Errors:
+  //   InvalidArgument — the expression does not parse or fails validation
+  //                     (unknown field, bad operator, malformed date, ...).
+  //                     The message is human-readable and safe to display.
+  rpc FilterTasks(FilterTasksRequest) returns (FilterTasksResponse);
 }
 
 // Task is a single unit of work. Tasks form a hierarchy of unrestricted
@@ -269,3 +280,28 @@ message SetTaskGoalRequest {
   optional int64 goal_id = 2;
 }
 message SetTaskGoalResponse { Task task = 1; }
+
+message FilterTasksRequest {
+  // The filter expression. Must be non-empty; clients treat an empty input
+  // as "no filter" and simply don't call FilterTasks.
+  string expression = 1;
+
+  // The client's "show all" state. When false and the expression contains
+  // no completed (resp. snoozed) condition, an implicit completed=false
+  // (resp. snoozed=false) condition is applied. Explicit conditions in the
+  // expression replace only their own attribute's implicit default.
+  bool show_all = 2;
+
+  // The client's current local calendar day, formatted YYYY-MM-DD.
+  // Required. Used to evaluate snoozed: a task is snoozed when its
+  // snooze_until day is strictly after this day (same rule clients already
+  // use for default views).
+  string today = 3;
+}
+
+message FilterTasksResponse {
+  // Ids of the calling user's tasks that satisfy the expression, ascending.
+  // Empty when nothing matches (including when an id in the expression
+  // references a task or goal that doesn't exist — that is not an error).
+  repeated int64 task_ids = 1;
+}
