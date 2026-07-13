@@ -736,3 +736,195 @@ func TestGoalPicker_InlineNamePlain(t *testing.T) {
 		t.Errorf("plain goal picker: name text missing; got %q", out)
 	}
 }
+
+// ── Hold state tests (T019) ─────────────────────────────────────────────────
+
+// TestGoal_HoldHiddenByDefault verifies that hold goals are hidden by default
+// and revealed when 'c' (GoalToggleAll) is pressed.
+func TestGoal_HoldHiddenByDefault(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 2, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	out := m.renderGoalList(40)
+	if strings.Contains(out, "On hold") {
+		t.Error("hold goal should be hidden when showAll=false")
+	}
+
+	// Press 'c' to toggle showAll.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m2 := next.(Model)
+
+	if !m2.goal.showAll {
+		t.Error("after 'c': goal.showAll should be true")
+	}
+
+	out2 := m2.renderGoalList(40)
+	if !strings.Contains(out2, "On hold") {
+		t.Error("hold goal should be visible after pressing 'c'")
+	}
+}
+
+// TestGoal_HoldGroupHeader verifies that hold goals have their own "Hold" section header
+// when showAll is enabled.
+func TestGoal_HoldGroupHeader(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Active", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 2, Name: "Incubating", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+		{Id: 3, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Press 'c' to enable showAll so hold goals are visible.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m2 := next.(Model)
+
+	out := m2.renderGoalList(40)
+
+	committedIdx := strings.Index(out, "Committed")
+	incubatingIdx := strings.Index(out, "Incubating")
+	holdIdx := strings.Index(out, "Hold")
+
+	if committedIdx < 0 {
+		t.Fatal("renderGoalList: 'Committed' header not found")
+	}
+	if incubatingIdx < 0 {
+		t.Fatal("renderGoalList: 'Incubating' header not found")
+	}
+	if holdIdx < 0 {
+		t.Fatal("renderGoalList: 'Hold' header not found")
+	}
+	if committedIdx >= incubatingIdx {
+		t.Errorf("group order: Committed (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
+	}
+	if incubatingIdx >= holdIdx {
+		t.Errorf("group order: Incubating (%d) should appear before Hold (%d)", incubatingIdx, holdIdx)
+	}
+}
+
+// TestGoal_HoldGroupOrder verifies: Committed → Incubating → Hold → Completed → Archived
+// when showAll is enabled.
+func TestGoal_HoldGroupOrder(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "A", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
+		{Id: 2, Name: "B", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 3, Name: "C", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Press 'c' to enable showAll so hold goals are visible.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m2 := next.(Model)
+
+	out := m2.renderGoalList(40)
+
+	committedIdx := strings.Index(out, "Committed")
+	incubatingIdx := strings.Index(out, "Incubating")
+	holdIdx := strings.Index(out, "Hold")
+
+	if committedIdx >= incubatingIdx || incubatingIdx >= holdIdx {
+		t.Errorf("expected Committed < Incubating < Hold; got indices %d, %d, %d",
+			committedIdx, incubatingIdx, holdIdx)
+	}
+}
+
+// TestGoal_HoldDetailStateName verifies the detail pane shows "State: Hold" for hold goals
+// when showAll is enabled.
+func TestGoal_HoldDetailStateName(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Paused work", State: goalv1.GoalState_GOAL_STATE_HOLD},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Press 'c' to enable showAll so hold goals are visible.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m2 := next.(Model)
+
+	out := m2.renderGoalDetail(60)
+	if !strings.Contains(out, "State: Hold") {
+		t.Errorf("detail pane: expected 'State: Hold'; got:\n%q", out)
+	}
+}
+
+// ── Space toggle tests (T022) ───────────────────────────────────────────────
+
+// TestGoal_Space_CommittedProducesCommand verifies Space on a committed goal
+// returns a command (setGoalStateCmd).
+func TestGoal_Space_CommittedProducesCommand(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("Space on committed goal: expected a command, got nil")
+	}
+}
+
+// TestGoal_Space_HoldProducesCommand verifies Space on a hold goal
+// returns a command when showAll is enabled.
+func TestGoal_Space_HoldProducesCommand(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	// Press 'c' to enable showAll so hold goals are visible.
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	m2 := next.(Model)
+
+	_, cmd := m2.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("Space on hold goal: expected a command, got nil")
+	}
+}
+
+// TestGoal_Space_ArchivedHiddenByDefault verifies archived goals are hidden without showAll,
+// so Space has no effect.
+func TestGoal_Space_ArchivedHiddenByDefault(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Archived", State: goalv1.GoalState_GOAL_STATE_ARCHIVED, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	visible := visibleGoals(m.goal.goals, m.goal.showAll)
+	if len(visible) != 0 {
+		t.Error("archived goal should be hidden when showAll=false")
+	}
+}
+
+// TestGoal_Space_CompletedHiddenByDefault verifies completed goals need showAll.
+func TestGoal_Space_CompletedHiddenByDefault(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Done", State: goalv1.GoalState_GOAL_STATE_COMPLETED, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	visible := visibleGoals(m.goal.goals, m.goal.showAll)
+	if len(visible) != 0 {
+		t.Error("completed goal should be hidden when showAll=false")
+	}
+}
+
+// TestGoal_Space_ShowsNotice verifies Space on an incubating goal shows a notice.
+func TestGoal_Space_ShowsNotice(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m2 := next.(Model)
+	notice := ExportNotice(m2)
+	if notice == "" {
+		t.Error("Space on incubating goal: expected a notice message")
+	}
+}
+
+// TestGoal_EmptyListSpaceNoOp verifies Space on empty goal list does nothing.
+func TestGoal_EmptyListSpaceNoOp(t *testing.T) {
+	m := ExportNewGoalModel(nil, nil)
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd != nil {
+		t.Error("Space on empty goal list: expected nil cmd")
+	}
+}

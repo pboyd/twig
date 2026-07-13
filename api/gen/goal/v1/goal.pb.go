@@ -30,6 +30,7 @@ const (
 	GoalState_GOAL_STATE_COMMITTED   GoalState = 2
 	GoalState_GOAL_STATE_COMPLETED   GoalState = 3
 	GoalState_GOAL_STATE_ARCHIVED    GoalState = 4
+	GoalState_GOAL_STATE_HOLD        GoalState = 5 // still-pursued, not currently worked on
 )
 
 // Enum value maps for GoalState.
@@ -40,6 +41,7 @@ var (
 		2: "GOAL_STATE_COMMITTED",
 		3: "GOAL_STATE_COMPLETED",
 		4: "GOAL_STATE_ARCHIVED",
+		5: "GOAL_STATE_HOLD",
 	}
 	GoalState_value = map[string]int32{
 		"GOAL_STATE_UNSPECIFIED": 0,
@@ -47,6 +49,7 @@ var (
 		"GOAL_STATE_COMMITTED":   2,
 		"GOAL_STATE_COMPLETED":   3,
 		"GOAL_STATE_ARCHIVED":    4,
+		"GOAL_STATE_HOLD":        5,
 	}
 )
 
@@ -1380,13 +1383,14 @@ const file_goal_v1_goal_proto_rawDesc = "" +
 	"\x06update\x18\x01 \x01(\v2\x15.goal.v1.StatusUpdateR\x06update\"/\n" +
 	"\x1dDeleteGoalStatusUpdateRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\" \n" +
-	"\x1eDeleteGoalStatusUpdateResponse*\x8f\x01\n" +
+	"\x1eDeleteGoalStatusUpdateResponse*\xa4\x01\n" +
 	"\tGoalState\x12\x1a\n" +
 	"\x16GOAL_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15GOAL_STATE_INCUBATING\x10\x01\x12\x18\n" +
 	"\x14GOAL_STATE_COMMITTED\x10\x02\x12\x18\n" +
 	"\x14GOAL_STATE_COMPLETED\x10\x03\x12\x17\n" +
-	"\x13GOAL_STATE_ARCHIVED\x10\x042\x9b\a\n" +
+	"\x13GOAL_STATE_ARCHIVED\x10\x04\x12\x13\n" +
+	"\x0fGOAL_STATE_HOLD\x10\x052\x9b\a\n" +
 	"\vGoalService\x12E\n" +
 	"\n" +
 	"CreateGoal\x12\x1a.goal.v1.CreateGoalRequest\x1a\x1b.goal.v1.CreateGoalResponse\x12<\n" +

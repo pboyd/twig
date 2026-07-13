@@ -132,9 +132,10 @@ ORDER BY
   CASE state
     WHEN 'committed'  THEN 1
     WHEN 'incubating' THEN 2
-    WHEN 'completed'  THEN 3
-    WHEN 'archived'   THEN 4
-    ELSE 5
+    WHEN 'hold'       THEN 3
+    WHEN 'completed'  THEN 4
+    WHEN 'archived'   THEN 5
+    ELSE 6
   END,
   position, id
 `

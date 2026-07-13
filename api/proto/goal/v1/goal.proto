@@ -66,8 +66,9 @@ enum GoalState {
   GOAL_STATE_UNSPECIFIED = 0;
   GOAL_STATE_INCUBATING = 1;
   GOAL_STATE_COMMITTED = 2;
-  GOAL_STATE_COMPLETED = 3;
-  GOAL_STATE_ARCHIVED = 4;
+  GOAL_STATE_COMPLETED   = 3;
+  GOAL_STATE_ARCHIVED    = 4;
+  GOAL_STATE_HOLD        = 5; // still-pursued, not currently worked on
 }
 
 message StatusUpdate {
