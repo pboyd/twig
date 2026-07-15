@@ -548,3 +548,186 @@ func TestRenderList_InlineNameNoNewline(t *testing.T) {
 		t.Errorf("renderList: expected %d lines, got %d; output:\n%q", len(tasks), len(lines), out)
 	}
 }
+
+// ── T003: windowOffset unit tests ──────────────────────────────────────────
+
+func TestWindowOffset_CursorAboveWindow(t *testing.T) {
+	// cursor=2, off=5 → off should drop to cursor
+	got := windowOffset(5, 2, 5, 20)
+	if got != 2 {
+		t.Errorf("cursor above: got %d, want 2", got)
+	}
+}
+
+func TestWindowOffset_CursorBelowWindow(t *testing.T) {
+	// cursor=15, off=0, height=5 → off should become cursor-height+1 = 11
+	got := windowOffset(0, 15, 5, 20)
+	if got != 11 {
+		t.Errorf("cursor below: got %d, want 11", got)
+	}
+}
+
+func TestWindowOffset_CursorInsideWindow(t *testing.T) {
+	// cursor=8, off=5, height=5 → no change
+	got := windowOffset(5, 8, 5, 20)
+	if got != 5 {
+		t.Errorf("cursor inside: got %d, want 5", got)
+	}
+}
+
+func TestWindowOffset_ClampHigh(t *testing.T) {
+	// off=18, height=5, n=20 → maxOff=15, off should clamp to 15
+	got := windowOffset(18, 15, 5, 20)
+	if got != 15 {
+		t.Errorf("clamp high: got %d, want 15", got)
+	}
+}
+
+func TestWindowOffset_ClampLow(t *testing.T) {
+	// off=-1 → clamp to 0
+	got := windowOffset(-1, 0, 5, 20)
+	if got != 0 {
+		t.Errorf("clamp low: got %d, want 0", got)
+	}
+}
+
+func TestWindowOffset_ListFitsViewport(t *testing.T) {
+	// n=3, height=10 → n<=height, off should be 0
+	got := windowOffset(0, 2, 10, 3)
+	if got != 0 {
+		t.Errorf("list fits: got %d, want 0", got)
+	}
+}
+
+func TestWindowOffset_EmptyList(t *testing.T) {
+	// n=0 → 0
+	got := windowOffset(0, 0, 5, 0)
+	if got != 0 {
+		t.Errorf("empty list: got %d, want 0", got)
+	}
+}
+
+func TestWindowOffset_LastPageEnd(t *testing.T) {
+	// cursor at last element, off near end: should not leave blank space
+	got := windowOffset(16, 19, 5, 20)
+	if got != 15 {
+		t.Errorf("last page end: got %d, want 15", got)
+	}
+}
+
+// ── T005: listViewportHeight unit tests ────────────────────────────────────
+
+func TestListViewportHeight_Styled(t *testing.T) {
+	m := ExportNewStyledModel(nil, nil, true)
+	m.height = 24
+	m.pom = nil
+	got := m.listViewportHeight()
+	// styled: height - 2 - statusHeight(1) - tabBarHeight(1) = 24 - 2 - 1 - 1 = 20
+	want := 20
+	if got != want {
+		t.Errorf("styled viewport height: got %d, want %d", got, want)
+	}
+}
+
+func TestListViewportHeight_Unstyled(t *testing.T) {
+	m := ExportNewStyledModel(nil, nil, false)
+	m.height = 24
+	m.pom = nil
+	got := m.listViewportHeight()
+	// plain: height - 1 - statusHeight(1) - tabBarHeight(1) = 24 - 1 - 1 - 1 = 21
+	want := 21
+	if got != want {
+		t.Errorf("unstyled viewport height: got %d, want %d", got, want)
+	}
+}
+
+func TestListViewportHeight_MinOne(t *testing.T) {
+	m := ExportNewStyledModel(nil, nil, true)
+	m.height = 2 // very short terminal
+	m.pom = nil
+	got := m.listViewportHeight()
+	if got != 1 {
+		t.Errorf("min 1 clamp: got %d, want 1", got)
+	}
+}
+
+func TestListViewportHeight_ActivePomodoro(t *testing.T) {
+	m := ExportNewStyledModel(nil, nil, true)
+	m.height = 24
+	m.pom = &activePom{taskName: "test"}
+	got := m.listViewportHeight()
+	// styled: 24 - 2 - 2(pom active) - 1 = 19
+	want := 19
+	if got != want {
+		t.Errorf("active pom viewport height: got %d, want %d", got, want)
+	}
+}
+
+// ── T007: renderList windowing tests ───────────────────────────────────────
+
+func TestRenderList_Windowed_CursorAlwaysVisible(t *testing.T) {
+	// Build a tall list: 30 tasks, viewport height 10 (styled).
+	tasks := make([]*taskv1.Task, 30)
+	for i := range tasks {
+		tasks[i] = &taskv1.Task{Id: int64(i + 1), Name: fmt.Sprintf("task %d", i+1)}
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.height = 14 // styled: innerH = 14 - 2 - 1 - 1 = 10
+	m.width = 80
+	m.showAll = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+
+	h := m.listViewportHeight()
+	if h != 10 {
+		t.Fatalf("viewport height: got %d, want 10", h)
+	}
+
+	// Test three representative cursor positions with a mid-list listScroll.
+	cursors := []int{0, 15, 29}
+	for _, cur := range cursors {
+		m.cursor = cur
+		m.listScroll = windowOffset(5, cur, h, len(m.visible))
+
+		out := m.renderList(80)
+		lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+		if len(lines) > h {
+			t.Errorf("cursor=%d: renderList emitted %d rows, want at most %d", cur, len(lines), h)
+		}
+
+		// The cursor row must always be present.
+		cursorTaskName := fmt.Sprintf("task %d", cur+1)
+		found := false
+		for _, line := range lines {
+			if strings.Contains(ansi.Strip(line), cursorTaskName) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("cursor=%d: cursor row %q not found in output", cur, cursorTaskName)
+		}
+	}
+}
+
+func TestRenderList_Windowed_ExactlyFits(t *testing.T) {
+	// 5 tasks, viewport height 10 → listScroll should be 0, output unchanged from full render.
+	tasks := make([]*taskv1.Task, 5)
+	for i := range tasks {
+		tasks[i] = &taskv1.Task{Id: int64(i + 1), Name: fmt.Sprintf("task %d", i+1)}
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.height = 14
+	m.width = 80
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.cursor = 2
+	m.listScroll = 0
+
+	out := m.renderList(80)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 5 {
+		t.Errorf("exactly-fits: expected 5 lines, got %d", len(lines))
+	}
+}

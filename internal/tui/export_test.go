@@ -130,6 +130,7 @@ func ExportEditSavedMsg(name string, parentID *int64) editSavedMsg {
 func ExportNewStyledModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode, styled bool) Model {
 	m := ExportNewModel(client, tree)
 	m.styled = styled
+	m.height = 40
 	return m
 }
 

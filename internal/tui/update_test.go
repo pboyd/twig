@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,10 @@ func pressKey(m Model, k string) Model {
 		msg = tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "tab":
 		msg = tea.KeyPressMsg{Code: tea.KeyTab}
+	case "pgup":
+		msg = tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		msg = tea.KeyPressMsg{Code: tea.KeyPgDown}
 	default:
 		runes := []rune(k)
 		if len(runes) == 1 {
@@ -2440,4 +2445,250 @@ func TestFilter_BuildVisibleFiltered(t *testing.T) {
 	if rows[1].node.Task.Id != 2 {
 		t.Errorf("second row: want child (id=2), got id=%d", rows[1].node.Task.Id)
 	}
+}
+
+// ── T008: scroll reconciliation tests (US1) ────────────────────────────────
+
+// buildTallTestModel creates a model with 20 tasks, styled, height=14 → viewport height 10.
+func buildTallTestModel() Model {
+	tasks := make([]*taskv1.Task, 20)
+	for i := range tasks {
+		tasks[i] = &taskv1.Task{Id: int64(i + 1), Name: fmt.Sprintf("task %d", i+1)}
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.height = 14
+	m.width = 80
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.cursor = 0
+	m.listScroll = 0
+	return m
+}
+
+func assertScrollInvariant(t *testing.T, m Model, label string) {
+	t.Helper()
+	h := m.listViewportHeight()
+	n := len(m.visible)
+	if n == 0 {
+		return
+	}
+	if m.listScroll < 0 {
+		t.Errorf("%s: listScroll=%d is negative", label, m.listScroll)
+	}
+	maxOff := n - h
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	if m.listScroll > maxOff {
+		t.Errorf("%s: listScroll=%d exceeds max %d (n=%d, h=%d)", label, m.listScroll, maxOff, n, h)
+	}
+	if m.cursor < m.listScroll || m.cursor >= m.listScroll+h {
+		t.Errorf("%s: cursor=%d not in [%d, %d) (listScroll=%d, h=%d)", label, m.cursor, m.listScroll, m.listScroll+h, m.listScroll, h)
+	}
+}
+
+func TestScroll_DownReconcilesScroll(t *testing.T) {
+	m := buildTallTestModel()
+
+	// Press Down 15 times to reach cursor=15.
+	for i := 0; i < 15; i++ {
+		m = pressKey(m, "j")
+	}
+	assertScrollInvariant(t, m, "after 15x Down")
+	if m.cursor != 15 {
+		t.Fatalf("cursor: want 15, got %d", m.cursor)
+	}
+}
+
+func TestScroll_UpReconcilesScroll(t *testing.T) {
+	m := buildTallTestModel()
+	// Move to bottom first.
+	m.cursor = 19
+	m.listScroll = windowOffset(0, 19, m.listViewportHeight(), len(m.visible))
+
+	// Press Up back to top.
+	for i := 0; i < 19; i++ {
+		m = pressKey(m, "k")
+	}
+	assertScrollInvariant(t, m, "after Up to top")
+	if m.cursor != 0 {
+		t.Errorf("cursor: want 0, got %d", m.cursor)
+	}
+}
+
+func TestScroll_HomeAndEnd(t *testing.T) {
+	m := buildTallTestModel()
+
+	// End: jump to last.
+	m = pressKey(m, "end")
+	assertScrollInvariant(t, m, "after End")
+	if m.cursor != 19 {
+		t.Errorf("End: cursor want 19, got %d", m.cursor)
+	}
+
+	// Home: jump back to first.
+	m = pressKey(m, "home")
+	assertScrollInvariant(t, m, "after Home")
+	if m.cursor != 0 {
+		t.Errorf("Home: cursor want 0, got %d", m.cursor)
+	}
+}
+
+func TestScroll_ResizeReclamps(t *testing.T) {
+	m := buildTallTestModel()
+	// Move to bottom and reconcile.
+	m.cursor = 19
+	m.listScroll = windowOffset(0, 19, m.listViewportHeight(), len(m.visible))
+	assertScrollInvariant(t, m, "pre-resize")
+
+	// Shrink terminal height.
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
+	m = next.(Model)
+	assertScrollInvariant(t, m, "after shrink")
+}
+
+// ── T013: PageUp / PageDown tests (US2) ────────────────────────────────────
+
+func TestPageDown_MovesCursor(t *testing.T) {
+	m := buildTallTestModel()
+	h := m.listViewportHeight()
+	m.cursor = 0
+	m.listScroll = 0
+
+	m = pressKey(m, "pgdown")
+	assertScrollInvariant(t, m, "after PgDn")
+	if m.cursor != h {
+		t.Errorf("PgDn from top: cursor want %d, got %d", h, m.cursor)
+	}
+}
+
+func TestPageDown_ClampsAtEnd(t *testing.T) {
+	m := buildTallTestModel()
+	// Place cursor near the bottom.
+	m.cursor = len(m.visible) - 2
+
+	m = pressKey(m, "pgdown")
+	assertScrollInvariant(t, m, "PgDn near end")
+	if m.cursor != len(m.visible)-1 {
+		t.Errorf("PgDn near end: cursor want %d, got %d", len(m.visible)-1, m.cursor)
+	}
+}
+
+func TestPageUp_MovesCursor(t *testing.T) {
+	m := buildTallTestModel()
+	h := m.listViewportHeight()
+	m.cursor = 19
+	m.listScroll = windowOffset(0, 19, h, len(m.visible))
+
+	m = pressKey(m, "pgup")
+	assertScrollInvariant(t, m, "PgUp from bottom")
+	want := 19 - h
+	if m.cursor != want {
+		t.Errorf("PgUp from bottom: cursor want %d, got %d", want, m.cursor)
+	}
+}
+
+func TestPageUp_ClampsAtStart(t *testing.T) {
+	m := buildTallTestModel()
+	m.cursor = 1
+	m.listScroll = 0
+
+	m = pressKey(m, "pgup")
+	assertScrollInvariant(t, m, "PgUp near top")
+	if m.cursor != 0 {
+		t.Errorf("PgUp near top: cursor want 0, got %d", m.cursor)
+	}
+}
+
+func TestPageUp_AtTopIsNoOp(t *testing.T) {
+	m := buildTallTestModel()
+	m.cursor = 0
+	m.listScroll = 0
+
+	m = pressKey(m, "pgup")
+	if m.cursor != 0 {
+		t.Errorf("PgUp at top: cursor want 0, got %d", m.cursor)
+	}
+}
+
+func TestPageDown_AtBottomIsNoOp(t *testing.T) {
+	m := buildTallTestModel()
+	n := len(m.visible)
+	m.cursor = n - 1
+	m.listScroll = windowOffset(0, n-1, m.listViewportHeight(), n)
+
+	m = pressKey(m, "pgdown")
+	if m.cursor != n-1 {
+		t.Errorf("PgDn at bottom: cursor want %d, got %d", n-1, m.cursor)
+	}
+}
+
+// buildTallTestModelWithSubtree creates a model with 20 root tasks (ids 1-20)
+// where root id=10 has 10 children (ids 101-110), styled, height=14 → viewport
+// height 10. Used to exercise Collapse/Expand crossing the viewport boundary.
+func buildTallTestModelWithSubtree() Model {
+	tasks := make([]*taskv1.Task, 0, 30)
+	for i := 1; i <= 20; i++ {
+		tasks = append(tasks, &taskv1.Task{Id: int64(i), Name: fmt.Sprintf("task %d", i)})
+	}
+	for i := 0; i < 10; i++ {
+		id := int64(101 + i)
+		tasks = append(tasks, &taskv1.Task{Id: id, Name: fmt.Sprintf("child %d", id), ParentId: ptr64(10)})
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.height = 14
+	m.width = 80
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.cursor = 0
+	m.listScroll = 0
+	return m
+}
+
+// TestScroll_ExpandReconcilesScroll asserts that expanding a subtree at the
+// bottom edge of the viewport re-clamps listScroll so the cursor (which jumps
+// to the newly-revealed first child) stays visible. Expand early-returns in
+// handleListKey, so it must reconcile explicitly rather than relying on the
+// catch-all at the end of the function.
+func TestScroll_ExpandReconcilesScroll(t *testing.T) {
+	m := buildTallTestModelWithSubtree()
+	h := m.listViewportHeight()
+
+	// Place cursor on root id=10 (index 9), the last visible row in the window.
+	m.cursor = 9
+	m.listScroll = windowOffset(0, 9, h, len(m.visible))
+	assertScrollInvariant(t, m, "before expand")
+
+	m = pressKey(m, "l")
+	if m.visible[m.cursor].node.Task.Id != 101 {
+		t.Fatalf("expected cursor on first child (id=101), got id=%d", m.visible[m.cursor].node.Task.Id)
+	}
+	assertScrollInvariant(t, m, "after expand")
+}
+
+// TestScroll_CollapseReconcilesScroll asserts that collapsing a subtree whose
+// parent has scrolled above the viewport re-clamps listScroll so the cursor
+// (which jumps up to the parent) stays visible. Collapse early-returns in
+// handleListKey, so it must reconcile explicitly rather than relying on the
+// catch-all at the end of the function.
+func TestScroll_CollapseReconcilesScroll(t *testing.T) {
+	m := buildTallTestModelWithSubtree()
+	m.expanded[10] = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	h := m.listViewportHeight()
+
+	// Rows: 0-8 = ids 1-9, 9 = id10 (parent), 10-19 = children 101-110, 20-29 = ids 11-20.
+	// Scroll down so the last child leaf is selected and the parent (index 9) is above the window.
+	m.cursor = 19
+	m.listScroll = windowOffset(0, 19, h, len(m.visible))
+	assertScrollInvariant(t, m, "before collapse")
+	if m.listScroll <= 9 {
+		t.Fatalf("setup invalid: expected parent row (9) to be above listScroll, got listScroll=%d", m.listScroll)
+	}
+
+	m = pressKey(m, "h")
+	if m.visible[m.cursor].node.Task.Id != 10 {
+		t.Fatalf("expected cursor on parent (id=10), got id=%d", m.visible[m.cursor].node.Task.Id)
+	}
+	assertScrollInvariant(t, m, "after collapse")
 }

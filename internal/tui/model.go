@@ -148,6 +148,7 @@ type Model struct {
 	tree              []*cli.TreeNode
 	visible           []*visibleRow
 	cursor            int
+	listScroll        int // top visible row index of the Tasks list viewport
 	expanded          map[int64]bool
 	statePath         string
 	activeProfile     string

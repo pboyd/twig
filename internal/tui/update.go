@@ -209,6 +209,8 @@ func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
 	// Rebuild visible list in filter mode.
 	m.visible = buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault(), m.filteredIDs)
 	m.cursor = clampCursor(m.cursor, len(m.visible))
+	// Re-clamp scroll offset after the filtered list is rebuilt.
+	m = m.reconcileScroll()
 
 	m.mode = modeList
 	return m, nil
@@ -749,6 +751,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			filterW = 1
 		}
 		m.filterInput.SetWidth(filterW)
+		// Re-clamp scroll offset after the viewport height changes.
+		m = m.reconcileScroll()
 		return m, nil
 
 	case listTasksResultMsg:
@@ -768,6 +772,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.cursor = clampCursor(m.cursor, len(m.visible))
 		}
+		// Re-clamp scroll offset after the list is rebuilt.
+		m = m.reconcileScroll()
 		return m, nil
 
 	case refreshedMsg:
@@ -792,6 +798,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.cursor = clampCursor(prevCursor, len(m.visible))
 		}
+		// Re-clamp scroll offset after the list is rebuilt.
+		m = m.reconcileScroll()
 		// Re-fire filter after mutation so results stay consistent.
 		if m.filterExpr != "" {
 			m.filterGen++
@@ -2174,6 +2182,18 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 		m.cursor = clampCursor(len(m.visible)-1, len(m.visible))
 
+	case key.Matches(msg, m.keys.PageUp):
+		h := m.listViewportHeight()
+		m.cursor -= h
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+
+	case key.Matches(msg, m.keys.PageDown):
+		h := m.listViewportHeight()
+		m.cursor += h
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+
 	case key.Matches(msg, m.keys.Collapse):
 		if len(m.visible) > 0 {
 			row := m.visible[m.cursor]
@@ -2187,9 +2207,11 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.expanded[parent.Task.Id] = false
 				m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 				m.cursor = findCursor(m.visible, parent.Task.Id)
+				m = m.reconcileScroll()
 				return m, m.persistTreeStateCmd()
 			}
 			m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+			m = m.reconcileScroll()
 			return m, m.persistTreeStateCmd()
 		}
 
@@ -2205,6 +2227,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					m.cursor = next
 				}
 			}
+			m = m.reconcileScroll()
 			return m, m.persistTreeStateCmd()
 		}
 
@@ -2356,6 +2379,15 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Reconcile listScroll after any key that may have moved the cursor or
+	// rebuilt the visible list (Up, Down, Home, End, PageUp, PageDown,
+	// ToggleAll, Filter clear). Collapse and Expand reconcile explicitly at
+	// their own early-returns above, since they stay in modeList and move the
+	// cursor. Cases that switch modes (Edit, NewSub, NewRoot, Pom* etc.) do
+	// not reach here, which is fine — their mode switch freezes the list
+	// until the user returns.
+	m = m.reconcileScroll()
+
 	return m, nil
 }
 
@@ -2506,6 +2538,8 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 	} else {
 		m.cursor = clampCursor(m.cursor, len(m.visible))
 	}
+	// Re-clamp scroll offset after the list is rebuilt.
+	m = m.reconcileScroll()
 	// Re-fire filter after move mutation.
 	if m.filterExpr != "" {
 		m.filterGen++
@@ -2532,6 +2566,8 @@ func (m Model) handleReorderResult(msg reorderResultMsg) (Model, tea.Cmd) {
 	m.err = nil
 	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 	m.cursor = findCursor(m.visible, msg.taskID)
+	// Re-clamp scroll offset after the list is rebuilt.
+	m = m.reconcileScroll()
 	return m, nil
 }
 

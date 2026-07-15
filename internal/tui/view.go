@@ -467,6 +467,56 @@ func (m Model) viewWithFilter() string {
 	return strings.Join(parts, "\n")
 }
 
+// windowOffset reconciles a scroll offset to keep the cursor visible with
+// minimal scrolling. off is the current top-visible-row index, cursor is the
+// selected row, height is the viewport row count, and n is the total row count.
+func windowOffset(off, cursor, height, n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if height <= 0 {
+		return 0
+	}
+	if cursor < off {
+		off = cursor
+	}
+	if cursor >= off+height {
+		off = cursor - height + 1
+	}
+	maxOff := n - height
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	if off < 0 {
+		off = 0
+	}
+	if off > maxOff {
+		off = maxOff
+	}
+	return off
+}
+
+// listViewportHeight returns the number of task rows the list pane can display.
+func (m Model) listViewportHeight() int {
+	var h int
+	if m.styled {
+		h = m.height - 2 - m.statusHeight() - tabBarHeight
+	} else {
+		h = m.height - 1 - m.statusHeight() - tabBarHeight
+	}
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// reconcileScroll re-clamps listScroll so the cursor stays visible after the
+// cursor moved or the visible list was rebuilt.
+func (m Model) reconcileScroll() Model {
+	m.listScroll = windowOffset(m.listScroll, m.cursor, m.listViewportHeight(), len(m.visible))
+	return m
+}
+
 func (m Model) renderList(width int) string {
 	if len(m.visible) == 0 {
 		if m.filterExpr != "" && !m.filterInvalid {
@@ -475,8 +525,21 @@ func (m Model) renderList(width int) string {
 		return "(no tasks)"
 	}
 
+	// Window: only render the visible slice of the list.
+	h := m.listViewportHeight()
+	start := m.listScroll
+	if start > len(m.visible) {
+		start = len(m.visible)
+	}
+	end := start + h
+	if end > len(m.visible) {
+		end = len(m.visible)
+	}
+	window := m.visible[start:end]
+
 	var sb strings.Builder
-	for i, row := range m.visible {
+	for i, row := range window {
+		globalIdx := start + i
 		var prefix string
 		if m.styled {
 			var chevron string
@@ -509,7 +572,7 @@ func (m Model) renderList(width int) string {
 		snoozed := taskIsSnoozed(row.node.Task, time.Now().Local())
 
 		var line string
-		if i == m.cursor && m.styled {
+		if globalIdx == m.cursor && m.styled {
 			// Cursor row: render name in plain mode so there are no inner ANSI
 			// reset codes that would clear the cursor background mid-line.
 			// Strikethrough is applied via the lipgloss style instead.
@@ -537,7 +600,7 @@ func (m Model) renderList(width int) string {
 				name += " 💤"
 			}
 			line = prefix + name
-			if i == m.cursor {
+			if globalIdx == m.cursor {
 				line = highlightStyle.Render(padRightAnsi(line, width))
 			} else {
 				line = padRightAnsi(line, width)
