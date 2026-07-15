@@ -510,6 +510,13 @@ func (m Model) listViewportHeight() int {
 	return h
 }
 
+// reconcileScroll re-clamps listScroll so the cursor stays visible after the
+// cursor moved or the visible list was rebuilt.
+func (m Model) reconcileScroll() Model {
+	m.listScroll = windowOffset(m.listScroll, m.cursor, m.listViewportHeight(), len(m.visible))
+	return m
+}
+
 func (m Model) renderList(width int) string {
 	if len(m.visible) == 0 {
 		if m.filterExpr != "" && !m.filterInvalid {

@@ -2622,3 +2622,73 @@ func TestPageDown_AtBottomIsNoOp(t *testing.T) {
 		t.Errorf("PgDn at bottom: cursor want %d, got %d", n-1, m.cursor)
 	}
 }
+
+// buildTallTestModelWithSubtree creates a model with 20 root tasks (ids 1-20)
+// where root id=10 has 10 children (ids 101-110), styled, height=14 → viewport
+// height 10. Used to exercise Collapse/Expand crossing the viewport boundary.
+func buildTallTestModelWithSubtree() Model {
+	tasks := make([]*taskv1.Task, 0, 30)
+	for i := 1; i <= 20; i++ {
+		tasks = append(tasks, &taskv1.Task{Id: int64(i), Name: fmt.Sprintf("task %d", i)})
+	}
+	for i := 0; i < 10; i++ {
+		id := int64(101 + i)
+		tasks = append(tasks, &taskv1.Task{Id: id, Name: fmt.Sprintf("child %d", id), ParentId: ptr64(10)})
+	}
+	tree := cli.BuildTree(tasks)
+	m := ExportNewStyledModel(nil, tree, true)
+	m.height = 14
+	m.width = 80
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.cursor = 0
+	m.listScroll = 0
+	return m
+}
+
+// TestScroll_ExpandReconcilesScroll asserts that expanding a subtree at the
+// bottom edge of the viewport re-clamps listScroll so the cursor (which jumps
+// to the newly-revealed first child) stays visible. Expand early-returns in
+// handleListKey, so it must reconcile explicitly rather than relying on the
+// catch-all at the end of the function.
+func TestScroll_ExpandReconcilesScroll(t *testing.T) {
+	m := buildTallTestModelWithSubtree()
+	h := m.listViewportHeight()
+
+	// Place cursor on root id=10 (index 9), the last visible row in the window.
+	m.cursor = 9
+	m.listScroll = windowOffset(0, 9, h, len(m.visible))
+	assertScrollInvariant(t, m, "before expand")
+
+	m = pressKey(m, "l")
+	if m.visible[m.cursor].node.Task.Id != 101 {
+		t.Fatalf("expected cursor on first child (id=101), got id=%d", m.visible[m.cursor].node.Task.Id)
+	}
+	assertScrollInvariant(t, m, "after expand")
+}
+
+// TestScroll_CollapseReconcilesScroll asserts that collapsing a subtree whose
+// parent has scrolled above the viewport re-clamps listScroll so the cursor
+// (which jumps up to the parent) stays visible. Collapse early-returns in
+// handleListKey, so it must reconcile explicitly rather than relying on the
+// catch-all at the end of the function.
+func TestScroll_CollapseReconcilesScroll(t *testing.T) {
+	m := buildTallTestModelWithSubtree()
+	m.expanded[10] = true
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	h := m.listViewportHeight()
+
+	// Rows: 0-8 = ids 1-9, 9 = id10 (parent), 10-19 = children 101-110, 20-29 = ids 11-20.
+	// Scroll down so the last child leaf is selected and the parent (index 9) is above the window.
+	m.cursor = 19
+	m.listScroll = windowOffset(0, 19, h, len(m.visible))
+	assertScrollInvariant(t, m, "before collapse")
+	if m.listScroll <= 9 {
+		t.Fatalf("setup invalid: expected parent row (9) to be above listScroll, got listScroll=%d", m.listScroll)
+	}
+
+	m = pressKey(m, "h")
+	if m.visible[m.cursor].node.Task.Id != 10 {
+		t.Fatalf("expected cursor on parent (id=10), got id=%d", m.visible[m.cursor].node.Task.Id)
+	}
+	assertScrollInvariant(t, m, "after collapse")
+}
