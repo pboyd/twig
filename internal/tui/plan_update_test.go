@@ -583,6 +583,56 @@ func TestTabSwitch_BlockedWhilePlannerForm(t *testing.T) {
 	}
 }
 
+// TestQuitKeyTypedIntoPlanForm checks that pressing "q" while a planner form
+// is open types the letter into the focused field instead of quitting the app
+// (regression test: handlePlanningKey used to check Quit before routing to
+// the open modal/form).
+func TestQuitKeyTypedIntoPlanForm(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.initAddEventForm()
+
+	m2, _ := pressKeyStr(m, "q")
+
+	if m2.plan.mode != planEventForm {
+		t.Errorf("'q' in an open plan form should not change mode, got %d", m2.plan.mode)
+	}
+	if got := m2.plan.form.fields[0].Value(); got != "q" {
+		t.Errorf("'q' should be typed into the focused field, got %q", got)
+	}
+}
+
+// TestQuitKeyBlockedInPlanPicker checks that "q" while the task picker is
+// open does not quit the app.
+func TestQuitKeyBlockedInPlanPicker(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planPickTask
+
+	m2, cmd := pressKeyStr(m, "q")
+
+	if cmd != nil {
+		t.Error("'q' while the task picker is open should not produce a quit command")
+	}
+	if m2.plan.mode != planPickTask {
+		t.Errorf("'q' while the task picker is open should not change mode, got %d", m2.plan.mode)
+	}
+}
+
+// TestQuitKeyStillQuitsFromPlanList checks that "q" still quits normally when
+// no planner form or picker is open, guarding against over-broad blocking.
+func TestQuitKeyStillQuitsFromPlanList(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.mode = planList
+
+	_, cmd := pressKeyStr(m, "q")
+
+	if cmd == nil {
+		t.Error("'q' from the plan list should produce a quit command")
+	}
+}
+
 // ── US1: Enter-driven edit form ────────────────────────────────────────────
 
 // TestEdit_FormOpensOnEnter checks that Enter on Planning with an entry selected

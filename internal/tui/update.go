@@ -1730,6 +1730,13 @@ func (m Model) handleGoalEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 
 // handlePlanningKey handles all key events while the Planning tab is active.
 func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// While a modal is open, route to the modal handler before any global
+	// keybinding (including Quit) so typing into a focused field can't leak
+	// into e.g. quitting the app. Tab-switch is ignored while a modal is open.
+	if m.plan.mode != planList {
+		return m.handlePlanModalKey(msg)
+	}
+
 	// Dismiss help overlay — any key closes it, mirroring handleHelpKey.
 	if m.mode == modeHelp {
 		m.mode = modeList
@@ -1754,11 +1761,6 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.saveAndQuitCmd()
-	}
-
-	// While a modal is open, route to the modal handler; tab-switch is ignored.
-	if m.plan.mode != planList {
-		return m.handlePlanModalKey(msg)
 	}
 
 	// Tab → Report; Shift+Tab → Tasks.
