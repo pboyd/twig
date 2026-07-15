@@ -57,6 +57,9 @@ type KeyMap struct {
 	// Report-tab keys
 	ReportPrevPreset key.Binding
 	ReportNextPreset key.Binding
+	// Page navigation (Tasks tab)
+	PageUp   key.Binding
+	PageDown key.Binding
 	// Goals-tab keys
 	GoalNew           key.Binding
 	GoalEdit          key.Binding
@@ -248,6 +251,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("right", "l"),
 			key.WithHelp("→/l", "next period"),
 		),
+		PageUp: key.NewBinding(
+			key.WithKeys("pgup"),
+			key.WithHelp("pgup", "page up"),
+		),
+		PageDown: key.NewBinding(
+			key.WithKeys("pgdown"),
+			key.WithHelp("pgdown", "page down"),
+		),
 		GoalNew: key.NewBinding(
 			key.WithKeys("ctrl+n"),
 			key.WithHelp("ctrl+n", "new goal"),
@@ -344,7 +355,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		}
 	}
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Collapse, k.Expand},
+		{k.Up, k.Down, k.PageUp, k.PageDown, k.Collapse, k.Expand},
 		{k.Edit, k.NewSub, k.NewRoot, k.Delete},
 		{k.Complete, k.PomStart, k.PomCancel, k.Move},
 		{k.RankUp, k.RankDown, k.PlanSendToday, k.PlanSendPickDay},
