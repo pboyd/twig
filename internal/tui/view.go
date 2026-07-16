@@ -649,7 +649,7 @@ func (m Model) renderStatus() string {
 			mm := int(remaining.Minutes())
 			ss := int(remaining.Seconds()) % 60
 			if m.styled {
-				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroDone)
+				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroRunning)
 				lines = append(lines, fmt.Sprintf("%s %02d:%02d still running. Quit anyway? [y]es [n]o", glyphStyle.Render("🍅"), mm, ss))
 			} else {
 				lines = append(lines, fmt.Sprintf("Pom %02d:%02d still running. Quit anyway? [y]es [n]o", mm, ss))
@@ -661,7 +661,7 @@ func (m Model) renderStatus() string {
 			mm := int(remaining.Minutes())
 			ss := int(remaining.Seconds()) % 60
 			if m.styled {
-				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroDone)
+				glyphStyle := lipgloss.NewStyle().Bold(true).Foreground(pomodoroRunning)
 				lines = append(lines, fmt.Sprintf("%s %02d:%02d · %s  [x] cancel", glyphStyle.Render("🍅"), mm, ss, m.pom.taskName))
 			} else {
 				lines = append(lines, fmt.Sprintf("Pom %02d:%02d %s  [x] cancel", mm, ss, m.pom.taskName))

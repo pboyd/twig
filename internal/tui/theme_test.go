@@ -10,16 +10,17 @@ import (
 func TestTheme_PaletteColorsAreNonNil(t *testing.T) {
 	// initPalette is called via TestMain. Verify each exported palette var is set.
 	colors := map[string]color.Color{
-		"accent":       accent,
-		"border":       border,
-		"borderActive": borderActive,
-		"dim":          dim,
-		"completed":    completed,
-		"errorColor":   errorColor,
-		"cursorBar":    cursorBar,
-		"cursorBg":     cursorBg,
-		"pomodoroDone": pomodoroDone,
-		"pomodoroOver": pomodoroOver,
+		"accent":          accent,
+		"border":          border,
+		"borderActive":    borderActive,
+		"dim":             dim,
+		"completed":       completed,
+		"errorColor":      errorColor,
+		"cursorBar":       cursorBar,
+		"cursorBg":        cursorBg,
+		"pomodoroDone":    pomodoroDone,
+		"pomodoroOver":    pomodoroOver,
+		"pomodoroRunning": pomodoroRunning,
 	}
 	for name, c := range colors {
 		if c == nil {

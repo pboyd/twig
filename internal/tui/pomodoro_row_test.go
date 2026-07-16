@@ -8,9 +8,9 @@ import (
 )
 
 // countPomodoroGlyphs counts the total number of pomodoro row glyphs
-// (done ●, remaining ○, over ◆) in s, regardless of state.
+// (done/over ●, remaining ○) in s, regardless of state.
 func countPomodoroGlyphs(s string) int {
-	return strings.Count(s, "●") + strings.Count(s, "○") + strings.Count(s, "◆")
+	return strings.Count(s, "●") + strings.Count(s, "○")
 }
 
 func TestRenderPomodoroRow(t *testing.T) {
@@ -20,18 +20,18 @@ func TestRenderPomodoroRow(t *testing.T) {
 		completed  int
 		styled     bool
 		wantEmpty  bool
-		wantN      int // total glyph count (● ○ ◆ each count as 1)
-		wantRed    int // bold-red (pomodoroDone) segments
+		wantN      int // total glyph count (● ○ each count as 1)
+		wantGreen  int // bold-green (pomodoroDone) segments
 		wantDim    int // dim segments
 		wantYellow int // bold-yellow (pomodoroOver) segments
 	}{
 		{name: "empty state", estimate: 0, completed: 0, styled: true, wantEmpty: true},
-		{name: "5/0 all dim", estimate: 5, completed: 0, styled: true, wantN: 5, wantRed: 0, wantDim: 5, wantYellow: 0},
-		{name: "5/2 mixed", estimate: 5, completed: 2, styled: true, wantN: 5, wantRed: 2, wantDim: 3, wantYellow: 0},
-		{name: "5/5 all done", estimate: 5, completed: 5, styled: true, wantN: 5, wantRed: 5, wantDim: 0, wantYellow: 0},
-		{name: "5/6 over", estimate: 5, completed: 6, styled: true, wantN: 6, wantRed: 5, wantDim: 0, wantYellow: 1},
-		{name: "3/1 mixed", estimate: 3, completed: 1, styled: true, wantN: 3, wantRed: 1, wantDim: 2, wantYellow: 0},
-		{name: "0/2 all over", estimate: 0, completed: 2, styled: true, wantN: 2, wantRed: 0, wantDim: 0, wantYellow: 2},
+		{name: "5/0 all dim", estimate: 5, completed: 0, styled: true, wantN: 5, wantGreen: 0, wantDim: 5, wantYellow: 0},
+		{name: "5/2 mixed", estimate: 5, completed: 2, styled: true, wantN: 5, wantGreen: 2, wantDim: 3, wantYellow: 0},
+		{name: "5/5 all done", estimate: 5, completed: 5, styled: true, wantN: 5, wantGreen: 5, wantDim: 0, wantYellow: 0},
+		{name: "5/6 over", estimate: 5, completed: 6, styled: true, wantN: 6, wantGreen: 5, wantDim: 0, wantYellow: 1},
+		{name: "3/1 mixed", estimate: 3, completed: 1, styled: true, wantN: 3, wantGreen: 1, wantDim: 2, wantYellow: 0},
+		{name: "0/2 all over", estimate: 0, completed: 2, styled: true, wantN: 2, wantGreen: 0, wantDim: 0, wantYellow: 2},
 		{name: "plain mode", estimate: 5, completed: 2, styled: false, wantN: 5},
 	}
 
@@ -41,7 +41,7 @@ func TestRenderPomodoroRow(t *testing.T) {
 
 	doneRendered := doneStyle.Render("●")
 	dimRendered := dimStyle.Render("○")
-	overRendered := overStyle.Render("◆")
+	overRendered := overStyle.Render("●")
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,12 +73,12 @@ func TestRenderPomodoroRow(t *testing.T) {
 			}
 
 			// Count styled segments by counting occurrences of each styled glyph.
-			gotRed := strings.Count(got, doneRendered)
+			gotGreen := strings.Count(got, doneRendered)
 			gotDim := strings.Count(got, dimRendered)
 			gotYellow := strings.Count(got, overRendered)
 
-			if gotRed != tc.wantRed {
-				t.Errorf("red segments: got %d, want %d", gotRed, tc.wantRed)
+			if gotGreen != tc.wantGreen {
+				t.Errorf("green segments: got %d, want %d", gotGreen, tc.wantGreen)
 			}
 			if gotDim != tc.wantDim {
 				t.Errorf("dim segments: got %d, want %d", gotDim, tc.wantDim)

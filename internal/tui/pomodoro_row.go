@@ -10,15 +10,15 @@ import (
 // the Geometric Shapes block are used instead of emoji so that all terminal
 // emulators draw them from the text font and respect ANSI color/bold styling.
 const (
-	glyphDone   = "●" // completed within estimate   (bold red)
+	glyphDone   = "●" // completed within estimate   (bold green)
 	glyphRemain = "○" // estimated but not yet done   (dim)
-	glyphOver   = "◆" // completed beyond estimate    (bold yellow)
+	glyphOver   = "●" // completed beyond estimate    (bold yellow)
 )
 
 // renderPomodoroRow renders a row of progress glyphs representing pomodoro
-// progress: ● done, ○ remaining, ◆ over-estimate.
+// progress: ● done, ○ remaining, ● over-estimate.
 // estimate == 0 && completed == 0 returns "" (caller omits the line entirely).
-// When styled, segments are colored: bold-red (done), dim (remaining), bold-yellow (over).
+// When styled, segments are colored: bold-green (done), dim (remaining), bold-yellow (over).
 // When not styled, emits plain glyphs with no ANSI codes; distinct shapes make
 // state readable even without color.
 func renderPomodoroRow(estimate, completed int, styled bool) string {

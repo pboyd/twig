@@ -458,7 +458,7 @@ func TestRenderStatus_FooterAndError(t *testing.T) {
 }
 
 // TestRenderStatus_ActivePomodoroGlyph (T017) asserts the leading 🍅 on the active-pomodoro
-// status line carries pomodoroDone bold styling when styled==true, and the plain fallback
+// status line carries pomodoroRunning bold styling when styled==true, and the plain fallback
 // is unchanged (no ANSI codes).
 func TestRenderStatus_ActivePomodoroGlyph(t *testing.T) {
 	m := ExportNewStyledModel(nil, nil, true)
@@ -469,7 +469,7 @@ func TestRenderStatus_ActivePomodoroGlyph(t *testing.T) {
 
 	status := m.renderStatus()
 
-	// Styled mode: 🍅 must appear with ANSI codes (the pomodoroDone+bold style).
+	// Styled mode: 🍅 must appear with ANSI codes (the pomodoroRunning+bold style).
 	if !strings.Contains(status, "🍅") {
 		t.Errorf("styled active-pom status: expected 🍅; got %q", status)
 	}
