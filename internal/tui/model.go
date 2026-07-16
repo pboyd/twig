@@ -196,6 +196,7 @@ type Model struct {
 	filterInvalid bool            // true when the current expression is invalid
 	filterGen     int             // generation counter to discard stale FilterTasks responses
 	filteredIDs   map[int64]bool  // set of task IDs in filterMatches for O(1) lookup
+	filterFocus   filterFocus     // where to put the cursor when the pending result lands
 }
 
 func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {

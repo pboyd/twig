@@ -2403,3 +2403,47 @@ func TestPlanReorder_BoundaryNoop(t *testing.T) {
 }
 
 func pint32F(v int32) *int32 { return &v }
+
+// ── T006: Plan-tab ctrl+t regression guard (FR-008) ────────────────────────
+
+// TestPlanTab_CtrlTStillJumpsToTask verifies that ctrl+t on the Plan tab still
+// jumps to the Tasks tab with the cursor on the selected entry's task and NO
+// filter applied. This is the shared-key regression check for FR-008.
+func TestPlanTab_CtrlTStillJumpsToTask(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Task entry", TaskId: 42},
+	}
+	// Set up a tree with the task so the visible list is non-empty after jump.
+	tree := []*cli.TreeNode{{Task: &taskv1.Task{Id: 42, Name: "task"}}}
+	m.tree = tree
+	m.visible = buildVisible(tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	m2 := next.(Model)
+
+	// Should jump to Tasks tab.
+	if m2.activeTab != tabTasks {
+		t.Errorf("activeTab: want tabTasks (%d), got %d", int(tabTasks), int(m2.activeTab))
+	}
+
+	// Should NOT apply any filter.
+	if m2.filterExpr != "" {
+		t.Errorf("filterExpr should be empty (no filter on Plan ctrl+t), got %q", m2.filterExpr)
+	}
+	if ExportFilterInputValue(m2) != "" {
+		t.Errorf("filterInput should be empty, got %q", ExportFilterInputValue(m2))
+	}
+
+	// Should position cursor on the task.
+	if m2.cursor < 0 || m2.cursor >= len(m2.visible) {
+		t.Errorf("cursor %d is out of range for %d visible rows", m2.cursor, len(m2.visible))
+	}
+
+	// Should return nil command (no filter dispatch).
+	if cmd != nil {
+		t.Error("expected nil command (no filter dispatch)")
+	}
+}

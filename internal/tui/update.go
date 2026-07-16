@@ -116,10 +116,24 @@ type goalStatusMutationMsg struct {
 
 // filterResultMsg carries the result of a FilterTasks RPC.
 type filterResultMsg struct {
-	gen int     // generation counter to discard stale responses
-	ids []int64 // matched task IDs (nil on error)
-	err error   // parse/validation error
+	gen  int     // generation counter to discard stale responses
+	expr string  // the expression this result was dispatched for
+	ids  []int64 // matched task IDs (nil on error)
+	err  error   // parse/validation error
 }
+
+// filterFocus says where the cursor should land when a filter result arrives.
+type filterFocus int
+
+const (
+	// filterKeepCursor clamps the existing cursor. Used when the user is
+	// refining or re-firing a filter and expects to stay where they were.
+	filterKeepCursor filterFocus = iota
+	// filterFirstMatch moves the cursor to the first row that actually matched.
+	// Used when a jump brings the user to the Tasks tab and the old cursor
+	// index means nothing.
+	filterFirstMatch
+)
 
 // ── command factories ───────────────────────────────────────────────────────
 
@@ -151,9 +165,25 @@ func (m Model) clearFilter() Model {
 	m.filterMatches = nil
 	m.filteredIDs = nil
 	m.filterInvalid = false
+	m.filterGen++ // cancel: discard any response already in flight
 	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
 	m.cursor = clampCursor(m.cursor, len(m.visible))
 	return m
+}
+
+// applyFilter records expr as the pending filter and dispatches it to the
+// server. Bumping filterGen both invalidates any response already in flight and
+// keeps the counter in step with clearFilter, which uses the same bump to
+// cancel. The expression is not committed to filterExpr here — that happens in
+// handleFilterResult when the result actually lands, so filterExpr always
+// describes the rows currently on screen. Callers own m.mode.
+func (m Model) applyFilter(expr string, focus filterFocus) (Model, tea.Cmd) {
+	m.filterGen++
+	m.filterFocus = focus
+	m.filterInput.SetValue(expr)
+	m.filterInput.Blur()
+	m.filterInvalid = false
+	return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
 }
 
 // handleFilterKey handles key events while the filter bar is active.
@@ -167,9 +197,8 @@ func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if expr == "" {
 			return m.clearFilter(), nil
 		}
-		m.filterGen++
-		m.filterInput.Blur()
-		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+		m2, cmd := m.applyFilter(expr, filterKeepCursor)
+		return m2, cmd
 
 	default:
 		// Any other key just edits the input; the expression is only
@@ -197,7 +226,7 @@ func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
 
 	m.filterInvalid = false
 	m.filterMatches = msg.ids
-	m.filterExpr = m.filterInput.Value()
+	m.filterExpr = msg.expr
 	m.err = nil
 
 	// Build the set for O(1) lookup.
@@ -208,12 +237,28 @@ func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
 
 	// Rebuild visible list in filter mode.
 	m.visible = buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault(), m.filteredIDs)
-	m.cursor = clampCursor(m.cursor, len(m.visible))
+	if m.filterFocus == filterFirstMatch {
+		m.cursor = firstMatchingRow(m.visible, m.filteredIDs)
+	} else {
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+	}
 	// Re-clamp scroll offset after the filtered list is rebuilt.
 	m = m.reconcileScroll()
 
 	m.mode = modeList
 	return m, nil
+}
+
+// firstMatchingRow returns the index of the first row whose task is in matched.
+// buildVisibleFiltered also emits non-matching ancestors as scaffold, so row 0
+// is not necessarily part of the match set. Returns 0 when nothing matched.
+func firstMatchingRow(rows []*visibleRow, matched map[int64]bool) int {
+	for i, row := range rows {
+		if matched[row.node.Task.Id] {
+			return i
+		}
+	}
+	return 0
 }
 
 // saveAndQuitCmd saves the tree state synchronously and then signals bubbletea
@@ -669,11 +714,11 @@ func filterCmd(client taskv1connect.TaskServiceClient, expr string, showAll bool
 		if err != nil {
 			var ce *connect.Error
 			if errors.As(err, &ce) && ce.Code() == connect.CodeInvalidArgument {
-				return filterResultMsg{gen: gen, err: ce}
+				return filterResultMsg{gen: gen, expr: expr, err: ce}
 			}
-			return filterResultMsg{gen: gen, err: err}
+			return filterResultMsg{gen: gen, expr: expr, err: err}
 		}
-		return filterResultMsg{gen: gen, ids: resp.Msg.TaskIds}
+		return filterResultMsg{gen: gen, expr: expr, ids: resp.Msg.TaskIds}
 	}
 }
 
@@ -802,8 +847,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.reconcileScroll()
 		// Re-fire filter after mutation so results stay consistent.
 		if m.filterExpr != "" {
-			m.filterGen++
-			return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
+			m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+			return m2, cmd
 		}
 		return m, nil
 
@@ -1445,6 +1490,22 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeNewRoot
 			m.goal.err = nil
 		}
+
+	case key.Matches(msg, m.keys.GoalGoToTasks):
+		// ctrl+t: jump to Tasks filtered to this goal's whole tree.
+		if len(visible) == 0 || m.goal.cursor >= len(visible) {
+			return m, nil // FR-006: no goal under cursor, do nothing
+		}
+		g := visible[m.goal.cursor]
+
+		m.activeTab = tabTasks  // FR-001
+		m.keys.GoalMode = false // help flags follow the tab
+		m.goal.err = nil
+		m.err = nil
+		m.mode = modeList
+
+		m2, cmd := m.applyFilter(fmt.Sprintf("^goal_id=%d", g.Id), filterFirstMatch)
+		return m2, cmd
 
 	case key.Matches(msg, m.keys.GoalLinkTask):
 		// `L`: open task picker; on selection, call SetTaskGoal.
@@ -2356,8 +2417,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor = findCursor(m.visible, curID)
 		// Re-fire the active filter so the filtered view stays consistent.
 		if m.filterExpr != "" {
-			m.filterGen++
-			return m, filterCmd(m.client, m.filterExpr, m.showAll, time.Now(), m.filterGen)
+			m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+			return m2, cmd
 		}
 
 	case key.Matches(msg, m.keys.Filter):
@@ -2542,8 +2603,8 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 	m = m.reconcileScroll()
 	// Re-fire filter after move mutation.
 	if m.filterExpr != "" {
-		m.filterGen++
-		return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
+		m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+		return m2, cmd
 	}
 	return m, nil
 }

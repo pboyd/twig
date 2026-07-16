@@ -772,6 +772,7 @@ type fakeTaskClient struct {
 	lastUpdateReq      *taskv1.UpdateTaskRequest
 	lastCreateReq      *taskv1.CreateTaskRequest
 	lastSetTaskGoalReq *taskv1.SetTaskGoalRequest // last request received by SetTaskGoal
+	lastFilterReq      *taskv1.FilterTasksRequest
 	lastCompleteID     int64
 	lastUncompleteID   int64
 	lastPomTaskID      int64
@@ -781,6 +782,10 @@ type fakeTaskClient struct {
 	setTaskGoalErr     error // if non-nil, SetTaskGoal returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
+	// filterIDs, if non-nil, is returned by FilterTasks; otherwise empty list.
+	filterIDs []int64
+	// filterErr, if non-nil, is returned by FilterTasks.
+	filterErr error
 	// createTaskID is the ID returned for the newly created task.
 	createTaskID int64
 }
@@ -838,6 +843,14 @@ func (f *fakeTaskClient) SetTaskGoal(_ context.Context, req *connect.Request[tas
 		return nil, f.setTaskGoalErr
 	}
 	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: &taskv1.Task{Id: req.Msg.TaskId}}), nil
+}
+
+func (f *fakeTaskClient) FilterTasks(_ context.Context, req *connect.Request[taskv1.FilterTasksRequest]) (*connect.Response[taskv1.FilterTasksResponse], error) {
+	f.lastFilterReq = req.Msg
+	if f.filterErr != nil {
+		return nil, f.filterErr
+	}
+	return connect.NewResponse(&taskv1.FilterTasksResponse{TaskIds: f.filterIDs}), nil
 }
 
 // ── T002: planning-tab complete action (US1) ──────────────────────────────────
@@ -2418,6 +2431,56 @@ func TestFilter_ToggleAllReFiresFilter(t *testing.T) {
 	m = pressKey(m, "c")
 	if m.filterGen <= oldGen {
 		t.Errorf("ToggleAll should increment filterGen when filter is active")
+	}
+}
+
+// TestFilter_ResultRecordsDispatchedExpr verifies a filter result records the
+// expression it was dispatched for, not whatever the input happens to hold when
+// it lands. Regression test: a failed ctrl+t jump leaves the input holding the
+// goal expression while the previous filter is still the active one, and the
+// next re-fire would otherwise label the old filter's results with the goal's.
+func TestFilter_ResultRecordsDispatchedExpr(t *testing.T) {
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+
+	// The input holds a different expression than the one in flight — the exact
+	// state a failed goal jump leaves behind.
+	m.filterInput.SetValue("^goal_id=7")
+
+	updated, _ := m.Update(filterResultMsg{gen: m.filterGen, expr: "name: a", ids: []int64{1}})
+	m2 := updated.(Model)
+
+	if got := ExportFilterExpr(m2); got != "name: a" {
+		t.Errorf("filterExpr: want %q (the dispatched expr), got %q", "name: a", got)
+	}
+}
+
+// TestFilter_ToggleAllUsesInjectedClock verifies the showAll toggle re-fires the
+// filter using the model's injected time source. FilterTasks resolves relative
+// date terms against Today, so a hardcoded time.Now() here would silently ignore
+// the test clock and evaluate the filter against a different day.
+func TestFilter_ToggleAllUsesInjectedClock(t *testing.T) {
+	fc := &fakeTaskClient{filterIDs: []int64{1}}
+	m := buildTestModel()
+	m.client = fc
+	ExportSetFilterState(&m, "name: a", []int64{1})
+
+	fixed := time.Date(2020, 3, 4, 12, 0, 0, 0, time.Local)
+	m.nowFunc = func() time.Time { return fixed }
+
+	m2 := pressKey(m, "c") // ToggleAll
+	// pressKey drops the command; re-dispatch through Update to capture it.
+	_, cmd := m2.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	if cmd == nil {
+		t.Fatal("expected a filter re-fire command")
+	}
+	cmd()
+
+	if fc.lastFilterReq == nil {
+		t.Fatal("FilterTasks was not called")
+	}
+	if got := fc.lastFilterReq.Today; got != "2020-03-04" {
+		t.Errorf("FilterTasks.Today: want %q (injected clock), got %q", "2020-03-04", got)
 	}
 }
 
