@@ -1446,6 +1446,26 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.goal.err = nil
 		}
 
+	case key.Matches(msg, m.keys.GoalGoToTasks):
+		// ctrl+t: jump to Tasks filtered to this goal's whole tree.
+		if len(visible) == 0 || m.goal.cursor >= len(visible) {
+			return m, nil // FR-006: no goal under cursor, do nothing
+		}
+		g := visible[m.goal.cursor]
+		expr := fmt.Sprintf("^goal_id=%d", g.Id)
+
+		m.activeTab = tabTasks  // FR-001
+		m.keys.GoalMode = false // help flags follow the tab
+		m.goal.err = nil
+		m.err = nil
+
+		m.filterInput.SetValue(expr) // FR-003/FR-004 — MUST precede dispatch
+		m.filterInput.Blur()         // focus belongs to the list, not the input
+		m.mode = modeList
+		m.filterInvalid = false
+		m.filterGen++ // invalidate any in-flight filter response
+		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+
 	case key.Matches(msg, m.keys.GoalLinkTask):
 		// `L`: open task picker; on selection, call SetTaskGoal.
 		if len(visible) > 0 {

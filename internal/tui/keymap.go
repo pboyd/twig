@@ -74,6 +74,7 @@ type KeyMap struct {
 	GoalAddStatus     key.Binding // `S`: quick-add status update
 	GoalStatusEdit    key.Binding // `e`: edit selected update (history view)
 	GoalStatusDelete  key.Binding // `d`: delete selected update (history view)
+	GoalGoToTasks     key.Binding // `ctrl+t`: jump to Tasks filtered to this goal
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -311,6 +312,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("d"),
 			key.WithHelp("d", "delete update"),
 		),
+		GoalGoToTasks: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "show goal's tasks"),
+		),
 	}
 }
 
@@ -336,6 +341,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 			{k.GoalDelete, k.GoalRankUp, k.GoalRankDown},
 			{k.GoalAddTask, k.GoalLinkTask, k.GoalUnlinkTask, k.GoalToggleAll},
 			{k.GoalStatusHistory, k.GoalAddStatus, k.GoalStatusEdit, k.GoalStatusDelete},
+			{k.GoalGoToTasks},
 			{k.Help, k.Quit},
 		}
 	}

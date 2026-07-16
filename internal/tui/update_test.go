@@ -772,6 +772,7 @@ type fakeTaskClient struct {
 	lastUpdateReq      *taskv1.UpdateTaskRequest
 	lastCreateReq      *taskv1.CreateTaskRequest
 	lastSetTaskGoalReq *taskv1.SetTaskGoalRequest // last request received by SetTaskGoal
+	lastFilterReq      *taskv1.FilterTasksRequest
 	lastCompleteID     int64
 	lastUncompleteID   int64
 	lastPomTaskID      int64
@@ -781,7 +782,10 @@ type fakeTaskClient struct {
 	setTaskGoalErr     error // if non-nil, SetTaskGoal returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
-	// createTaskID is the ID returned for the newly created task.
+	// filterIDs, if non-nil, is returned by FilterTasks; otherwise empty list.
+	filterIDs []int64
+	// filterErr, if non-nil, is returned by FilterTasks.
+	filterErr    error
 	createTaskID int64
 }
 
@@ -838,6 +842,14 @@ func (f *fakeTaskClient) SetTaskGoal(_ context.Context, req *connect.Request[tas
 		return nil, f.setTaskGoalErr
 	}
 	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: &taskv1.Task{Id: req.Msg.TaskId}}), nil
+}
+
+func (f *fakeTaskClient) FilterTasks(_ context.Context, req *connect.Request[taskv1.FilterTasksRequest]) (*connect.Response[taskv1.FilterTasksResponse], error) {
+	f.lastFilterReq = req.Msg
+	if f.filterErr != nil {
+		return nil, f.filterErr
+	}
+	return connect.NewResponse(&taskv1.FilterTasksResponse{TaskIds: f.filterIDs}), nil
 }
 
 // ── T002: planning-tab complete action (US1) ──────────────────────────────────

@@ -346,3 +346,30 @@ func ExportFilterExpr(m Model) string {
 func ExportFilterMatches(m Model) []int64 {
 	return m.filterMatches
 }
+
+// ExportFilterInputValue returns the current filter input widget value.
+func ExportFilterInputValue(m Model) string {
+	return m.filterInput.Value()
+}
+
+// ExportSetGoalMode sets the goal sub-mode for tests.
+func ExportSetGoalMode(m *Model, mode int) {
+	m.goal.mode = goalViewMode(mode)
+}
+
+// ExportGoalModeEdit is the goalEdit constant for tests.
+const ExportGoalModeEdit = int(goalEdit)
+
+// ExportGoalModePickLink is the goalPickLink constant for tests.
+const ExportGoalModePickLink = int(goalPickLink)
+
+// ExportSetShowAll sets the Tasks-tab showAll state for tests.
+func ExportSetShowAll(m *Model, v bool) {
+	m.showAll = v
+}
+
+// ExportModeList is the modeList constant for tests.
+const ExportModeList = int(modeList)
+
+// ExportModeFilter is the modeFilter constant for tests.
+const ExportModeFilter = int(modeFilter)
