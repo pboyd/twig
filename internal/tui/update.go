@@ -237,12 +237,28 @@ func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
 
 	// Rebuild visible list in filter mode.
 	m.visible = buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault(), m.filteredIDs)
-	m.cursor = clampCursor(m.cursor, len(m.visible))
+	if m.filterFocus == filterFirstMatch {
+		m.cursor = firstMatchingRow(m.visible, m.filteredIDs)
+	} else {
+		m.cursor = clampCursor(m.cursor, len(m.visible))
+	}
 	// Re-clamp scroll offset after the filtered list is rebuilt.
 	m = m.reconcileScroll()
 
 	m.mode = modeList
 	return m, nil
+}
+
+// firstMatchingRow returns the index of the first row whose task is in matched.
+// buildVisibleFiltered also emits non-matching ancestors as scaffold, so row 0
+// is not necessarily part of the match set. Returns 0 when nothing matched.
+func firstMatchingRow(rows []*visibleRow, matched map[int64]bool) int {
+	for i, row := range rows {
+		if matched[row.node.Task.Id] {
+			return i
+		}
+	}
+	return 0
 }
 
 // saveAndQuitCmd saves the tree state synchronously and then signals bubbletea

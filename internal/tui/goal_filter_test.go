@@ -477,3 +477,43 @@ func TestGoalFilter_ClearCancelsInFlightResult(t *testing.T) {
 		t.Errorf("visible: want %d unfiltered rows after clear, got %d", len(tree), len(m5.visible))
 	}
 }
+
+// TestGoalFilter_JumpLandsOnFirstMatchingRow verifies the jump puts the cursor
+// on the first task actually in the goal's tree. buildVisibleFiltered pulls
+// non-matching ancestors in as scaffold rows, so a task linked to the goal can
+// sit below a parent that is not — the cursor must skip past that parent.
+func TestGoalFilter_JumpLandsOnFirstMatchingRow(t *testing.T) {
+	// Task 2 is in the goal; its parent (task 1) is not.
+	parentID := int64(1)
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "parent not in goal"},
+		{Id: 2, Name: "child in goal", ParentId: &parentID},
+	}
+	tree := cli.BuildTree(tasks)
+
+	fc := &fakeTaskClient{filterIDs: []int64{2}} // only the child matches
+	goals := []*goalv1.Goal{
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+	}
+	m := ExportNewGoalModel(fc, goals)
+	m.tree = tree
+	m.expanded = map[int64]bool{1: true}
+	m.cursor = 0 // clamping would leave it here, on the scaffold parent
+	m.width = 80
+	m.height = 30
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	m2 := next.(Model)
+	updated, _ := m2.Update(cmd())
+	m3 := updated.(Model)
+
+	if len(m3.visible) != 2 {
+		t.Fatalf("visible: want 2 rows (scaffold parent + matching child), got %d", len(m3.visible))
+	}
+	if m3.cursor != 1 {
+		t.Errorf("cursor: want 1 (the matching child), got %d — landed on the scaffold parent", m3.cursor)
+	}
+	if got := m3.visible[m3.cursor].node.Task.Id; got != 2 {
+		t.Errorf("cursor task: want id 2, got %d", got)
+	}
+}
