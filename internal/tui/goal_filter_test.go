@@ -433,3 +433,47 @@ func TestGoalFilter_ShortHelpDoesNotIncludeShortcut(t *testing.T) {
 		}
 	}
 }
+
+// TestGoalFilter_ClearCancelsInFlightResult verifies that clearing the filter
+// before a ctrl+t jump's response lands discards that response. clearFilter is
+// the cancel side of the filterGen protocol; if it does not bump the counter,
+// the stale response applies to a cleared model and leaves the list filtered
+// with an empty filterExpr — a filter the user cannot see or turn off.
+func TestGoalFilter_ClearCancelsInFlightResult(t *testing.T) {
+	fc := &fakeTaskClient{filterIDs: []int64{10}}
+	goals := []*goalv1.Goal{
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+	}
+	tree := []*cli.TreeNode{
+		{Task: &taskv1.Task{Id: 10, Name: "task a"}},
+		{Task: &taskv1.Task{Id: 20, Name: "task b"}},
+	}
+	m := ExportNewGoalModel(fc, goals)
+	m.tree = tree
+	m.visible = buildVisible(tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.width = 80
+	m.height = 30
+
+	// Jump, holding the command back so the response is still "in flight".
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("setup: expected a filter command from ctrl+t")
+	}
+	m2 := next.(Model)
+
+	// Clear before it lands: `/` to open the bar, `esc` to cancel.
+	n3, _ := m2.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	n4, _ := n3.(Model).Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m4 := n4.(Model)
+
+	// The response arrives after the clear.
+	updated, _ := m4.Update(cmd())
+	m5 := updated.(Model)
+
+	if got := ExportFilterExpr(m5); got != "" {
+		t.Errorf("filterExpr: want empty after clear, got %q", got)
+	}
+	if len(m5.visible) != len(tree) {
+		t.Errorf("visible: want %d unfiltered rows after clear, got %d", len(tree), len(m5.visible))
+	}
+}

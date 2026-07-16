@@ -152,6 +152,7 @@ func (m Model) clearFilter() Model {
 	m.filterMatches = nil
 	m.filteredIDs = nil
 	m.filterInvalid = false
+	m.filterGen++ // cancel: discard any response already in flight
 	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
 	m.cursor = clampCursor(m.cursor, len(m.visible))
 	return m
