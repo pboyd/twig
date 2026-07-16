@@ -363,11 +363,6 @@ const ExportGoalModeEdit = int(goalEdit)
 // ExportGoalModePickLink is the goalPickLink constant for tests.
 const ExportGoalModePickLink = int(goalPickLink)
 
-// ExportSetShowAll sets the Tasks-tab showAll state for tests.
-func ExportSetShowAll(m *Model, v bool) {
-	m.showAll = v
-}
-
 // ExportModeList is the modeList constant for tests.
 const ExportModeList = int(modeList)
 

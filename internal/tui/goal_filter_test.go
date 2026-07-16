@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -126,11 +127,8 @@ func TestGoalFilter_InertInSubModes(t *testing.T) {
 	}
 }
 
-// TestGoalFilter_ShowAllPassthrough verifies that showAll is passed to
-// FilterTasks unmodified in both true and false states (FR-009).
-// Since filterCmd captures the client at creation time, we verify the expression
-// is set correctly (which is what drives the dispatch) and that the command is
-// non-nil. The full dispatch path is covered by TestGoalFilter_JumpAppliesFilter.
+// TestGoalFilter_ShowAllPassthrough verifies the Tasks-tab showAll state is
+// passed to FilterTasks unmodified in both states (FR-009).
 func TestGoalFilter_ShowAllPassthrough(t *testing.T) {
 	for _, showAll := range []bool{false, true} {
 		t.Run(fmt.Sprintf("showAll=%v", showAll), func(t *testing.T) {
@@ -143,19 +141,17 @@ func TestGoalFilter_ShowAllPassthrough(t *testing.T) {
 			m.width = 80
 			m.height = 30
 
-			next, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
-			m2 := next.(Model)
-
-			// The filter expression should be set correctly.
-			want := "^goal_id=3"
-			got := ExportFilterInputValue(m2)
-			if got != want {
-				t.Errorf("filterInput.Value(): want %q, got %q", want, got)
-			}
-
-			// A command should be returned.
+			_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 			if cmd == nil {
 				t.Fatal("expected non-nil command")
+			}
+			cmd() // execute so the fake records the request
+
+			if fc.lastFilterReq == nil {
+				t.Fatal("FilterTasks was not called")
+			}
+			if fc.lastFilterReq.ShowAll != showAll {
+				t.Errorf("FilterTasks.ShowAll: want %v, got %v", showAll, fc.lastFilterReq.ShowAll)
 			}
 		})
 	}
@@ -331,11 +327,6 @@ func TestGoalFilter_ReplacesExistingFilter(t *testing.T) {
 	if gotExpr != want {
 		t.Errorf("filterExpr after result: want %q, got %q", want, gotExpr)
 	}
-
-	// No trace of the prior expression.
-	if ExportFilterExpr(m3) != want {
-		t.Errorf("filterExpr should be only the goal expression, got %q", ExportFilterExpr(m3))
-	}
 }
 
 // TestGoalFilter_ClearFilterRestoresUnfiltered verifies that after a jump,
@@ -405,7 +396,7 @@ func TestGoalFilter_HelpListsShortcut(t *testing.T) {
 	found := false
 	for _, row := range fullHelp {
 		for _, b := range row {
-			if b.Keys() != nil && len(b.Keys()) > 0 && b.Keys()[0] == "ctrl+t" {
+			if keys := b.Keys(); len(keys) > 0 && keys[0] == "ctrl+t" {
 				found = true
 				break
 			}
@@ -428,7 +419,7 @@ func TestGoalFilter_ShortHelpDoesNotIncludeShortcut(t *testing.T) {
 
 	shortHelp := km.ShortHelp()
 	for _, b := range shortHelp {
-		if b.Keys() != nil && len(b.Keys()) > 0 && b.Keys()[0] == "ctrl+t" {
+		if keys := b.Keys(); len(keys) > 0 && keys[0] == "ctrl+t" {
 			t.Error("Goals ShortHelp should NOT contain the ctrl+t binding")
 		}
 	}
@@ -515,5 +506,34 @@ func TestGoalFilter_JumpLandsOnFirstMatchingRow(t *testing.T) {
 	}
 	if got := m3.visible[m3.cursor].node.Task.Id; got != 2 {
 		t.Errorf("cursor task: want id 2, got %d", got)
+	}
+}
+
+// TestGoalFilter_JumpErrorKeepsPriorFilter verifies that when the jump's
+// FilterTasks call fails, the previously active filter stays intact and keeps
+// describing the rows on screen, rather than being relabelled with the goal's
+// expression.
+func TestGoalFilter_JumpErrorKeepsPriorFilter(t *testing.T) {
+	fc := &fakeTaskClient{filterErr: errors.New("boom")}
+	goals := []*goalv1.Goal{
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+	}
+	m := ExportNewGoalModel(fc, goals)
+	m.width = 80
+	m.height = 30
+	ExportSetFilterState(&m, "completed=false", []int64{1, 2})
+	m.filterInput.SetValue("completed=false")
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	m2 := next.(Model)
+	updated, _ := m2.Update(cmd())
+	m3 := updated.(Model)
+
+	if !m3.filterInvalid {
+		t.Error("filterInvalid: want true after a failed filter")
+	}
+	// The prior filter is still the one describing the visible rows.
+	if got := ExportFilterExpr(m3); got != "completed=false" {
+		t.Errorf("filterExpr: want the prior filter %q, got %q", "completed=false", got)
 	}
 }

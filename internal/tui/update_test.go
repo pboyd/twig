@@ -785,7 +785,8 @@ type fakeTaskClient struct {
 	// filterIDs, if non-nil, is returned by FilterTasks; otherwise empty list.
 	filterIDs []int64
 	// filterErr, if non-nil, is returned by FilterTasks.
-	filterErr    error
+	filterErr error
+	// createTaskID is the ID returned for the newly created task.
 	createTaskID int64
 }
 
