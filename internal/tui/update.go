@@ -116,9 +116,10 @@ type goalStatusMutationMsg struct {
 
 // filterResultMsg carries the result of a FilterTasks RPC.
 type filterResultMsg struct {
-	gen int     // generation counter to discard stale responses
-	ids []int64 // matched task IDs (nil on error)
-	err error   // parse/validation error
+	gen  int     // generation counter to discard stale responses
+	expr string  // the expression this result was dispatched for
+	ids  []int64 // matched task IDs (nil on error)
+	err  error   // parse/validation error
 }
 
 // ── command factories ───────────────────────────────────────────────────────
@@ -197,7 +198,7 @@ func (m Model) handleFilterResult(msg filterResultMsg) (tea.Model, tea.Cmd) {
 
 	m.filterInvalid = false
 	m.filterMatches = msg.ids
-	m.filterExpr = m.filterInput.Value()
+	m.filterExpr = msg.expr
 	m.err = nil
 
 	// Build the set for O(1) lookup.
@@ -669,11 +670,11 @@ func filterCmd(client taskv1connect.TaskServiceClient, expr string, showAll bool
 		if err != nil {
 			var ce *connect.Error
 			if errors.As(err, &ce) && ce.Code() == connect.CodeInvalidArgument {
-				return filterResultMsg{gen: gen, err: ce}
+				return filterResultMsg{gen: gen, expr: expr, err: ce}
 			}
-			return filterResultMsg{gen: gen, err: err}
+			return filterResultMsg{gen: gen, expr: expr, err: err}
 		}
-		return filterResultMsg{gen: gen, ids: resp.Msg.TaskIds}
+		return filterResultMsg{gen: gen, expr: expr, ids: resp.Msg.TaskIds}
 	}
 }
 

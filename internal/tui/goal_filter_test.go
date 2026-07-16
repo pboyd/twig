@@ -183,7 +183,7 @@ func TestGoalFilter_ExpressionBareRelational(t *testing.T) {
 	}
 
 	// Verify the filterExpr is also set correctly via handleFilterResult.
-	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, ids: []int64{1}})
+	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, expr: "^goal_id=42", ids: []int64{1}})
 	m3 := updated.(Model)
 	gotExpr := ExportFilterExpr(m3)
 	if gotExpr != want {
@@ -214,7 +214,7 @@ func TestGoalFilter_SecondGoalResolvesCorrectly(t *testing.T) {
 	}
 
 	// Verify via handleFilterResult.
-	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, ids: []int64{5}})
+	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, expr: "^goal_id=20", ids: []int64{5}})
 	m3 := updated.(Model)
 	gotExpr := ExportFilterExpr(m3)
 	if gotExpr != want {
@@ -241,7 +241,7 @@ func TestGoalFilter_FilterExprRecordedAfterResult(t *testing.T) {
 	m2 := next.(Model)
 
 	// Dispatch the filter result.
-	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, ids: []int64{10, 20}})
+	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, expr: "^goal_id=7", ids: []int64{10, 20}})
 	m3 := updated.(Model)
 
 	// P4: filterExpr should be the goal expression.
@@ -277,7 +277,7 @@ func TestGoalFilter_FilterReopenPrefilled(t *testing.T) {
 	m2 := next.(Model)
 
 	// Dispatch filter result.
-	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, ids: []int64{10}})
+	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, expr: "^goal_id=5", ids: []int64{10}})
 	m3 := updated.(Model)
 
 	// Press `/` to reopen the filter.
@@ -324,7 +324,7 @@ func TestGoalFilter_ReplacesExistingFilter(t *testing.T) {
 	}
 
 	// Dispatch filter result and check filterExpr.
-	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, ids: []int64{1, 2}})
+	updated, _ := m2.Update(filterResultMsg{gen: m2.filterGen, expr: "^goal_id=8", ids: []int64{1, 2}})
 	m3 := updated.(Model)
 
 	gotExpr := ExportFilterExpr(m3)

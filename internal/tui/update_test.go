@@ -2433,6 +2433,27 @@ func TestFilter_ToggleAllReFiresFilter(t *testing.T) {
 	}
 }
 
+// TestFilter_ResultRecordsDispatchedExpr verifies a filter result records the
+// expression it was dispatched for, not whatever the input happens to hold when
+// it lands. Regression test: a failed ctrl+t jump leaves the input holding the
+// goal expression while the previous filter is still the active one, and the
+// next re-fire would otherwise label the old filter's results with the goal's.
+func TestFilter_ResultRecordsDispatchedExpr(t *testing.T) {
+	m := buildTestModel()
+	ExportSetFilterState(&m, "name: a", []int64{1})
+
+	// The input holds a different expression than the one in flight — the exact
+	// state a failed goal jump leaves behind.
+	m.filterInput.SetValue("^goal_id=7")
+
+	updated, _ := m.Update(filterResultMsg{gen: m.filterGen, expr: "name: a", ids: []int64{1}})
+	m2 := updated.(Model)
+
+	if got := ExportFilterExpr(m2); got != "name: a" {
+		t.Errorf("filterExpr: want %q (the dispatched expr), got %q", "name: a", got)
+	}
+}
+
 func TestFilter_BuildVisibleFiltered(t *testing.T) {
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "parent"},
