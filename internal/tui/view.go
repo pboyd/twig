@@ -669,6 +669,10 @@ func (m Model) renderStatus() string {
 		}
 	}
 
+	if m.activeTab == tabTasks && m.mode == modeList && m.filterExpr != "" && !m.filterInvalid {
+		lines = append(lines, fmt.Sprintf("filter: %s · esc to clear", m.filterExpr))
+	}
+
 	activeErr := m.err
 	if m.activeTab == tabGoals && m.goal.err != nil {
 		activeErr = m.goal.err

@@ -186,6 +186,16 @@ func (m Model) applyFilter(expr string, focus filterFocus) (Model, tea.Cmd) {
 	return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
 }
 
+// rebuildVisible recomputes the visible row list, honoring an active filter so
+// list navigation and local edits stay within the matched set. With no filter
+// applied it rebuilds the full tree view.
+func (m Model) rebuildVisible() []*visibleRow {
+	if m.filterExpr != "" {
+		return buildVisibleFiltered(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault(), m.filteredIDs)
+	}
+	return buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, m.nowOrDefault())
+}
+
 // handleFilterKey handles key events while the filter bar is active.
 func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -1946,6 +1956,11 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.PlanningMode = false
 		m.plan.err = nil
 		m.plan.pendingComplete = nil
+		m.filterExpr = ""
+		m.filterMatches = nil
+		m.filteredIDs = nil
+		m.filterInvalid = false
+		m.filterGen++
 		m.ensureVisible(entry.TaskId)
 		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 		m.cursor = findCursor(m.visible, entry.TaskId)
@@ -2212,9 +2227,14 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case key.Matches(msg, m.keys.Cancel):
+		if m.filterExpr != "" || m.filterInvalid {
+			return m.clearFilter(), nil
+		}
+
 	case key.Matches(msg, m.keys.Up):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+		m.visible = m.rebuildVisible()
 		if m.cursor > 0 {
 			m.cursor--
 		}
@@ -2226,7 +2246,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			targetID = m.visible[m.cursor+1].node.Task.Id
 		}
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+		m.visible = m.rebuildVisible()
 		if targetID != 0 {
 			m.cursor = findCursor(m.visible, targetID)
 		} else {
@@ -2235,12 +2255,12 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.First):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+		m.visible = m.rebuildVisible()
 		m.cursor = clampCursor(0, len(m.visible))
 
 	case key.Matches(msg, m.keys.Last):
 		m.pendingComplete = nil
-		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+		m.visible = m.rebuildVisible()
 		m.cursor = clampCursor(len(m.visible)-1, len(m.visible))
 
 	case key.Matches(msg, m.keys.PageUp):
@@ -2256,7 +2276,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor = clampCursor(m.cursor, len(m.visible))
 
 	case key.Matches(msg, m.keys.Collapse):
-		if len(m.visible) > 0 {
+		if len(m.visible) > 0 && m.filterExpr == "" {
 			row := m.visible[m.cursor]
 			id := row.node.Task.Id
 			if len(row.node.Children) > 0 && m.expanded[id] {
@@ -2266,21 +2286,21 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				// Task is a leaf or already collapsed — collapse the parent and
 				// move the cursor up to it.
 				m.expanded[parent.Task.Id] = false
-				m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+				m.visible = m.rebuildVisible()
 				m.cursor = findCursor(m.visible, parent.Task.Id)
 				m = m.reconcileScroll()
 				return m, m.persistTreeStateCmd()
 			}
-			m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+			m.visible = m.rebuildVisible()
 			m = m.reconcileScroll()
 			return m, m.persistTreeStateCmd()
 		}
 
 	case key.Matches(msg, m.keys.Expand):
-		if len(m.visible) > 0 {
+		if len(m.visible) > 0 && m.filterExpr == "" {
 			id := m.visible[m.cursor].node.Task.Id
 			m.expanded[id] = true
-			m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+			m.visible = m.rebuildVisible()
 			// Move to first child if it is visible immediately after the cursor.
 			// Works whether the subtree was just expanded or was already open.
 			if next := m.cursor + 1; next < len(m.visible) {
@@ -2625,7 +2645,7 @@ func (m Model) handleReorderResult(msg reorderResultMsg) (Model, tea.Cmd) {
 	}
 	m.tree = cli.BuildTree(flattenTree(m.tree))
 	m.err = nil
-	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.visible = m.rebuildVisible()
 	m.cursor = findCursor(m.visible, msg.taskID)
 	// Re-clamp scroll offset after the list is rebuilt.
 	m = m.reconcileScroll()
