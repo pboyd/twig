@@ -122,6 +122,19 @@ type filterResultMsg struct {
 	err  error   // parse/validation error
 }
 
+// filterFocus says where the cursor should land when a filter result arrives.
+type filterFocus int
+
+const (
+	// filterKeepCursor clamps the existing cursor. Used when the user is
+	// refining or re-firing a filter and expects to stay where they were.
+	filterKeepCursor filterFocus = iota
+	// filterFirstMatch moves the cursor to the first row that actually matched.
+	// Used when a jump brings the user to the Tasks tab and the old cursor
+	// index means nothing.
+	filterFirstMatch
+)
+
 // ── command factories ───────────────────────────────────────────────────────
 
 // persistTreeStateCmd snapshots the current expanded set and saves it
@@ -158,6 +171,21 @@ func (m Model) clearFilter() Model {
 	return m
 }
 
+// applyFilter records expr as the pending filter and dispatches it to the
+// server. Bumping filterGen both invalidates any response already in flight and
+// keeps the counter in step with clearFilter, which uses the same bump to
+// cancel. The expression is not committed to filterExpr here — that happens in
+// handleFilterResult when the result actually lands, so filterExpr always
+// describes the rows currently on screen. Callers own m.mode.
+func (m Model) applyFilter(expr string, focus filterFocus) (Model, tea.Cmd) {
+	m.filterGen++
+	m.filterFocus = focus
+	m.filterInput.SetValue(expr)
+	m.filterInput.Blur()
+	m.filterInvalid = false
+	return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+}
+
 // handleFilterKey handles key events while the filter bar is active.
 func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -169,9 +197,8 @@ func (m Model) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if expr == "" {
 			return m.clearFilter(), nil
 		}
-		m.filterGen++
-		m.filterInput.Blur()
-		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+		m2, cmd := m.applyFilter(expr, filterKeepCursor)
+		return m2, cmd
 
 	default:
 		// Any other key just edits the input; the expression is only
@@ -804,8 +831,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.reconcileScroll()
 		// Re-fire filter after mutation so results stay consistent.
 		if m.filterExpr != "" {
-			m.filterGen++
-			return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
+			m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+			return m2, cmd
 		}
 		return m, nil
 
@@ -1454,19 +1481,15 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil // FR-006: no goal under cursor, do nothing
 		}
 		g := visible[m.goal.cursor]
-		expr := fmt.Sprintf("^goal_id=%d", g.Id)
 
 		m.activeTab = tabTasks  // FR-001
 		m.keys.GoalMode = false // help flags follow the tab
 		m.goal.err = nil
 		m.err = nil
-
-		m.filterInput.SetValue(expr) // FR-003/FR-004 — MUST precede dispatch
-		m.filterInput.Blur()         // focus belongs to the list, not the input
 		m.mode = modeList
-		m.filterInvalid = false
-		m.filterGen++ // invalidate any in-flight filter response
-		return m, filterCmd(m.client, expr, m.showAll, m.nowOrDefault(), m.filterGen)
+
+		m2, cmd := m.applyFilter(fmt.Sprintf("^goal_id=%d", g.Id), filterFirstMatch)
+		return m2, cmd
 
 	case key.Matches(msg, m.keys.GoalLinkTask):
 		// `L`: open task picker; on selection, call SetTaskGoal.
@@ -2378,8 +2401,8 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor = findCursor(m.visible, curID)
 		// Re-fire the active filter so the filtered view stays consistent.
 		if m.filterExpr != "" {
-			m.filterGen++
-			return m, filterCmd(m.client, m.filterExpr, m.showAll, time.Now(), m.filterGen)
+			m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+			return m2, cmd
 		}
 
 	case key.Matches(msg, m.keys.Filter):
@@ -2564,8 +2587,8 @@ func (m Model) handleMoveTaskResult(msg moveTaskResultMsg) (tea.Model, tea.Cmd) 
 	m = m.reconcileScroll()
 	// Re-fire filter after move mutation.
 	if m.filterExpr != "" {
-		m.filterGen++
-		return m, filterCmd(m.client, m.filterExpr, m.showAll, m.nowOrDefault(), m.filterGen)
+		m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
+		return m2, cmd
 	}
 	return m, nil
 }

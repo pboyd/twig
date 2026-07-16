@@ -2454,6 +2454,35 @@ func TestFilter_ResultRecordsDispatchedExpr(t *testing.T) {
 	}
 }
 
+// TestFilter_ToggleAllUsesInjectedClock verifies the showAll toggle re-fires the
+// filter using the model's injected time source. FilterTasks resolves relative
+// date terms against Today, so a hardcoded time.Now() here would silently ignore
+// the test clock and evaluate the filter against a different day.
+func TestFilter_ToggleAllUsesInjectedClock(t *testing.T) {
+	fc := &fakeTaskClient{filterIDs: []int64{1}}
+	m := buildTestModel()
+	m.client = fc
+	ExportSetFilterState(&m, "name: a", []int64{1})
+
+	fixed := time.Date(2020, 3, 4, 12, 0, 0, 0, time.Local)
+	m.nowFunc = func() time.Time { return fixed }
+
+	m2 := pressKey(m, "c") // ToggleAll
+	// pressKey drops the command; re-dispatch through Update to capture it.
+	_, cmd := m2.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	if cmd == nil {
+		t.Fatal("expected a filter re-fire command")
+	}
+	cmd()
+
+	if fc.lastFilterReq == nil {
+		t.Fatal("FilterTasks was not called")
+	}
+	if got := fc.lastFilterReq.Today; got != "2020-03-04" {
+		t.Errorf("FilterTasks.Today: want %q (injected clock), got %q", "2020-03-04", got)
+	}
+}
+
 func TestFilter_BuildVisibleFiltered(t *testing.T) {
 	tasks := []*taskv1.Task{
 		{Id: 1, Name: "parent"},
