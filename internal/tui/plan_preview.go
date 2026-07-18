@@ -102,8 +102,9 @@ func (m Model) buildPlanPreview() *planv1.PlanEntry {
 // planPreviewConflicts returns the set of 15-min slot-start minutes (multiples
 // of 15) where the given preview overlaps any entry in others.
 //
-// Uses half-open intervals: slot [t, t+15) conflicts with entry [s, s+d) iff
-// t < s+d && s < t+15. Touching boundaries do not conflict.
+// Compares exact intervals: a conflict exists only when two exact intervals
+// overlap by at least one minute. Touching boundaries do not conflict.
+// Marked slots are limited to those spanning the overlap region.
 //
 // others MUST already exclude the edit target (self-exclusion is the caller's
 // responsibility). Returns nil when preview is nil or no overlap exists.
@@ -114,9 +115,6 @@ func planPreviewConflicts(preview *planv1.PlanEntry, others []*planv1.PlanEntry)
 
 	pStart := int(preview.GetStartMinute())
 	pEnd := pStart + int(preview.DurationMinute)
-	if pEnd <= pStart {
-		pEnd = pStart + 15 // minimum one slot
-	}
 
 	var result map[int]bool
 	for _, o := range others {
@@ -125,19 +123,20 @@ func planPreviewConflicts(preview *planv1.PlanEntry, others []*planv1.PlanEntry)
 		}
 		oStart := int(o.GetStartMinute())
 		oEnd := oStart + int(o.DurationMinute)
-		if oEnd <= oStart {
-			oEnd = oStart + 15
+
+		// Compute exact overlap region.
+		ovStart := max(pStart, oStart)
+		ovEnd := min(pEnd, oEnd)
+		if ovStart >= ovEnd {
+			continue // no overlap; touching boundaries land here
 		}
 
-		// Iterate over each 15-min slot of the preview and check overlap.
-		for t := snapDown15(pStart); t < pEnd; t += 15 {
-			// Slot [t, t+15) overlaps [oStart, oEnd) iff t < oEnd && oStart < t+15.
-			if t < oEnd && oStart < t+15 {
-				if result == nil {
-					result = make(map[int]bool)
-				}
-				result[t] = true
+		// Mark slots spanning the overlap region.
+		for t := snapDown15(ovStart); t < ovEnd; t += 15 {
+			if result == nil {
+				result = make(map[int]bool)
 			}
+			result[t] = true
 		}
 	}
 	return result

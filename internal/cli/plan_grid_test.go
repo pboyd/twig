@@ -1938,8 +1938,77 @@ func TestAutoScheduleSlot_NoFit(t *testing.T) {
 	}
 }
 
-// TestRenderGrid_GapVisibility_PreviewFlush verifies that a preview starting at 10:00
-// is flush with an entry ending at 10:00 (shared border, no empty row between them).
+// ── 067: Exact-time label tests (T003–T006) ─────────────────────────────────
+
+// TestRenderGrid_ExactLabel_13_50_Dur20 verifies that an entry at 13:50 with duration
+// 20 labels as "13:50-14:10" (not the snapped "13:45-14:15").
+func TestRenderGrid_ExactLabel_13_50_Dur20(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Quick task", StartMinute: pint32(830), DurationMinute: 20}, // 13:50–14:10
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: true})
+	if !strings.Contains(out, "13:50-14:10") {
+		t.Errorf("exact label: expected '13:50-14:10' in output:\n%s", out)
+	}
+	// Must NOT show the snapped label.
+	if strings.Contains(out, "13:45-14:15") {
+		t.Errorf("exact label: must not show snapped '13:45-14:15' in output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_ExactLabel_13_00_Dur50_GeometryUnchanged verifies that an entry at
+// 13:00 with duration 50 labels as "13:00-13:50" while the box still occupies rows
+// from 13:00 through 14:00 (SC-005 geometry guard).
+func TestRenderGrid_ExactLabel_13_00_Dur50_GeometryUnchanged(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Meeting", StartMinute: pint32(780), DurationMinute: 50}, // 13:00–13:50
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: true})
+	lines := rowsOf(out)
+
+	// Label must show exact time range.
+	if !strings.Contains(out, "13:00-13:50") {
+		t.Errorf("exact label: expected '13:00-13:50' in output:\n%s", out)
+	}
+
+	// Box geometry: 13:00 snap down = 780, 13:50 snap up = 840 (14:00).
+	// winStart = 8*60 = 480. topLine = (780-480)/15 = 20. bottomLine = (840-480)/15 = 24.
+	// Row 20 (13:00) should be top edge ┏, row 24 (14:00) should be bottom edge ┗.
+	if len(lines) <= 24 {
+		t.Fatalf("not enough rows: %d", len(lines))
+	}
+	if !strings.Contains(lines[20], "┏") {
+		t.Errorf("SC-005: row 20 (13:00) must contain top border ┏, got %q", lines[20])
+	}
+	if !strings.Contains(lines[24], "┗") {
+		t.Errorf("SC-005: row 24 (14:00) must contain bottom border ┗, got %q", lines[24])
+	}
+}
+
+// TestRenderGrid_ExactLabel_WithIDPrefix verifies that HideID=false preserves the
+// "[id] " prefix ahead of the exact time range (FR-007).
+func TestRenderGrid_ExactLabel_WithIDPrefix(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 42, Name: "Task", StartMinute: pint32(830), DurationMinute: 20}, // 13:50–14:10
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: false})
+	if !strings.Contains(out, "[42] 13:50-14:10") {
+		t.Errorf("ID prefix + exact label: expected '[42] 13:50-14:10' in output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_ExactLabel_AlignedEntry_NoRegression verifies that a 15-minute-aligned
+// entry (09:00, duration 30) still labels as "09:00-09:30" — no regression from the fix.
+func TestRenderGrid_ExactLabel_AlignedEntry_NoRegression(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Quick sync", StartMinute: pint32(540), DurationMinute: 30}, // 09:00–09:30
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(9, 0), 80, false, cli.GridOptions{HideID: true})
+	if !strings.Contains(out, "09:00-09:30") {
+		t.Errorf("no regression: expected '09:00-09:30' in output:\n%s", out)
+	}
+}
+
 func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {
 	const previewID int32 = -1
 	entries := []*planv1.PlanEntry{
@@ -1958,5 +2027,51 @@ func TestRenderGrid_GapVisibility_PreviewFlush(t *testing.T) {
 	sharedRow := lines[8]
 	if !strings.ContainsAny(sharedRow, "┣┗╍┏├") {
 		t.Errorf("flush preview: expected entry boundary at row 8 (10:00), got: %q", sharedRow)
+	}
+}
+
+// ── 067: Preview label exact-time tests (T019–T020) ──────────────────────────
+
+// TestRenderGrid_PreviewLabel_ExactTimes verifies that a preview entry (Id=-1)
+// at 13:00 with duration 50 renders the label "13:00-13:50".
+func TestRenderGrid_PreviewLabel_ExactTimes(t *testing.T) {
+	const prevID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Id: prevID, Name: "New task", StartMinute: pint32(780), DurationMinute: 50}, // 13:00–13:50
+	}
+	opts := cli.GridOptions{HideID: true, PreviewID: prevID}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, opts)
+	if !strings.Contains(out, "13:00-13:50") {
+		t.Errorf("preview label: expected '13:00-13:50' in output:\n%s", out)
+	}
+	if strings.Contains(out, "13:00-14:00") {
+		t.Errorf("preview label: must not show snapped '13:00-14:00' in output:\n%s", out)
+	}
+}
+
+// TestRenderGrid_PreviewLabel_LiveEdit verifies that re-rendering the same
+// preview entry with a different duration updates the label accordingly.
+func TestRenderGrid_PreviewLabel_LiveEdit(t *testing.T) {
+	const prevID int32 = -1
+	opts := cli.GridOptions{HideID: true, PreviewID: prevID}
+	day := "2026-05-27"
+	now := fixedTime(13, 0)
+
+	// First render: 13:00, duration 50 → "13:00-13:50".
+	entries1 := []*planv1.PlanEntry{
+		{Id: prevID, Name: "Task", StartMinute: pint32(780), DurationMinute: 50},
+	}
+	out1 := cli.RenderGrid(entries1, day, now, 80, false, opts)
+	if !strings.Contains(out1, "13:00-13:50") {
+		t.Errorf("live edit first render: expected '13:00-13:50'; got:\n%s", out1)
+	}
+
+	// Second render: same start, duration 20 → "13:00-13:20".
+	entries2 := []*planv1.PlanEntry{
+		{Id: prevID, Name: "Task", StartMinute: pint32(780), DurationMinute: 20},
+	}
+	out2 := cli.RenderGrid(entries2, day, now, 80, false, opts)
+	if !strings.Contains(out2, "13:00-13:20") {
+		t.Errorf("live edit second render: expected '13:00-13:20'; got:\n%s", out2)
 	}
 }

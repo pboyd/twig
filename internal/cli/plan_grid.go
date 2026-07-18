@@ -118,11 +118,14 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			labelRowCount = bl - tl - 1 // interior rows
 		}
 
+		es := int(e.GetStartMinute())
+		ee := es + int(e.DurationMinute)
+
 		var fullLabel string
 		if opts.HideID {
-			fullLabel = fmt.Sprintf("%02d:%02d-%02d:%02d %s", sn/60, sn%60, se/60, se%60, e.Name)
+			fullLabel = fmt.Sprintf("%02d:%02d-%02d:%02d %s", es/60, es%60, ee/60, ee%60, e.Name)
 		} else {
-			fullLabel = fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, sn/60, sn%60, se/60, se%60, e.Name)
+			fullLabel = fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, es/60, es%60, ee/60, ee%60, e.Name)
 		}
 		rows := wrapLabel(fullLabel, contentWidth, labelRowCount)
 
