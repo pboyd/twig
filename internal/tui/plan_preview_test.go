@@ -212,3 +212,151 @@ func TestPlanPreviewConflicts_NilPreview(t *testing.T) {
 		t.Errorf("nil preview: expected nil/empty conflicts, got %v", conflicts)
 	}
 }
+
+// ── 067: Exact-interval conflict tests (T010–T014) ────────────────────────────
+
+// TestPlanPreviewConflicts_TouchingNonAligned verifies that preview 13:00–13:50
+// against an existing entry at 13:50–14:10 yields no conflicts (user-reported false positive).
+func TestPlanPreviewConflicts_TouchingNonAligned(t *testing.T) {
+	start := int32(780) // 13:00
+	preview := &planv1.PlanEntry{
+		Id:             previewID,
+		StartMinute:    &start,
+		DurationMinute: 50, // 13:00–13:50
+	}
+	otherStart := int32(830) // 13:50
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: &otherStart, DurationMinute: 20}, // 13:50–14:10
+	}
+	conflicts := planPreviewConflicts(preview, others)
+	if len(conflicts) > 0 {
+		t.Errorf("touching non-aligned: expected no conflicts, got %v", conflicts)
+	}
+}
+
+// TestPlanPreviewConflicts_OverlapNonAligned verifies that preview 13:00–14:00
+// against entry 13:50–14:10 yields exactly {825} (13:45 slot).
+func TestPlanPreviewConflicts_OverlapNonAligned(t *testing.T) {
+	start := int32(780) // 13:00
+	preview := &planv1.PlanEntry{
+		Id:             previewID,
+		StartMinute:    &start,
+		DurationMinute: 60, // 13:00–14:00
+	}
+	otherStart := int32(830) // 13:50
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: &otherStart, DurationMinute: 20}, // 13:50–14:10
+	}
+	conflicts := planPreviewConflicts(preview, others)
+	if len(conflicts) != 1 {
+		t.Fatalf("overlap non-aligned: expected 1 conflict slot, got %d: %v", len(conflicts), conflicts)
+	}
+	if !conflicts[825] {
+		t.Errorf("overlap non-aligned: expected slot 825 (13:45), got %v", conflicts)
+	}
+}
+
+// TestPlanPreviewConflicts_SubSlotNeighbors verifies that preview 13:00–13:05
+// against entry 13:10–13:20 yields no conflicts (two entries in same slot, no overlap).
+func TestPlanPreviewConflicts_SubSlotNeighbors(t *testing.T) {
+	start := int32(780) // 13:00
+	preview := &planv1.PlanEntry{
+		Id:             previewID,
+		StartMinute:    &start,
+		DurationMinute: 5, // 13:00–13:05
+	}
+	otherStart := int32(790) // 13:10
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: &otherStart, DurationMinute: 10}, // 13:10–13:20
+	}
+	conflicts := planPreviewConflicts(preview, others)
+	if len(conflicts) > 0 {
+		t.Errorf("sub-slot neighbors: expected no conflicts, got %v", conflicts)
+	}
+}
+
+// TestPlanPreviewConflicts_FullyContained verifies that preview 10:00–11:00
+// fully contained by an entry at 09:00–12:00 yields {600, 615, 630, 645}.
+func TestPlanPreviewConflicts_FullyContained(t *testing.T) {
+	start := int32(600) // 10:00
+	preview := &planv1.PlanEntry{
+		Id:             previewID,
+		StartMinute:    &start,
+		DurationMinute: 60, // 10:00–11:00
+	}
+	otherStart := int32(540) // 09:00
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: &otherStart, DurationMinute: 180}, // 09:00–12:00
+	}
+	conflicts := planPreviewConflicts(preview, others)
+	if len(conflicts) != 4 {
+		t.Fatalf("fully contained: expected 4 conflict slots, got %d: %v", len(conflicts), conflicts)
+	}
+	for _, slot := range []int{600, 615, 630, 645} {
+		if !conflicts[slot] {
+			t.Errorf("fully contained: expected slot %d, got %v", slot, conflicts)
+		}
+	}
+}
+
+// TestPlanPreviewConflicts_MultipleOthers verifies slot accumulation across
+// several entries: only the genuinely overlapping one contributes slots.
+func TestPlanPreviewConflicts_MultipleOthers(t *testing.T) {
+	preview := &planv1.PlanEntry{
+		Id:             previewID,
+		StartMinute:    pint32(780),
+		DurationMinute: 90, // 13:00–14:30
+	}
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: pint32(600), DurationMinute: 180}, // 10:00–13:00, touches only
+		{Id: 2, StartMinute: pint32(795), DurationMinute: 60},  // 13:15–14:15, overlaps
+		{Id: 3, StartMinute: pint32(900), DurationMinute: 120}, // 15:00–17:00, clear
+	}
+	conflicts := planPreviewConflicts(preview, others)
+
+	// Overlap with #2 is [13:15, 14:15) → slots 795, 810, 825, 840. The 14:15
+	// slot is excluded: the interval is half-open, so nothing overlaps at 855.
+	want := []int{795, 810, 825, 840}
+	if len(conflicts) != len(want) {
+		t.Fatalf("expected %d conflict slots, got %d: %v", len(want), len(conflicts), conflicts)
+	}
+	for _, slot := range want {
+		if !conflicts[slot] {
+			t.Errorf("expected slot %d, got %v", slot, conflicts)
+		}
+	}
+}
+
+// ── Zero-duration preview ────────────────────────────────────────────────────
+
+// TestBuildPlanPreview_ZeroDuration verifies that a "0m" duration falls back to
+// the 30-minute default. The server reads DurationMinute == 0 as "unset" and
+// substitutes a default, so a zero-length preview would both promise a box the
+// save never creates and — having no extent — report no conflicts at all.
+func TestBuildPlanPreview_ZeroDuration(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.plan.mode = planEventForm
+	m.plan.form = planFormState{
+		fields: []textinput.Model{
+			newFormInput("Event"),
+			newFormInput("13:00"),
+			newFormInput("0m"),
+		},
+	}
+	got := m.buildPlanPreview()
+	if got == nil {
+		t.Fatal("zero duration: expected non-nil preview")
+	}
+	if got.DurationMinute != 30 {
+		t.Errorf("zero duration: want the 30m default, got %d", got.DurationMinute)
+	}
+
+	// With a real extent, the preview now reports the conflict it sits in.
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: pint32(780), DurationMinute: 60}, // 13:00–14:00
+	}
+	conflicts := planPreviewConflicts(got, others)
+	if len(conflicts) == 0 {
+		t.Error("zero duration: expected conflicts against an entry it sits inside, got none")
+	}
+}

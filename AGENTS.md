@@ -157,5 +157,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/066-add-task-to-plan/plan.md`.
+`specs/067-fix-plan-time-labels/plan.md`.
 <!-- SPECKIT END -->
