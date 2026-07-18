@@ -85,7 +85,11 @@ func (m Model) buildPlanPreview() *planv1.PlanEntry {
 
 	durMin := 30 // match the server-side default for a blank duration field
 	if durField != "" {
-		if d, err := timeparse.ParseDurationOrEnd(durField, startMin); err == nil {
+		// A parsed zero ("0m") is treated like a blank field: the server reads
+		// DurationMinute == 0 as "unset" and substitutes a default, so a
+		// zero-length preview would promise a box the save never creates —
+		// and, having no extent, would report no conflicts at all.
+		if d, err := timeparse.ParseDurationOrEnd(durField, startMin); err == nil && d > 0 {
 			durMin = d
 		}
 	}

@@ -299,27 +299,64 @@ func TestPlanPreviewConflicts_FullyContained(t *testing.T) {
 	}
 }
 
-// TestPlanPreviewConflicts_KeysAreMultiplesOf15 verifies that every returned key
-// is a multiple of 15 (contract §3 requirement 7).
-func TestPlanPreviewConflicts_KeysAreMultiplesOf15(t *testing.T) {
-	start := int32(780) // 13:00
+// TestPlanPreviewConflicts_MultipleOthers verifies slot accumulation across
+// several entries: only the genuinely overlapping one contributes slots.
+func TestPlanPreviewConflicts_MultipleOthers(t *testing.T) {
 	preview := &planv1.PlanEntry{
 		Id:             previewID,
-		StartMinute:    &start,
+		StartMinute:    pint32(780),
 		DurationMinute: 90, // 13:00–14:30
 	}
-	// Multiple overlapping entries to generate a variety of slots.
 	others := []*planv1.PlanEntry{
-		{Id: 1, StartMinute: int32Ptr(600), DurationMinute: 180},  // 10:00–13:00 → overlap 13:00–13:00? no (touching)
-		{Id: 2, StartMinute: int32Ptr(795), DurationMinute: 60},  // 13:15–14:15
-		{Id: 3, StartMinute: int32Ptr(900), DurationMinute: 120}, // 15:00–17:00 → no overlap
+		{Id: 1, StartMinute: pint32(600), DurationMinute: 180}, // 10:00–13:00, touches only
+		{Id: 2, StartMinute: pint32(795), DurationMinute: 60},  // 13:15–14:15, overlaps
+		{Id: 3, StartMinute: pint32(900), DurationMinute: 120}, // 15:00–17:00, clear
 	}
 	conflicts := planPreviewConflicts(preview, others)
-	for k := range conflicts {
-		if k%15 != 0 {
-			t.Errorf("key %d is not a multiple of 15", k)
+
+	// Overlap with #2 is [13:15, 14:15) → slots 795, 810, 825, 840. The 14:15
+	// slot is excluded: the interval is half-open, so nothing overlaps at 855.
+	want := []int{795, 810, 825, 840}
+	if len(conflicts) != len(want) {
+		t.Fatalf("expected %d conflict slots, got %d: %v", len(want), len(conflicts), conflicts)
+	}
+	for _, slot := range want {
+		if !conflicts[slot] {
+			t.Errorf("expected slot %d, got %v", slot, conflicts)
 		}
 	}
 }
 
-func int32Ptr(v int32) *int32 { return &v }
+// ── Zero-duration preview ────────────────────────────────────────────────────
+
+// TestBuildPlanPreview_ZeroDuration verifies that a "0m" duration falls back to
+// the 30-minute default. The server reads DurationMinute == 0 as "unset" and
+// substitutes a default, so a zero-length preview would both promise a box the
+// save never creates and — having no extent — report no conflicts at all.
+func TestBuildPlanPreview_ZeroDuration(t *testing.T) {
+	m := ExportNewModel(nil, nil)
+	m.plan.mode = planEventForm
+	m.plan.form = planFormState{
+		fields: []textinput.Model{
+			newFormInput("Event"),
+			newFormInput("13:00"),
+			newFormInput("0m"),
+		},
+	}
+	got := m.buildPlanPreview()
+	if got == nil {
+		t.Fatal("zero duration: expected non-nil preview")
+	}
+	if got.DurationMinute != 30 {
+		t.Errorf("zero duration: want the 30m default, got %d", got.DurationMinute)
+	}
+
+	// With a real extent, the preview now reports the conflict it sits in.
+	others := []*planv1.PlanEntry{
+		{Id: 1, StartMinute: pint32(780), DurationMinute: 60}, // 13:00–14:00
+	}
+	conflicts := planPreviewConflicts(got, others)
+	if len(conflicts) == 0 {
+		t.Error("zero duration: expected conflicts against an entry it sits inside, got none")
+	}
+}

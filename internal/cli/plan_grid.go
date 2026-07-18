@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -50,6 +51,8 @@ type GridOptions struct {
 // The visible window defaults to 08:00–17:00 and is extended outward (rounded
 // to the nearest hour) to contain every entry's snapped span.
 func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width int, isTTY bool, opts GridOptions) string {
+	boxes := planBoxes(entries)
+
 	winStart := 8 * 60
 	winEnd := 17 * 60
 
@@ -60,16 +63,14 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		winEnd = *opts.WindowEndMin
 	}
 
-	for _, e := range entries {
-		sn := snapDown15(int(e.GetStartMinute()))
-		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
+	for _, b := range boxes {
 		if opts.WindowStartMin == nil {
-			if h := (sn / 60) * 60; h < winStart {
+			if h := (b.snapStart / 60) * 60; h < winStart {
 				winStart = h
 			}
 		}
 		if opts.WindowEndMin == nil {
-			if h := ((se + 59) / 60) * 60; h > winEnd {
+			if h := ((b.snapEnd + 59) / 60) * 60; h > winEnd {
 				winEnd = h
 			}
 		}
@@ -96,15 +97,10 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 		labelRows []string // pre-wrapped label lines
 	}
 
-	layouts := make([]entryLayout, 0, len(entries))
-	for _, e := range entries {
-		sn := snapDown15(int(e.GetStartMinute()))
-		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
-		if se < sn+15 {
-			se = sn + 15
-		}
-		tl := rowOf(sn)
-		bl := rowOf(se)
+	layouts := make([]entryLayout, 0, len(boxes))
+	for _, b := range boxes {
+		tl := rowOf(b.snapStart)
+		bl := rowOf(b.snapEnd)
 		isSingle := bl == tl+1
 		if isSingle {
 			bl = tl
@@ -118,18 +114,20 @@ func RenderGrid(entries []*planv1.PlanEntry, day string, now time.Time, width in
 			labelRowCount = bl - tl - 1 // interior rows
 		}
 
-		es := int(e.GetStartMinute())
-		ee := es + int(e.DurationMinute)
+		// Labels print the entry's exact minutes, not the snapped box span: the
+		// box may have been trimmed or pushed to clear a neighbour, but the time
+		// the user typed must survive that.
+		es, ee := b.exactStart, b.exactEnd
 
 		var fullLabel string
 		if opts.HideID {
-			fullLabel = fmt.Sprintf("%02d:%02d-%02d:%02d %s", es/60, es%60, ee/60, ee%60, e.Name)
+			fullLabel = fmt.Sprintf("%02d:%02d-%02d:%02d %s", es/60, es%60, ee/60, ee%60, b.e.Name)
 		} else {
-			fullLabel = fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", e.Id, es/60, es%60, ee/60, ee%60, e.Name)
+			fullLabel = fmt.Sprintf("[%d] %02d:%02d-%02d:%02d %s", b.e.Id, es/60, es%60, ee/60, ee%60, b.e.Name)
 		}
 		rows := wrapLabel(fullLabel, contentWidth, labelRowCount)
 
-		layouts = append(layouts, entryLayout{e, tl, bl, sn, se, rows})
+		layouts = append(layouts, entryLayout{b.e, tl, bl, b.snapStart, b.snapEnd, rows})
 	}
 
 	// Build per-line lookup maps.
@@ -685,6 +683,82 @@ func NextGapFloor(timed []*planv1.PlanEntry, fromMin int, excludeID int32) (floo
 	return 0, false
 }
 
+// planBox is an entry's exact interval together with the snapped grid span its
+// box occupies. Labels are drawn from the exact minutes; geometry from the
+// snapped ones.
+type planBox struct {
+	e          *planv1.PlanEntry
+	exactStart int
+	exactEnd   int
+	snapStart  int
+	snapEnd    int
+}
+
+// planBoxes returns the grid boxes for entries, sorted by snapped span with
+// snapped-box collisions resolved. Callers may rely on no two returned boxes
+// claiming the same grid row unless their exact intervals genuinely overlap.
+func planBoxes(entries []*planv1.PlanEntry) []planBox {
+	boxes := make([]planBox, 0, len(entries))
+	for _, e := range entries {
+		es := int(e.GetStartMinute())
+		ee := es + int(e.DurationMinute)
+		sn := snapDown15(es)
+		se := snapUp15(ee)
+		if se < sn+15 {
+			se = sn + 15 // every entry gets at least one row
+		}
+		boxes = append(boxes, planBox{e: e, exactStart: es, exactEnd: ee, snapStart: sn, snapEnd: se})
+	}
+
+	// Entries arrive sorted by start from the server, but the TUI appends its
+	// preview entry after that list — sort rather than assume.
+	sort.SliceStable(boxes, func(i, j int) bool {
+		if boxes[i].snapStart != boxes[j].snapStart {
+			return boxes[i].snapStart < boxes[j].snapStart
+		}
+		return boxes[i].snapEnd < boxes[j].snapEnd
+	})
+
+	resolveBoxCollisions(boxes)
+	return boxes
+}
+
+// resolveBoxCollisions adjusts snapped spans so that no two boxes claim the same
+// grid row. Snapping the start down and the end up means two entries that merely
+// touch in exact time (13:00–13:50 and 13:50–14:10) can still overlap by a row
+// or two. The per-row layout maps hold one entry per row, so without this the
+// loser silently forfeits a border — or disappears from the grid entirely.
+//
+// Entries whose exact intervals genuinely overlap are left alone: two saved
+// entries can never overlap (the server rejects that), so the only real overlap
+// is an unsaved preview sitting on top of a saved entry, and moving its box
+// would hide the very conflict the red styling exists to show.
+//
+// boxes must be sorted by (snapStart, snapEnd).
+func resolveBoxCollisions(boxes []planBox) {
+	for i := 1; i < len(boxes); i++ {
+		prev, cur := &boxes[i-1], &boxes[i]
+		if cur.snapStart >= prev.snapEnd {
+			continue // boxes already clear of each other
+		}
+		if cur.exactStart < prev.exactEnd {
+			continue // a real overlap; leave it visible
+		}
+		// Prefer pulling the earlier box's end back to where the later one
+		// starts: both keep their true position and share one divider row.
+		if cur.snapStart >= prev.snapStart+15 {
+			prev.snapEnd = cur.snapStart
+			continue
+		}
+		// The earlier box would collapse to nothing (both entries start inside
+		// the same slot), so push the later box down instead.
+		cur.snapStart = prev.snapEnd
+		if cur.snapEnd < cur.snapStart+15 {
+			cur.snapEnd = cur.snapStart + 15
+		}
+	}
+}
+
 // snapDown15 rounds min down to the nearest 15-minute boundary.
 func snapDown15(min int) int {
 	return (min / 15) * 15
@@ -701,13 +775,13 @@ func snapUp15(min int) int {
 func baseWindowFor(entries []*planv1.PlanEntry) (baseStart, baseEnd int) {
 	baseStart = 8 * 60
 	baseEnd = 17 * 60
-	for _, e := range entries {
-		sn := snapDown15(int(e.GetStartMinute()))
-		se := snapUp15(int(e.GetStartMinute()) + int(e.DurationMinute))
-		if h := (sn / 60) * 60; h < baseStart {
+	// Use the same resolved boxes RenderGrid will draw, so a box that got pushed
+	// down to clear a neighbour can't land outside the window the TUI sized.
+	for _, b := range planBoxes(entries) {
+		if h := (b.snapStart / 60) * 60; h < baseStart {
 			baseStart = h
 		}
-		if h := ((se + 59) / 60) * 60; h > baseEnd {
+		if h := ((b.snapEnd + 59) / 60) * 60; h > baseEnd {
 			baseEnd = h
 		}
 	}

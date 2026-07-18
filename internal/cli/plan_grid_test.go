@@ -2075,3 +2075,145 @@ func TestRenderGrid_PreviewLabel_LiveEdit(t *testing.T) {
 		t.Errorf("live edit second render: expected '13:00-13:20'; got:\n%s", out2)
 	}
 }
+
+// ── Snapped-box collision resolution ─────────────────────────────────────────
+//
+// Labels use exact minutes, but boxes still occupy whole 15-minute rows. Two
+// entries that merely touch in exact time (13:00–13:50 and 13:50–14:10) would
+// snap to overlapping row spans, and the per-row layout maps only hold one
+// entry per row — so one entry loses a border, or disappears entirely. The
+// layout pass resolves those collisions so every entry keeps a closed box.
+
+// countRune returns the number of times r occurs in s.
+func countRune(s, r string) int { return strings.Count(s, r) }
+
+// TestRenderGrid_AdjacentNonAligned_SharedBorder verifies that two entries that
+// touch at a non-aligned minute (13:50) render as two closed boxes sharing one
+// divider row, rather than overlapping row spans that drop a border.
+func TestRenderGrid_AdjacentNonAligned_SharedBorder(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Alpha", StartMinute: pint32(780), DurationMinute: 50}, // 13:00–13:50
+		{Id: 2, Name: "Bravo", StartMinute: pint32(830), DurationMinute: 20}, // 13:50–14:10
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: true})
+
+	if got := countRune(out, "┏"); got != 1 {
+		t.Errorf("expected exactly 1 top border ┏, got %d:\n%s", got, out)
+	}
+	if got := countRune(out, "┗"); got != 1 {
+		t.Errorf("expected exactly 1 bottom border ┗, got %d:\n%s", got, out)
+	}
+	// The shared divider is the whole point: without it, Alpha never closes and
+	// Bravo never opens.
+	if got := countRune(out, "┣"); got != 1 {
+		t.Errorf("expected exactly 1 shared divider ┣, got %d:\n%s", got, out)
+	}
+
+	// Both labels keep their exact times.
+	if !strings.Contains(out, "13:00-13:50") || !strings.Contains(out, "13:50-14:10") {
+		t.Errorf("expected both exact labels in output:\n%s", out)
+	}
+
+	// The divider lands on the 13:45 row: (825-480)/15 = 23.
+	lines := rowsOf(out)
+	if len(lines) <= 23 {
+		t.Fatalf("not enough rows: %d", len(lines))
+	}
+	if !strings.Contains(lines[23], "┣") {
+		t.Errorf("expected shared divider on row 23 (13:45), got %q", lines[23])
+	}
+}
+
+// TestRenderGrid_AdjacentNonAligned_UnsortedInput verifies that collision
+// resolution does not depend on the caller passing entries in start order —
+// the TUI appends its preview entry after the server's sorted list.
+func TestRenderGrid_AdjacentNonAligned_UnsortedInput(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 2, Name: "Bravo", StartMinute: pint32(830), DurationMinute: 20}, // 13:50–14:10
+		{Id: 1, Name: "Alpha", StartMinute: pint32(780), DurationMinute: 50}, // 13:00–13:50
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: true})
+
+	if got := countRune(out, "┏"); got != 1 {
+		t.Errorf("unsorted: expected exactly 1 top border ┏, got %d:\n%s", got, out)
+	}
+	if got := countRune(out, "┗"); got != 1 {
+		t.Errorf("unsorted: expected exactly 1 bottom border ┗, got %d:\n%s", got, out)
+	}
+	if got := countRune(out, "┣"); got != 1 {
+		t.Errorf("unsorted: expected exactly 1 shared divider ┣, got %d:\n%s", got, out)
+	}
+}
+
+// TestRenderGrid_SubSlotNeighbors_BothVisible verifies the push branch: two
+// short entries inside the same 15-minute slot (13:00–13:05 and 13:10–13:20)
+// cannot both keep their snapped span, so the later one moves down a row —
+// but neither may vanish from the grid.
+func TestRenderGrid_SubSlotNeighbors_BothVisible(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Alpha", StartMinute: pint32(780), DurationMinute: 5},  // 13:00–13:05
+		{Id: 2, Name: "Bravo", StartMinute: pint32(790), DurationMinute: 10}, // 13:10–13:20
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, cli.GridOptions{HideID: true})
+
+	if !strings.Contains(out, "Alpha") {
+		t.Errorf("sub-slot neighbors: Alpha disappeared from the grid:\n%s", out)
+	}
+	if !strings.Contains(out, "Bravo") {
+		t.Errorf("sub-slot neighbors: Bravo disappeared from the grid:\n%s", out)
+	}
+
+	// Each entry must occupy its own row.
+	lines := rowsOf(out)
+	alphaRow, bravoRow := -1, -1
+	for i, l := range lines {
+		if strings.Contains(l, "Alpha") {
+			alphaRow = i
+		}
+		if strings.Contains(l, "Bravo") {
+			bravoRow = i
+		}
+	}
+	if alphaRow == bravoRow {
+		t.Errorf("sub-slot neighbors: both entries landed on row %d:\n%s", alphaRow, out)
+	}
+	if alphaRow > bravoRow {
+		t.Errorf("sub-slot neighbors: Alpha (row %d) must render above Bravo (row %d):\n%s",
+			alphaRow, bravoRow, out)
+	}
+}
+
+// TestRenderGrid_ExactOverlap_PreviewNotPushedAway verifies that a preview that
+// genuinely overlaps a saved entry is NOT pushed clear of it. Two saved entries
+// can never overlap (the server rejects that), so the only real overlap is
+// preview-vs-saved — and moving the preview's box would hide the very conflict
+// the red styling is meant to show.
+func TestRenderGrid_ExactOverlap_PreviewNotPushedAway(t *testing.T) {
+	const prevID int32 = -1
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "Alpha", StartMinute: pint32(780), DurationMinute: 60},    // 13:00–14:00
+		{Id: prevID, Name: "New", StartMinute: pint32(810), DurationMinute: 60}, // 13:30–14:30
+	}
+	opts := cli.GridOptions{
+		HideID:               true,
+		PreviewID:            prevID,
+		PreviewConflictSlots: map[int]bool{810: true, 825: true},
+	}
+	out := cli.RenderGrid(entries, "2026-05-27", fixedTime(13, 0), 80, false, opts)
+
+	// The preview must still open at its own snapped row (13:30), inside Alpha.
+	lines := rowsOf(out)
+	previewTop := (810 - 480) / 15 // row 22
+	if len(lines) <= previewTop {
+		t.Fatalf("not enough rows: %d", len(lines))
+	}
+	if !strings.Contains(lines[previewTop], "┏") {
+		t.Errorf("exact overlap: expected preview's top border on row %d (13:30), got %q",
+			previewTop, lines[previewTop])
+	}
+	// Plain mode marks conflicting rows with "!" in the gutter.
+	if !strings.Contains(lines[previewTop], "!") {
+		t.Errorf("exact overlap: expected conflict marker on row %d, got %q",
+			previewTop, lines[previewTop])
+	}
+}
