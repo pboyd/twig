@@ -1,15 +1,7 @@
 import { useState } from "react";
-import { useMutation } from "@connectrpc/connect-query";
-import { useQueryClient } from "@tanstack/react-query";
-import { createConnectQueryKey } from "@connectrpc/connect-query";
-import { ConnectError, Code } from "@connectrpc/connect";
-import {
-  addPlanTask,
-  listPlanEntries,
-} from "../gen/plan/v1/plan-PlanService_connectquery";
-import { useToast } from "../context/ToastProvider";
 import { messages } from "../theme/messages";
-import { todayIso, tomorrowIso, dayPickerLabel } from "../lib/planDays";
+import { todayIso, tomorrowIso } from "../lib/planDays";
+import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
 import { Button } from "./Button";
 
 interface AddToPlanControlProps {
@@ -19,27 +11,13 @@ interface AddToPlanControlProps {
 export function AddToPlanControl({ taskId }: AddToPlanControlProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [pickedDate, setPickedDate] = useState("");
-  const { show } = useToast();
-  const queryClient = useQueryClient();
-
-  const { mutateAsync: doAdd, isPending } = useMutation(addPlanTask);
+  const { addToPlan, isPending } = useAddTaskToPlan(messages.connectivityError);
 
   async function addToDay(day: string) {
-    try {
-      await doAdd({ day, taskId, durationMinute: 0 });
-      await queryClient.invalidateQueries({
-        queryKey: createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" }),
-      });
-      const label = dayPickerLabel(day);
-      show(label === "Today" ? messages.addedToToday : messages.addedToDay(label), "success");
+    const ok = await addToPlan(day, taskId);
+    if (ok) {
       setShowPicker(false);
       setPickedDate("");
-    } catch (err) {
-      if (err instanceof ConnectError && err.code === Code.FailedPrecondition) {
-        show(messages.alreadyOnPlan, "error");
-      } else {
-        show(messages.connectivityError, "error");
-      }
     }
   }
 

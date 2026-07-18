@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectError, Code } from "@connectrpc/connect";
 import TaskTreePage from "./TaskTreePage";
 import { ToastProvider } from "../context/ToastProvider";
+import { messages } from "../theme/messages";
 
 vi.mock("../gen/task/v1/task-TaskService_connectquery", () => ({
   listTasks: "schema:listTasks",
@@ -231,8 +232,8 @@ describe("TaskTreePage — plan after create (US1)", () => {
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: name } });
   }
 
-  it("CT-08: CreateTask fails ⇒ no plan call", async () => {
-    mockMutateFn.mockRejectedValueOnce(new ConnectError(Code.Unavailable, "down"));
+  it("CT-08: CreateTask fails ⇒ no plan call, error toast shown, form stays open", async () => {
+    mockMutateFn.mockRejectedValueOnce(new ConnectError("down", Code.Unavailable));
     listTasksResult.mockReturnValue({
       data: { tasks: [] },
       isLoading: false,
@@ -248,13 +249,20 @@ describe("TaskTreePage — plan after create (US1)", () => {
     await vi.waitFor(() => {
       expect(mockMutateFn).toHaveBeenCalledTimes(1);
     });
+    // The rejection must be caught, not left to become an unhandled
+    // promise rejection: the user sees an error toast and the form
+    // (still holding their typed name) stays open for a retry.
+    await vi.waitFor(() => {
+      expect(screen.getByText(messages.addFailed)).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
   });
 
   it("CT-09: AddPlanTask fails ⇒ task created but partial-failure toast shown", async () => {
     mockMutateFn
       .mockResolvedValueOnce({ task: { id: 42n } })
       .mockRejectedValueOnce(
-        new ConnectError(Code.FailedPrecondition, "already on plan"),
+        new ConnectError("already on plan", Code.FailedPrecondition),
       );
     listTasksResult.mockReturnValue({
       data: { tasks: [] },
@@ -300,5 +308,65 @@ describe("TaskTreePage — plan after create (US1)", () => {
       expect(mockMutateFn).toHaveBeenCalledTimes(2);
     });
     expect(invalidateQueries).toHaveBeenCalled();
+  });
+});
+
+describe("TreeRow — plan after create for sub-tasks (US1)", () => {
+  function seedOneTask() {
+    listTasksResult.mockReturnValue({
+      data: { tasks: [makeTask(7n)] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  }
+
+  // TreeRow's "Add sub-task" icon toggle shares its accessible name with the
+  // form's own submit button once the form is open — grab the last match to
+  // get the submit button.
+  function clickAddSubTaskSubmit() {
+    const buttons = screen.getAllByRole("button", { name: "Add sub-task" });
+    fireEvent.click(buttons[buttons.length - 1]);
+  }
+
+  it("CT-08b: CreateTask fails for a sub-task ⇒ no plan call, error toast shown, form stays open", async () => {
+    mockMutateFn.mockRejectedValueOnce(new ConnectError("down", Code.Unavailable));
+    seedOneTask();
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Add sub-task" }));
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Sub fail" } });
+    fireEvent.click(screen.getByText("Today"));
+    clickAddSubTaskSubmit();
+
+    await vi.waitFor(() => {
+      expect(mockMutateFn).toHaveBeenCalledTimes(1);
+    });
+    await vi.waitFor(() => {
+      expect(screen.getByText(messages.addFailed)).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+  });
+
+  it("sub-task create succeeds but AddPlanTask fails ⇒ partial-failure toast, no throw", async () => {
+    mockMutateFn
+      .mockResolvedValueOnce({ task: { id: 43n } })
+      .mockRejectedValueOnce(new ConnectError("down", Code.Unavailable));
+    seedOneTask();
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Add sub-task" }));
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Sub partial" } });
+    fireEvent.click(screen.getByText("Today"));
+    clickAddSubTaskSubmit();
+
+    await vi.waitFor(() => {
+      expect(mockMutateFn).toHaveBeenCalledTimes(2);
+    });
+    await vi.waitFor(() => {
+      expect(screen.getByText(messages.addedToPlanPartialFail)).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument();
   });
 });

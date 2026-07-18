@@ -8,10 +8,6 @@ import {
   completeTask,
   uncompleteTask,
 } from "../gen/task/v1/task-TaskService_connectquery";
-import {
-  addPlanTask,
-  listPlanEntries,
-} from "../gen/plan/v1/plan-PlanService_connectquery";
 import { createConnectQueryKey } from "@connectrpc/connect-query";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { useSortable, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -24,7 +20,7 @@ import { CompletionToggle } from "./CompletionToggle";
 import { messages } from "../theme/messages";
 import { Markdown } from "./Markdown";
 import { useToast } from "../context/ToastProvider";
-import { dayPickerLabel } from "../lib/planDays";
+import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
 
 interface TreeRowProps {
   node: TaskNode;
@@ -42,15 +38,11 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
   const { show: showToast } = useToast();
 
   const { mutateAsync: doCreateTask, isPending: isCreating } = useMutation(createTask);
-  const { mutateAsync: doAddPlanTask } = useMutation(addPlanTask);
+  const { addToPlan } = useAddTaskToPlan(messages.addedToPlanPartialFail);
   const { mutateAsync: doComplete, isPending: isCompleting } = useMutation(completeTask);
   const { mutateAsync: doUncomplete, isPending: isUncompleting } = useMutation(uncompleteTask);
 
   const listTasksKey = createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" });
-
-  function planEntriesKey(day: string) {
-    return createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" });
-  }
 
   const {
     attributes,
@@ -68,22 +60,17 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
   };
 
   async function handleAddSubTask(name: string, description: string, planDay?: string) {
-    const createResp = await doCreateTask({ name, description, parentId: task.id });
+    let createResp;
+    try {
+      createResp = await doCreateTask({ name, description, parentId: task.id });
+    } catch {
+      showToast(messages.addFailed, "error");
+      return;
+    }
     const newTaskId = createResp.task?.id;
 
     if (planDay && newTaskId) {
-      try {
-        await doAddPlanTask({ day: planDay, taskId: newTaskId, durationMinute: 0 });
-        const label = dayPickerLabel(planDay);
-        showToast(label === "Today" ? messages.addedToToday : messages.addedToDay(label), "success");
-        await queryClient.invalidateQueries({ queryKey: planEntriesKey(planDay) });
-      } catch (err) {
-        if (err instanceof ConnectError && err.code === Code.FailedPrecondition) {
-          showToast(messages.alreadyOnPlan, "error");
-        } else {
-          showToast(messages.addedToPlanPartialFail, "error");
-        }
-      }
+      await addToPlan(planDay, newTaskId);
     }
 
     await queryClient.invalidateQueries({ queryKey: listTasksKey });

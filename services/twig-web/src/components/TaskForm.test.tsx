@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TaskForm } from "./TaskForm";
-import { todayIso, tomorrowIso } from "../lib/planDays";
+import { todayIso } from "../lib/planDays";
 
 describe("TaskForm — US3 round-trip safety", () => {
   it("shows raw markdown source in name field, not rendered HTML", () => {

@@ -6,7 +6,6 @@ import {
   createTask,
   reorderTask,
 } from "../gen/task/v1/task-TaskService_connectquery";
-import { addPlanTask, listPlanEntries } from "../gen/plan/v1/plan-PlanService_connectquery";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { buildTree, findSiblingIds } from "../lib/tree";
@@ -23,8 +22,7 @@ import { TaskForm } from "../components/TaskForm";
 import { Button } from "../components/Button";
 import { messages } from "../theme/messages";
 import { useToast } from "../context/ToastProvider";
-import { dayPickerLabel } from "../lib/planDays";
-import { ConnectError, Code } from "@connectrpc/connect";
+import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
 
 const EXPANDED_STORAGE_KEY = "twig-expanded-tasks";
 
@@ -70,7 +68,7 @@ export default function TaskTreePage() {
   const { data, isLoading, isError, error, refetch } = useQuery(listTasks, {});
   const { mutateAsync: doCreateTask, isPending } = useMutation(createTask);
   const { mutateAsync: doReorderTask } = useMutation(reorderTask);
-  const { mutateAsync: doAddPlanTask } = useMutation(addPlanTask);
+  const { addToPlan } = useAddTaskToPlan(messages.addedToPlanPartialFail);
 
   const [showCompleted, setShowCompleted] = useState(readShowCompleted);
 
@@ -79,10 +77,6 @@ export default function TaskTreePage() {
   const filteredTree = filterTree(tree, showCompleted);
 
   const listTasksKey = createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" });
-
-  function planEntriesKey(day: string) {
-    return createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" });
-  }
 
   // Initialize expand state once when tree data arrives
   useEffect(() => {
@@ -110,22 +104,17 @@ export default function TaskTreePage() {
   }
 
   async function handleAddTask(name: string, description: string, planDay?: string) {
-    const createResp = await doCreateTask({ name, description });
+    let createResp;
+    try {
+      createResp = await doCreateTask({ name, description });
+    } catch {
+      showToast(messages.addFailed, "error");
+      return;
+    }
     const newTaskId = createResp.task?.id;
 
     if (planDay && newTaskId) {
-      try {
-        await doAddPlanTask({ day: planDay, taskId: newTaskId, durationMinute: 0 });
-        const label = dayPickerLabel(planDay);
-        showToast(label === "Today" ? messages.addedToToday : messages.addedToDay(label), "success");
-        await queryClient.invalidateQueries({ queryKey: planEntriesKey(planDay) });
-      } catch (err) {
-        if (err instanceof ConnectError && err.code === Code.FailedPrecondition) {
-          showToast(messages.alreadyOnPlan, "error");
-        } else {
-          showToast(messages.addedToPlanPartialFail, "error");
-        }
-      }
+      await addToPlan(planDay, newTaskId);
     }
 
     await queryClient.invalidateQueries({ queryKey: listTasksKey });

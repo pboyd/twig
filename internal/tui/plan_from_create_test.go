@@ -6,9 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"connectrpc.com/connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
+	"github.com/pboyd/twig/internal/config"
 )
 
 // failingTaskClient is a minimal TaskServiceClient that always fails on CreateTask.
@@ -133,5 +135,61 @@ func TestCT09_AddPlanTaskFailsTaskStaysCreated(t *testing.T) {
 	}
 	if len(rm.tree) != 1 || rm.tree[0].Task.Id != taskID {
 		t.Errorf("tree should contain the created task, got %v", rm.tree)
+	}
+}
+
+// Create-with-plan must also refresh the Plan tab's scheduled-days markers,
+// not just the task tree — otherwise the newly scheduled day doesn't show up
+// until some unrelated action happens to refresh it.
+func TestHandleEditSaved_WithPlanDay_AlsoRefreshesScheduledDays(t *testing.T) {
+	tc := &fakeTaskClient{createTaskID: 42}
+	pc := &fakePlanClient{}
+	m := newModel(tc, pc, "", config.PomodoroConfig{}, false, nil)
+
+	msg := editSavedMsg{name: "new task", planDay: "2026-07-20"}
+	_, cmd := m.handleEditSaved(msg)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg when a plan day was chosen, got %T", cmd())
+	}
+	if len(batch) != 2 {
+		t.Fatalf("expected 2 batched commands, got %d", len(batch))
+	}
+
+	sawRefresh := false
+	for _, sub := range batch {
+		if _, ok := sub().(refreshedMsg); ok {
+			sawRefresh = true
+		}
+	}
+	if !sawRefresh {
+		t.Error("expected one batched command to produce refreshedMsg (the task-tree refresh)")
+	}
+	if pc.scheduledDaysReq == nil {
+		t.Error("expected ListScheduledDays to be called after create-with-plan")
+	}
+}
+
+// Create without a plan day is unaffected: no scheduled-days refresh, and the
+// result is the plain (non-batched) command it always was.
+func TestHandleEditSaved_WithoutPlanDay_NoScheduledDaysRefresh(t *testing.T) {
+	tc := &fakeTaskClient{createTaskID: 42}
+	pc := &fakePlanClient{}
+	m := newModel(tc, pc, "", config.PomodoroConfig{}, false, nil)
+
+	msg := editSavedMsg{name: "new task"}
+	_, cmd := m.handleEditSaved(msg)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd")
+	}
+	if _, ok := cmd().(tea.BatchMsg); ok {
+		t.Error("expected a single (non-batched) cmd when no plan day was chosen")
+	}
+	if pc.scheduledDaysReq != nil {
+		t.Error("ListScheduledDays should not be called when no plan day was chosen")
 	}
 }

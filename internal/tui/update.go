@@ -2615,6 +2615,12 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.parentID != nil {
 		m.expanded[*msg.parentID] = true
 	}
+	if msg.planDay != "" {
+		// A plan day was chosen on the create form: refresh the Plan tab's
+		// scheduled-days markers alongside the task tree so the new day
+		// shows up without waiting for some other action to refresh it.
+		return m, tea.Batch(createTaskCmd(m.client, m.planClient, msg), listScheduledDaysCmd(m.planClient))
+	}
 	return m, createTaskCmd(m.client, m.planClient, msg)
 }
 
