@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConnectError, Code } from "@connectrpc/connect";
 import TaskTreePage from "./TaskTreePage";
 import { ToastProvider } from "../context/ToastProvider";
 
@@ -220,5 +221,84 @@ describe("TaskTreePage — inline name rendering (US2)", () => {
     const taskRow = container.querySelector("li");
     expect(taskRow?.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
     expect(container.textContent).toContain("Not a heading");
+  });
+});
+
+describe("TaskTreePage — plan after create (US1)", () => {
+  function openAddFormAndFillName(name: string) {
+    // Click the "+ Add task" header button (not the form submit which appears later)
+    fireEvent.click(screen.getByText("+ Add task"));
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: name } });
+  }
+
+  it("CT-08: CreateTask fails ⇒ no plan call", async () => {
+    mockMutateFn.mockRejectedValueOnce(new ConnectError(Code.Unavailable, "down"));
+    listTasksResult.mockReturnValue({
+      data: { tasks: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    openAddFormAndFillName("Fail task");
+    fireEvent.click(screen.getByText("Today"));
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    await vi.waitFor(() => {
+      expect(mockMutateFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("CT-09: AddPlanTask fails ⇒ task created but partial-failure toast shown", async () => {
+    mockMutateFn
+      .mockResolvedValueOnce({ task: { id: 42n } })
+      .mockRejectedValueOnce(
+        new ConnectError(Code.FailedPrecondition, "already on plan"),
+      );
+    listTasksResult.mockReturnValue({
+      data: { tasks: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    openAddFormAndFillName("Partial fail");
+    fireEvent.click(screen.getByText("Today"));
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    await vi.waitFor(() => {
+      expect(mockMutateFn).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument();
+  });
+
+  it("CT-11: success invalidates listTasks and plan entries", async () => {
+    const invalidateQueries = vi.fn();
+    vi.mocked(
+      (await import("@tanstack/react-query")).useQueryClient,
+    ).mockReturnValue({ invalidateQueries } as never);
+
+    mockMutateFn
+      .mockResolvedValueOnce({ task: { id: 99n } })
+      .mockResolvedValueOnce({});
+
+    listTasksResult.mockReturnValue({
+      data: { tasks: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    openAddFormAndFillName("Success task");
+    fireEvent.click(screen.getByText("Today"));
+    fireEvent.click(screen.getByRole("button", { name: "Add task" }));
+    await vi.waitFor(() => {
+      expect(mockMutateFn).toHaveBeenCalledTimes(2);
+    });
+    expect(invalidateQueries).toHaveBeenCalled();
   });
 });

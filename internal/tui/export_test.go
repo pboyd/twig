@@ -118,7 +118,7 @@ func ExportUpdateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMs
 
 // ExportCreateTaskCmd exposes createTaskCmd for unit tests.
 func ExportCreateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea.Cmd {
-	return createTaskCmd(client, msg)
+	return createTaskCmd(client, nil, msg)
 }
 
 // ExportEditSavedMsg constructs an editSavedMsg for unit tests.
@@ -368,3 +368,42 @@ const ExportModeList = int(modeList)
 
 // ExportModeFilter is the modeFilter constant for tests.
 const ExportModeFilter = int(modeFilter)
+
+// ── Plan form state shims ───────────────────────────────────────────────────
+
+// ExportPlanChoiceNone is the planChoiceNone constant for tests.
+const ExportPlanChoiceNone = int(planChoiceNone)
+
+// ExportPlanChoiceToday is the planChoiceToday constant for tests.
+const ExportPlanChoiceToday = int(planChoiceToday)
+
+// ExportPlanChoiceTomorrow is the planChoiceTomorrow constant for tests.
+const ExportPlanChoiceTomorrow = int(planChoiceTomorrow)
+
+// ExportPlanChoiceDate is the planChoiceDate constant for tests.
+const ExportPlanChoiceDate = int(planChoiceDate)
+
+// ExportEditFormPlanIdx returns the planIdx from an editFormModel.
+func ExportEditFormPlanIdx(f editFormModel) int {
+	return f.planIdx
+}
+
+// ExportEditFormPlanDate returns the planDate from an editFormModel.
+func ExportEditFormPlanDate(f editFormModel) string {
+	return f.planDate
+}
+
+// ExportEditFormShowPlanField returns the showPlanField from an editFormModel.
+func ExportEditFormShowPlanField(f editFormModel) bool {
+	return f.showPlanField
+}
+
+// ExportEditFormCyclePlan calls cyclePlan on the form and returns the updated form.
+func ExportEditFormCyclePlan(f editFormModel, delta int) editFormModel {
+	return f.cyclePlan(delta)
+}
+
+// ExportCreateTaskCmdWithPlan exposes createTaskCmd with a plan client for unit tests.
+func ExportCreateTaskCmdWithPlan(taskClient taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, msg editSavedMsg) tea.Cmd {
+	return createTaskCmd(taskClient, planClient, msg)
+}

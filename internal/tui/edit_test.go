@@ -74,6 +74,7 @@ func TestNewRootFormIsBlank(t *testing.T) {
 
 // TestEditFormTabCyclesFocus verifies Tab cycles through all focus positions.
 // When showGoalField is false (NewRootForm), focusGoal is skipped.
+// showPlanField is true for NewRootForm, so focusPlan is included.
 func TestEditFormTabCyclesFocus(t *testing.T) {
 	f := NewRootForm(0, nil)
 	keys := DefaultKeyMap()
@@ -82,8 +83,8 @@ func TestEditFormTabCyclesFocus(t *testing.T) {
 		t.Fatalf("initial focus: want focusName(%d), got %d", focusName, f.focusIndex)
 	}
 
-	// Expected focus order (focusGoal is skipped because showGoalField=false).
-	want := []int{focusDescription, focusDue, focusEstimate, focusSnooze, focusSave, focusCancel}
+	// Expected focus order (focusState skipped because !isGoal, focusGoal skipped because !showGoalField).
+	want := []int{focusDescription, focusDue, focusEstimate, focusSnooze, focusPlan, focusSave, focusCancel}
 	for step, w := range want {
 		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
 		if f.focusIndex != w {
@@ -1270,5 +1271,137 @@ func TestEditForm_GoalState_RenderInView(t *testing.T) {
 	}
 	if !strings.Contains(view, "Hold") {
 		t.Error("goal edit form View: expected 'Hold' state label")
+	}
+}
+
+// ── T009: Plan selector form-state tests (US1) ─────────────────────────────
+
+// CT-01: A new create form has planIdx == planChoiceNone.
+func TestPlanField_NewCreateFormStartsAtNone(t *testing.T) {
+	f := NewRootForm(0, nil)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceNone {
+		t.Errorf("new create form planIdx: want %d (none), got %d", ExportPlanChoiceNone, got)
+	}
+}
+
+// CT-02: Cycling right from none yields Today, Tomorrow, then wraps to none.
+func TestPlanField_CycleRightWraps(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	keys := DefaultKeyMap()
+
+	// none → Today
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceToday {
+		t.Errorf("after →: want Today(%d), got %d", ExportPlanChoiceToday, got)
+	}
+
+	// Today → Tomorrow
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceTomorrow {
+		t.Errorf("after →→: want Tomorrow(%d), got %d", ExportPlanChoiceTomorrow, got)
+	}
+
+	// Tomorrow → none (wrap)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceNone {
+		t.Errorf("after →→→ (wrap): want none(%d), got %d", ExportPlanChoiceNone, got)
+	}
+}
+
+// CT-03: Save with Today ⇒ editSavedMsg.planDay is today's ISO day.
+func TestPlanField_SaveWithTodayEmitsPlanDay(t *testing.T) {
+	fixedNow := time.Date(2030, 3, 15, 12, 0, 0, 0, time.UTC)
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	f.nowFunc = func() time.Time { return fixedNow }
+	keys := DefaultKeyMap()
+
+	// Select Today.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceToday {
+		t.Fatalf("setup: want Today(%d), got %d", ExportPlanChoiceToday, got)
+	}
+
+	// Save.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	if cmd == nil {
+		t.Fatal("expected Cmd from Ctrl+S, got nil")
+	}
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	want := fixedNow.Format("2006-01-02")
+	if saved.planDay != want {
+		t.Errorf("planDay: want %q, got %q", want, saved.planDay)
+	}
+}
+
+// CT-10: Touching the plan control makes isDirty() true.
+func TestPlanField_CyclingMakesFormDirty(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+
+	// Initially clean.
+	if ExportEditFormIsDirty(f) {
+		t.Error("before cycling: isDirty should be false")
+	}
+
+	// Cycle right once (none → Today).
+	f = ExportEditFormCyclePlan(f, 1)
+	if !ExportEditFormIsDirty(f) {
+		t.Error("after cycling plan: isDirty should be true")
+	}
+}
+
+// CT-13: Changing the plan choice leaves due/snooze/estimate/goal untouched in editSavedMsg.
+func TestPlanField_PlanChangeLeavesOtherFieldsUntouched(t *testing.T) {
+	id20 := int64(20)
+	task := &taskv1.Task{
+		Id:          5,
+		Name:        "original name",
+		Description: "original desc",
+		Estimate:    3,
+		GoalId:      &id20,
+		Due:         timestamppb.New(time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC)),
+		SnoozeUntil: timestamppb.New(time.Date(2030, 6, 1, 0, 0, 0, 0, time.UTC)),
+	}
+	f := NewEditForm(task, 0, makeGoals(), goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
+	f.showPlanField = true // force plan field visible (normally hidden on edit)
+	f.focusIndex = focusPlan
+	f.nowFunc = func() time.Time { return time.Date(2030, 7, 10, 0, 0, 0, 0, time.UTC) }
+	keys := DefaultKeyMap()
+
+	// Select Today.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+
+	// Save.
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+
+	// planDay must be set.
+	if saved.planDay == "" {
+		t.Error("planDay should be non-empty after selecting Today")
+	}
+
+	// Other fields must remain at original values.
+	if saved.dueStr != task.Due.AsTime().UTC().Format("2006-01-02T15:04:05Z") {
+		t.Errorf("dueStr should be unchanged, got %q", saved.dueStr)
+	}
+	if saved.estimateStr != "3" {
+		t.Errorf("estimateStr: want %q, got %q", "3", saved.estimateStr)
+	}
+	if saved.snoozeStr != "2030-06-01" {
+		t.Errorf("snoozeStr: want %q, got %q", "2030-06-01", saved.snoozeStr)
+	}
+	if saved.newGoalID == nil || *saved.newGoalID != 20 {
+		t.Errorf("newGoalID: want 20, got %v", saved.newGoalID)
+	}
+	if saved.goalChanged {
+		t.Error("goalChanged should be false when goal was not changed")
 	}
 }

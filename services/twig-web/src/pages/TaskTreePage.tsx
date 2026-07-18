@@ -6,6 +6,7 @@ import {
   createTask,
   reorderTask,
 } from "../gen/task/v1/task-TaskService_connectquery";
+import { addPlanTask, listPlanEntries } from "../gen/plan/v1/plan-PlanService_connectquery";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { buildTree, findSiblingIds } from "../lib/tree";
@@ -21,6 +22,9 @@ import { EmptyState } from "../components/EmptyState";
 import { TaskForm } from "../components/TaskForm";
 import { Button } from "../components/Button";
 import { messages } from "../theme/messages";
+import { useToast } from "../context/ToastProvider";
+import { dayPickerLabel } from "../lib/planDays";
+import { ConnectError, Code } from "@connectrpc/connect";
 
 const EXPANDED_STORAGE_KEY = "twig-expanded-tasks";
 
@@ -61,10 +65,12 @@ export default function TaskTreePage() {
   const [expandedIds, setExpandedIds] = useState<Set<bigint>>(new Set());
   const [reorderError, setReorderError] = useState<string | null>(null);
   const initializedRef = useRef(false);
+  const { show: showToast } = useToast();
 
   const { data, isLoading, isError, error, refetch } = useQuery(listTasks, {});
   const { mutateAsync: doCreateTask, isPending } = useMutation(createTask);
   const { mutateAsync: doReorderTask } = useMutation(reorderTask);
+  const { mutateAsync: doAddPlanTask } = useMutation(addPlanTask);
 
   const [showCompleted, setShowCompleted] = useState(readShowCompleted);
 
@@ -73,6 +79,10 @@ export default function TaskTreePage() {
   const filteredTree = filterTree(tree, showCompleted);
 
   const listTasksKey = createConnectQueryKey({ schema: listTasks, input: {}, cardinality: "finite" });
+
+  function planEntriesKey(day: string) {
+    return createConnectQueryKey({ schema: listPlanEntries, input: { day }, cardinality: "finite" });
+  }
 
   // Initialize expand state once when tree data arrives
   useEffect(() => {
@@ -99,11 +109,26 @@ export default function TaskTreePage() {
     });
   }
 
-  async function handleAddTask(name: string, description: string) {
-    await doCreateTask({ name, description });
-    await queryClient.invalidateQueries({
-      queryKey: listTasksKey,
-    });
+  async function handleAddTask(name: string, description: string, planDay?: string) {
+    const createResp = await doCreateTask({ name, description });
+    const newTaskId = createResp.task?.id;
+
+    if (planDay && newTaskId) {
+      try {
+        await doAddPlanTask({ day: planDay, taskId: newTaskId, durationMinute: 0 });
+        const label = dayPickerLabel(planDay);
+        showToast(label === "Today" ? messages.addedToToday : messages.addedToDay(label), "success");
+        await queryClient.invalidateQueries({ queryKey: planEntriesKey(planDay) });
+      } catch (err) {
+        if (err instanceof ConnectError && err.code === Code.FailedPrecondition) {
+          showToast(messages.alreadyOnPlan, "error");
+        } else {
+          showToast(messages.addedToPlanPartialFail, "error");
+        }
+      }
+    }
+
+    await queryClient.invalidateQueries({ queryKey: listTasksKey });
     setShowAddForm(false);
   }
 
@@ -166,6 +191,7 @@ export default function TaskTreePage() {
               onSubmit={handleAddTask}
               onCancel={() => setShowAddForm(false)}
               loading={isPending}
+              showPlanControl
             />
           </div>
         )}

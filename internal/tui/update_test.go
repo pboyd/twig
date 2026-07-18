@@ -508,6 +508,37 @@ func TestHighlight_RefreshedMsgHighlightsByID(t *testing.T) {
 	}
 }
 
+// TestRefreshedMsg_PartialErrShowsTreeAndError verifies that a refreshedMsg
+// carrying a partialErr (soft failure after an otherwise-successful refresh,
+// e.g. AddPlanTask failing after CreateTask succeeded) both rebuilds the tree
+// AND surfaces the error, instead of the hard-error path which drops the tree.
+func TestRefreshedMsg_PartialErrShowsTreeAndError(t *testing.T) {
+	m := buildTestModel()
+
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "a"},
+		{Id: 2, Name: "b"},
+		{Id: 42, Name: "new task"},
+	}
+	tree := cli.BuildTree(tasks)
+	next, _ := m.Update(refreshedMsg{
+		tree:        tree,
+		highlightID: 42,
+		partialErr:  errForTest("task saved, but it didn't make it onto the plan"),
+	})
+	nm := next.(Model)
+
+	if nm.tree == nil {
+		t.Fatal("tree should be populated on a partial-failure refresh")
+	}
+	if nm.err == nil || !strings.Contains(nm.err.Error(), "plan") {
+		t.Errorf("expected partial-failure error to be surfaced, got %v", nm.err)
+	}
+	if got := findCursor(nm.visible, 42); got != nm.cursor {
+		t.Errorf("cursor should be on the highlighted new task: want %d, got %d", got, nm.cursor)
+	}
+}
+
 // TestHighlight_NewSubtaskOpensModeNewSubtask checks N key.
 func TestHighlight_NewSubtaskKey(t *testing.T) {
 	m := buildTestModel()
