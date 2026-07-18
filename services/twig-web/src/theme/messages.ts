@@ -31,6 +31,7 @@ export const messages = {
   addedToToday: "On today's plan! Go get it. 🎉",
   addedToDay: (label: string) => `Added to ${label} — marked and ready.`,
   alreadyOnPlan: "It's already waiting there — no need to add it twice.",
+  addedToPlanPartialFail: "Task saved, but it didn't make it onto the plan. Want to add it from the list?",
   entryRemoved: "Gone from the plan. A little lighter now.",
   addFailed: "Couldn't add that — give it another try?",
   account: {

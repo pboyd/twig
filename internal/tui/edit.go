@@ -37,6 +37,16 @@ type pgMsgGoalStateToggle struct {
 	delta int
 }
 
+// Plan selector choices for the create-task form.
+const (
+	planChoiceNone     = 0
+	planChoiceToday    = 1
+	planChoiceTomorrow = 2
+	planChoiceDate     = 3
+)
+
+var planChoiceLabels = []string{"No plan", "Today", "Tomorrow", ""}
+
 const (
 	focusName        = 0
 	focusDescription = 1
@@ -44,10 +54,11 @@ const (
 	focusEstimate    = 3
 	focusSnooze      = 4
 	focusState       = 5
-	focusGoal        = 6
-	focusSave        = 7
-	focusCancel      = 8
-	focusCount       = 9
+	focusPlan        = 6
+	focusGoal        = 7
+	focusSave        = 8
+	focusCancel      = 9
+	focusCount       = 10
 )
 
 // editFormModel holds the state of the task edit/create form.
@@ -72,6 +83,11 @@ type editFormModel struct {
 	// Goal state selector (goal edit forms only; hidden when !isGoal || taskID == nil).
 	goalStateIdx     int // index into goalStates cycle
 	origGoalStateIdx int
+	// Plan selector (task create forms only; hidden when showPlanField is false).
+	planIdx       int    // index into plan choices; 0 = none
+	planDate      string // ISO day, set only when a calendar pick made planIdx == planChoiceDate
+	showPlanField bool   // true only when creating a task (not editing, not a goal)
+	origPlanIdx   int
 	// Opened-state snapshot for dirty detection.
 	origName        string
 	origDescription string
@@ -97,6 +113,8 @@ type editSavedMsg struct {
 	// Goal state: populated only when editing an existing goal (isGoal && taskID != nil).
 	goalState        goalv1.GoalState // the cycling selector value
 	goalStateChanged bool             // true if state differs from original
+	// Plan: resolved ISO day (YYYY-MM-DD) for the new task's plan entry. Empty = no plan.
+	planDay string
 }
 
 // editCancelledMsg is dispatched when the user cancels the edit form.
@@ -175,6 +193,9 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal, go
 		f.goalStateIdx = goalStateIndex(goalState)
 	}
 
+	// Plan field is only for create forms; edit forms never show it.
+	f.showPlanField = false
+
 	// Capture opened-state snapshot for dirty detection.
 	f.origName = f.name.Value()
 	f.origDescription = f.description.Value()
@@ -183,6 +204,7 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal, go
 	f.origSnooze = f.snooze.Value()
 	f.origGoalIdx = f.goalIdx
 	f.origGoalStateIdx = f.goalStateIdx
+	f.origPlanIdx = f.planIdx
 
 	return f
 }
@@ -240,6 +262,7 @@ func newBlankForm(originalCursor int) editFormModel {
 		snooze:           snooze,
 		focusIndex:       focusName,
 		originalCursor:   originalCursor,
+		showPlanField:    true,
 		origGoalIdx:      -1,
 	}
 }
@@ -278,6 +301,9 @@ func (f editFormModel) isDirty() bool {
 	if f.isGoal && f.taskID != nil && f.goalStateIdx != f.origGoalStateIdx {
 		return true
 	}
+	if f.showPlanField && f.planIdx != f.origPlanIdx {
+		return true
+	}
 	return false
 }
 
@@ -291,6 +317,11 @@ func (f editFormModel) openCalendar() editFormModel {
 		rfc3339Field = true
 	case focusSnooze:
 		fieldValue = f.snooze.Value()
+	case focusPlan:
+		fieldValue = f.planDate
+		if fieldValue == "" {
+			fieldValue = f.now().Format("2006-01-02")
+		}
 	}
 	f.calendar = newCalendar(fieldValue, f.now(), rfc3339Field)
 	return f
@@ -336,6 +367,9 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 				f.due.SetValue(dateStr)
 			case focusSnooze:
 				f.snooze.SetValue(dateStr)
+			case focusPlan:
+				f.planDate = dateStr
+				f.planIdx = planChoiceDate
 			}
 			f.calendar = nil
 			return f, nil
@@ -352,7 +386,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	case key.Matches(keyMsg, keys.Editor) && f.focusIndex == focusDescription:
 		return f, openEditorCmd(f.description.Value())
 
-	case key.Matches(keyMsg, keys.Calendar) && (f.focusIndex == focusDue || f.focusIndex == focusSnooze):
+	case key.Matches(keyMsg, keys.Calendar) && (f.focusIndex == focusDue || f.focusIndex == focusSnooze || f.focusIndex == focusPlan):
 		f = f.openCalendar()
 		return f, nil
 
@@ -402,6 +436,18 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		}
 	}
 
+	// Handle plan field key events (left/right cycle plan choice).
+	if f.focusIndex == focusPlan && f.showPlanField {
+		switch keyMsg.Code {
+		case tea.KeyLeft:
+			f = f.cyclePlan(-1)
+			return f, nil
+		case tea.KeyRight:
+			f = f.cyclePlan(1)
+			return f, nil
+		}
+	}
+
 	// Enter on Save/Cancel buttons.
 	if keyMsg.Code == tea.KeyEnter {
 		switch f.focusIndex {
@@ -410,7 +456,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 		case focusCancel:
 			return f, func() tea.Msg { return editCancelledMsg{originalCursor: f.originalCursor} }
 		// Enter on single-line fields advances focus.
-		case focusName, focusDue, focusEstimate, focusSnooze, focusState, focusGoal:
+		case focusName, focusDue, focusEstimate, focusSnooze, focusState, focusGoal, focusPlan:
 			f = f.cycleFocus(1)
 			return f, nil
 		}
@@ -447,6 +493,16 @@ func (f editFormModel) buildSaveMsg() func() tea.Msg {
 			msg.goalState = goalStates[f.goalStateIdx]
 			msg.goalStateChanged = f.goalStateIdx != f.origGoalStateIdx
 		}
+		if f.showPlanField && f.planIdx != planChoiceNone {
+			switch f.planIdx {
+			case planChoiceToday:
+				msg.planDay = f.now().Format("2006-01-02")
+			case planChoiceTomorrow:
+				msg.planDay = f.now().AddDate(0, 0, 1).Format("2006-01-02")
+			case planChoiceDate:
+				msg.planDay = f.planDate
+			}
+		}
 		return msg
 	}
 }
@@ -465,6 +521,16 @@ func (f editFormModel) cycleGoal(delta int) editFormModel {
 	return f
 }
 
+// cyclePlan moves the plan selector by delta (-1 or +1), cycling through
+// None → Today → Tomorrow → None. planChoiceDate is a destination, not a
+// cycle stop; cycling from Date re-enters the loop and clears planDate.
+func (f editFormModel) cyclePlan(delta int) editFormModel {
+	// 3-stop cycle: None, Today, Tomorrow
+	f.planIdx = (f.planIdx + delta + 3) % 3
+	f.planDate = "" // cycling away from Date clears it
+	return f
+}
+
 // cycleFocus moves the focus index by delta, wrapping around, and updates field
 // focus state. focusGoal is skipped when showGoalField is false.
 func (f editFormModel) cycleFocus(delta int) editFormModel {
@@ -475,6 +541,9 @@ func (f editFormModel) cycleFocus(delta int) editFormModel {
 			continue
 		}
 		if idx == focusState && (!f.isGoal || f.taskID == nil) {
+			continue
+		}
+		if idx == focusPlan && !f.showPlanField {
 			continue
 		}
 		break
@@ -562,6 +631,27 @@ func (f editFormModel) View(width int) string {
 	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
 
 	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
+
+	if f.showPlanField {
+		planLabel := planChoiceLabels[f.planIdx]
+		if f.planIdx == planChoiceDate {
+			planLabel = f.planDate
+		}
+		if planLabel == "" {
+			planLabel = "No plan"
+		}
+		sb.WriteString(fieldLabel("Plan", f.focusIndex == focusPlan))
+		sb.WriteString("‹ " + planLabel + " ›\n")
+		if f.focusIndex == focusPlan {
+			if f.calendar != nil {
+				sb.WriteString(f.calendar.View())
+				sb.WriteString("  enter: pick  esc: never mind  t: today  [/]: month  {/}: year\n")
+			} else {
+				sb.WriteString("  ←/→ cycle · ctrl+g: summon the calendar\n")
+			}
+		}
+		sb.WriteString("\n")
+	}
 
 	if f.isGoal && f.taskID != nil {
 		stateName := goalStateName(goalStates[f.goalStateIdx])

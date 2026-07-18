@@ -19,6 +19,8 @@ import { AddToPlanControl } from "./AddToPlanControl";
 import { CompletionToggle } from "./CompletionToggle";
 import { messages } from "../theme/messages";
 import { Markdown } from "./Markdown";
+import { useToast } from "../context/ToastProvider";
+import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
 
 interface TreeRowProps {
   node: TaskNode;
@@ -33,8 +35,10 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
   const queryClient = useQueryClient();
   const [showSubForm, setShowSubForm] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const { show: showToast } = useToast();
 
   const { mutateAsync: doCreateTask, isPending: isCreating } = useMutation(createTask);
+  const { addToPlan } = useAddTaskToPlan(messages.addedToPlanPartialFail);
   const { mutateAsync: doComplete, isPending: isCompleting } = useMutation(completeTask);
   const { mutateAsync: doUncomplete, isPending: isUncompleting } = useMutation(uncompleteTask);
 
@@ -55,8 +59,20 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
     opacity: isDragging ? 0.5 : undefined,
   };
 
-  async function handleAddSubTask(name: string, description: string) {
-    await doCreateTask({ name, description, parentId: task.id });
+  async function handleAddSubTask(name: string, description: string, planDay?: string) {
+    let createResp;
+    try {
+      createResp = await doCreateTask({ name, description, parentId: task.id });
+    } catch {
+      showToast(messages.addFailed, "error");
+      return;
+    }
+    const newTaskId = createResp.task?.id;
+
+    if (planDay && newTaskId) {
+      await addToPlan(planDay, newTaskId);
+    }
+
     await queryClient.invalidateQueries({ queryKey: listTasksKey });
     setShowSubForm(false);
   }
@@ -196,6 +212,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
             onCancel={() => setShowSubForm(false)}
             loading={isCreating}
             submitLabel="Add sub-task"
+            showPlanControl
           />
         </div>
       )}

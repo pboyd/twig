@@ -44,7 +44,11 @@ type reorderResultMsg struct {
 type refreshedMsg struct {
 	tree        []*cli.TreeNode
 	highlightID int64 // task to focus after refresh; 0 = use clamped cursor
-	err         error
+	err         error // hard error: the refresh did not happen, tree/highlightID are unset
+	// partialErr is a soft error: the tree WAS refreshed (a mutation partially
+	// succeeded), but something after it failed. Shown alongside the fresh tree
+	// instead of suppressing it.
+	partialErr error
 }
 
 // moveTaskResultMsg carries the result of a move-parent UpdateTask call.
@@ -362,7 +366,7 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 	}
 }
 
-func createTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea.Cmd {
+func createTaskCmd(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, msg editSavedMsg) tea.Cmd {
 	return func() tea.Msg {
 		req := &taskv1.CreateTaskRequest{
 			Name:        msg.name,
@@ -397,6 +401,33 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			goalReq := &taskv1.SetTaskGoalRequest{TaskId: newID, GoalId: msg.newGoalID}
 			if _, err := client.SetTaskGoal(context.Background(), connect.NewRequest(goalReq)); err != nil {
 				return taskGoalMutationMsg{err: err}
+			}
+		}
+
+		// If a plan day was chosen, add the task to that day's plan.
+		if msg.planDay != "" && planClient != nil {
+			_, err := planClient.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
+				Day:            msg.planDay,
+				TaskId:         newID,
+				DurationMinute: 0,
+			}))
+			if err != nil {
+				// Partial failure: task was created but plan failed (FR-007).
+				// Report the partial success — the task stays, and the tree
+				// must still be refreshed so it's visible.
+				var partial error
+				var ce *connect.Error
+				if errors.As(err, &ce) && ce.Code() == connect.CodeFailedPrecondition {
+					partial = fmt.Errorf("task created, but already on that day's plan")
+				} else {
+					partial = fmt.Errorf("task saved, but it didn't make it onto the plan. Want to add it from the list?")
+				}
+				if rm, ok := fetchAfterMutation(client, newID).(refreshedMsg); ok && rm.err == nil {
+					rm.partialErr = partial
+					return rm
+				}
+				// ListTasks itself failed — fall back to a plain hard error.
+				return refreshedMsg{highlightID: newID, err: partial}
 			}
 		}
 
@@ -839,7 +870,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		prevCursor := m.cursor
 		m.tree = msg.tree
-		m.err = nil
+		m.err = msg.partialErr
 		m.mode = modeList
 		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 		if msg.highlightID != 0 {
@@ -2584,7 +2615,13 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.parentID != nil {
 		m.expanded[*msg.parentID] = true
 	}
-	return m, createTaskCmd(m.client, msg)
+	if msg.planDay != "" {
+		// A plan day was chosen on the create form: refresh the Plan tab's
+		// scheduled-days markers alongside the task tree so the new day
+		// shows up without waiting for some other action to refresh it.
+		return m, tea.Batch(createTaskCmd(m.client, m.planClient, msg), listScheduledDaysCmd(m.planClient))
+	}
+	return m, createTaskCmd(m.client, m.planClient, msg)
 }
 
 func (m Model) handleMoveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

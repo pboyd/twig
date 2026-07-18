@@ -21,6 +21,8 @@ import { EmptyState } from "../components/EmptyState";
 import { TaskForm } from "../components/TaskForm";
 import { Button } from "../components/Button";
 import { messages } from "../theme/messages";
+import { useToast } from "../context/ToastProvider";
+import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
 
 const EXPANDED_STORAGE_KEY = "twig-expanded-tasks";
 
@@ -61,10 +63,12 @@ export default function TaskTreePage() {
   const [expandedIds, setExpandedIds] = useState<Set<bigint>>(new Set());
   const [reorderError, setReorderError] = useState<string | null>(null);
   const initializedRef = useRef(false);
+  const { show: showToast } = useToast();
 
   const { data, isLoading, isError, error, refetch } = useQuery(listTasks, {});
   const { mutateAsync: doCreateTask, isPending } = useMutation(createTask);
   const { mutateAsync: doReorderTask } = useMutation(reorderTask);
+  const { addToPlan } = useAddTaskToPlan(messages.addedToPlanPartialFail);
 
   const [showCompleted, setShowCompleted] = useState(readShowCompleted);
 
@@ -99,11 +103,21 @@ export default function TaskTreePage() {
     });
   }
 
-  async function handleAddTask(name: string, description: string) {
-    await doCreateTask({ name, description });
-    await queryClient.invalidateQueries({
-      queryKey: listTasksKey,
-    });
+  async function handleAddTask(name: string, description: string, planDay?: string) {
+    let createResp;
+    try {
+      createResp = await doCreateTask({ name, description });
+    } catch {
+      showToast(messages.addFailed, "error");
+      return;
+    }
+    const newTaskId = createResp.task?.id;
+
+    if (planDay && newTaskId) {
+      await addToPlan(planDay, newTaskId);
+    }
+
+    await queryClient.invalidateQueries({ queryKey: listTasksKey });
     setShowAddForm(false);
   }
 
@@ -166,6 +180,7 @@ export default function TaskTreePage() {
               onSubmit={handleAddTask}
               onCancel={() => setShowAddForm(false)}
               loading={isPending}
+              showPlanControl
             />
           </div>
         )}

@@ -244,3 +244,17 @@ describe("TaskDetailPage — completion toggle", () => {
     });
   });
 });
+
+describe("TaskDetailPage — CT-07: no plan control on edit form (FR-011)", () => {
+  it("edit form does not render the Add to plan radiogroup", () => {
+    renderDetailPage();
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    expect(screen.queryByRole("radiogroup", { name: /add to plan/i })).not.toBeInTheDocument();
+  });
+
+  it("edit form does not render a date input for plan", () => {
+    renderDetailPage();
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    expect(screen.queryByLabelText(/pick a date/i)).not.toBeInTheDocument();
+  });
+});
