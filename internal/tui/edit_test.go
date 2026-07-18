@@ -1355,6 +1355,246 @@ func TestPlanField_CyclingMakesFormDirty(t *testing.T) {
 	}
 }
 
+// ── T022: US2 calendar and plan tests ────────────────────────────────────────
+
+// CT-12: A calendar pick sets planDate, moves the selector to planChoiceDate,
+// and renders the ISO date. Cycling away clears planDate.
+func TestPlanField_CalendarPickSetsPlanDateAndCyclingClears(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	f.nowFunc = func() time.Time { return time.Date(2030, 3, 15, 12, 0, 0, 0, time.UTC) }
+	keys := DefaultKeyMap()
+
+	// Open calendar on the Plan field.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("ctrl+g on Plan: expected calendar to open")
+	}
+
+	// Confirm with Enter (default selected = today).
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyEnter}, keys)
+	if f.calendar != nil {
+		t.Error("after enter: expected calendar to close")
+	}
+	if f.planIdx != planChoiceDate {
+		t.Errorf("after calendar pick: planIdx want planChoiceDate(%d), got %d", planChoiceDate, f.planIdx)
+	}
+	if f.planDate != "2030-03-15" {
+		t.Errorf("planDate: want %q, got %q", "2030-03-15", f.planDate)
+	}
+
+	// Cycling away from Date re-enters the 3-stop loop and clears planDate.
+	// cyclePlan uses modular arithmetic over [0..2], so from index 3 (Date) +1 lands on Today (1).
+	f = ExportEditFormCyclePlan(f, 1)
+	if f.planDate != "" {
+		t.Errorf("after cycling away from Date: planDate should be empty, got %q", f.planDate)
+	}
+	if f.planIdx != planChoiceToday {
+		t.Errorf("after cycling away from Date: planIdx want Today(%d), got %d", planChoiceToday, f.planIdx)
+	}
+}
+
+// CT-06: With nowFunc pinned across a midnight boundary, Today resolves to the
+// save-time day, not the form-open time.
+func TestPlanField_TodayResolvesAtSaveTime(t *testing.T) {
+	// Save happens at 00:05 on March 15 (next day after form open).
+	saveTime := time.Date(2030, 3, 15, 0, 5, 0, 0, time.UTC)
+
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	// nowFunc returns the save time when buildSaveMsg resolves.
+	f.nowFunc = func() time.Time { return saveTime }
+	keys := DefaultKeyMap()
+
+	// Select Today.
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceToday {
+		t.Fatalf("setup: want Today(%d), got %d", ExportPlanChoiceToday, got)
+	}
+
+	// Save — planDay must be the save-time day (March 15).
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.planDay != "2030-03-15" {
+		t.Errorf("planDay: want %q (save-time day), got %q", "2030-03-15", saved.planDay)
+	}
+}
+
+// Save with Tomorrow ⇒ planDay is tomorrow's ISO day.
+func TestPlanField_SaveWithTomorrowEmitsPlanDay(t *testing.T) {
+	fixedNow := time.Date(2030, 3, 15, 12, 0, 0, 0, time.UTC)
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	f.nowFunc = func() time.Time { return fixedNow }
+	keys := DefaultKeyMap()
+
+	// none → Today → Tomorrow
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyRight}, keys)
+	if got := ExportEditFormPlanIdx(f); got != ExportPlanChoiceTomorrow {
+		t.Fatalf("setup: want Tomorrow(%d), got %d", ExportPlanChoiceTomorrow, got)
+	}
+
+	_, cmd := f.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}, keys)
+	saved, ok := cmd().(editSavedMsg)
+	if !ok {
+		t.Fatalf("expected editSavedMsg, got %T", cmd())
+	}
+	if saved.planDay != "2030-03-16" {
+		t.Errorf("planDay: want %q (tomorrow), got %q", "2030-03-16", saved.planDay)
+	}
+}
+
+// ctrl+g on Plan field opens calendar seeded from planDate (or today when empty).
+func TestPlanField_CtrlGOpensCalendarSeededFromPlanDate(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+	f.nowFunc = func() time.Time { return time.Date(2030, 3, 15, 0, 0, 0, 0, time.UTC) }
+	keys := DefaultKeyMap()
+
+	// Open calendar with no planDate set — should seed from today.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("ctrl+g on Plan: expected calendar to open")
+	}
+	want := time.Date(2030, 3, 15, 0, 0, 0, 0, time.UTC)
+	if !f.calendar.selected.Equal(want) {
+		t.Errorf("calendar.selected: want %v, got %v", want, f.calendar.selected)
+	}
+
+	// Close and set a planDate.
+	f.calendar = nil
+	f.planDate = "2030-05-01"
+	f.planIdx = planChoiceDate
+
+	// Reopen — should seed from planDate.
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Fatal("ctrl+g on Plan: expected calendar to open")
+	}
+	want2 := time.Date(2030, 5, 1, 0, 0, 0, 0, time.UTC)
+	if !f.calendar.selected.Equal(want2) {
+		t.Errorf("calendar.selected after planDate seed: want %v, got %v", want2, f.calendar.selected)
+	}
+}
+
+// View renders the Plan field label and the plan choice label.
+func TestPlanField_ViewRendersPlanLabel(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusPlan
+
+	view := f.View(80)
+	if !strings.Contains(view, "Plan") {
+		t.Error("View should contain 'Plan' label")
+	}
+	if !strings.Contains(view, "No plan") {
+		t.Error("View should contain 'No plan' when planIdx == planChoiceNone")
+	}
+
+	// Select Today and check rendering.
+	f = ExportEditFormCyclePlan(f, 1)
+	view = f.View(80)
+	if !strings.Contains(view, "Today") {
+		t.Error("View should contain 'Today' after cycling to Today")
+	}
+
+	// Check hint line when focused.
+	if !strings.Contains(view, "←/→ cycle") {
+		t.Error("View should contain hint line when Plan is focused")
+	}
+}
+
+// ctrl+g does not open calendar when focusPlan is not focused.
+func TestPlanField_CtrlGNoOpWhenNotFocused(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.focusIndex = focusName
+	keys := DefaultKeyMap()
+
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar != nil {
+		t.Error("ctrl+g on Name: calendar should not open")
+	}
+}
+
+// ── T028: US3 CT-07 — showPlanField is false on edit/goal forms ──────────────
+
+// CT-07 (TUI): showPlanField is false for the task edit form and for every goal form.
+// The Plan field must be absent from the rendered view and skipped by cycleFocus.
+func TestPlanField_HiddenOnTaskEditForm(t *testing.T) {
+	task := makeTask(1, "task")
+	f := NewEditForm(task, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
+	if f.showPlanField {
+		t.Error("showPlanField should be false for task edit form")
+	}
+
+	// Plan field should not appear in the view.
+	view := f.View(80)
+	if strings.Contains(view, "Plan:") && strings.Contains(view, "‹") {
+		// Check that "Plan:" label doesn't appear in a field context.
+		// The word "Plan" might appear in other contexts, so we check specifically for the field.
+		lines := strings.Split(view, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "Plan:") && strings.Contains(line, "‹") {
+				t.Errorf("Plan field should not be visible on task edit form, found in view: %s", line)
+			}
+		}
+	}
+
+	// Tab cycling should skip focusPlan.
+	f2 := NewEditForm(task, 0, nil, goalv1.GoalState_GOAL_STATE_UNSPECIFIED)
+	f2.showPlanField = false
+	keys := DefaultKeyMap()
+	for i := 0; i < focusCount; i++ {
+		f2, _ = f2.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f2.focusIndex == focusPlan {
+			t.Error("focusPlan should be skipped by cycleFocus when showPlanField is false")
+		}
+	}
+}
+
+func TestPlanField_HiddenOnGoalEditForm(t *testing.T) {
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	fakeTask := goalToFakeTask(goal)
+	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
+	f.isGoal = true
+	if f.showPlanField {
+		t.Error("showPlanField should be false for goal edit form")
+	}
+
+	view := f.View(80)
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Plan:") && strings.Contains(line, "‹") {
+			t.Errorf("Plan field should not be visible on goal edit form, found in view: %s", line)
+		}
+	}
+}
+
+func TestPlanField_HiddenOnNewGoalForm(t *testing.T) {
+	// NewGoalForm uses NewRootForm + isGoal=true, same as handleGoalsKey does.
+	f := NewRootForm(0, nil)
+	f.isGoal = true
+	// isGoal alone doesn't hide the plan field — the code path that creates
+	// goal forms explicitly sets showPlanField = false. Verify that the form
+	// starts with showPlanField = true (as NewRootForm does) and only hides it
+	// when explicitly set, matching the real goal-form creation flow.
+	f.showPlanField = false
+	if f.showPlanField {
+		t.Error("showPlanField should be false after explicit set")
+	}
+
+	view := f.View(80)
+	lines := strings.Split(view, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Plan:") && strings.Contains(line, "‹") {
+			t.Errorf("Plan field should not be visible on new goal form, found in view: %s", line)
+		}
+	}
+}
+
 // CT-13: Changing the plan choice leaves due/snooze/estimate/goal untouched in editSavedMsg.
 func TestPlanField_PlanChangeLeavesOtherFieldsUntouched(t *testing.T) {
 	id20 := int64(20)

@@ -81,3 +81,65 @@ describe("TaskForm — plan control (US1)", () => {
     });
   });
 });
+
+describe("TaskForm — US2 date affordance", () => {
+  it("clicking the calendar icon reveals a date input", () => {
+    render(<TaskForm showPlanControl onSubmit={vi.fn()} />);
+    expect(screen.queryByLabelText(/pick a date/i)).not.toBeInTheDocument();
+
+    // Click the calendar (📅) button.
+    const calButton = screen.getByRole("radio", { name: /pick a specific date/i });
+    fireEvent.click(calButton);
+
+    const dateInput = screen.getByLabelText(/pick a date/i) as HTMLInputElement;
+    expect(dateInput).toBeInTheDocument();
+    expect(dateInput.type).toBe("date");
+  });
+
+  it("picking a date and submitting passes that ISO day as planDay", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showPlanControl onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Dated task" } });
+
+    // Open date input.
+    fireEvent.click(screen.getByRole("radio", { name: /pick a specific date/i }));
+    const dateInput = screen.getByLabelText(/pick a date/i);
+    fireEvent.change(dateInput, { target: { value: "2026-07-24" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("Dated task", "", "2026-07-24");
+    });
+  });
+
+  it("date choice with no date entered passes undefined rather than garbage", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showPlanControl onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "No date task" } });
+
+    // Select date but leave the input empty.
+    fireEvent.click(screen.getByRole("radio", { name: /pick a specific date/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("No date task", "", undefined);
+    });
+  });
+
+  it("selecting a date makes it the active choice; clearing the input returns to previous", () => {
+    render(<TaskForm showPlanControl onSubmit={vi.fn()} />);
+
+    // Select Today first.
+    fireEvent.click(screen.getByText("Today"));
+    expect(screen.getByText("Today")).toHaveAttribute("aria-checked", "true");
+
+    // Switch to date.
+    fireEvent.click(screen.getByRole("radio", { name: /pick a specific date/i }));
+    expect(screen.getByRole("radio", { name: /pick a specific date/i })).toHaveAttribute("aria-checked", "true");
+
+    // Clearing date input by switching back to Today.
+    fireEvent.click(screen.getByText("Today"));
+    expect(screen.getByText("Today")).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByLabelText(/pick a date/i)).not.toBeInTheDocument();
+  });
+});
