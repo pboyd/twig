@@ -70,7 +70,7 @@
 ### Implementation for User Story 2
 
 - [X] T018 [US2] Add goal-pane association actions in `internal/tui/update.go` — `a` opens the task form and creates the task then calls `SetTaskGoal` to attach it; `L` opens the existing task picker (`pickerState`, as in the Plan add-task flow) and links the chosen task's subtree; `U` picks among the goal's association roots and clears via `SetTaskGoal`; surface `FailedPrecondition` with the playful nesting message, per `contracts/goal-cli.md`
-- [X] T019 [P] [US2] Add the **Goal** field to the task edit form in `internal/tui/edit.go` — cycles `none` → each visible (committed/incubating) goal by name; on save, a changed value calls `SetTaskGoal` (never UpdateTask) per research D2
+- [X] T019 [P] [US2] Add the **Goal** field to the task edit form in `internal/tui/edit.go` — cycles `none` → each visible (in-progress/incubating) goal by name; on save, a changed value calls `SetTaskGoal` (never UpdateTask) per research D2
 - [X] T020 [P] [US2] Show `Goal: <name>` in the TUI task detail pane in `internal/tui/details.go` using effective-goal computation from `internal/goal` (inherited goals included); tree rows unchanged
 - [X] T021 [P] [US2] Add `--goal <id>` to `twig task add` and `--goal <id>|none` to `twig task mod` in `internal/cli/task.go` (mod path calls `SetTaskGoal`), plus a `Goal: <name>` line in CLI task detail output and the playful nesting-conflict error, per `contracts/goal-cli.md`
 - [X] T022 [US2] Add association tests — picker link/unlink flows, edit-form goal cycling, detail-pane `Goal:` line in `internal/tui/goal_view_test.go` + `internal/tui/details_test.go`; `--goal` flag parsing, `none` clearing, nesting-error rendering in `internal/cli/task_test.go` (depends on T018, T019, T020, T021)

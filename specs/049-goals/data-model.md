@@ -13,7 +13,7 @@
 | `name` | VARCHAR(255) | required, non-blank after trim (CHECK `btrim(name) <> ''`) |
 | `description` | TEXT | optional, default `''` |
 | `due` | TIMESTAMPTZ | optional (nullable); no enforcement when past |
-| `state` | TEXT | CHECK in (`incubating`, `committed`, `completed`, `archived`); default `incubating` |
+| `state` | TEXT | CHECK in (`incubating`, `in_progress`, `completed`, `archived`); default `incubating` |
 | `position` | INTEGER | rank within the `(user_id, state)` group; lower sorts first |
 
 Index: `goals_user_state_position_idx ON goals (user_id, state, position)`.
@@ -42,7 +42,7 @@ absent), `state` (enum `GOAL_STATE_{INCUBATING,COMMITTED,COMPLETED,ARCHIVED}`),
 
 ```
             ┌────────────┐
-   create → │ incubating │ ⇄ committed ⇄ completed
+   create → │ incubating │ ⇄ in_progress ⇄ completed
             └────────────┘       ⇅           ⇅
                   ⇵           archived ⇄ ────┘
 ```
@@ -52,7 +52,7 @@ There are no transition side effects on tasks. The only side effect is rank
 placement: the goal is appended to the bottom of its new `(user, state)` group
 (FR-013a).
 
-Visibility rule: `incubating` and `committed` are shown by default;
+Visibility rule: `incubating` and `in_progress` are shown by default;
 `completed` and `archived` are hidden until the user asks (FR-011).
 
 ## Validation rules

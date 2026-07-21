@@ -44,7 +44,7 @@ type goalGroup struct {
 }
 
 // visibleGoals filters the goals list by visibility rules:
-//   - Committed and Incubating are always shown.
+//   - In Progress and Incubating are always shown.
 //   - Hold, Completed, and Archived are only shown when showAll is true.
 func visibleGoals(goals []*goalv1.Goal, showAll bool) []*goalv1.Goal {
 	var out []*goalv1.Goal
@@ -62,7 +62,7 @@ func visibleGoals(goals []*goalv1.Goal, showAll bool) []*goalv1.Goal {
 }
 
 // goalGroupHeaders returns goals organized into display groups in order:
-// Committed, Incubating (always); Hold, Completed, Archived (when showAll).
+// In Progress, Incubating (always); Hold, Completed, Archived (when showAll).
 func goalGroupHeaders(goals []*goalv1.Goal, showAll bool) []goalGroup {
 	groupMap := make(map[goalv1.GoalState][]*goalv1.Goal)
 	for _, g := range goals {
@@ -71,7 +71,7 @@ func goalGroupHeaders(goals []*goalv1.Goal, showAll bool) []goalGroup {
 
 	var groups []goalGroup
 	orderedStates := []goalv1.GoalState{
-		goalv1.GoalState_GOAL_STATE_COMMITTED,
+		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
 	}
 	if showAll {
@@ -93,8 +93,8 @@ func goalGroupHeaders(goals []*goalv1.Goal, showAll bool) []goalGroup {
 // goalStateName returns the display name for a GoalState.
 func goalStateName(state goalv1.GoalState) string {
 	switch state {
-	case goalv1.GoalState_GOAL_STATE_COMMITTED:
-		return "Committed"
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
+		return "In Progress"
 	case goalv1.GoalState_GOAL_STATE_INCUBATING:
 		return "Incubating"
 	case goalv1.GoalState_GOAL_STATE_HOLD:

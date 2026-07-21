@@ -27,8 +27,8 @@ func goalStateToString(s goalv1.GoalState) (string, error) {
 	switch s {
 	case goalv1.GoalState_GOAL_STATE_INCUBATING:
 		return "incubating", nil
-	case goalv1.GoalState_GOAL_STATE_COMMITTED:
-		return "committed", nil
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
+		return "in_progress", nil
 	case goalv1.GoalState_GOAL_STATE_COMPLETED:
 		return "completed", nil
 	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
@@ -45,8 +45,8 @@ func goalStateFromString(s string) goalv1.GoalState {
 	switch s {
 	case "incubating":
 		return goalv1.GoalState_GOAL_STATE_INCUBATING
-	case "committed":
-		return goalv1.GoalState_GOAL_STATE_COMMITTED
+	case "in_progress":
+		return goalv1.GoalState_GOAL_STATE_IN_PROGRESS
 	case "completed":
 		return goalv1.GoalState_GOAL_STATE_COMPLETED
 	case "archived":

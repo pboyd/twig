@@ -36,7 +36,7 @@ func goalWithLatest(id int64, name string, su *goalv1.StatusUpdate) *goalv1.Goal
 	return &goalv1.Goal{
 		Id:                 id,
 		Name:               name,
-		State:              goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State:              goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		LatestStatusUpdate: su,
 	}
 }
@@ -48,7 +48,7 @@ func TestGoalStatus_DetailPaneNoStatus(t *testing.T) {
 	g := &goalv1.Goal{
 		Id:    1,
 		Name:  "Build a rocket",
-		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	out := m.renderGoalDetail(60)
@@ -81,7 +81,7 @@ func TestGoalStatus_DetailPaneWithLatest(t *testing.T) {
 
 // TestGoalStatus_SKeyStartsCompose verifies pressing `S` activates compose.
 func TestGoalStatus_SKeyStartsCompose(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	// We cannot actually open the editor in a test, but we can check compose is set.
@@ -93,7 +93,7 @@ func TestGoalStatus_SKeyStartsCompose(t *testing.T) {
 
 // TestGoalStatus_EmptyEditorDiscards verifies that an empty result is discarded.
 func TestGoalStatus_EmptyEditorDiscards(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.compose = statusCompose{goalID: g.Id, active: true}
 
@@ -115,7 +115,7 @@ func TestGoalStatus_EmptyEditorDiscards(t *testing.T) {
 
 // TestGoalStatus_NonEmptyEditorSendsAddCmd verifies non-empty editor result triggers RPC cmd.
 func TestGoalStatus_NonEmptyEditorSendsAddCmd(t *testing.T) {
-	g := &goalv1.Goal{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.compose = statusCompose{goalID: g.Id, active: true}
 
@@ -129,7 +129,7 @@ func TestGoalStatus_NonEmptyEditorSendsAddCmd(t *testing.T) {
 
 // TestGoalStatus_EditComposeSendsUpdateCmd verifies that an edit (editingID>0) returns an update cmd.
 func TestGoalStatus_EditComposeSendsUpdateCmd(t *testing.T) {
-	g := &goalv1.Goal{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.compose = statusCompose{goalID: g.Id, editingID: 7, active: true}
 
@@ -141,7 +141,7 @@ func TestGoalStatus_EditComposeSendsUpdateCmd(t *testing.T) {
 
 // TestGoalStatus_MutationMsgClearsCompose verifies goalStatusMutationMsg clears compose.
 func TestGoalStatus_MutationMsgClearsCompose(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.compose = statusCompose{goalID: 1, active: true}
 
@@ -155,7 +155,7 @@ func TestGoalStatus_MutationMsgClearsCompose(t *testing.T) {
 
 // TestGoalStatus_ListMsgEntersHistoryMode verifies goalStatusListMsg sets history mode.
 func TestGoalStatus_ListMsgEntersHistoryMode(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -174,7 +174,7 @@ func TestGoalStatus_ListMsgEntersHistoryMode(t *testing.T) {
 
 // TestGoalStatus_HistoryRenderNewestFirst verifies the history list renders newest first.
 func TestGoalStatus_HistoryRenderNewestFirst(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -198,7 +198,7 @@ func TestGoalStatus_HistoryRenderNewestFirst(t *testing.T) {
 
 // TestGoalStatus_HistoryNavCursor verifies cursor navigation in history view.
 func TestGoalStatus_HistoryNavCursor(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -240,7 +240,7 @@ func TestGoalStatus_HistoryNavCursor(t *testing.T) {
 
 // TestGoalStatus_EnterOpensReader verifies enter key opens the reader.
 func TestGoalStatus_EnterOpensReader(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -257,7 +257,7 @@ func TestGoalStatus_EnterOpensReader(t *testing.T) {
 
 // TestGoalStatus_EscFromReaderBackToHistory verifies esc returns to history list.
 func TestGoalStatus_EscFromReaderBackToHistory(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -274,7 +274,7 @@ func TestGoalStatus_EscFromReaderBackToHistory(t *testing.T) {
 
 // TestGoalStatus_EscFromHistoryBackToList verifies esc from history returns to goal list.
 func TestGoalStatus_EscFromHistoryBackToList(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -292,7 +292,7 @@ func TestGoalStatus_EscFromHistoryBackToList(t *testing.T) {
 // TestGoalStatus_ReaderScrollsLongBody verifies scroll offset changes on down key,
 // and that it clamps at the end of the content (no scrolling into a blank view).
 func TestGoalStatus_ReaderScrollsLongBody(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	// Set realistic terminal dimensions so the markdown renderer produces multiple
 	// lines and the scroll clamp has meaningful values.
@@ -340,7 +340,7 @@ func TestGoalStatus_ReaderScrollsLongBody(t *testing.T) {
 
 // TestGoalStatus_ReaderRenderNoTruncation verifies reader renders all content (no truncation for long bodies).
 func TestGoalStatus_ReaderRenderNoTruncation(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	var lines []string
@@ -361,7 +361,7 @@ func TestGoalStatus_ReaderRenderNoTruncation(t *testing.T) {
 
 // TestGoalStatus_EmptyHistoryRendersCopy verifies the empty-history copy.
 func TestGoalStatus_EmptyHistoryRendersCopy(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.mode = goalStatusHistory
 
@@ -375,7 +375,7 @@ func TestGoalStatus_EmptyHistoryRendersCopy(t *testing.T) {
 
 // TestGoalStatus_EKeyStartsEditCompose verifies `e` sets compose with editingID.
 func TestGoalStatus_EKeyStartsEditCompose(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -393,7 +393,7 @@ func TestGoalStatus_EKeyStartsEditCompose(t *testing.T) {
 
 // TestGoalStatus_EditEmptyEditorDiscards verifies empty edit is also discarded.
 func TestGoalStatus_EditEmptyEditorDiscards(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 	m.goal.compose = statusCompose{goalID: g.Id, editingID: 99, active: true}
 
@@ -408,7 +408,7 @@ func TestGoalStatus_EditEmptyEditorDiscards(t *testing.T) {
 
 // TestGoalStatus_DKeyEntersConfirmMode verifies `d` enters confirm-delete.
 func TestGoalStatus_DKeyEntersConfirmMode(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -425,7 +425,7 @@ func TestGoalStatus_DKeyEntersConfirmMode(t *testing.T) {
 
 // TestGoalStatus_ConfirmDeleteNKey cancels deletion.
 func TestGoalStatus_ConfirmDeleteNKey(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{
@@ -445,7 +445,7 @@ func TestGoalStatus_ConfirmDeleteNKey(t *testing.T) {
 
 // TestGoalStatus_ConfirmDeleteYKeyCallsDeleteCmd verifies `y` fires delete cmd.
 func TestGoalStatus_ConfirmDeleteYKeyCallsDeleteCmd(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := newGoalTestModel([]*goalv1.Goal{g})
 
 	updates := []*goalv1.StatusUpdate{

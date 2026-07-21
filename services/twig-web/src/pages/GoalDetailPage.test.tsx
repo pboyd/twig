@@ -159,7 +159,7 @@ describe("GoalDetailPage — goal display", () => {
 
   it("shows state label", () => {
     renderPage();
-    expect(screen.getByText("Committed")).toBeTruthy();
+    expect(screen.getByText("In Progress")).toBeTruthy();
   });
 
   it("shows due date when present", () => {

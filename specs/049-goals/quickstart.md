@@ -20,13 +20,13 @@ export TWIG_ADDR=http://localhost:8080
 ./twig goal add "Buy a new car" --due 2027-03-01 --desc "EV, after the bonus lands"
 ./twig goal add "Learn woodworking"
 ./twig goal                                # both under Incubating
-./twig goal state 1 committed
+./twig goal state 1 in-progress
 ./twig goal                                # goal 1 now under Committed (listed first)
 ./twig goal mod 2 "Learn furniture making"
 ./twig goal state 2 completed
 ./twig goal                                # goal 2 gone from default view
 ./twig goal --all                          # goal 2 visible under Completed
-./twig goal state 2 committed              # reversible; reappears at bottom of Committed
+./twig goal state 2 in-progress              # reversible; reappears at bottom of In Progress
 ./twig goal show 1                         # fields + "No tasks attached yet…"
 ./twig goal state 1 bogus                  # error listing the four valid states
 ./twig goal show 99                        # playful not-found, exit 1

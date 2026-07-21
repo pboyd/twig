@@ -138,3 +138,18 @@ export const countCompletedPomodoros = TaskService.method.countCompletedPomodoro
  * @generated from rpc task.v1.TaskService.SetTaskGoal
  */
 export const setTaskGoal = TaskService.method.setTaskGoal;
+
+/**
+ * FilterTasks evaluates a filter expression (see the filter grammar
+ * contract) against the calling user's tasks and returns the ids of the
+ * tasks that match. It never returns ancestor-context rows — deciding how
+ * to display matches is the client's job.
+ *
+ * Errors:
+ *   InvalidArgument — the expression does not parse or fails validation
+ *                     (unknown field, bad operator, malformed date, ...).
+ *                     The message is human-readable and safe to display.
+ *
+ * @generated from rpc task.v1.TaskService.FilterTasks
+ */
+export const filterTasks = TaskService.method.filterTasks;

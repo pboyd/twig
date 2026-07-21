@@ -14,7 +14,7 @@ func ptr[T any](v T) *T { return &v }
 func TestStateDisplayOrder(t *testing.T) {
 	order := goal.StateDisplayOrder()
 	want := []goalv1.GoalState{
-		goalv1.GoalState_GOAL_STATE_COMMITTED,
+		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
 		goalv1.GoalState_GOAL_STATE_COMPLETED,
 		goalv1.GoalState_GOAL_STATE_ARCHIVED,
@@ -34,7 +34,7 @@ func TestDefaultVisible(t *testing.T) {
 		state   goalv1.GoalState
 		visible bool
 	}{
-		{goalv1.GoalState_GOAL_STATE_COMMITTED, true},
+		{goalv1.GoalState_GOAL_STATE_IN_PROGRESS, true},
 		{goalv1.GoalState_GOAL_STATE_INCUBATING, true},
 		{goalv1.GoalState_GOAL_STATE_COMPLETED, false},
 		{goalv1.GoalState_GOAL_STATE_ARCHIVED, false},
@@ -54,7 +54,7 @@ func TestStateName(t *testing.T) {
 		name  string
 	}{
 		{goalv1.GoalState_GOAL_STATE_INCUBATING, "incubating"},
-		{goalv1.GoalState_GOAL_STATE_COMMITTED, "committed"},
+		{goalv1.GoalState_GOAL_STATE_IN_PROGRESS, "in progress"},
 		{goalv1.GoalState_GOAL_STATE_COMPLETED, "completed"},
 		{goalv1.GoalState_GOAL_STATE_ARCHIVED, "archived"},
 	}
@@ -69,7 +69,7 @@ func TestStateName(t *testing.T) {
 func TestParseState(t *testing.T) {
 	roundTrips := []goalv1.GoalState{
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
-		goalv1.GoalState_GOAL_STATE_COMMITTED,
+		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		goalv1.GoalState_GOAL_STATE_COMPLETED,
 		goalv1.GoalState_GOAL_STATE_ARCHIVED,
 	}

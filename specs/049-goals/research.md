@@ -48,7 +48,7 @@ mutations on TaskService matches the existing layout.
 
 - `goals` table: `id` (identity PK), `user_id` (FK), `name` (VARCHAR(255),
   non-blank check), `description` (TEXT, default ''), `due` (TIMESTAMPTZ,
-  nullable), `state` (TEXT, CHECK in incubating/committed/completed/archived,
+  nullable), `state` (TEXT, CHECK in incubating/in_progress/completed/archived,
   default 'incubating'), `position` (INTEGER) — plus an index on
   `(user_id, state, position)`.
 - `tasks.goal_id BIGINT REFERENCES goals(id) ON DELETE SET NULL` — deleting a
@@ -140,7 +140,7 @@ twig goal [--all]                          # list (default), grouped by state
 twig goal add [--due <date>] [--desc <text>] <name>
 twig goal show <id>                        # fields + associated task subtrees
 twig goal mod <id> [<name>] [--due <date>] [--desc <text>]
-twig goal state <id> <incubating|committed|completed|archived>
+twig goal state <id> <incubating|in-progress|completed|archived>
 twig goal rm <id>
 ```
 

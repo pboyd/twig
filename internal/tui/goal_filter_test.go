@@ -20,7 +20,7 @@ import (
 func TestGoalFilter_JumpAppliesFilter(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{10, 20}}
 	goals := []*goalv1.Goal{
-		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80
@@ -95,7 +95,7 @@ func TestGoalFilter_EmptyGoalsNoOp(t *testing.T) {
 func TestGoalFilter_InertInSubModes(t *testing.T) {
 	fc := &fakeTaskClient{}
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 
 	subModes := []struct {
@@ -134,7 +134,7 @@ func TestGoalFilter_ShowAllPassthrough(t *testing.T) {
 		t.Run(fmt.Sprintf("showAll=%v", showAll), func(t *testing.T) {
 			fc := &fakeTaskClient{filterIDs: []int64{1}}
 			goals := []*goalv1.Goal{
-				{Id: 3, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+				{Id: 3, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 			}
 			m := ExportNewGoalModel(fc, goals)
 			m.showAll = showAll
@@ -163,7 +163,7 @@ func TestGoalFilter_ShowAllPassthrough(t *testing.T) {
 func TestGoalFilter_ExpressionBareRelational(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{1}}
 	goals := []*goalv1.Goal{
-		{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 42, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80
@@ -192,8 +192,8 @@ func TestGoalFilter_ExpressionBareRelational(t *testing.T) {
 func TestGoalFilter_SecondGoalResolvesCorrectly(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{5}}
 	goals := []*goalv1.Goal{
-		{Id: 10, Name: "First", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
-		{Id: 20, Name: "Second", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 1},
+		{Id: 10, Name: "First", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
+		{Id: 20, Name: "Second", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 1},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.goal.cursor = 1
@@ -226,7 +226,7 @@ func TestGoalFilter_SecondGoalResolvesCorrectly(t *testing.T) {
 func TestGoalFilter_FilterExprRecordedAfterResult(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{10, 20}}
 	goals := []*goalv1.Goal{
-		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80
@@ -262,7 +262,7 @@ func TestGoalFilter_FilterExprRecordedAfterResult(t *testing.T) {
 func TestGoalFilter_FilterReopenPrefilled(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{10}}
 	goals := []*goalv1.Goal{
-		{Id: 5, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 5, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80
@@ -298,7 +298,7 @@ func TestGoalFilter_FilterReopenPrefilled(t *testing.T) {
 func TestGoalFilter_ReplacesExistingFilter(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{1, 2}}
 	goals := []*goalv1.Goal{
-		{Id: 8, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 8, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80
@@ -335,7 +335,7 @@ func TestGoalFilter_ReplacesExistingFilter(t *testing.T) {
 func TestGoalFilter_ClearFilterRestoresUnfiltered(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{10, 20, 30}}
 	goals := []*goalv1.Goal{
-		{Id: 3, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 3, Name: "Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	// Set up a tree with tasks so visible is non-empty.
 	tree := []*cli.TreeNode{
@@ -433,7 +433,7 @@ func TestGoalFilter_ShortHelpDoesNotIncludeShortcut(t *testing.T) {
 func TestGoalFilter_ClearCancelsInFlightResult(t *testing.T) {
 	fc := &fakeTaskClient{filterIDs: []int64{10}}
 	goals := []*goalv1.Goal{
-		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	tree := []*cli.TreeNode{
 		{Task: &taskv1.Task{Id: 10, Name: "task a"}},
@@ -484,7 +484,7 @@ func TestGoalFilter_JumpLandsOnFirstMatchingRow(t *testing.T) {
 
 	fc := &fakeTaskClient{filterIDs: []int64{2}} // only the child matches
 	goals := []*goalv1.Goal{
-		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.tree = tree
@@ -516,7 +516,7 @@ func TestGoalFilter_JumpLandsOnFirstMatchingRow(t *testing.T) {
 func TestGoalFilter_JumpErrorKeepsPriorFilter(t *testing.T) {
 	fc := &fakeTaskClient{filterErr: errors.New("boom")}
 	goals := []*goalv1.Goal{
-		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 7, Name: "My Goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(fc, goals)
 	m.width = 80

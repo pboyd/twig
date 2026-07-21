@@ -47,12 +47,14 @@ export const renamePlanEntry = PlanService.method.renamePlanEntry;
 export const movePlanEntry = PlanService.method.movePlanEntry;
 
 /**
- * ClearPlan removes every entry starting at or after start_minute on day; if an
- * entry straddles start_minute, its duration is shortened so it ends at start_minute.
+ * ReorderPlanEntry repositions an untimed entry within the day's untimed
+ * group by placing it immediately before or after a sibling untimed anchor.
+ * Both the entry and the anchor must be untimed (no start_minute) and on the
+ * same day. Timed entries cannot be reordered or used as anchors.
  *
- * @generated from rpc plan.v1.PlanService.ClearPlan
+ * @generated from rpc plan.v1.PlanService.ReorderPlanEntry
  */
-export const clearPlan = PlanService.method.clearPlan;
+export const reorderPlanEntry = PlanService.method.reorderPlanEntry;
 
 /**
  * ListScheduledDays returns, for every task the caller has scheduled, each

@@ -130,7 +130,7 @@ SELECT id, user_id, name, description, due, state, position FROM goals
 WHERE user_id = $1
 ORDER BY
   CASE state
-    WHEN 'committed'  THEN 1
+    WHEN 'in_progress' THEN 1
     WHEN 'incubating' THEN 2
     WHEN 'hold'       THEN 3
     WHEN 'completed'  THEN 4

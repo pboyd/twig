@@ -8,7 +8,7 @@
 
 Add goals — long-term aims that aren't actionable today — as a first-class
 object so they stop cluttering the task list. Goals have name/description/due,
-four states (incubating, committed, completed, archived; any transition
+four states (incubating, in_progress, completed, archived; any transition
 allowed), per-state-group ranking, and optional task association with subtree
 inheritance. Technical approach: a new `goal/v1` proto package with its own
 `GoalService` (CRUD + SetGoalState + ReorderGoal, mirroring existing service

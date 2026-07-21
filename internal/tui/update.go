@@ -1467,11 +1467,11 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			g := visible[m.goal.cursor]
 			id := g.Id
 			switch g.GetState() {
-			case goalv1.GoalState_GOAL_STATE_COMMITTED, goalv1.GoalState_GOAL_STATE_INCUBATING, goalv1.GoalState_GOAL_STATE_HOLD:
+			case goalv1.GoalState_GOAL_STATE_IN_PROGRESS, goalv1.GoalState_GOAL_STATE_INCUBATING, goalv1.GoalState_GOAL_STATE_HOLD:
 				m.notice = "Goal achieved — take a bow!"
 				return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMPLETED)
 			case goalv1.GoalState_GOAL_STATE_COMPLETED:
-				return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_COMMITTED)
+				return m, setGoalStateCmd(m.goalClient, id, goalv1.GoalState_GOAL_STATE_IN_PROGRESS)
 			}
 		}
 

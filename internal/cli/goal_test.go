@@ -177,7 +177,7 @@ func TestGoalList_GroupsAndOrder(t *testing.T) {
 	// Add committed and incubating goals.
 	h.goalSvc.mu.Lock()
 	h.goalSvc.goals[1] = &goalv1.Goal{Id: 1, Name: "Incubating goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0}
-	h.goalSvc.goals[2] = &goalv1.Goal{Id: 2, Name: "Committed goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0}
+	h.goalSvc.goals[2] = &goalv1.Goal{Id: 2, Name: "In progress goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0}
 	h.goalSvc.nextID = 3
 	h.goalSvc.mu.Unlock()
 
@@ -188,13 +188,13 @@ func TestGoalList_GroupsAndOrder(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
-	committedIdx := strings.Index(stdout, "Committed")
+	inProgressIdx := strings.Index(stdout, "In Progress")
 	incubatingIdx := strings.Index(stdout, "Incubating")
-	if committedIdx < 0 || incubatingIdx < 0 {
+	if inProgressIdx < 0 || incubatingIdx < 0 {
 		t.Fatalf("expected both group headers, got: %s", stdout)
 	}
-	if committedIdx >= incubatingIdx {
-		t.Errorf("Committed (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
+	if inProgressIdx >= incubatingIdx {
+		t.Errorf("In Progress (%d) should appear before Incubating (%d)", inProgressIdx, incubatingIdx)
 	}
 }
 
@@ -316,17 +316,17 @@ func TestGoalState(t *testing.T) {
 
 	var code int
 	stdout, _ := captureOutput(func() {
-		code = runGoalState(h.goalClient, h.addr, []string{"1", "committed"})
+		code = runGoalState(h.goalClient, h.addr, []string{"1", "in-progress"})
 	})
 	if code != 0 {
 		t.Fatalf("expected exit 0")
 	}
-	if !strings.Contains(stdout, "committed") {
-		t.Errorf("expected 'committed' in output, got: %s", stdout)
+	if !strings.Contains(stdout, "in progress") {
+		t.Errorf("expected 'in progress' in output, got: %s", stdout)
 	}
 	h.goalSvc.mu.Lock()
 	defer h.goalSvc.mu.Unlock()
-	if h.goalSvc.goals[1].State != goalv1.GoalState_GOAL_STATE_COMMITTED {
+	if h.goalSvc.goals[1].State != goalv1.GoalState_GOAL_STATE_IN_PROGRESS {
 		t.Errorf("state not updated")
 	}
 }
@@ -346,7 +346,7 @@ func TestGoalState_InvalidState(t *testing.T) {
 		t.Fatal("expected non-zero exit for invalid state")
 	}
 	// Error message should list valid states.
-	for _, valid := range []string{"incubating", "committed", "completed", "archived"} {
+	for _, valid := range []string{"incubating", "in-progress", "completed", "archived"} {
 		if !strings.Contains(stderr, valid) {
 			t.Errorf("expected valid state %q listed in error, got: %s", valid, stderr)
 		}
@@ -357,7 +357,7 @@ func TestGoalState_NotFound(t *testing.T) {
 	h := newGoalTestHarness(t)
 	var code int
 	_, stderr := captureOutput(func() {
-		code = runGoalState(h.goalClient, h.addr, []string{"99", "committed"})
+		code = runGoalState(h.goalClient, h.addr, []string{"99", "in-progress"})
 	})
 	if code == 0 {
 		t.Fatal("expected non-zero exit")
@@ -408,7 +408,7 @@ func TestGoalRm_NotFound(t *testing.T) {
 func TestGoalShow_NoTasks(t *testing.T) {
 	h := newGoalTestHarness(t)
 	h.goalSvc.mu.Lock()
-	h.goalSvc.goals[1] = &goalv1.Goal{Id: 1, Name: "Build a boat", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Description: "A small sailboat"}
+	h.goalSvc.goals[1] = &goalv1.Goal{Id: 1, Name: "Build a boat", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Description: "A small sailboat"}
 	h.goalSvc.nextID = 2
 	h.goalSvc.mu.Unlock()
 
@@ -422,7 +422,7 @@ func TestGoalShow_NoTasks(t *testing.T) {
 	if !strings.Contains(stdout, "Build a boat") {
 		t.Errorf("expected goal name in output, got: %s", stdout)
 	}
-	if !strings.Contains(stdout, "committed") {
+	if !strings.Contains(stdout, "in progress") {
 		t.Errorf("expected state in output, got: %s", stdout)
 	}
 	if !strings.Contains(stdout, "A small sailboat") {
@@ -437,7 +437,7 @@ func TestGoalShow_WithTasks(t *testing.T) {
 	h := newGoalTestHarness(t)
 	goalID := int64(1)
 	h.goalSvc.mu.Lock()
-	h.goalSvc.goals[1] = &goalv1.Goal{Id: goalID, Name: "Ship the feature", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	h.goalSvc.goals[1] = &goalv1.Goal{Id: goalID, Name: "Ship the feature", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	h.goalSvc.nextID = 2
 	h.goalSvc.mu.Unlock()
 
@@ -479,7 +479,7 @@ func TestTaskShow_WithGoal(t *testing.T) {
 
 	goalID := int64(1)
 	h.goalSvc.mu.Lock()
-	h.goalSvc.goals[goalID] = &goalv1.Goal{Id: goalID, Name: "Buy a new car", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	h.goalSvc.goals[goalID] = &goalv1.Goal{Id: goalID, Name: "Buy a new car", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	h.goalSvc.mu.Unlock()
 
 	h.taskSvc.mu.Lock()

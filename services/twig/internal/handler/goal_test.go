@@ -179,41 +179,41 @@ func TestSetGoalState_Transitions(t *testing.T) {
 	// Move A to committed.
 	resp, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    goalA,
-		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	}))
 	if err != nil {
-		t.Fatalf("SetGoalState incubating→committed: %v", err)
+		t.Fatalf("SetGoalState incubating→in_progress: %v", err)
 	}
-	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_COMMITTED {
-		t.Errorf("state = %v, want COMMITTED", resp.Msg.Goal.State)
+	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_IN_PROGRESS {
+		t.Errorf("state = %v, want IN_PROGRESS", resp.Msg.Goal.State)
 	}
-	// Position in the committed group: first committed → position 0.
+	// Position in the in_progress group: first in_progress → position 0.
 	if resp.Msg.Goal.Position != 0 {
-		t.Errorf("position after transition to committed = %d, want 0", resp.Msg.Goal.Position)
+		t.Errorf("position after transition to in_progress = %d, want 0", resp.Msg.Goal.Position)
 	}
 
-	// Move B to committed — should be at position 1 (bottom of committed group).
+	// Move B to in_progress — should be at position 1 (bottom of in_progress group).
 	resp2, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    goalB,
-		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	}))
 	if err != nil {
-		t.Fatalf("SetGoalState B incubating→committed: %v", err)
+		t.Fatalf("SetGoalState B incubating→in_progress: %v", err)
 	}
-	if resp2.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_COMMITTED {
-		t.Errorf("state = %v, want COMMITTED", resp2.Msg.Goal.State)
+	if resp2.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_IN_PROGRESS {
+		t.Errorf("state = %v, want IN_PROGRESS", resp2.Msg.Goal.State)
 	}
 	if resp2.Msg.Goal.Position != 1 {
-		t.Errorf("position after B→committed = %d, want 1", resp2.Msg.Goal.Position)
+		t.Errorf("position after B→in_progress = %d, want 1", resp2.Msg.Goal.Position)
 	}
 
-	// committed→completed
+	// in_progress→completed
 	resp, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    goalA,
 		State: goalv1.GoalState_GOAL_STATE_COMPLETED,
 	}))
 	if err != nil {
-		t.Fatalf("SetGoalState committed→completed: %v", err)
+		t.Fatalf("SetGoalState in_progress→completed: %v", err)
 	}
 	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_COMPLETED {
 		t.Errorf("state = %v, want COMPLETED", resp.Msg.Goal.State)
@@ -309,16 +309,16 @@ func TestReorderGoal_CrossGroupRejected(t *testing.T) {
 	r1, _ := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Incubating goal"}))
 	r2, _ := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Also incubating"}))
 
-	// Move r2 to committed.
+	// Move r2 to in_progress.
 	_, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    r2.Msg.Goal.Id,
-		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	}))
 	if err != nil {
 		t.Fatalf("SetGoalState: %v", err)
 	}
 
-	// Attempt to reorder r1 (incubating) before r2 (committed) — must fail.
+	// Attempt to reorder r1 (incubating) before r2 (in_progress) — must fail.
 	_, err = gh.ReorderGoal(ctx, connect.NewRequest(&goalv1.ReorderGoalRequest{
 		GoalId: r1.Msg.Goal.Id,
 		Anchor: &goalv1.ReorderGoalRequest_BeforeGoalId{BeforeGoalId: r2.Msg.Goal.Id},
@@ -451,7 +451,7 @@ func TestGoalCrossUserIsolation(t *testing.T) {
 	t.Run("user B cannot change state of user A's goal", func(t *testing.T) {
 		_, err := ghB.SetGoalState(ctxB, connect.NewRequest(&goalv1.SetGoalStateRequest{
 			Id:    goalID,
-			State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+			State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		}))
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -757,25 +757,25 @@ func TestSetGoalState_Hold_RoundTrip(t *testing.T) {
 		t.Errorf("state = %v, want HOLD", resp.Msg.Goal.State)
 	}
 
-	// hold → committed
+	// hold → in_progress
 	resp, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    goalID,
-		State: goalv1.GoalState_GOAL_STATE_COMMITTED,
+		State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	}))
 	if err != nil {
-		t.Fatalf("SetGoalState hold→committed: %v", err)
+		t.Fatalf("SetGoalState hold→in_progress: %v", err)
 	}
-	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_COMMITTED {
-		t.Errorf("state = %v, want COMMITTED", resp.Msg.Goal.State)
+	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_IN_PROGRESS {
+		t.Errorf("state = %v, want IN_PROGRESS", resp.Msg.Goal.State)
 	}
 
-	// committed → hold (re-enter hold from committed)
+	// in_progress → hold (re-enter hold from in_progress)
 	resp, err = gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
 		Id:    goalID,
 		State: goalv1.GoalState_GOAL_STATE_HOLD,
 	}))
 	if err != nil {
-		t.Fatalf("SetGoalState committed→hold: %v", err)
+		t.Fatalf("SetGoalState in_progress→hold: %v", err)
 	}
 	if resp.Msg.Goal.State != goalv1.GoalState_GOAL_STATE_HOLD {
 		t.Errorf("state = %v, want HOLD", resp.Msg.Goal.State)

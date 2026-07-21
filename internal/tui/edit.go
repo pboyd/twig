@@ -15,7 +15,7 @@ import (
 
 // goalStates defines the cycling order for the goal state selector in the edit form.
 var goalStates = []goalv1.GoalState{
-	goalv1.GoalState_GOAL_STATE_COMMITTED,
+	goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 	goalv1.GoalState_GOAL_STATE_INCUBATING,
 	goalv1.GoalState_GOAL_STATE_HOLD,
 	goalv1.GoalState_GOAL_STATE_COMPLETED,
@@ -76,7 +76,7 @@ type editFormModel struct {
 	nowFunc          func() time.Time
 	isGoal           bool // true when this form edits/creates a Goal, not a Task
 	// Goal selector (task edit forms only; hidden when showGoalField is false).
-	availableGoals []*goalv1.Goal // committed + incubating goals
+	availableGoals []*goalv1.Goal // in progress + incubating goals
 	goalIdx        int            // -1 = none, 0..N-1 = index into availableGoals
 	showGoalField  bool
 	originalGoalID *int64
@@ -129,7 +129,7 @@ type editDiscardRequestedMsg struct {
 }
 
 // NewEditForm creates a form pre-filled with an existing task's values.
-// goals, when non-nil, enables the Goal selector field showing committed/incubating goals.
+// goals, when non-nil, enables the Goal selector field showing in-progress/incubating goals.
 // Pass nil (e.g. when editing a goal via its fake-task) to hide the Goal field.
 // goalState, when non-empty, sets the goal state cycling field (for goal edit forms).
 func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal, goalState goalv1.GoalState) editFormModel {
@@ -154,13 +154,13 @@ func NewEditForm(task *taskv1.Task, originalCursor int, goals []*goalv1.Goal, go
 	if goals != nil {
 		f.showGoalField = true
 		f.originalGoalID = task.GoalId
-		// Collect committed + incubating goals for the selector. Also include
+		// Collect in progress + incubating goals for the selector. Also include
 		// the task's current goal if it's completed/archived so that saving
 		// without changing the goal field doesn't clear the association.
 		var currentGoalIncluded bool
 		for _, g := range goals {
 			s := g.GetState()
-			if s == goalv1.GoalState_GOAL_STATE_COMMITTED || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
+			if s == goalv1.GoalState_GOAL_STATE_IN_PROGRESS || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
 				f.availableGoals = append(f.availableGoals, g)
 				if task.GoalId != nil && g.GetId() == task.GetGoalId() {
 					currentGoalIncluded = true
@@ -218,12 +218,12 @@ func NewSubtaskForm(parentID int64, originalCursor int) editFormModel {
 
 // NewRootForm creates a blank form for a new root task.
 // goals, when non-nil and non-empty, enables the Goal selector showing
-// committed/incubating goals. Pass nil (or an empty slice) to hide it.
+// in-progress/incubating goals. Pass nil (or an empty slice) to hide it.
 func NewRootForm(originalCursor int, goals []*goalv1.Goal) editFormModel {
 	f := newBlankForm(originalCursor)
 	for _, g := range goals {
 		s := g.GetState()
-		if s == goalv1.GoalState_GOAL_STATE_COMMITTED || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
+		if s == goalv1.GoalState_GOAL_STATE_IN_PROGRESS || s == goalv1.GoalState_GOAL_STATE_INCUBATING {
 			f.availableGoals = append(f.availableGoals, g)
 		}
 	}

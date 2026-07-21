@@ -7,10 +7,10 @@ import (
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 )
 
-// StateDisplayOrder returns states in display order: Committed, Incubating, Completed, Archived.
+// StateDisplayOrder returns states in display order: In Progress, Incubating, Completed, Archived.
 func StateDisplayOrder() []goalv1.GoalState {
 	return []goalv1.GoalState{
-		goalv1.GoalState_GOAL_STATE_COMMITTED,
+		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
 		goalv1.GoalState_GOAL_STATE_COMPLETED,
 		goalv1.GoalState_GOAL_STATE_ARCHIVED,
@@ -18,10 +18,10 @@ func StateDisplayOrder() []goalv1.GoalState {
 }
 
 // DefaultVisible returns true if the state is shown without a "show all" toggle.
-// Committed and incubating are visible by default; completed and archived are hidden.
+// In progress and incubating are visible by default; completed and archived are hidden.
 func DefaultVisible(s goalv1.GoalState) bool {
 	switch s {
-	case goalv1.GoalState_GOAL_STATE_COMMITTED, goalv1.GoalState_GOAL_STATE_INCUBATING:
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS, goalv1.GoalState_GOAL_STATE_INCUBATING:
 		return true
 	default:
 		return false
@@ -33,8 +33,8 @@ func StateName(s goalv1.GoalState) string {
 	switch s {
 	case goalv1.GoalState_GOAL_STATE_INCUBATING:
 		return "incubating"
-	case goalv1.GoalState_GOAL_STATE_COMMITTED:
-		return "committed"
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
+		return "in progress"
 	case goalv1.GoalState_GOAL_STATE_COMPLETED:
 		return "completed"
 	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
@@ -44,13 +44,31 @@ func StateName(s goalv1.GoalState) string {
 	}
 }
 
+// DisplayLabel returns the human-facing label for a state, e.g. for group headers.
+func DisplayLabel(s goalv1.GoalState) string {
+	switch s {
+	case goalv1.GoalState_GOAL_STATE_INCUBATING:
+		return "Incubating"
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
+		return "In Progress"
+	case goalv1.GoalState_GOAL_STATE_HOLD:
+		return "Hold"
+	case goalv1.GoalState_GOAL_STATE_COMPLETED:
+		return "Completed"
+	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
+		return "Archived"
+	default:
+		return "Unspecified"
+	}
+}
+
 // ParseState parses a CLI string to a GoalState. Returns an error for unknown values.
 func ParseState(s string) (goalv1.GoalState, error) {
 	switch s {
 	case "incubating":
 		return goalv1.GoalState_GOAL_STATE_INCUBATING, nil
-	case "committed":
-		return goalv1.GoalState_GOAL_STATE_COMMITTED, nil
+	case "in-progress", "in progress":
+		return goalv1.GoalState_GOAL_STATE_IN_PROGRESS, nil
 	case "completed":
 		return goalv1.GoalState_GOAL_STATE_COMPLETED, nil
 	case "archived":

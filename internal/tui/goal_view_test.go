@@ -46,29 +46,29 @@ func TestGoal_TabOrderShiftTabFromTasksReachesGoals(t *testing.T) {
 	}
 }
 
-// TestGoal_GroupOrderCommittedBeforeIncubating verifies that Committed goals
+// TestGoal_GroupOrderCommittedBeforeIncubating verifies that In Progress goals
 // appear before Incubating goals in the rendered left pane.
 func TestGoal_GroupOrderCommittedBeforeIncubating(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "Plant a garden", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
-		{Id: 2, Name: "Run a marathon", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 2, Name: "Run a marathon", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
 
 	// Render the goal list (unstyled).
 	out := m.renderGoalList(40)
 
-	committedIdx := strings.Index(out, "Committed")
+	committedIdx := strings.Index(out, "In Progress")
 	incubatingIdx := strings.Index(out, "Incubating")
 
 	if committedIdx < 0 {
-		t.Fatal("renderGoalList: 'Committed' header not found")
+		t.Fatal("renderGoalList: 'In Progress' header not found")
 	}
 	if incubatingIdx < 0 {
 		t.Fatal("renderGoalList: 'Incubating' header not found")
 	}
 	if committedIdx >= incubatingIdx {
-		t.Errorf("group order: Committed (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
+		t.Errorf("group order: In Progress (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
 	}
 }
 
@@ -76,7 +76,7 @@ func TestGoal_GroupOrderCommittedBeforeIncubating(t *testing.T) {
 // rendered when showAll is false, and are revealed when 'c' is pressed.
 func TestGoal_CompletedHiddenByDefault(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 2, Name: "Done goal", State: goalv1.GoalState_GOAL_STATE_COMPLETED, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
@@ -281,7 +281,7 @@ func TestGoalDetail_DescriptionRendered(t *testing.T) {
 // an invisible edit form (regression for goalNewTask missing from viewGoals gate).
 func TestGoal_AddTaskFormVisible(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Learn woodworking", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Learn woodworking", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	m.width = 80
@@ -306,7 +306,7 @@ func TestGoal_AddTaskFormVisible(t *testing.T) {
 // confirmation notice contains the expected copy about tasks.
 func TestGoal_DeleteConfirmCopyMentionsTasksStickAround(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Learn woodworking", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Learn woodworking", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
 
@@ -397,7 +397,7 @@ func TestGoalRank_DownAtBottomEdge(t *testing.T) {
 // goal in a group (adjacent to a different state group) is a no-op.
 func TestGoalRank_CrossGroupBoundaryNoOp(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Committed goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Committed goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 2, Name: "Incubating goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
@@ -485,7 +485,7 @@ func TestGoalRank_NoHighlightIDClampsAsBefore(t *testing.T) {
 // when SetTaskGoal returns FailedPrecondition (nesting conflict), the TUI
 // shows the playful nesting message as a notice rather than a raw error.
 func TestTaskGoalMutation_FailedPreconditionShowsPlayfulNotice(t *testing.T) {
-	g := &goalv1.Goal{Id: 1, Name: "Alpha", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	g := &goalv1.Goal{Id: 1, Name: "Alpha", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	m := ExportNewGoalModel(nil, []*goalv1.Goal{g})
 
 	nestingErr := connect.NewError(connect.CodeFailedPrecondition, errors.New("an ancestor task already has a goal assigned"))
@@ -509,7 +509,7 @@ func TestTaskGoalMutation_FailedPreconditionShowsPlayfulNotice(t *testing.T) {
 // wired into renderGoalDetail rather than falling back to plain text.
 func TestGoalDetail_DescriptionStyled(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Description: mdSample},
+		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Description: mdSample},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	m.styled = true
@@ -525,7 +525,7 @@ func TestGoalDetail_DescriptionStyled(t *testing.T) {
 // description produces no ANSI escape sequences when styled=false.
 func TestGoalDetail_DescriptionPlainNoEscape(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Description: mdSample},
+		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Description: mdSample},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	m.styled = false
@@ -548,7 +548,7 @@ func TestGoalDetail_DescriptionWithinWidth(t *testing.T) {
 	longDesc := "# A Goal\n\n" +
 		"This is a fairly long paragraph that should be wrapped to fit within forty display columns when the renderer is active.\n"
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Description: longDesc},
+		{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Description: longDesc},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	m.styled = true
@@ -586,8 +586,8 @@ func TestGoalDetail_DescriptionWithinWidth(t *testing.T) {
 func TestGoalList_InlineNameStyled(t *testing.T) {
 	// Two goals: cursor at 0. Second goal has markdown name; check it in plain mode.
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "cursor row", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
-		{Id: 2, Name: "**Bold Goal**", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: 1, Name: "cursor row", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
+		{Id: 2, Name: "**Bold Goal**", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 	}
 
 	// Styled: expect ANSI codes somewhere (section headers, name styles, highlight).
@@ -615,7 +615,7 @@ func TestGoalList_InlineNameStyled(t *testing.T) {
 // visible text, and carries ANSI codes in styled mode.
 func TestGoalDetail_NameInlineStyledNoMarkupChars(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "**Deploy** the `app`", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: 1, Name: "**Deploy** the `app`", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	m.styled = true
@@ -633,7 +633,7 @@ func TestGoalDetail_NameInlineStyledNoMarkupChars(t *testing.T) {
 func TestGoalDetail_CompletedRootTasksShowAllDoneCopy(t *testing.T) {
 	goalID := int64(1)
 	goals := []*goalv1.Goal{
-		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 	}
 	completedAt := timestamppb.Now()
 	tasks := []*taskv1.Task{
@@ -662,7 +662,7 @@ func TestGoalDetail_CompletedRootTasksShowAllDoneCopy(t *testing.T) {
 func TestGoalDetail_IncompleteRootOnlyNoChildren(t *testing.T) {
 	goalID := int64(1)
 	goals := []*goalv1.Goal{
-		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 	}
 	rootID := int64(10)
 	tasks := []*taskv1.Task{
@@ -688,7 +688,7 @@ func TestGoalDetail_IncompleteRootOnlyNoChildren(t *testing.T) {
 func TestGoalDetail_MixedCompletionOnlyIncompleteRootsShown(t *testing.T) {
 	goalID := int64(1)
 	goals := []*goalv1.Goal{
-		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: goalID, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 	}
 	completedAt := timestamppb.Now()
 	tasks := []*taskv1.Task{
@@ -743,7 +743,7 @@ func TestGoalPicker_InlineNamePlain(t *testing.T) {
 // and revealed when 'c' (GoalToggleAll) is pressed.
 func TestGoal_HoldHiddenByDefault(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 2, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
@@ -771,7 +771,7 @@ func TestGoal_HoldHiddenByDefault(t *testing.T) {
 // when showAll is enabled.
 func TestGoal_HoldGroupHeader(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "Active", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "Active", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 2, Name: "Incubating", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
 		{Id: 3, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
 	}
@@ -783,12 +783,12 @@ func TestGoal_HoldGroupHeader(t *testing.T) {
 
 	out := m2.renderGoalList(40)
 
-	committedIdx := strings.Index(out, "Committed")
+	committedIdx := strings.Index(out, "In Progress")
 	incubatingIdx := strings.Index(out, "Incubating")
 	holdIdx := strings.Index(out, "Hold")
 
 	if committedIdx < 0 {
-		t.Fatal("renderGoalList: 'Committed' header not found")
+		t.Fatal("renderGoalList: 'In Progress' header not found")
 	}
 	if incubatingIdx < 0 {
 		t.Fatal("renderGoalList: 'Incubating' header not found")
@@ -797,7 +797,7 @@ func TestGoal_HoldGroupHeader(t *testing.T) {
 		t.Fatal("renderGoalList: 'Hold' header not found")
 	}
 	if committedIdx >= incubatingIdx {
-		t.Errorf("group order: Committed (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
+		t.Errorf("group order: In Progress (%d) should appear before Incubating (%d)", committedIdx, incubatingIdx)
 	}
 	if incubatingIdx >= holdIdx {
 		t.Errorf("group order: Incubating (%d) should appear before Hold (%d)", incubatingIdx, holdIdx)
@@ -809,7 +809,7 @@ func TestGoal_HoldGroupHeader(t *testing.T) {
 func TestGoal_HoldGroupOrder(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "A", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
-		{Id: 2, Name: "B", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 2, Name: "B", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 3, Name: "C", State: goalv1.GoalState_GOAL_STATE_INCUBATING, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
@@ -854,7 +854,7 @@ func TestGoal_HoldDetailStateName(t *testing.T) {
 // returns a command (setGoalStateCmd).
 func TestGoal_Space_CommittedProducesCommand(t *testing.T) {
 	goals := []*goalv1.Goal{
-		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED, Position: 0},
+		{Id: 1, Name: "My goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 	}
 	m := ExportNewGoalModel(nil, goals)
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})

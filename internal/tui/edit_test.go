@@ -604,7 +604,7 @@ func TestEditForm_Calendar_NowFuncInjection(t *testing.T) {
 
 func makeGoals() []*goalv1.Goal {
 	return []*goalv1.Goal{
-		{Id: 10, Name: "Alpha goal", State: goalv1.GoalState_GOAL_STATE_COMMITTED},
+		{Id: 10, Name: "Alpha goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS},
 		{Id: 20, Name: "Beta goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING},
 	}
 }
@@ -1093,7 +1093,7 @@ func TestEditForm_EscOnDirtyBlankFormEmitsDiscardRequested(t *testing.T) {
 // TestEditForm_GoalState_ShowsOnGoalEdit verifies that the State field
 // appears in the Tab cycle when editing an existing goal.
 func TestEditForm_GoalState_ShowsOnGoalEdit(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1160,7 +1160,7 @@ func TestEditForm_GoalState_PreFillFromGoalState(t *testing.T) {
 
 // TestEditForm_GoalState_RightArrowCycles verifies → cycles through states.
 func TestEditForm_GoalState_RightArrowCycles(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1176,7 +1176,7 @@ func TestEditForm_GoalState_RightArrowCycles(t *testing.T) {
 
 // TestEditForm_GoalState_LeftArrowCycles verifies ← cycles through states backwards.
 func TestEditForm_GoalState_LeftArrowCycles(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1194,7 +1194,7 @@ func TestEditForm_GoalState_LeftArrowCycles(t *testing.T) {
 // TestEditForm_GoalState_DirtyDetection verifies that changing the state
 // makes the form dirty, and leaving it unchanged keeps it clean.
 func TestEditForm_GoalState_DirtyDetection(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1214,7 +1214,7 @@ func TestEditForm_GoalState_DirtyDetection(t *testing.T) {
 // TestEditForm_GoalState_SaveEmitsStateChanged verifies that saving after
 // a state change emits goalStateChanged=true and the correct goalState.
 func TestEditForm_GoalState_SaveEmitsStateChanged(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1236,7 +1236,7 @@ func TestEditForm_GoalState_SaveEmitsStateChanged(t *testing.T) {
 	if !saved.goalStateChanged {
 		t.Error("goalStateChanged should be true after state cycling")
 	}
-	wantState := goalStates[(goalStateIndex(goalv1.GoalState_GOAL_STATE_COMMITTED)+1)%len(goalStates)]
+	wantState := goalStates[(goalStateIndex(goalv1.GoalState_GOAL_STATE_IN_PROGRESS)+1)%len(goalStates)]
 	if saved.goalState != wantState {
 		t.Errorf("goalState: want %v, got %v", wantState, saved.goalState)
 	}
@@ -1245,7 +1245,7 @@ func TestEditForm_GoalState_SaveEmitsStateChanged(t *testing.T) {
 // TestEditForm_GoalState_SaveUnchangedNotChanged verifies that saving without
 // a state change emits goalStateChanged=false.
 func TestEditForm_GoalState_SaveUnchangedNotChanged(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true
@@ -1556,7 +1556,7 @@ func TestPlanField_HiddenOnTaskEditForm(t *testing.T) {
 }
 
 func TestPlanField_HiddenOnGoalEditForm(t *testing.T) {
-	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_COMMITTED}
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
 	fakeTask := goalToFakeTask(goal)
 	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
 	f.isGoal = true

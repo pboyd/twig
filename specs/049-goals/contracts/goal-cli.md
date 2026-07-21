@@ -13,7 +13,7 @@ twig goal [--all]                                 List goals (default subcommand
 twig goal add [--due <date>] [--desc <text>] <name>   Create a goal (starts incubating)
 twig goal show <id>                               Goal fields + associated task subtrees
 twig goal mod <id> [<name>] [--due <date>] [--desc <text>]   Edit name/description/due
-twig goal state <id> <incubating|committed|completed|archived>   Change state
+twig goal state <id> <incubating|in-progress|completed|archived>   Change state
 twig goal rm <id>                                 Delete a goal (tasks survive)
 ```
 
@@ -99,7 +99,7 @@ A blank canvas! Press 'n' to plant your first goal.
 | `n` | New goal (form: name, description, due — reuses the task edit-form component) | `n` new task |
 | `e`/`enter` | Edit selected goal (same form) | `e` edit task |
 | `ctrl+d` | Delete selected goal (confirm prompt names surviving tasks: "Tasks attached to it will stick around.") | `ctrl+d` delete task |
-| `i` / `o` / `d` / `v` | Set state: incubating / committed (commit) / completed (done) / archived | new; shown in help |
+| `i` / `o` / `d` / `v` | Set state: incubating / in-progress / completed (done) / archived | new; shown in help |
 | `{` / `}` | Rank higher / lower within the state group (no-op at group edge) | `{`/`}` task rank |
 | `c` | Toggle showing Completed + Archived groups | `c` toggle show all |
 | `a` | Add a new task attached to this goal (opens task form; created with `--goal` semantics) | — |
@@ -118,7 +118,7 @@ mind.`
 - Task detail pane gains `Goal: <name>` when the task has an effective goal
   (inherited goals show the same line — nearest self-or-ancestor rule).
 - The task edit form gains a **Goal** field: cycles `none` → each visible
-  (committed/incubating) goal by name; saving a change calls `SetTaskGoal`.
+  (in-progress/incubating) goal by name; saving a change calls `SetTaskGoal`.
   Tree rows are unchanged (clarification 2026-06-11: detail only).
 
 ### Hidden-state behavior

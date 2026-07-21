@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"connectrpc.com/connect"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
@@ -77,7 +76,7 @@ func printGoalUsage(w io.Writer) {
 	fmt.Fprintln(w, "  show <id>        Show goal details and associated tasks")
 	fmt.Fprintln(w, "  mod <id> [<name>] [--due <date>] [--desc <text>]")
 	fmt.Fprintln(w, "                   Modify a goal")
-	fmt.Fprintln(w, "  state <id> <incubating|committed|completed|archived>")
+	fmt.Fprintln(w, "  state <id> <incubating|in-progress|completed|archived>")
 	fmt.Fprintln(w, "                   Change goal state")
 	fmt.Fprintln(w, "  rm <id>          Delete a goal (tasks survive)")
 	fmt.Fprintln(w, "")
@@ -144,7 +143,7 @@ func renderGoalGroups(w io.Writer, goals []*goalv1.Goal, styled bool) {
 		}
 		first = false
 
-		header := capitalize(goal.StateName(state))
+		header := goal.DisplayLabel(state)
 		if styled {
 			header = "\x1b[1m" + header + "\x1b[0m"
 		}
@@ -357,7 +356,7 @@ func runGoalMod(client goalv1connect.GoalServiceClient, addr string, args []stri
 
 func runGoalState(client goalv1connect.GoalServiceClient, addr string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: twig goal state <id> <incubating|committed|completed|archived>")
+		fmt.Fprintln(os.Stderr, "usage: twig goal state <id> <incubating|in-progress|completed|archived>")
 		return 1
 	}
 
@@ -369,7 +368,7 @@ func runGoalState(client goalv1connect.GoalServiceClient, addr string, args []st
 
 	state, err := goal.ParseState(args[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "twig: %q isn't a valid state — try one of: incubating, committed, completed, archived\n", args[1])
+		fmt.Fprintf(os.Stderr, "twig: %q isn't a valid state — try one of: incubating, in-progress, completed, archived\n", args[1])
 		return 1
 	}
 
@@ -418,14 +417,4 @@ func runGoalRm(client goalv1connect.GoalServiceClient, addr string, args []strin
 func isNotFound(err error) bool {
 	ce, ok := err.(*connect.Error)
 	return ok && ce.Code() == connect.CodeNotFound
-}
-
-// capitalize returns s with the first rune uppercased.
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	r := []rune(s)
-	r[0] = unicode.ToUpper(r[0])
-	return string(r)
 }

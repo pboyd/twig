@@ -26,7 +26,7 @@ import { useToast } from "../context/ToastProvider";
 import { messages } from "../theme/messages";
 
 const STATE_LABELS: Partial<Record<GoalState, string>> = {
-  [GoalState.COMMITTED]: "Committed",
+  [GoalState.IN_PROGRESS]: "In Progress",
   [GoalState.INCUBATING]: "Incubating",
   [GoalState.COMPLETED]: "Completed",
   [GoalState.ARCHIVED]: "Archived",

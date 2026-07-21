@@ -61,18 +61,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const GOAL_STATE_COMMITTED = 2;
+const GOAL_STATE_IN_PROGRESS = 2;
 const GOAL_STATE_INCUBATING = 1;
 const GOAL_STATE_COMPLETED = 3;
 const GOAL_STATE_ARCHIVED = 4;
 
 describe("GoalsPage — grouping", () => {
-  it("shows Committed then Incubating by default", () => {
+  it("shows In Progress then Incubating by default", () => {
     listGoalsResult.mockReturnValue({
       data: {
         goals: [
           makeGoal(1n, GOAL_STATE_INCUBATING, "Incubating goal"),
-          makeGoal(2n, GOAL_STATE_COMMITTED, "Committed goal"),
+          makeGoal(2n, GOAL_STATE_IN_PROGRESS, "In progress goal"),
         ],
       },
       isLoading: false,
@@ -80,7 +80,7 @@ describe("GoalsPage — grouping", () => {
       error: null,
     });
     renderPage();
-    expect(screen.getByText("Committed goal")).toBeTruthy();
+    expect(screen.getByText("In progress goal")).toBeTruthy();
     expect(screen.getByText("Incubating goal")).toBeTruthy();
   });
 
@@ -88,7 +88,7 @@ describe("GoalsPage — grouping", () => {
     listGoalsResult.mockReturnValue({
       data: {
         goals: [
-          makeGoal(1n, GOAL_STATE_COMMITTED),
+          makeGoal(1n, GOAL_STATE_IN_PROGRESS),
           makeGoal(2n, GOAL_STATE_COMPLETED),
           makeGoal(3n, GOAL_STATE_ARCHIVED),
         ],
@@ -109,7 +109,7 @@ describe("GoalsPage — toggle hidden", () => {
     listGoalsResult.mockReturnValue({
       data: {
         goals: [
-          makeGoal(1n, GOAL_STATE_COMMITTED),
+          makeGoal(1n, GOAL_STATE_IN_PROGRESS),
           makeGoal(2n, GOAL_STATE_COMPLETED),
         ],
       },
