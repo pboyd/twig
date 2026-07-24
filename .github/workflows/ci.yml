@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.0"
+
+jobs:
+  go-test:
+    name: Go test (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module:
+          - "."
+          - "api"
+          - "services/twig"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: go vet
+        working-directory: ${{ matrix.module }}
+        run: GOWORK=off go vet ./...
+
+      - name: go test
+        working-directory: ${{ matrix.module }}
+        run: GOWORK=off go test ./...
+
+  cli-build:
+    name: CLI/TUI trial build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Build CLI/TUI (cmd/twig)
+        run: GOWORK=off go build -o twig ./cmd/twig
+
+  web:
+    name: Web trial build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/twig-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/twig-web/package-lock.json
+
+      - run: npm ci
+
+      - name: Trial build
+        run: npm run build
+
+      - name: Test
+        run: npm test -- --run
+
+  server-image-build:
+    name: Server image trial build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build (no push)
+        uses: ./.github/actions/build-server-image
+        with:
+          push: "false"
