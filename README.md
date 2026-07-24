@@ -50,25 +50,3 @@ npm run dev   # → http://localhost:5173, proxies API calls to :8080
 ```
 
 Log in with the name and password from step 2.
-
-## Tests
-
-```bash
-go test ./...                       # CLI/TUI
-cd services/twig && go test ./...   # server
-cd services/twig-web && npm test    # web app
-```
-
-Tests need no running database or server.
-
-## Layout
-
-| Path | Contents |
-|---|---|
-| `cmd/twig`, `internal/` | CLI and TUI |
-| `api/` | Protobuf definitions and generated ConnectRPC stubs |
-| `services/twig/` | Server, database migrations, and queries |
-| `services/twig-web/` | React web app |
-| `specs/` | Feature specifications |
-
-See [CLAUDE.md](CLAUDE.md) for development details: regenerating protobuf and sqlc code, config file schema, and architecture notes.
