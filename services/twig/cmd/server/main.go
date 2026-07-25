@@ -17,11 +17,6 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/pboyd/twig/api/gen/account/v1/accountv1connect"
-	"github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
-	"github.com/pboyd/twig/api/gen/health/v1/healthv1connect"
-	"github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
-	"github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
 	"github.com/pboyd/twig/services/twig/internal/auth"
 	"github.com/pboyd/twig/services/twig/internal/db"
 	"github.com/pboyd/twig/services/twig/internal/handler"
@@ -89,38 +84,14 @@ func main() {
 	)
 	loginLimiter := auth.NewLoginLimiter(loginMaxFailures, loginWindow)
 
-	mux := http.NewServeMux()
-	mux.Handle("/auth/login", auth.LoginHandler(queries, sessionLifetime, loginLimiter))
-	mux.Handle("/auth/logout", auth.LogoutHandler(queries))
-
 	cliBinary := handler.NewCLIBinary("/cli")
 	webUI := handler.NewWebUI("/web")
 
-	taskMux := http.NewServeMux()
-	healthPath, healthH := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
-	taskMux.Handle(healthPath, healthH)
-	taskPath, taskH := taskv1connect.NewTaskServiceHandler(&handler.Task{Queries: queries, Pool: pool})
-	taskMux.Handle(taskPath, taskH)
-	planPath, planH := planv1connect.NewPlanServiceHandler(&handler.Plan{Queries: queries, Pool: pool})
-	taskMux.Handle(planPath, planH)
-	goalPath, goalH := goalv1connect.NewGoalServiceHandler(&handler.Goal{Queries: queries, Pool: pool})
-	taskMux.Handle(goalPath, goalH)
-	accountPath, accountH := accountv1connect.NewAccountServiceHandler(&handler.Account{Queries: queries, Limiter: loginLimiter})
-	taskMux.Handle(accountPath, accountH)
-	taskMux.HandleFunc("GET /cli/download", cliBinary.ServeDownload)
-	taskMux.HandleFunc("GET /cli/info", cliBinary.ServeInfo)
-
-	authed := auth.Middleware(queries)(taskMux)
-	mux.Handle(healthPath, authed)
-	mux.Handle(taskPath, authed)
-	mux.Handle(planPath, authed)
-	mux.Handle(goalPath, authed)
-	mux.Handle(accountPath, authed)
-	mux.Handle("/cli/", authed)
-
-	// Everything else is the SPA — served unauthenticated so /login (and the
-	// app shell generally) can load before a session exists.
-	mux.Handle("/", webUI)
+	routes := services(queries, pool, loginLimiter)
+	mux := newRouter(queries, routes, cliBinary, webUI,
+		auth.LoginHandler(queries, sessionLifetime, loginLimiter),
+		auth.LogoutHandler(queries),
+	)
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", h2c.NewHandler(mux, &http2.Server{})); err != nil {
