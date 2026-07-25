@@ -1,0 +1,34 @@
+---
+# Data-safety guards — run only on redeploys (when .deployed exists).
+# Both checks protect the task database from silent data loss.
+
+- name: Check postgres data directory for PG_VERSION
+  ansible.builtin.stat:
+    path: "{{ twig_data_dir }}/postgres/PG_VERSION"
+  register: twig_pg_version_stat
+
+- name: Fail if postgres data directory is missing after a prior deployment
+  ansible.builtin.fail:
+    msg: >
+      {{ twig_data_dir }}/postgres/PG_VERSION is missing but a prior deployment marker
+      exists. The postgres bind-mount may be pointing at the wrong or empty directory.
+      Check compose.yaml and the host data dir before proceeding.
+  when: not twig_pg_version_stat.stat.exists
+
+- name: Get postgres container creation timestamp (epoch seconds)
+  ansible.builtin.command:
+    cmd: "podman inspect twig_postgres --format '{% raw %}{{.Created.Unix}}{% endraw %}'"
+  register: twig_postgres_inspect
+  changed_when: false
+  failed_when: false
+
+- name: Fail if postgres container was recreated during this deploy
+  ansible.builtin.fail:
+    msg: >
+      The twig_postgres container was recreated during this deploy
+      (Created epoch: {{ twig_postgres_inspect.stdout | trim }}, play start epoch: {{ twig_play_start_epoch }}).
+      PostgreSQL data may have been wiped. Check compose.yaml.j2 for changes to the
+      postgres service definition that force container recreation.
+  when: >
+    twig_postgres_inspect.rc | default(1) == 0 and
+    (twig_postgres_inspect.stdout | trim | int) > (twig_play_start_epoch | int)

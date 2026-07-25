@@ -1,0 +1,65 @@
+---
+# Fail-fast assertions — every check runs before any host mutation.
+# Each failure names the variable and the file to set it in.
+
+- name: Assert twig_domain is defined and valid
+  ansible.builtin.assert:
+    that:
+      - twig_domain is defined
+      - twig_domain | trim | length > 0
+      - twig_domain | trim | regex_search('^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$') is not none
+    fail_msg: >
+      twig_domain is missing or invalid (got: '{{ twig_domain | default('') }}').
+      Set it in group_vars/twig_servers/main.yml.
+      It must be a valid hostname or FQDN (e.g. twig.example.com) with no scheme or path.
+
+- name: Assert twig_tls_mode is valid
+  ansible.builtin.assert:
+    that:
+      - twig_tls_mode is defined
+      - twig_tls_mode in ['internal', 'letsencrypt']
+    fail_msg: >
+      twig_tls_mode must be "internal" or "letsencrypt" (got: '{{ twig_tls_mode | default('') }}').
+      Set it in group_vars/twig_servers/main.yml.
+
+- name: Assert twig_postgres_password is defined and non-empty
+  ansible.builtin.assert:
+    that:
+      - twig_postgres_password is defined
+      - twig_postgres_password | trim | length > 0
+    fail_msg: >
+      twig_postgres_password is missing or empty.
+      Set it in group_vars/twig_servers/vault.yml and encrypt with ansible-vault.
+  no_log: true
+
+- name: Assert twig_image_tag is defined and non-empty
+  ansible.builtin.assert:
+    that:
+      - twig_image_tag is defined
+      - twig_image_tag | trim | length > 0
+    fail_msg: >
+      twig_image_tag is missing or empty.
+      Set it in group_vars/twig_servers/main.yml or group_vars/all/defaults.yml.
+
+- name: Assert twig_acme_email when Let's Encrypt is enabled
+  ansible.builtin.assert:
+    that:
+      - twig_acme_email is defined
+      - twig_acme_email | trim | length > 0
+    fail_msg: >
+      twig_acme_email is required when twig_tls_mode is "letsencrypt".
+      Let's Encrypt needs a contact address for certificate notifications.
+      Set it in group_vars/twig_servers/main.yml.
+  when: twig_tls_mode == 'letsencrypt'
+
+- name: Assert twig_tunnel_token when tunnel is enabled
+  ansible.builtin.assert:
+    that:
+      - twig_tunnel_token is defined
+      - twig_tunnel_token | trim | length > 0
+    fail_msg: >
+      twig_tunnel_token is required when twig_tunnel_enabled is true.
+      Set it in group_vars/twig_servers/vault.yml (encrypted with ansible-vault).
+      Obtain the token from the Cloudflare dashboard under Zero Trust → Tunnels.
+  no_log: true
+  when: twig_tunnel_enabled | default(false) | bool

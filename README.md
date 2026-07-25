@@ -50,3 +50,9 @@ npm run dev   # → http://localhost:5173, proxies API calls to :8080
 ```
 
 Log in with the name and password from step 2.
+
+### Deploy to a real host
+
+The `deploy/` directory contains a self-contained Ansible example that turns a bare Fedora host into
+a working Twig instance — two roles, four configuration values, and a first run that needs no
+external service. See [`deploy/README.md`](deploy/README.md) for the walkthrough.

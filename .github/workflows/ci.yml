@@ -86,3 +86,24 @@ jobs:
         uses: ./.github/actions/build-server-image
         with:
           push: "false"
+
+  ansible:
+    name: Ansible lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
+      - name: Install collections
+        working-directory: deploy
+        run: ansible-galaxy install -r requirements.yml
+
+      - name: Syntax check
+        working-directory: deploy
+        run: ansible-playbook --syntax-check -i inventory.example.ini site.yml
+
+      - name: Lint
+        working-directory: deploy
+        run: ansible-lint
