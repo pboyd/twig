@@ -94,6 +94,7 @@ func main() {
 	mux.Handle("/auth/logout", auth.LogoutHandler(queries))
 
 	cliBinary := handler.NewCLIBinary("/cli")
+	webUI := handler.NewWebUI("/web")
 
 	taskMux := http.NewServeMux()
 	healthPath, healthH := healthv1connect.NewHealthServiceHandler(&handler.Health{Queries: queries})
@@ -109,7 +110,17 @@ func main() {
 	taskMux.HandleFunc("GET /cli/download", cliBinary.ServeDownload)
 	taskMux.HandleFunc("GET /cli/info", cliBinary.ServeInfo)
 
-	mux.Handle("/", auth.Middleware(queries)(taskMux))
+	authed := auth.Middleware(queries)(taskMux)
+	mux.Handle(healthPath, authed)
+	mux.Handle(taskPath, authed)
+	mux.Handle(planPath, authed)
+	mux.Handle(goalPath, authed)
+	mux.Handle(accountPath, authed)
+	mux.Handle("/cli/", authed)
+
+	// Everything else is the SPA — served unauthenticated so /login (and the
+	// app shell generally) can load before a session exists.
+	mux.Handle("/", webUI)
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", h2c.NewHandler(mux, &http2.Server{})); err != nil {

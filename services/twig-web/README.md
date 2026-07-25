@@ -35,6 +35,6 @@ src/
 
 ## Key constraints
 
-- **Single origin**: the Vite proxy (dev) and Caddy (production) keep the SPA and API on one origin so the `SameSite=Strict` session cookie is sent. Never call `:8080` directly from the browser.
+- **Single origin**: the Vite proxy (dev) keeps the SPA and API on one origin. In production, the server image builds this app and serves `dist/` itself (see `services/twig/Dockerfile` and `handler.WebUI`) so the SPA and API share an origin with no separate proxy. Never call `:8080` directly from the browser.
 - **Full replace on edit**: `UpdateTask` requires resending `due` + `parentId` unchanged — `src/lib/updatePayload.ts` handles this.
 - **Generated code**: re-run `npm run gen` after any proto change.

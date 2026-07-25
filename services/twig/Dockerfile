@@ -1,3 +1,10 @@
+FROM node:20-alpine AS web
+WORKDIR /web
+COPY services/twig-web/package.json services/twig-web/package-lock.json ./
+RUN npm ci
+COPY services/twig-web/ ./
+RUN npm run build
+
 FROM golang:1.26-alpine AS builder
 ARG CLI_VERSION=dev
 WORKDIR /app
@@ -28,5 +35,6 @@ FROM gcr.io/distroless/static-debian12
 COPY --from=builder /server /server
 COPY --from=builder /app/services/twig/db/migrations /db/migrations
 COPY --from=builder /cli /cli
+COPY --from=web /web/dist /web
 EXPOSE 8080
 ENTRYPOINT ["/server"]
