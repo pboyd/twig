@@ -116,7 +116,9 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 
 ## Frontend (services/twig-web/)
 
-A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints. **The backend is not modified.**
+A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints.
+
+**Distribution:** the server image (`services/twig/Dockerfile`) builds the SPA in a Node stage and bakes the output into `/web`, alongside the CLI binary at `/cli`. `cmd/server/main.go` serves it from `handler.WebUI` at `/` (unauthenticated, with SPA history-fallback to `index.html`), while every `*.v1.*Service` path, `/cli/*`, and the Connect/health routes stay behind `auth.Middleware`. One image ships both the API and the UI — see `make dev` / `make build`.
 
 All frontend commands run from `services/twig-web/`:
 
