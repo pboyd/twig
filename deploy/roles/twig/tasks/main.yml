@@ -1,0 +1,185 @@
+---
+# ---------------------------------------------------------------------------
+# Fail-fast assertions (must run before any host mutation)
+# ---------------------------------------------------------------------------
+- name: Include validation
+  ansible.builtin.include_tasks: validate.yml
+
+# ---------------------------------------------------------------------------
+# Idempotence bookkeeping
+# ---------------------------------------------------------------------------
+
+- name: Check if prior deployment marker exists
+  ansible.builtin.stat:
+    path: "{{ twig_data_dir }}/.deployed"
+  register: twig_deployed_marker
+
+- name: Record play start epoch (used by data-safety guards)
+  ansible.builtin.set_fact:
+    twig_play_start_epoch: "{{ ansible_date_time.epoch | int }}"
+
+# ---------------------------------------------------------------------------
+# Render compose and reverse proxy config
+# ---------------------------------------------------------------------------
+
+- name: Render production compose.yaml
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ twig_data_dir }}/app/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: twig_compose_rendered
+
+- name: Render Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ twig_data_dir }}/app/Caddyfile"
+    owner: root
+    group: root
+    mode: "0644"
+  register: twig_caddyfile_rendered
+
+# 0600, no_log: token must not appear in Ansible output.
+- name: Render cloudflared.env
+  ansible.builtin.copy:
+    dest: "{{ twig_data_dir }}/app/cloudflared.env"
+    content: "TUNNEL_TOKEN={{ twig_tunnel_token }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  register: twig_cloudflared_env_rendered
+  no_log: true
+  when: twig_tunnel_enabled | default(false) | bool
+
+# ---------------------------------------------------------------------------
+# Systemd unit
+# ---------------------------------------------------------------------------
+
+# Needed to keep --check usable against a host where twig.service has never
+# been installed: the systemd module queries the real systemctl state even
+# in check mode, and it errors out (rather than just predicting) when the
+# unit is completely unknown to systemd.
+- name: Check whether twig.service is already installed
+  ansible.builtin.stat:
+    path: /etc/systemd/system/twig.service
+  register: twig_unit_file_precheck
+
+- name: Render twig systemd unit
+  ansible.builtin.template:
+    src: twig.service.j2
+    dest: /etc/systemd/system/twig.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: twig_unit_rendered
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable twig.service
+  ansible.builtin.systemd:
+    name: twig.service
+    enabled: true
+  when: not ansible_check_mode or twig_unit_file_precheck.stat.exists
+
+# ---------------------------------------------------------------------------
+# Pre-pull images and (re)start stack when anything changed
+# ---------------------------------------------------------------------------
+
+- name: Pre-pull Twig server image
+  ansible.builtin.command:
+    cmd: "podman pull {{ twig_image }}:{{ twig_image_tag }}"
+  when: >
+    twig_compose_rendered.changed or
+    twig_caddyfile_rendered.changed or
+    twig_unit_rendered.changed or
+    (twig_cloudflared_env_rendered.changed | default(false))
+  changed_when: true
+
+- name: Pre-pull postgres image
+  ansible.builtin.command:
+    cmd: "podman pull {{ twig_postgres_image }}"
+  when: >
+    twig_compose_rendered.changed or
+    twig_caddyfile_rendered.changed or
+    twig_unit_rendered.changed or
+    (twig_cloudflared_env_rendered.changed | default(false))
+  changed_when: true
+
+- name: Pre-pull Caddy image
+  ansible.builtin.command:
+    cmd: "podman pull {{ twig_caddy_image }}"
+  when: >
+    twig_compose_rendered.changed or
+    twig_caddyfile_rendered.changed or
+    twig_unit_rendered.changed or
+    (twig_cloudflared_env_rendered.changed | default(false))
+  changed_when: true
+
+- name: Start or restart stack
+  ansible.builtin.command:
+    cmd: podman-compose up -d
+    chdir: "{{ twig_data_dir }}/app"
+  when: >
+    twig_compose_rendered.changed or
+    twig_caddyfile_rendered.changed or
+    twig_unit_rendered.changed or
+    (twig_cloudflared_env_rendered.changed | default(false))
+  changed_when: true
+
+- name: Ensure twig.service is started
+  ansible.builtin.systemd:
+    name: twig.service
+    state: started
+  when: not ansible_check_mode or twig_unit_file_precheck.stat.exists
+
+# ---------------------------------------------------------------------------
+# Smoke test
+# ---------------------------------------------------------------------------
+
+# Assert HTTP 200 on the unauthenticated GET /, from the control node.
+# Using --resolve so the check does not depend on the operator's own DNS.
+# Retry for up to twig_smoke_test_timeout seconds.
+- name: Wait for Twig to respond over HTTPS  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: >-
+      curl -o /dev/null -w '%{http_code}'
+      --resolve {{ twig_domain }}:{{ twig_https_port }}:{{ ansible_host }}
+      {% if twig_tls_mode == 'internal' %}-k {% endif %}
+      https://{{ twig_domain }}/
+  delegate_to: localhost
+  become: false
+  register: twig_smoke_result
+  retries: "{{ (twig_smoke_test_timeout / 10) | int }}"
+  delay: 10
+  until: twig_smoke_result.stdout | trim == '200'
+  changed_when: false
+
+# ---------------------------------------------------------------------------
+# Data-safety guards (redeploys only)
+# ---------------------------------------------------------------------------
+- name: Include data guards
+  ansible.builtin.include_tasks: data_guards.yml
+  when: twig_deployed_marker.stat.exists
+
+# ---------------------------------------------------------------------------
+# Deployment marker
+# ---------------------------------------------------------------------------
+
+- name: Mark deployment as completed
+  ansible.builtin.copy:
+    dest: "{{ twig_data_dir }}/.deployed"
+    content: "deployed\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Print next steps
+  ansible.builtin.debug:
+    msg: >
+      Twig is up and running at https://{{ twig_domain }}/!
+      Provision your first user with:
+      sudo podman exec twig_server /server --provision-user <name>:<password>
+      Save the API key — it is printed once and cannot be recovered.

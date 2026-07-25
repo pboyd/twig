@@ -1,0 +1,12 @@
+# Operator knobs — set these before your first deploy.
+#
+# Required:
+#   twig_domain: your domain, e.g. twig.example.com
+#
+# Optional (uncomment to change from the defaults in group_vars/all/defaults.yml):
+#   twig_image_tag: latest     # pin to vX.Y.Z once releases exist
+#   twig_tls_mode: internal    # "internal" or "letsencrypt"
+#   twig_acme_email: ""        # required when tls_mode is letsencrypt
+#   twig_tunnel_enabled: false # true to enable the Cloudflare Tunnel connector
+
+twig_domain:

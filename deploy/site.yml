@@ -1,0 +1,20 @@
+---
+- name: Assert inventory is targeted explicitly (not "all")
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Require explicit twig_servers target
+      ansible.builtin.assert:
+        that:
+          - groups['twig_servers'] | length > 0
+          - "'all' not in ansible_limit | default('')"
+        fail_msg: >
+          Run with -i <inventory> or --limit twig_servers.
+          This playbook must not silently target all hosts.
+
+- name: Deploy Twig stack
+  hosts: twig_servers
+  become: true
+  roles:
+    - base
+    - twig

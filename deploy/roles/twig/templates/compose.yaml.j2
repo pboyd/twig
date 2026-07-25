@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: "{{ twig_postgres_image }}"
+    container_name: twig_postgres
+    environment:
+      POSTGRES_USER: "{{ twig_postgres_user }}"
+      POSTGRES_PASSWORD: "{{ twig_postgres_password }}"
+      POSTGRES_DB: "{{ twig_postgres_db }}"
+    volumes:
+      # Bind-mount (not a named volume) so the data directory is visible on the host
+      # and easy to back up with standard tools.
+      # :z relabels the host dir with container_share_t for SELinux compatibility.
+      - "{{ twig_data_dir }}/postgres:/var/lib/postgresql/data:z"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ twig_postgres_user }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  twig_server:
+    image: "{{ twig_image }}:{{ twig_image_tag }}"
+    container_name: twig_server
+    environment:
+      DATABASE_URL: "postgres://{{ twig_postgres_user }}:{{ twig_postgres_password }}@postgres:5432/{{ twig_postgres_db }}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # No healthcheck — the image is distroless (no shell).
+
+  caddy:
+    image: "{{ twig_caddy_image }}"
+    container_name: twig_caddy
+    ports:
+      - "{{ twig_http_port }}:80"
+      - "{{ twig_https_port }}:443"
+    volumes:
+      - "{{ twig_data_dir }}/app/Caddyfile:/etc/caddy/Caddyfile:ro,z"
+      - "{{ twig_data_dir }}/caddy:/data:z"
+    depends_on:
+      - twig_server
+    restart: unless-stopped
+{% if twig_tunnel_enabled | default(false) | bool %}
+
+  cloudflared:
+    image: "{{ twig_cloudflared_image }}"
+    container_name: twig_cloudflared
+    command: tunnel --no-autoupdate run
+    env_file:
+      - "{{ twig_data_dir }}/app/cloudflared.env"
+    depends_on:
+      - caddy
+    restart: unless-stopped
+{% endif %}

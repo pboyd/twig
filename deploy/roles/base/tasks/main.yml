@@ -1,0 +1,48 @@
+---
+- name: Install required packages
+  ansible.builtin.dnf:
+    name:
+      - podman
+      - podman-compose
+      - python3-pip
+    state: present
+
+- name: Create host directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ twig_data_dir }}"
+    - "{{ twig_data_dir }}/app"
+    - "{{ twig_data_dir }}/caddy"
+
+- name: Create postgres data directory with correct ownership
+  # postgres:17-alpine runs as uid/gid 70. Mode 0700: postgres initdb
+  # requires this and sets it on first start; creating it up front keeps idempotent.
+  ansible.builtin.file:
+    path: "{{ twig_data_dir }}/postgres"
+    state: directory
+    owner: "70"
+    group: "70"
+    mode: "0700"
+
+- name: Check if firewalld is running  # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: systemctl is-active firewalld
+  register: base_firewalld_active
+  changed_when: false
+  failed_when: false
+
+- name: Open http and https services in firewalld
+  ansible.posix.firewalld:  # noqa: syntax-check[unknown-module]
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - http
+    - https
+  when: base_firewalld_active.rc == 0

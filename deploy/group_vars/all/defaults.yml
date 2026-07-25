@@ -1,0 +1,22 @@
+# Default configuration for the Twig deployment example.
+# These are the example's own defaults — not operator-owned.
+# Override them in group_vars/twig_servers/main.yml if needed.
+
+twig_image: ghcr.io/pboyd/twig-server
+twig_image_tag: latest  # pin this to a vX.Y.Z tag once Twig publishes releases
+
+twig_tls_mode: internal  # "internal" or "letsencrypt"
+twig_acme_email: ""  # required when twig_tls_mode is letsencrypt
+twig_tunnel_enabled: false
+
+twig_http_port: 80
+twig_https_port: 443
+twig_data_dir: /var/lib/twig
+
+twig_postgres_user: twig
+twig_postgres_db: twig
+twig_postgres_image: docker.io/library/postgres:17-alpine
+twig_caddy_image: docker.io/library/caddy:2-alpine
+twig_cloudflared_image: docker.io/cloudflare/cloudflared:latest
+
+twig_smoke_test_timeout: 600

@@ -1,0 +1,10 @@
+# Copy this file to vault.yml and encrypt it:
+#   cp group_vars/twig_servers/vault.example.yml group_vars/twig_servers/vault.yml
+#   ansible-vault encrypt group_vars/twig_servers/vault.yml
+#
+# Then edit with real values:
+#   ansible-vault edit group_vars/twig_servers/vault.yml
+
+twig_postgres_password: changeme
+# twig_tunnel_token: <connector token from Cloudflare Zero Trust dashboard>
+# ansible_become_password: <alternative to -K prompt>

@@ -1,0 +1,44 @@
+# Shared routing snippet for Twig — used by both the HTTPS site (LAN) and the
+# plain-HTTP site (Cloudflare Tunnel). twig_server serves both the API and the
+# SPA itself (the SPA is baked into its image), so Caddy just proxies everything.
+(twig_routes) {
+	encode zstd gzip
+	reverse_proxy twig_server:8080
+}
+
+{% if twig_tls_mode == 'letsencrypt' or twig_tunnel_enabled | default(false) | bool %}
+{
+{% if twig_tls_mode == 'letsencrypt' %}
+	email {{ twig_acme_email }}
+{% endif %}
+{% if twig_tunnel_enabled | default(false) | bool %}
+	# Caddy's automatic HTTPS still marks twig_domain as "needs a redirect" because
+	# of the HTTPS site below, even though it's also given its own http:// block —
+	# an explicit http:// scheme only suppresses the redirect for hosts that have no
+	# other TLS-enabled block. Without this, the auto-redirect gets merged onto the
+	# same :80 server as the tunnel's plain-HTTP site, so every tunneled request
+	# bounces to https://twig_domain/ — the exact URL it came in as. Loop.
+	auto_https disable_redirects
+{% endif %}
+}
+{% endif %}
+
+# Twig — HTTPS site (LAN clients, or public with Let's Encrypt).
+{{ twig_domain }} {
+{% if twig_tls_mode == 'internal' %}
+	tls internal
+{% endif %}
+	import twig_routes
+}
+{% if twig_tunnel_enabled | default(false) | bool %}
+
+# Plain HTTP site for the Cloudflare Tunnel hop (cloudflared → http://caddy:80).
+# The cloudflared↔Caddy hop is already inside the encrypted tunnel, so no TLS is
+# needed here. `auto_https disable_redirects` above is what keeps this from
+# looping back to the HTTPS site — see that comment for why the http:// scheme
+# alone doesn't suppress the redirect. LAN clients use the HTTPS site above
+# (:443) directly.
+http://{{ twig_domain }} {
+	import twig_routes
+}
+{% endif %}
