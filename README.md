@@ -2,16 +2,22 @@
 
 # twig
 
-Twig is a personal task tracker built around goals, daily plans, and Pomodoro sessions. It ships as three pieces:
+Twig is a terminal-first to do list with the following features:
 
-- **CLI/TUI** (`cmd/twig`) — manage goals and tasks, run Pomodoro timers, build a daily plan, and review activity reports. Running `twig` with no arguments opens an interactive TUI.
-- **Server** (`services/twig`) — an HTTP/2 ConnectRPC API backed by PostgreSQL.
-- **Web app** (`services/twig-web`) — a React SPA over the same API.
+* Self-hosted server
+* Full-featured TUI
+* Mobile-optimized web app
+* CLI interface
+* Tasks to keep track of stuff you need to do
+* Plans to organize your day
+* Goals to keep bigger projects on track
+* Pomodoro timer to keep you focused
+* Markdown rendering almost everywhere
+* Text is editable in your `$EDITOR`
 
 ## Quick start
 
-Requirements: `podman` and `podman-compose`, or Docker with the Compose plugin. No clone, no Go
-toolchain — the published image has everything.
+Requirements: `podman` and `podman-compose`, or Docker with the Compose plugin.
 
 1. **Save this as `compose.yaml`:**
 
