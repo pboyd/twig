@@ -739,9 +739,9 @@ func TestGoalPicker_InlineNamePlain(t *testing.T) {
 
 // ── Hold state tests (T019) ─────────────────────────────────────────────────
 
-// TestGoal_HoldHiddenByDefault verifies that hold goals are hidden by default
-// and revealed when 'c' (GoalToggleAll) is pressed.
-func TestGoal_HoldHiddenByDefault(t *testing.T) {
+// TestGoal_HoldVisibleByDefault verifies that hold goals are shown in the
+// default goals view, without needing 'c' (GoalToggleAll).
+func TestGoal_HoldVisibleByDefault(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "Active goal", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
 		{Id: 2, Name: "On hold", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
@@ -749,26 +749,13 @@ func TestGoal_HoldHiddenByDefault(t *testing.T) {
 	m := ExportNewGoalModel(nil, goals)
 
 	out := m.renderGoalList(40)
-	if strings.Contains(out, "On hold") {
-		t.Error("hold goal should be hidden when showAll=false")
-	}
-
-	// Press 'c' to toggle showAll.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	m2 := next.(Model)
-
-	if !m2.goal.showAll {
-		t.Error("after 'c': goal.showAll should be true")
-	}
-
-	out2 := m2.renderGoalList(40)
-	if !strings.Contains(out2, "On hold") {
-		t.Error("hold goal should be visible after pressing 'c'")
+	if !strings.Contains(out, "On hold") {
+		t.Error("hold goal should be visible by default (showAll=false)")
 	}
 }
 
 // TestGoal_HoldGroupHeader verifies that hold goals have their own "Hold" section header
-// when showAll is enabled.
+// by default (showAll not required).
 func TestGoal_HoldGroupHeader(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "Active", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
@@ -777,11 +764,7 @@ func TestGoal_HoldGroupHeader(t *testing.T) {
 	}
 	m := ExportNewGoalModel(nil, goals)
 
-	// Press 'c' to enable showAll so hold goals are visible.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	m2 := next.(Model)
-
-	out := m2.renderGoalList(40)
+	out := m.renderGoalList(40)
 
 	committedIdx := strings.Index(out, "In Progress")
 	incubatingIdx := strings.Index(out, "Incubating")
@@ -804,8 +787,8 @@ func TestGoal_HoldGroupHeader(t *testing.T) {
 	}
 }
 
-// TestGoal_HoldGroupOrder verifies: Committed → Incubating → Hold → Completed → Archived
-// when showAll is enabled.
+// TestGoal_HoldGroupOrder verifies: In Progress → Incubating → Hold, by default
+// (Completed/Archived require showAll, which is not enabled here).
 func TestGoal_HoldGroupOrder(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "A", State: goalv1.GoalState_GOAL_STATE_HOLD, Position: 0},
@@ -814,33 +797,25 @@ func TestGoal_HoldGroupOrder(t *testing.T) {
 	}
 	m := ExportNewGoalModel(nil, goals)
 
-	// Press 'c' to enable showAll so hold goals are visible.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	m2 := next.(Model)
+	out := m.renderGoalList(40)
 
-	out := m2.renderGoalList(40)
-
-	committedIdx := strings.Index(out, "Committed")
+	committedIdx := strings.Index(out, "In Progress")
 	incubatingIdx := strings.Index(out, "Incubating")
 	holdIdx := strings.Index(out, "Hold")
 
 	if committedIdx >= incubatingIdx || incubatingIdx >= holdIdx {
-		t.Errorf("expected Committed < Incubating < Hold; got indices %d, %d, %d",
+		t.Errorf("expected In Progress < Incubating < Hold; got indices %d, %d, %d",
 			committedIdx, incubatingIdx, holdIdx)
 	}
 }
 
 // TestGoal_HoldDetailStateName verifies the detail pane shows "State: Hold" for hold goals
-// when showAll is enabled.
+// by default.
 func TestGoal_HoldDetailStateName(t *testing.T) {
 	goals := []*goalv1.Goal{
 		{Id: 1, Name: "Paused work", State: goalv1.GoalState_GOAL_STATE_HOLD},
 	}
-	m := ExportNewGoalModel(nil, goals)
-
-	// Press 'c' to enable showAll so hold goals are visible.
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
-	m2 := next.(Model)
+	m2 := ExportNewGoalModel(nil, goals)
 
 	out := m2.renderGoalDetail(60)
 	if !strings.Contains(out, "State: Hold") {

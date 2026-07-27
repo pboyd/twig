@@ -67,15 +67,15 @@ Three-module Go workspace: `api/` (shared proto), `services/twig/` (server), rep
 
 ## Phase 4: User Story 2 — Put a goal on hold so it's out of sight but not gone (Priority: P2)
 
-**Goal**: Hold goals are hidden from the default Goals view and revealed by the existing "show all" toggle, grouped after Incubating and before Completed.
+**Goal**: Hold goals are shown in the default Goals view, grouped after Incubating and before Completed; the existing "show all" toggle continues to gate only Completed/Archived visibility.
 
-**Independent Test**: Set a goal to Hold, confirm it vanishes from the default view, toggle "show all" on to confirm it reappears under a Hold group in the right position, toggle off to confirm it hides again.
+**Independent Test**: Set a goal to Hold, confirm it stays in the default view under a Hold group in the right position, toggle "show all" on and off to confirm Hold visibility is unaffected.
 
-- [x] T017 [US2] Treat `GOAL_STATE_HOLD` like Completed/Archived in `visibleGoals` (hidden unless `showAll`) in `internal/tui/goal_view.go`
-- [x] T018 [US2] Insert `GOAL_STATE_HOLD` into the `goalGroupHeaders` `showAll` ordering after Incubating and before Completed, in `internal/tui/goal_view.go`
-- [x] T019 [P] [US2] Add tests in `internal/tui/goal_view_test.go`: Hold hidden by default, revealed with `showAll`, and grouped in the correct order/label
+- [x] T017 [US2] Keep `GOAL_STATE_HOLD` always visible (not gated by `showAll`) in `visibleGoals`, in `internal/tui/goal_view.go`
+- [x] T018 [US2] Insert `GOAL_STATE_HOLD` into the always-shown `goalGroupHeaders` ordering after Incubating and before Completed, in `internal/tui/goal_view.go`
+- [x] T019 [P] [US2] Add tests in `internal/tui/goal_view_test.go`: Hold visible by default, unaffected by `showAll`, and grouped in the correct order/label
 
-**Checkpoint**: Hold goals hide/reveal correctly and sit in the right group. US2 works on top of US1 (which supplies a way to set Hold) but tests independently with a Hold-state fixture.
+**Checkpoint**: Hold goals stay visible by default and sit in the right group. US2 works on top of US1 (which supplies a way to set Hold) but tests independently with a Hold-state fixture.
 
 ---
 

@@ -218,6 +218,30 @@ func TestGoalList_HidesCompletedAndArchivedByDefault(t *testing.T) {
 	}
 }
 
+func TestGoalList_ShowsHoldByDefault(t *testing.T) {
+	h := newGoalTestHarness(t)
+	h.goalSvc.mu.Lock()
+	h.goalSvc.goals[1] = &goalv1.Goal{Id: 1, Name: "incubating goal", State: goalv1.GoalState_GOAL_STATE_INCUBATING}
+	h.goalSvc.goals[2] = &goalv1.Goal{Id: 2, Name: "parked goal", State: goalv1.GoalState_GOAL_STATE_HOLD}
+	h.goalSvc.nextID = 3
+	h.goalSvc.mu.Unlock()
+
+	stdout, _ := captureOutput(func() {
+		runGoalList(h.goalClient, h.addr, nil)
+	})
+	if !strings.Contains(stdout, "parked goal") {
+		t.Errorf("hold goal should be visible by default, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "Hold") {
+		t.Errorf("expected 'Hold' group header, got: %s", stdout)
+	}
+	incubatingIdx := strings.Index(stdout, "Incubating")
+	holdIdx := strings.Index(stdout, "Hold")
+	if incubatingIdx < 0 || holdIdx < 0 || incubatingIdx >= holdIdx {
+		t.Errorf("expected Incubating (%d) before Hold (%d)", incubatingIdx, holdIdx)
+	}
+}
+
 func TestGoalList_ShowAllFlag(t *testing.T) {
 	h := newGoalTestHarness(t)
 	h.goalSvc.mu.Lock()
