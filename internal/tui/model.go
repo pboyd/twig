@@ -62,13 +62,14 @@ type statusCompose struct {
 }
 
 type goalState struct {
-	goals   []*goalv1.Goal
-	cursor  int
-	showAll bool
-	loaded  bool
-	err     error
-	mode    goalViewMode
-	picker  pickerState // task picker used for L (link) and U (unlink)
+	goals    []*goalv1.Goal
+	cursor   int
+	showAll  bool
+	loaded   bool
+	err      error
+	mode     goalViewMode
+	picker   pickerState // task picker used for L (link) and U (unlink)
+	lastLoad time.Time   // when the Goals tab's data was last loaded or a refresh was dispatched
 	// Status-update compose state (US1/US3).
 	compose statusCompose
 	// Status-update history state (US2/US3).
@@ -120,7 +121,8 @@ type planState struct {
 	picker          pickerState
 	form            planFormState
 	err             error
-	pendingComplete *int32 // entry id of a just-completed untimed entry to retain while highlighted
+	pendingComplete *int32    // entry id of a just-completed untimed entry to retain while highlighted
+	lastLoad        time.Time // when the Plan tab's data was last loaded or a refresh was dispatched
 }
 
 // reportState holds all state for the Report tab.
@@ -133,7 +135,8 @@ type reportState struct {
 	totals    report.Totals
 	loaded    bool
 	err       error
-	scroll    int // scroll offset in lines
+	scroll    int       // scroll offset in lines
+	lastLoad  time.Time // when the Report tab's data was last loaded or a refresh was dispatched
 }
 
 // Model is the root Bubble Tea model for the TUI.
@@ -187,6 +190,8 @@ type Model struct {
 	reportData reportState
 	// goal holds all state for the Goals tab.
 	goal goalState
+	// tasksLastLoad records when the Tasks tab's data was last loaded or a refresh was dispatched.
+	tasksLastLoad time.Time
 	// md renders Markdown to terminal-styled text.
 	md *markdown.Renderer
 	// Filter state (Task Filters feature).
