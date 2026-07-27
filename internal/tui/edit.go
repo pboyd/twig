@@ -78,7 +78,7 @@ type editFormModel struct {
 	// Goal state selector (goal edit forms only; hidden when !isGoal || taskID == nil).
 	goalStateIdx     int // index into goalStates cycle
 	origGoalStateIdx int
-	// Plan selector (task create forms only; hidden when showPlanField is false).
+	// Plan selector (task create forms only; see showPlan).
 	planIdx       int    // index into plan choices; 0 = none
 	planDate      string // ISO day, set only when a calendar pick made planIdx == planChoiceDate
 	showPlanField bool   // true only when creating a task (not editing, not a goal)
@@ -262,6 +262,18 @@ func newBlankForm(originalCursor int) editFormModel {
 	}
 }
 
+// showTaskOnlyFields reports whether the pomodoro Estimate and Snooze until
+// fields apply to this form. They are task-only; goals have neither.
+func (f editFormModel) showTaskOnlyFields() bool {
+	return !f.isGoal
+}
+
+// showPlan reports whether the Plan selector applies to this form. It is set on
+// every create form, but goals are never planned, so goal forms hide it.
+func (f editFormModel) showPlan() bool {
+	return f.showPlanField && !f.isGoal
+}
+
 // now returns the current time, using nowFunc if set.
 func (f editFormModel) now() time.Time {
 	if f.nowFunc != nil {
@@ -284,10 +296,10 @@ func (f editFormModel) isDirty() bool {
 	if strings.TrimSpace(f.due.Value()) != f.origDue {
 		return true
 	}
-	if strings.TrimSpace(f.pomodoroEstimate.Value()) != f.origEstimate {
+	if f.showTaskOnlyFields() && strings.TrimSpace(f.pomodoroEstimate.Value()) != f.origEstimate {
 		return true
 	}
-	if strings.TrimSpace(f.snooze.Value()) != f.origSnooze {
+	if f.showTaskOnlyFields() && strings.TrimSpace(f.snooze.Value()) != f.origSnooze {
 		return true
 	}
 	if f.showGoalField && f.goalIdx != f.origGoalIdx {
@@ -296,7 +308,7 @@ func (f editFormModel) isDirty() bool {
 	if f.isGoal && f.taskID != nil && f.goalStateIdx != f.origGoalStateIdx {
 		return true
 	}
-	if f.showPlanField && f.planIdx != f.origPlanIdx {
+	if f.showPlan() && f.planIdx != f.origPlanIdx {
 		return true
 	}
 	return false
@@ -432,7 +444,7 @@ func (f editFormModel) Update(msg tea.Msg, keys KeyMap) (editFormModel, tea.Cmd)
 	}
 
 	// Handle plan field key events (left/right cycle plan choice).
-	if f.focusIndex == focusPlan && f.showPlanField {
+	if f.focusIndex == focusPlan && f.showPlan() {
 		switch keyMsg.Code {
 		case tea.KeyLeft:
 			f = f.cyclePlan(-1)
@@ -469,9 +481,11 @@ func (f editFormModel) buildSaveMsg() func() tea.Msg {
 			name:           f.name.Value(),
 			description:    f.description.Value(),
 			dueStr:         f.due.Value(),
-			estimateStr:    f.pomodoroEstimate.Value(),
-			snoozeStr:      f.snooze.Value(),
 			originalCursor: f.originalCursor,
+		}
+		if f.showTaskOnlyFields() {
+			msg.estimateStr = f.pomodoroEstimate.Value()
+			msg.snoozeStr = f.snooze.Value()
 		}
 		if f.showGoalField {
 			var newGoalID *int64
@@ -488,7 +502,7 @@ func (f editFormModel) buildSaveMsg() func() tea.Msg {
 			msg.goalState = goalStates[f.goalStateIdx]
 			msg.goalStateChanged = f.goalStateIdx != f.origGoalStateIdx
 		}
-		if f.showPlanField && f.planIdx != planChoiceNone {
+		if f.showPlan() && f.planIdx != planChoiceNone {
 			switch f.planIdx {
 			case planChoiceToday:
 				msg.planDay = f.now().Format("2006-01-02")
@@ -538,7 +552,10 @@ func (f editFormModel) cycleFocus(delta int) editFormModel {
 		if idx == focusState && (!f.isGoal || f.taskID == nil) {
 			continue
 		}
-		if idx == focusPlan && !f.showPlanField {
+		if idx == focusPlan && !f.showPlan() {
+			continue
+		}
+		if (idx == focusEstimate || idx == focusSnooze) && !f.showTaskOnlyFields() {
 			continue
 		}
 		break
@@ -622,12 +639,14 @@ func (f editFormModel) View(width int) string {
 
 	f.writeDateField(&sb, "Due", f.due, focusDue)
 
-	sb.WriteString(fieldLabel("Estimate", f.focusIndex == focusEstimate))
-	sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
+	if f.showTaskOnlyFields() {
+		sb.WriteString(fieldLabel("Estimate", f.focusIndex == focusEstimate))
+		sb.WriteString(f.pomodoroEstimate.View() + "\n\n")
 
-	f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
+		f.writeDateField(&sb, "Snooze until", f.snooze, focusSnooze)
+	}
 
-	if f.showPlanField {
+	if f.showPlan() {
 		planLabel := planChoiceLabels[f.planIdx]
 		if f.planIdx == planChoiceDate {
 			planLabel = f.planDate
