@@ -752,6 +752,20 @@ func TestGoal_HoldVisibleByDefault(t *testing.T) {
 	if !strings.Contains(out, "On hold") {
 		t.Error("hold goal should be visible by default (showAll=false)")
 	}
+
+	// Toggling "show all" on must not affect Hold visibility (FR-003 / acceptance
+	// scenarios 2-3).
+	m.goal.showAll = true
+	out = m.renderGoalList(40)
+	if !strings.Contains(out, "On hold") {
+		t.Error("hold goal should still be visible with showAll=true")
+	}
+
+	m.goal.showAll = false
+	out = m.renderGoalList(40)
+	if !strings.Contains(out, "On hold") {
+		t.Error("hold goal should still be visible after toggling showAll back off")
+	}
 }
 
 // TestGoal_HoldGroupHeader verifies that hold goals have their own "Hold" section header
@@ -901,5 +915,27 @@ func TestGoal_EmptyListSpaceNoOp(t *testing.T) {
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	if cmd != nil {
 		t.Error("Space on empty goal list: expected nil cmd")
+	}
+}
+
+// TestGoal_UnspecifiedStateCursorAlignment verifies that a goal with an
+// unrecognized (UNSPECIFIED) state does not shift the cursor out of sync
+// with the rendered rows: visibleGoals and goalGroupHeaders must agree on
+// which goals are shown by default.
+func TestGoal_UnspecifiedStateCursorAlignment(t *testing.T) {
+	goals := []*goalv1.Goal{
+		{Id: 1, Name: "Active", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS, Position: 0},
+		{Id: 2, Name: "Mystery", State: goalv1.GoalState_GOAL_STATE_UNSPECIFIED, Position: 0},
+	}
+	m := ExportNewGoalModel(nil, goals)
+
+	visible := visibleGoals(m.goal.goals, m.goal.showAll)
+	groups := goalGroupHeaders(m.goal.goals, m.goal.showAll)
+	var rendered int
+	for _, g := range groups {
+		rendered += len(g.goals)
+	}
+	if len(visible) != rendered {
+		t.Errorf("visibleGoals returned %d goals but goalGroupHeaders renders %d rows; cursor will misalign", len(visible), rendered)
 	}
 }

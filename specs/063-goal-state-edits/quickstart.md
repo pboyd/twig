@@ -54,4 +54,4 @@ Launch the TUI (`./twig`) and open the **Goals** tab.
 
 ## Success check
 
-Maps to spec Success Criteria SC-001…SC-005: Hold hides/reveals via "show all"; every state reachable through the form with no per-state hotkey; exactly one state hotkey remains (Space); Space toggles complete/uncomplete like a task; no existing goal silently reassigned.
+Maps to spec Success Criteria SC-001…SC-005: Hold stays visible in the default view; every state reachable through the form with no per-state hotkey; exactly one state hotkey remains (Space); Space toggles complete/uncomplete like a task; no existing goal silently reassigned.

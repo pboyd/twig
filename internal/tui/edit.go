@@ -11,16 +11,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
+	"github.com/pboyd/twig/internal/goal"
 )
 
 // goalStates defines the cycling order for the goal state selector in the edit form.
-var goalStates = []goalv1.GoalState{
-	goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
-	goalv1.GoalState_GOAL_STATE_INCUBATING,
-	goalv1.GoalState_GOAL_STATE_HOLD,
-	goalv1.GoalState_GOAL_STATE_COMPLETED,
-	goalv1.GoalState_GOAL_STATE_ARCHIVED,
-}
+var goalStates = goal.StateDisplayOrder()
 
 // goalStateIndex returns the index of the given state in goalStates.
 func goalStateIndex(s goalv1.GoalState) int {
@@ -654,7 +649,7 @@ func (f editFormModel) View(width int) string {
 	}
 
 	if f.isGoal && f.taskID != nil {
-		stateName := goalStateName(goalStates[f.goalStateIdx])
+		stateName := goal.DisplayLabel(goalStates[f.goalStateIdx])
 		sb.WriteString(fieldLabel("State", f.focusIndex == focusState))
 		sb.WriteString(stateName + "\n")
 		if f.focusIndex == focusState {

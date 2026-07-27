@@ -49,12 +49,7 @@ type goalGroup struct {
 func visibleGoals(goals []*goalv1.Goal, showAll bool) []*goalv1.Goal {
 	var out []*goalv1.Goal
 	for _, g := range goals {
-		switch g.GetState() {
-		case goalv1.GoalState_GOAL_STATE_COMPLETED, goalv1.GoalState_GOAL_STATE_ARCHIVED:
-			if showAll {
-				out = append(out, g)
-			}
-		default:
+		if showAll || goal.DefaultVisible(g.GetState()) {
 			out = append(out, g)
 		}
 	}
@@ -70,42 +65,15 @@ func goalGroupHeaders(goals []*goalv1.Goal, showAll bool) []goalGroup {
 	}
 
 	var groups []goalGroup
-	orderedStates := []goalv1.GoalState{
-		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
-		goalv1.GoalState_GOAL_STATE_INCUBATING,
-		goalv1.GoalState_GOAL_STATE_HOLD,
-	}
-	if showAll {
-		orderedStates = append(orderedStates,
-			goalv1.GoalState_GOAL_STATE_COMPLETED,
-			goalv1.GoalState_GOAL_STATE_ARCHIVED,
-		)
-	}
-
-	for _, state := range orderedStates {
+	for _, state := range goal.StateDisplayOrder() {
+		if !showAll && !goal.DefaultVisible(state) {
+			continue
+		}
 		if gs, ok := groupMap[state]; ok && len(gs) > 0 {
 			groups = append(groups, goalGroup{state: state, goals: gs})
 		}
 	}
 	return groups
-}
-
-// goalStateName returns the display name for a GoalState.
-func goalStateName(state goalv1.GoalState) string {
-	switch state {
-	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
-		return "In Progress"
-	case goalv1.GoalState_GOAL_STATE_INCUBATING:
-		return "Incubating"
-	case goalv1.GoalState_GOAL_STATE_HOLD:
-		return "Hold"
-	case goalv1.GoalState_GOAL_STATE_COMPLETED:
-		return "Completed"
-	case goalv1.GoalState_GOAL_STATE_ARCHIVED:
-		return "Archived"
-	default:
-		return "Unknown"
-	}
 }
 
 // viewGoals renders the Goals tab content including tab bar and status bar.
@@ -281,7 +249,7 @@ func (m Model) renderGoalList(width int) string {
 
 	for _, grp := range groups {
 		// Section header.
-		header := goalStateName(grp.state)
+		header := goal.DisplayLabel(grp.state)
 		if m.styled {
 			sb.WriteString(dimStyle.Render(header))
 		} else {
@@ -352,7 +320,7 @@ func (m Model) renderGoalDetail(width int) string {
 	sb.WriteByte('\n')
 
 	// State.
-	stateLine := "State: " + goalStateName(g.GetState())
+	stateLine := "State: " + goal.DisplayLabel(g.GetState())
 	if m.styled {
 		sb.WriteString(dimStyle.Render(stateLine))
 	} else {

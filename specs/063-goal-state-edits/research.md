@@ -19,7 +19,7 @@ All items below were resolved from the existing codebase; no external research w
 
 **Decision**: `hold` sorts **after `incubating`, before `completed`** everywhere it appears:
 - Server `ListGoals` `ORDER BY CASE`: `committed`=1, `incubating`=2, `hold`=3, `completed`=4, `archived`=5.
-- TUI `goalGroupHeaders` order (when "show all" is on): Committed, Incubating, Hold, Completed, Archived.
+- TUI `goalGroupHeaders` order: Committed, Incubating, Hold, Completed, Archived.
 
 **Rationale**: Hold represents a still-active intent that's paused — conceptually between the actively-pursued states and the finished ones. The TUI regroups client-side, but keeping the server order consistent avoids surprises for any other consumer (e.g. the web app).
 
