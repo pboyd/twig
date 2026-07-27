@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a fifth goal lifecycle state, **Hold** (a goal the user still intends to pursue but isn't working on now), hidden from the default Goals view like Completed and Archived. Consolidate goal state changes into a single **State** selector in the goal edit form, removing the per-state hotkeys (`i`/`o`/`v` and the old `d`). Rebind goal completion to **Space** (matching tasks) as a toggle: Space completes an active goal and returns a Completed goal to Committed.
+Add a fifth goal lifecycle state, **Hold** (a goal the user still intends to pursue but isn't working on now), shown in the default Goals view in its own group below Incubating (unlike Completed and Archived, which stay hidden by default). Consolidate goal state changes into a single **State** selector in the goal edit form, removing the per-state hotkeys (`i`/`o`/`v` and the old `d`). Rebind goal completion to **Space** (matching tasks) as a toggle: Space completes an active goal and returns a Completed goal to Committed.
 
 Technical approach: the only contract change is one new proto enum value (`GOAL_STATE_HOLD`); the form reuses the existing `SetGoalState` RPC for state changes rather than extending `UpdateGoal`. The backend change is a DB `CHECK`-constraint migration plus two string↔enum mappings. The bulk of the work is TUI: extend the goal grouping/visibility rules, remove hotkeys, add a Space toggle handler, and add a cycling State field to the goal edit form.
 

@@ -11,6 +11,7 @@ interface GoalListItemProps {
 const STATE_COLORS: Partial<Record<GoalState, string>> = {
   [GoalState.IN_PROGRESS]: "border-l-green-500",
   [GoalState.INCUBATING]: "border-l-blue-400",
+  [GoalState.HOLD]: "border-l-amber-400",
   [GoalState.COMPLETED]: "border-l-gray-400",
   [GoalState.ARCHIVED]: "border-l-gray-400",
 };
@@ -18,6 +19,7 @@ const STATE_COLORS: Partial<Record<GoalState, string>> = {
 const STATE_LABELS: Partial<Record<GoalState, string>> = {
   [GoalState.IN_PROGRESS]: "In Progress",
   [GoalState.INCUBATING]: "Incubating",
+  [GoalState.HOLD]: "Hold",
   [GoalState.COMPLETED]: "Completed",
   [GoalState.ARCHIVED]: "Archived",
 };

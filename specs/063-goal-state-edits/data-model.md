@@ -65,4 +65,4 @@ Every state change re-ranks the goal to the bottom of the destination group's po
 
 ## Ownership & scope
 
-Unchanged: goals (and therefore their state) are scoped to the owning user by the auth middleware. Hold introduces no new sharing or visibility rules beyond the default-hidden behavior described above.
+Unchanged: goals (and therefore their state) are scoped to the owning user by the auth middleware. Hold introduces no new sharing rules; unlike Completed/Archived, it is visible in the default view.

@@ -16,6 +16,7 @@ interface GroupDef {
 const GROUP_ORDER: GroupDef[] = [
   { state: GoalState.IN_PROGRESS, label: "In Progress", hidden: false },
   { state: GoalState.INCUBATING, label: "Incubating", hidden: false },
+  { state: GoalState.HOLD, label: "Hold", hidden: false },
   { state: GoalState.COMPLETED, label: "Completed", hidden: true },
   { state: GoalState.ARCHIVED, label: "Archived", hidden: true },
 ];

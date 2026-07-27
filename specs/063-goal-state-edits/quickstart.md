@@ -35,10 +35,10 @@ make migrate-up
 
 Launch the TUI (`./twig`) and open the **Goals** tab.
 
-1. **Hold hides by default**
+1. **Hold shows by default**
    - Edit a goal, set **State** → **Hold**, save.
-   - Confirm the goal disappears from the default list.
-   - Press `c` ("show all"): the goal reappears under a **Hold** group (positioned after Incubating, before Completed). Press `c` again: it hides.
+   - Confirm the goal stays visible in the default list, under a **Hold** group (positioned after Incubating, before Completed).
+   - Press `c` ("show all") and back off: the Hold group stays visible throughout — "show all" only affects Completed/Archived.
 
 2. **State only via the edit form**
    - Press the old keys `i`, `o`, `v`, `d` on a selected goal → nothing changes state.
@@ -54,4 +54,4 @@ Launch the TUI (`./twig`) and open the **Goals** tab.
 
 ## Success check
 
-Maps to spec Success Criteria SC-001…SC-005: Hold hides/reveals via "show all"; every state reachable through the form with no per-state hotkey; exactly one state hotkey remains (Space); Space toggles complete/uncomplete like a task; no existing goal silently reassigned.
+Maps to spec Success Criteria SC-001…SC-005: Hold stays visible in the default view; every state reachable through the form with no per-state hotkey; exactly one state hotkey remains (Space); Space toggles complete/uncomplete like a task; no existing goal silently reassigned.

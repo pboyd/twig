@@ -16,6 +16,7 @@ func TestStateDisplayOrder(t *testing.T) {
 	want := []goalv1.GoalState{
 		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
+		goalv1.GoalState_GOAL_STATE_HOLD,
 		goalv1.GoalState_GOAL_STATE_COMPLETED,
 		goalv1.GoalState_GOAL_STATE_ARCHIVED,
 	}
@@ -36,6 +37,7 @@ func TestDefaultVisible(t *testing.T) {
 	}{
 		{goalv1.GoalState_GOAL_STATE_IN_PROGRESS, true},
 		{goalv1.GoalState_GOAL_STATE_INCUBATING, true},
+		{goalv1.GoalState_GOAL_STATE_HOLD, true},
 		{goalv1.GoalState_GOAL_STATE_COMPLETED, false},
 		{goalv1.GoalState_GOAL_STATE_ARCHIVED, false},
 		{goalv1.GoalState_GOAL_STATE_UNSPECIFIED, false},
@@ -55,6 +57,7 @@ func TestStateName(t *testing.T) {
 	}{
 		{goalv1.GoalState_GOAL_STATE_INCUBATING, "incubating"},
 		{goalv1.GoalState_GOAL_STATE_IN_PROGRESS, "in progress"},
+		{goalv1.GoalState_GOAL_STATE_HOLD, "hold"},
 		{goalv1.GoalState_GOAL_STATE_COMPLETED, "completed"},
 		{goalv1.GoalState_GOAL_STATE_ARCHIVED, "archived"},
 	}
@@ -70,6 +73,7 @@ func TestParseState(t *testing.T) {
 	roundTrips := []goalv1.GoalState{
 		goalv1.GoalState_GOAL_STATE_INCUBATING,
 		goalv1.GoalState_GOAL_STATE_IN_PROGRESS,
+		goalv1.GoalState_GOAL_STATE_HOLD,
 		goalv1.GoalState_GOAL_STATE_COMPLETED,
 		goalv1.GoalState_GOAL_STATE_ARCHIVED,
 	}
@@ -212,5 +216,19 @@ func TestSubtreeForGoal(t *testing.T) {
 
 	if len(subtree) != 5 {
 		t.Errorf("SubtreeForGoal(_, 10) len = %d, want 5", len(subtree))
+	}
+}
+
+func TestCLINameRoundTripsThroughParseState(t *testing.T) {
+	for _, s := range goal.StateDisplayOrder() {
+		name := goal.CLIName(s)
+		got, err := goal.ParseState(name)
+		if err != nil {
+			t.Errorf("ParseState(CLIName(%v)) = %v, want no error", s, err)
+			continue
+		}
+		if got != s {
+			t.Errorf("ParseState(CLIName(%v)) = %v, want %v", s, got, s)
+		}
 	}
 }
