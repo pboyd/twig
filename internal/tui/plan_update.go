@@ -20,10 +20,14 @@ import (
 // ── message types ──────────────────────────────────────────────────────────
 
 // planEntriesMsg carries the result of a ListPlanEntries call.
+// bg marks a clock-initiated background load; bgDay records which day the
+// background load was dispatched for.
 type planEntriesMsg struct {
 	entries     []*planv1.PlanEntry
 	highlightID int32 // entry to highlight after loading; 0 = clamp cursor
 	err         error
+	bg          bool
+	bgDay       string
 }
 
 // planMutatedMsg is returned after a plan mutation: carries the entry to highlight on reload.
@@ -45,17 +49,17 @@ type planTickMsg struct{}
 
 // ── command factories ──────────────────────────────────────────────────────
 
-func listPlanCmd(client planv1connect.PlanServiceClient, day string) tea.Cmd {
-	return listPlanHighlightCmd(client, day, 0)
+func listPlanCmd(client planv1connect.PlanServiceClient, day string, bg bool, bgDay string) tea.Cmd {
+	return listPlanHighlightCmd(client, day, 0, bg, bgDay)
 }
 
-func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, highlightID int32) tea.Cmd {
+func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, highlightID int32, bg bool, bgDay string) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListPlanEntries(context.Background(), connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
 		if err != nil {
-			return planEntriesMsg{err: err}
+			return planEntriesMsg{err: err, bg: bg, bgDay: bgDay}
 		}
-		return planEntriesMsg{entries: resp.Msg.Entries, highlightID: highlightID}
+		return planEntriesMsg{entries: resp.Msg.Entries, highlightID: highlightID, bg: bg, bgDay: bgDay}
 	}
 }
 
@@ -512,11 +516,30 @@ func displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) [
 // handlePlanEntriesMsg processes a ListPlanEntries response: replaces the
 // entries, sets loaded, clamps cursor, and optionally highlights an entry by id.
 func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
+	// Background loads only apply to the tab and day they were dispatched for.
+	if msg.bg && m.activeTab != tabPlanning {
+		return m
+	}
+	if msg.bg && msg.bgDay != "" && msg.bgDay != m.plan.day {
+		return m
+	}
+	// Background failures are silent: keep the existing data on screen.
+	if msg.bg && msg.err != nil {
+		return m
+	}
 	if msg.err != nil {
 		m.plan.err = msg.err
 		return m
 	}
-	m.plan.err = nil
+	// Only user-initiated loads clear the visible error.
+	if !msg.bg {
+		m.plan.err = nil
+	}
+	// Preserve cursor by entry id.
+	var curID int32
+	if len(m.plan.entries) > 0 && m.plan.cursor < len(m.plan.entries) {
+		curID = m.plan.entries[m.plan.cursor].Id
+	}
 	m.plan.entries = displayedPlanEntries(msg.entries, m.plan.pendingComplete)
 	m.plan.loaded = true
 
@@ -524,11 +547,22 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 		for i, e := range m.plan.entries {
 			if e.Id == msg.highlightID {
 				m.plan.cursor = i
+				m.plan.lastLoad = m.nowOrDefault()
+				return m
+			}
+		}
+	}
+	if curID != 0 {
+		for i, e := range m.plan.entries {
+			if e.Id == curID {
+				m.plan.cursor = i
+				m.plan.lastLoad = m.nowOrDefault()
 				return m
 			}
 		}
 	}
 	m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
+	m.plan.lastLoad = m.nowOrDefault()
 	return m
 }
 

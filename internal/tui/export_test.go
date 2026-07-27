@@ -169,6 +169,36 @@ func ExportSetNowFunc(m *Model, f func() time.Time) {
 	m.nowFunc = f
 }
 
+// ExportTasksLastLoad returns the Tasks tab's last-load timestamp.
+func ExportTasksLastLoad(m Model) time.Time { return m.tasksLastLoad }
+
+// ExportSetTasksLastLoad sets the Tasks tab's last-load timestamp.
+func ExportSetTasksLastLoad(m *Model, t time.Time) { m.tasksLastLoad = t }
+
+// ExportGoalLastLoad returns the Goals tab's last-load timestamp.
+func ExportGoalLastLoad(m Model) time.Time { return m.goal.lastLoad }
+
+// ExportSetGoalLastLoad sets the Goals tab's last-load timestamp.
+func ExportSetGoalLastLoad(m *Model, t time.Time) { m.goal.lastLoad = t }
+
+// ExportPlanLastLoad returns the Planning tab's last-load timestamp.
+func ExportPlanLastLoad(m Model) time.Time { return m.plan.lastLoad }
+
+// ExportSetPlanLastLoad sets the Planning tab's last-load timestamp.
+func ExportSetPlanLastLoad(m *Model, t time.Time) { m.plan.lastLoad = t }
+
+// ExportReportLastLoad returns the Report tab's last-load timestamp.
+func ExportReportLastLoad(m Model) time.Time { return m.reportData.lastLoad }
+
+// ExportSetReportLastLoad sets the Report tab's last-load timestamp.
+func ExportSetReportLastLoad(m *Model, t time.Time) { m.reportData.lastLoad = t }
+
+// ExportAutoRefreshEligible exposes autoRefreshEligible for tests.
+func ExportAutoRefreshEligible(m Model) bool { return m.autoRefreshEligible() }
+
+// ExportActiveTabLastLoad exposes activeTabLastLoad for tests.
+func ExportActiveTabLastLoad(m Model) time.Time { return m.activeTabLastLoad() }
+
 // ExportNotice returns the model's current transient notice string.
 func ExportNotice(m Model) string {
 	return m.notice

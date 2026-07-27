@@ -28,9 +28,11 @@ import (
 // ── message types ──────────────────────────────────────────────────────────
 
 // listTasksResultMsg carries the result of a bare ListTasks (init / Ctrl-R).
+// bg marks a clock-initiated background load.
 type listTasksResultMsg struct {
 	tree []*cli.TreeNode
 	err  error
+	bg   bool
 }
 
 // reorderResultMsg carries the result of a ReorderTask RPC.
@@ -59,6 +61,7 @@ type moveTaskResultMsg struct {
 }
 
 // reportResultMsg carries the result of a report fetch (tasks + pom count).
+// bg marks a clock-initiated background load.
 type reportResultMsg struct {
 	dayGroups []report.DayGroup
 	finished  []report.AccomplishmentGroup
@@ -66,6 +69,7 @@ type reportResultMsg struct {
 	totals    report.Totals
 	period    report.Period
 	err       error
+	bg        bool
 }
 
 // scheduledDaysResultMsg carries the result of a ListScheduledDays RPC.
@@ -78,10 +82,12 @@ type scheduledDaysResultMsg struct {
 // highlightID, when non-zero, causes the cursor to follow that goal by ID
 // after the list is refreshed (used after a reorder to keep the moved goal
 // highlighted).
+// bg marks a clock-initiated background load.
 type listGoalsResultMsg struct {
 	goals       []*goalv1.Goal
 	err         error
 	highlightID int64
+	bg          bool
 }
 
 // goalMutationMsg carries the result of a create or update goal RPC.
@@ -126,6 +132,19 @@ type filterResultMsg struct {
 	err  error   // parse/validation error
 }
 
+const (
+	// autoRefreshInterval is how old a tab's data must be before the heartbeat
+	// refreshes it. Fixed by FR-009; not configurable.
+	autoRefreshInterval = 10 * time.Minute
+	// autoRefreshTickRate is how often the heartbeat evaluates staleness.
+	// Fixed by FR-005; the interval itself is user-visible, not this cadence.
+	autoRefreshTickRate = time.Minute
+)
+
+// autoRefreshTickMsg is fired once per minute by the heartbeat. It carries no
+// data; the handler reads all state from the model.
+type autoRefreshTickMsg struct{}
+
 // filterFocus says where the cursor should land when a filter result arrives.
 type filterFocus int
 
@@ -143,6 +162,15 @@ const (
 
 // persistTreeStateCmd snapshots the current expanded set and saves it
 // asynchronously. Errors are silently discarded (FR-005).
+// autoRefreshTickCmd returns a command that fires the next heartbeat tick.
+// Exactly one chain of these should exist (FR-010): started in Init and
+// rescheduled by the autoRefreshTickMsg handler itself.
+func autoRefreshTickCmd() tea.Cmd {
+	return tea.Tick(autoRefreshTickRate, func(_ time.Time) tea.Msg {
+		return autoRefreshTickMsg{}
+	})
+}
+
 func (m Model) persistTreeStateCmd() tea.Cmd {
 	path := m.statePath
 	key := m.activeProfile
@@ -310,13 +338,13 @@ func listScheduledDaysCmd(client planv1connect.PlanServiceClient) tea.Cmd {
 	}
 }
 
-func listTasksCmd(client taskv1connect.TaskServiceClient) tea.Cmd {
+func listTasksCmd(client taskv1connect.TaskServiceClient, bg bool) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 		if err != nil {
-			return listTasksResultMsg{err: err}
+			return listTasksResultMsg{err: err, bg: bg}
 		}
-		return listTasksResultMsg{tree: cli.BuildTree(resp.Msg.Tasks)}
+		return listTasksResultMsg{tree: cli.BuildTree(resp.Msg.Tasks), bg: bg}
 	}
 }
 
@@ -531,13 +559,13 @@ func moveTaskCmd(client taskv1connect.TaskServiceClient, task *taskv1.Task, newP
 
 // ── goal command factories ───────────────────────────────────────────────────
 
-func listGoalsCmd(client goalv1connect.GoalServiceClient) tea.Cmd {
+func listGoalsCmd(client goalv1connect.GoalServiceClient, bg bool) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListGoals(context.Background(), connect.NewRequest(&goalv1.ListGoalsRequest{}))
 		if err != nil {
-			return listGoalsResultMsg{err: err}
+			return listGoalsResultMsg{err: err, bg: bg}
 		}
-		return listGoalsResultMsg{goals: resp.Msg.Goals}
+		return listGoalsResultMsg{goals: resp.Msg.Goals, bg: bg}
 	}
 }
 
@@ -771,11 +799,12 @@ func pomodoroRemaining(startAt time.Time, now time.Time) time.Duration {
 
 // fetchReportCmd fetches all tasks and the pomodoro count for the given period,
 // builds day-grouped and accomplishment-grouped data, and returns a reportResultMsg.
-func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period) tea.Cmd {
+// bg marks a clock-initiated background load.
+func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period, bg bool) tea.Cmd {
 	return func() tea.Msg {
 		tasksResp, err := client.ListTasks(context.Background(), connect.NewRequest(&taskv1.ListTasksRequest{}))
 		if err != nil {
-			return reportResultMsg{err: err, period: p}
+			return reportResultMsg{err: err, period: p, bg: bg}
 		}
 
 		pomResp, err := client.CountCompletedPomodoros(context.Background(), connect.NewRequest(&taskv1.CountCompletedPomodorosRequest{
@@ -783,7 +812,7 @@ func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period) tea
 			End:   timestamppb.New(p.EndUTC()),
 		}))
 		if err != nil {
-			return reportResultMsg{err: err, period: p}
+			return reportResultMsg{err: err, period: p, bg: bg}
 		}
 
 		tasks := tasksResp.Msg.Tasks
@@ -809,14 +838,15 @@ func fetchReportCmd(client taskv1connect.TaskServiceClient, p report.Period) tea
 			ongoing:   ongoing,
 			totals:    totals,
 			period:    p,
+			bg:        bg,
 		}
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{listTasksCmd(m.client), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient)}
+	cmds := []tea.Cmd{listTasksCmd(m.client, false), getActivePomCmd(m.client, m.tree), listScheduledDaysCmd(m.planClient), autoRefreshTickCmd()}
 	if m.goalClient != nil {
-		cmds = append(cmds, listGoalsCmd(m.goalClient))
+		cmds = append(cmds, listGoalsCmd(m.goalClient, false))
 	}
 	return tea.Batch(cmds...)
 }
@@ -842,6 +872,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case listTasksResultMsg:
+		// Background loads only apply to the tab they were dispatched for.
+		if msg.bg && m.activeTab != tabTasks {
+			return m, nil
+		}
+		// Background failures are silent: keep the existing data on screen.
+		if msg.bg && msg.err != nil {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
@@ -852,7 +890,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			curID = m.visible[m.cursor].node.Task.Id
 		}
 		m.tree = msg.tree
-		m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+		m.visible = m.rebuildVisible()
 		if curID != 0 {
 			m.cursor = findCursor(m.visible, curID)
 		} else {
@@ -860,6 +898,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Re-clamp scroll offset after the list is rebuilt.
 		m = m.reconcileScroll()
+		m.tasksLastLoad = m.nowOrDefault()
 		return m, nil
 
 	case refreshedMsg:
@@ -886,6 +925,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Re-clamp scroll offset after the list is rebuilt.
 		m = m.reconcileScroll()
+		m.tasksLastLoad = m.nowOrDefault()
 		// Re-fire filter after mutation so results stay consistent.
 		if m.filterExpr != "" {
 			m2, cmd := m.applyFilter(m.filterExpr, filterKeepCursor)
@@ -940,7 +980,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		}
 		hookCmd := runPomHook(m.pomConfig.OnComplete, "on_complete")
-		return m, tea.Batch(hookCmd, pomBannerExpireCmd(), listTasksCmd(m.client))
+		return m, tea.Batch(hookCmd, pomBannerExpireCmd(), listTasksCmd(m.client, false))
 
 	case pomBannerExpireMsg:
 		m.pom = nil
@@ -1042,7 +1082,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.notice != "" {
 			m.notice = msg.notice
 		}
-		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID), listScheduledDaysCmd(m.planClient))
+		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID, false, ""), listScheduledDaysCmd(m.planClient))
 
 	case planTickMsg:
 		if m.activeTab == tabPlanning && planIsToday(m.plan.day) {
@@ -1054,34 +1094,85 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handlePaste(msg)
 
 	case reportResultMsg:
-		m.reportData.err = msg.err
+		// Background loads only apply to the tab they were dispatched for.
+		if msg.bg && m.activeTab != tabReport {
+			return m, nil
+		}
+		// Background loads only apply if the period they were dispatched for is
+		// still the one being viewed; the user may have changed presets while
+		// the request was in flight.
+		if msg.bg && (!msg.period.From.Equal(m.reportData.period.From) ||
+			!msg.period.To.Equal(m.reportData.period.To)) {
+			return m, nil
+		}
+		// Background failures are silent: keep the existing data on screen.
+		if msg.bg && msg.err != nil {
+			return m, nil
+		}
+		// Only user-initiated loads update the visible error (and clear it on success).
+		if !msg.bg {
+			m.reportData.err = msg.err
+		}
 		if msg.err == nil {
 			m.reportData.dayGroups = msg.dayGroups
 			m.reportData.finished = msg.finished
 			m.reportData.ongoing = msg.ongoing
 			m.reportData.totals = msg.totals
 			m.reportData.period = msg.period
-			m.reportData.scroll = 0
+			// Scroll reset is user-initiated behavior; preserve it for background loads.
+			if !msg.bg {
+				m.reportData.scroll = 0
+			}
 		}
 		m.reportData.loaded = true
+		m.reportData.lastLoad = m.nowOrDefault()
 		return m, nil
 
 	case listGoalsResultMsg:
-		m.goal.err = msg.err
-		if msg.err == nil {
-			m.goal.goals = msg.goals
+		// Background loads only apply to the tab they were dispatched for.
+		if msg.bg && m.activeTab != tabGoals {
+			return m, nil
 		}
+		// Background failures are silent: keep the existing data on screen.
+		if msg.bg && msg.err != nil {
+			return m, nil
+		}
+		// Only user-initiated loads update the visible error (and clear it on success).
+		if !msg.bg {
+			m.goal.err = msg.err
+		}
+		// A load attempt, successful or not, ends the initial "Loading..." state.
 		m.goal.loaded = true
-		visible := visibleGoals(m.goal.goals, m.goal.showAll)
-		if msg.highlightID != 0 {
-			for i, g := range visible {
-				if g.Id == msg.highlightID {
-					m.goal.cursor = i
-					return m, nil
+		if msg.err == nil {
+			// Preserve cursor by goal id.
+			var curID int64
+			prevVisible := visibleGoals(m.goal.goals, m.goal.showAll)
+			if len(prevVisible) > 0 && m.goal.cursor < len(prevVisible) {
+				curID = prevVisible[m.goal.cursor].Id
+			}
+			m.goal.goals = msg.goals
+			visible := visibleGoals(m.goal.goals, m.goal.showAll)
+			if msg.highlightID != 0 {
+				for i, g := range visible {
+					if g.Id == msg.highlightID {
+						m.goal.cursor = i
+						m.goal.lastLoad = m.nowOrDefault()
+						return m, nil
+					}
 				}
 			}
+			if curID != 0 {
+				for i, g := range visible {
+					if g.Id == curID {
+						m.goal.cursor = i
+						m.goal.lastLoad = m.nowOrDefault()
+						return m, nil
+					}
+				}
+			}
+			m.goal.cursor = clampCursor(m.goal.cursor, len(visible))
+			m.goal.lastLoad = m.nowOrDefault()
 		}
-		m.goal.cursor = clampCursor(m.goal.cursor, len(visible))
 		return m, nil
 
 	case goalMutationMsg:
@@ -1093,7 +1184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.goal.mode = goalList
 		m.mode = modeList
 		// Re-fetch to get updated list.
-		return m, listGoalsCmd(m.goalClient)
+		return m, listGoalsCmd(m.goalClient, false)
 
 	case goalDeletedMsg:
 		if msg.err != nil {
@@ -1102,7 +1193,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.goal.err = nil
 		m.goal.mode = goalList
-		return m, listGoalsCmd(m.goalClient)
+		return m, listGoalsCmd(m.goalClient, false)
 
 	case goalPickerTasksMsg:
 		if msg.err != nil {
@@ -1135,12 +1226,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeList
 			// Re-fetch tasks so the list reflects the partial update (name/due were
 			// already persisted by UpdateTask before SetTaskGoal failed).
-			return m, listTasksCmd(m.client)
+			return m, listTasksCmd(m.client, false)
 		}
 		m.goal.err = nil
 		m.goal.mode = goalList
 		// Re-fetch both tasks (to update goal_id fields) and goals (for detail pane).
-		return m, tea.Batch(listTasksCmd(m.client), listGoalsCmd(m.goalClient))
+		return m, tea.Batch(listTasksCmd(m.client, false), listGoalsCmd(m.goalClient, false))
 
 	case goalStatusListMsg:
 		if msg.err != nil {
@@ -1163,12 +1254,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.goal.compose = statusCompose{}
 		// Refresh the goal list (embedded latest) and, if in history view, the history.
 		var cmds []tea.Cmd
-		cmds = append(cmds, listGoalsCmd(m.goalClient))
+		cmds = append(cmds, listGoalsCmd(m.goalClient, false))
 		if m.goal.mode == goalStatusHistory || m.goal.mode == goalStatusReader || m.goal.mode == goalStatusConfirmDel {
 			cmds = append(cmds, listGoalStatusUpdatesCmd(m.goalClient, msg.goalID))
 			// Stay in history mode; the list will update when goalStatusListMsg arrives.
 		}
 		return m, tea.Batch(cmds...)
+
+	case autoRefreshTickMsg:
+		// Reschedule the heartbeat unconditionally; it is never allowed to die.
+		cmd := autoRefreshTickCmd()
+		if !m.autoRefreshEligible() {
+			return m, cmd
+		}
+		if m.nowOrDefault().Sub(m.activeTabLastLoad()) <= autoRefreshInterval {
+			return m, cmd
+		}
+		// Stamp before dispatch so a failed or late response cannot trigger
+		// another refresh within the same interval.
+		switch m.activeTab {
+		case tabTasks:
+			m.tasksLastLoad = m.nowOrDefault()
+		case tabGoals:
+			m.goal.lastLoad = m.nowOrDefault()
+		case tabPlanning:
+			m.plan.lastLoad = m.nowOrDefault()
+		case tabReport:
+			m.reportData.lastLoad = m.nowOrDefault()
+		}
+		return m, tea.Batch(m.autoRefreshBackgroundCmd(), cmd)
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -1307,17 +1421,14 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.PlanningMode = false
 		m.keys.GoalMode = true
 		m.reportData.err = nil
-		if !m.goal.loaded {
-			return m, listGoalsCmd(m.goalClient)
-		}
-		return m, nil
+		return m, listGoalsCmd(m.goalClient, false)
 
 	case key.Matches(msg, m.keys.PrevTab):
 		m.activeTab = tabPlanning
 		m.keys.ReportMode = false
 		m.keys.PlanningMode = true
 		m.reportData.err = nil
-		return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day))
+		return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false, ""))
 
 	case key.Matches(msg, m.keys.ReportPrevPreset):
 		idx := (m.reportData.presetIdx - 1 + len(presets)) % len(presets)
@@ -1325,7 +1436,7 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.reportData.loaded = false
 		p, _ := report.ParsePeriod(presets[idx], "", "", now)
 		m.reportData.period = p
-		return m, fetchReportCmd(m.client, p)
+		return m, fetchReportCmd(m.client, p, false)
 
 	case key.Matches(msg, m.keys.ReportNextPreset):
 		idx := (m.reportData.presetIdx + 1) % len(presets)
@@ -1333,13 +1444,13 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.reportData.loaded = false
 		p, _ := report.ParsePeriod(presets[idx], "", "", now)
 		m.reportData.period = p
-		return m, fetchReportCmd(m.client, p)
+		return m, fetchReportCmd(m.client, p, false)
 
 	case key.Matches(msg, m.keys.Refresh):
 		m.reportData.loaded = false
 		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
 		m.reportData.period = p
-		return m, fetchReportCmd(m.client, p)
+		return m, fetchReportCmd(m.client, p, false)
 
 	case key.Matches(msg, m.keys.Up):
 		if m.reportData.scroll > 0 {
@@ -1432,7 +1543,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabTasks
 		m.keys.GoalMode = false
 		m.goal.err = nil
-		return m, nil
+		return m, tea.Batch(listTasksCmd(m.client, false), listScheduledDaysCmd(m.planClient))
 
 	case key.Matches(msg, m.keys.PrevTab):
 		// Goals → Report (wrap around)
@@ -1445,7 +1556,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
 		m.reportData.period = p
 		m.reportData.loaded = false
-		return m, fetchReportCmd(m.client, p)
+		return m, fetchReportCmd(m.client, p, false)
 
 	case key.Matches(msg, m.keys.Up):
 		if m.goal.cursor > 0 {
@@ -1601,7 +1712,7 @@ func (m Model) handleGoalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Refresh):
 		m.goal.loaded = false
 		m.goal.err = nil
-		return m, listGoalsCmd(m.goalClient)
+		return m, listGoalsCmd(m.goalClient, false)
 
 	case key.Matches(msg, m.keys.Help):
 		m.mode = modeHelp
@@ -1885,14 +1996,14 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		p, _ := report.ParsePeriod(presets[m.reportData.presetIdx], "", "", now)
 		m.reportData.period = p
 		m.reportData.loaded = false
-		return m, fetchReportCmd(m.client, p)
+		return m, fetchReportCmd(m.client, p, false)
 	}
 	if key.Matches(msg, m.keys.PrevTab) {
 		m.activeTab = tabTasks
 		m.keys.PlanningMode = false
 		m.plan.err = nil
 		m.plan.pendingComplete = nil
-		return m, listScheduledDaysCmd(m.planClient)
+		return m, tea.Batch(listTasksCmd(m.client, false), listScheduledDaysCmd(m.planClient))
 	}
 
 	// Navigation.
@@ -1937,7 +2048,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, -1).Format("2006-01-02")
 			m.plan.loaded = false
-			return m, listPlanCmd(m.planClient, m.plan.day)
+			return m, listPlanCmd(m.planClient, m.plan.day, false, "")
 		}
 	case key.Matches(msg, m.keys.PlanNextDay):
 		t, err := time.Parse("2006-01-02", m.plan.day)
@@ -1945,7 +2056,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, 1).Format("2006-01-02")
 			m.plan.loaded = false
-			return m, listPlanCmd(m.planClient, m.plan.day)
+			return m, listPlanCmd(m.planClient, m.plan.day, false, "")
 		}
 	case key.Matches(msg, m.keys.PlanToday):
 		m.plan.pendingComplete = nil
@@ -1953,11 +2064,11 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.plan.day != today {
 			m.plan.day = today
 			m.plan.loaded = false
-			return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day), planTickCmd())
+			return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false, ""), planTickCmd())
 		}
 	case key.Matches(msg, m.keys.Refresh):
 		m.plan.loaded = false
-		return m, listPlanCmd(m.planClient, m.plan.day)
+		return m, listPlanCmd(m.planClient, m.plan.day, false, "")
 
 	// Entry actions.
 	case key.Matches(msg, m.keys.PlanAddTask):
@@ -2242,7 +2353,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.GoalMode = false
 		m.err = nil
 		var cmds []tea.Cmd
-		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day))
+		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day, false, ""))
 		if planIsToday(m.plan.day) {
 			cmds = append(cmds, planTickCmd())
 		}
@@ -2253,10 +2364,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.activeTab = tabGoals
 		m.keys.GoalMode = true
 		m.err = nil
-		if !m.goal.loaded {
-			return m, listGoalsCmd(m.goalClient)
-		}
-		return m, nil
+		return m, listGoalsCmd(m.goalClient, false)
 
 	case key.Matches(msg, m.keys.Cancel):
 		if m.filterExpr != "" || m.filterInvalid {
@@ -2456,7 +2564,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Refresh):
 		m.pendingComplete = nil
 		m.err = nil
-		return m, tea.Batch(listTasksCmd(m.client), listScheduledDaysCmd(m.planClient))
+		return m, tea.Batch(listTasksCmd(m.client, false), listScheduledDaysCmd(m.planClient))
 
 	case key.Matches(msg, m.keys.ToggleAll):
 		m.showAll = !m.showAll
@@ -2781,6 +2889,61 @@ func (m Model) nowOrDefault() time.Time {
 		return m.nowFunc()
 	}
 	return time.Now().Local()
+}
+
+// autoRefreshEligible is true when the active tab is in its plain list view
+// and no confirmation or modal is open. Keying off m.mode == modeList means
+// any future non-list mode suppresses automatically.
+func (m Model) autoRefreshEligible() bool {
+	if m.mode != modeList {
+		return false
+	}
+	if m.confirmingQuit || m.confirmingDiscard {
+		return false
+	}
+	switch m.activeTab {
+	case tabGoals:
+		return m.goal.mode == goalList
+	case tabPlanning:
+		return m.plan.mode == planList
+	default:
+		return true
+	}
+}
+
+// activeTabLastLoad returns the last-load timestamp for the currently active tab.
+func (m Model) activeTabLastLoad() time.Time {
+	switch m.activeTab {
+	case tabTasks:
+		return m.tasksLastLoad
+	case tabGoals:
+		return m.goal.lastLoad
+	case tabPlanning:
+		return m.plan.lastLoad
+	case tabReport:
+		return m.reportData.lastLoad
+	default:
+		return time.Time{}
+	}
+}
+
+// autoRefreshBackgroundCmd returns the background-flavored fetch command for the
+// active tab. The caller must stamp the tab's lastLoad before returning the
+// command so failed or late responses cannot trigger another refresh within the
+// same interval.
+func (m Model) autoRefreshBackgroundCmd() tea.Cmd {
+	switch m.activeTab {
+	case tabTasks:
+		return listTasksCmd(m.client, true)
+	case tabGoals:
+		return listGoalsCmd(m.goalClient, true)
+	case tabPlanning:
+		return listPlanCmd(m.planClient, m.plan.day, true, m.plan.day)
+	case tabReport:
+		return fetchReportCmd(m.client, m.reportData.period, true)
+	default:
+		return nil
+	}
 }
 
 // prevVisibleUntimed returns the previous untimed entry before cursor in the

@@ -811,6 +811,7 @@ type fakeTaskClient struct {
 	uncompleteErr      error
 	pomErr             error
 	setTaskGoalErr     error // if non-nil, SetTaskGoal returns this error
+	listErr            error // if non-nil, ListTasks returns this error
 	// listTasksResp, if non-nil, is returned by ListTasks; otherwise empty list.
 	listTasksResp []*taskv1.Task
 	// filterIDs, if non-nil, is returned by FilterTasks; otherwise empty list.
@@ -827,6 +828,9 @@ func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[task
 }
 
 func (f *fakeTaskClient) ListTasks(_ context.Context, _ *connect.Request[taskv1.ListTasksRequest]) (*connect.Response[taskv1.ListTasksResponse], error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
 	return connect.NewResponse(&taskv1.ListTasksResponse{Tasks: f.listTasksResp}), nil
 }
 
@@ -882,6 +886,10 @@ func (f *fakeTaskClient) FilterTasks(_ context.Context, req *connect.Request[tas
 		return nil, f.filterErr
 	}
 	return connect.NewResponse(&taskv1.FilterTasksResponse{TaskIds: f.filterIDs}), nil
+}
+
+func (f *fakeTaskClient) CountCompletedPomodoros(_ context.Context, _ *connect.Request[taskv1.CountCompletedPomodorosRequest]) (*connect.Response[taskv1.CountCompletedPomodorosResponse], error) {
+	return connect.NewResponse(&taskv1.CountCompletedPomodorosResponse{Count: 0}), nil
 }
 
 // ── T002: planning-tab complete action (US1) ──────────────────────────────────
