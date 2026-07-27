@@ -1274,6 +1274,121 @@ func TestEditForm_GoalState_RenderInView(t *testing.T) {
 	}
 }
 
+// TestEditForm_GoalEdit_HidesEstimateAndSnooze verifies that Estimate and
+// Snooze until are neither reachable via Tab nor rendered on a goal edit form.
+func TestEditForm_GoalEdit_HidesEstimateAndSnooze(t *testing.T) {
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
+	fakeTask := goalToFakeTask(goal)
+	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
+	f.isGoal = true
+
+	keys := DefaultKeyMap()
+	for i := 0; i < focusCount; i++ {
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f.focusIndex == focusEstimate || f.focusIndex == focusSnooze {
+			t.Errorf("focusIndex %d should be unreachable on a goal edit form", f.focusIndex)
+		}
+	}
+
+	view := f.View(80)
+	if strings.Contains(view, "Estimate") {
+		t.Error("goal edit form View: unexpected 'Estimate' label")
+	}
+	if strings.Contains(view, "Snooze until") {
+		t.Error("goal edit form View: unexpected 'Snooze until' label")
+	}
+}
+
+// TestEditForm_NewGoal_HidesEstimateAndSnooze verifies the same for a new-goal
+// form (isGoal true, taskID nil), where State is also skipped.
+func TestEditForm_NewGoal_HidesEstimateAndSnooze(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.isGoal = true
+
+	keys := DefaultKeyMap()
+	for i := 0; i < focusCount; i++ {
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f.focusIndex == focusEstimate || f.focusIndex == focusSnooze {
+			t.Errorf("focusIndex %d should be unreachable on a new goal form", f.focusIndex)
+		}
+	}
+
+	view := f.View(80)
+	if strings.Contains(view, "Estimate") {
+		t.Error("new goal form View: unexpected 'Estimate' label")
+	}
+	if strings.Contains(view, "Snooze until") {
+		t.Error("new goal form View: unexpected 'Snooze until' label")
+	}
+}
+
+// TestEditForm_GoalEdit_CtrlGOnlyOpensCalendarOnDue verifies that, with the
+// Estimate/Snooze fields gated out of the focus cycle, ctrl+g on a goal form
+// only ever opens the calendar from the Due field.
+func TestEditForm_GoalEdit_CtrlGOnlyOpensCalendarOnDue(t *testing.T) {
+	goal := &goalv1.Goal{Id: 1, Name: "G", State: goalv1.GoalState_GOAL_STATE_IN_PROGRESS}
+	fakeTask := goalToFakeTask(goal)
+	f := NewEditForm(fakeTask, 0, nil, goal.GetState())
+	f.isGoal = true
+	keys := DefaultKeyMap()
+
+	// State field: ctrl+g must be a no-op.
+	f.focusIndex = focusState
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar != nil {
+		t.Error("ctrl+g on focusState should not open the calendar")
+	}
+
+	// Due field: ctrl+g must open the calendar.
+	f.focusIndex = focusDue
+	f, _ = f.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}, keys)
+	if f.calendar == nil {
+		t.Error("ctrl+g on focusDue should open the calendar")
+	}
+}
+
+// TestEditForm_NewGoal_HidesPlan verifies that the Plan selector is neither
+// reachable via Tab nor rendered on a new-goal form. Goals are never planned,
+// and handleGoalEditSaved ignores planDay, so a visible selector would silently
+// drop the user's choice.
+func TestEditForm_NewGoal_HidesPlan(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.isGoal = true
+
+	keys := DefaultKeyMap()
+	for i := 0; i < focusCount; i++ {
+		f, _ = f.Update(tea.KeyPressMsg{Code: tea.KeyTab}, keys)
+		if f.focusIndex == focusPlan {
+			t.Error("focusPlan should be unreachable on a new goal form")
+		}
+	}
+
+	if view := f.View(80); strings.Contains(view, "Plan") {
+		t.Error("new goal form View: unexpected 'Plan' label")
+	}
+}
+
+// TestEditForm_NewGoal_PlanNotDirty verifies a stray plan choice on a goal form
+// cannot mark the form dirty or reach the save message.
+func TestEditForm_NewGoal_PlanNotDirty(t *testing.T) {
+	f := NewRootForm(0, nil)
+	f.isGoal = true
+	f.planIdx = planChoiceToday
+
+	if f.isDirty() {
+		t.Error("new goal form should not be dirty from a plan choice")
+	}
+
+	msg := f.buildSaveMsg()()
+	saved, ok := msg.(editSavedMsg)
+	if !ok {
+		t.Fatalf("buildSaveMsg: want editSavedMsg, got %T", msg)
+	}
+	if saved.planDay != "" {
+		t.Errorf("goal form planDay: want empty, got %q", saved.planDay)
+	}
+}
+
 // ── T009: Plan selector form-state tests (US1) ─────────────────────────────
 
 // CT-01: A new create form has planIdx == planChoiceNone.
