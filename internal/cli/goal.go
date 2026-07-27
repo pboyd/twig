@@ -76,7 +76,7 @@ func printGoalUsage(w io.Writer) {
 	fmt.Fprintln(w, "  show <id>        Show goal details and associated tasks")
 	fmt.Fprintln(w, "  mod <id> [<name>] [--due <date>] [--desc <text>]")
 	fmt.Fprintln(w, "                   Modify a goal")
-	fmt.Fprintln(w, "  state <id> <incubating|in-progress|completed|archived>")
+	fmt.Fprintf(w, "  state <id> <%s>\n", strings.Join(goal.StateNames(), "|"))
 	fmt.Fprintln(w, "                   Change goal state")
 	fmt.Fprintln(w, "  rm <id>          Delete a goal (tasks survive)")
 	fmt.Fprintln(w, "")
@@ -356,7 +356,7 @@ func runGoalMod(client goalv1connect.GoalServiceClient, addr string, args []stri
 
 func runGoalState(client goalv1connect.GoalServiceClient, addr string, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: twig goal state <id> <incubating|in-progress|completed|archived>")
+		fmt.Fprintf(os.Stderr, "usage: twig goal state <id> <%s>\n", strings.Join(goal.StateNames(), "|"))
 		return 1
 	}
 
@@ -368,7 +368,7 @@ func runGoalState(client goalv1connect.GoalServiceClient, addr string, args []st
 
 	state, err := goal.ParseState(args[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "twig: %q isn't a valid state — try one of: incubating, in-progress, completed, archived\n", args[1])
+		fmt.Fprintf(os.Stderr, "twig: %q isn't a valid state — try one of: %s\n", args[1], strings.Join(goal.StateNames(), ", "))
 		return 1
 	}
 

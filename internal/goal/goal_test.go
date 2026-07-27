@@ -218,3 +218,17 @@ func TestSubtreeForGoal(t *testing.T) {
 		t.Errorf("SubtreeForGoal(_, 10) len = %d, want 5", len(subtree))
 	}
 }
+
+func TestCLINameRoundTripsThroughParseState(t *testing.T) {
+	for _, s := range goal.StateDisplayOrder() {
+		name := goal.CLIName(s)
+		got, err := goal.ParseState(name)
+		if err != nil {
+			t.Errorf("ParseState(CLIName(%v)) = %v, want no error", s, err)
+			continue
+		}
+		if got != s {
+			t.Errorf("ParseState(CLIName(%v)) = %v, want %v", s, got, s)
+		}
+	}
+}

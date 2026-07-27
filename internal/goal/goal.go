@@ -65,6 +65,29 @@ func DisplayLabel(s goalv1.GoalState) string {
 	}
 }
 
+// CLIName returns the parseable CLI spelling for a state, i.e. a string that
+// ParseState accepts. Unlike StateName, this uses "in-progress" (hyphen) so
+// the result round-trips through ParseState.
+func CLIName(s goalv1.GoalState) string {
+	switch s {
+	case goalv1.GoalState_GOAL_STATE_IN_PROGRESS:
+		return "in-progress"
+	default:
+		return StateName(s)
+	}
+}
+
+// StateNames returns the parseable CLI names for all states in display order,
+// excluding UNSPECIFIED.
+func StateNames() []string {
+	order := StateDisplayOrder()
+	names := make([]string, len(order))
+	for i, s := range order {
+		names[i] = CLIName(s)
+	}
+	return names
+}
+
 // ParseState parses a CLI string to a GoalState. Returns an error for unknown values.
 func ParseState(s string) (goalv1.GoalState, error) {
 	switch s {

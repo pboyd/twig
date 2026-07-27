@@ -16,6 +16,7 @@ import (
 	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	taskv1connect "github.com/pboyd/twig/api/gen/task/v1/taskv1connect"
+	"github.com/pboyd/twig/internal/goal"
 )
 
 // fakeGoalService is an in-memory GoalServiceHandler for testing.
@@ -370,7 +371,7 @@ func TestGoalState_InvalidState(t *testing.T) {
 		t.Fatal("expected non-zero exit for invalid state")
 	}
 	// Error message should list valid states.
-	for _, valid := range []string{"incubating", "in-progress", "completed", "archived"} {
+	for _, valid := range goal.StateNames() {
 		if !strings.Contains(stderr, valid) {
 			t.Errorf("expected valid state %q listed in error, got: %s", valid, stderr)
 		}
