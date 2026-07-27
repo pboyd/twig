@@ -18,6 +18,34 @@ describe("goalGroups", () => {
     expect(groups[1].label).toBe("Incubating");
   });
 
+  it("includes Hold between Incubating and Completed when showHidden is false", () => {
+    const goals = [
+      goal(1n, GoalState.INCUBATING),
+      goal(2n, GoalState.HOLD),
+      goal(3n, GoalState.IN_PROGRESS),
+    ];
+    const groups = goalGroups(goals, false);
+    expect(groups).toHaveLength(3);
+    expect(groups[0].label).toBe("In Progress");
+    expect(groups[1].label).toBe("Incubating");
+    expect(groups[2].label).toBe("Hold");
+  });
+
+  it("keeps Hold in the same position when showHidden is true", () => {
+    const goals = [
+      goal(1n, GoalState.INCUBATING),
+      goal(2n, GoalState.HOLD),
+      goal(3n, GoalState.IN_PROGRESS),
+      goal(4n, GoalState.COMPLETED),
+    ];
+    const groups = goalGroups(goals, true);
+    expect(groups).toHaveLength(4);
+    expect(groups[0].label).toBe("In Progress");
+    expect(groups[1].label).toBe("Incubating");
+    expect(groups[2].label).toBe("Hold");
+    expect(groups[3].label).toBe("Completed");
+  });
+
   it("hides Completed and Archived when showHidden is false", () => {
     const goals = [
       goal(1n, GoalState.IN_PROGRESS),

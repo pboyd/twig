@@ -28,6 +28,7 @@ import { messages } from "../theme/messages";
 const STATE_LABELS: Partial<Record<GoalState, string>> = {
   [GoalState.IN_PROGRESS]: "In Progress",
   [GoalState.INCUBATING]: "Incubating",
+  [GoalState.HOLD]: "Hold",
   [GoalState.COMPLETED]: "Completed",
   [GoalState.ARCHIVED]: "Archived",
 };
