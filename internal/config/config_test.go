@@ -296,6 +296,110 @@ func TestProfileBackwardCompat(t *testing.T) {
 	}
 }
 
+func TestPlanSection(t *testing.T) {
+	tests := []struct {
+		name     string
+		toml     string
+		wantPlan config.PlanConfig
+		wantOK   bool
+	}{
+		{
+			name:     "no plan section yields zero PlanConfig",
+			toml:     `api_key = "k"`,
+			wantPlan: config.PlanConfig{},
+			wantOK:   false,
+		},
+		{
+			name: "all four keys set",
+			toml: `
+[plan]
+on_task_start  = "task-start.sh"
+on_task_end    = "task-end.sh"
+on_event_start = "event-start.sh"
+on_event_end   = "event-end.sh"
+`,
+			wantPlan: config.PlanConfig{
+				OnTaskStart:  "task-start.sh",
+				OnTaskEnd:    "task-end.sh",
+				OnEventStart: "event-start.sh",
+				OnEventEnd:   "event-end.sh",
+			},
+			wantOK: true,
+		},
+		{
+			name: "partial section leaves other keys zero",
+			toml: `
+[plan]
+on_task_start = "only-this.sh"
+`,
+			wantPlan: config.PlanConfig{
+				OnTaskStart: "only-this.sh",
+			},
+			wantOK: true,
+		},
+		{
+			name: "empty values mean disabled",
+			toml: `
+[plan]
+on_task_start = ""
+on_task_end   = ""
+`,
+			wantPlan: config.PlanConfig{},
+			wantOK:   false,
+		},
+		{
+			name: "unknown key inside [plan] is ignored",
+			toml: `
+[plan]
+on_task_start = "ok.sh"
+future_key     = "future.sh"
+`,
+			wantPlan: config.PlanConfig{OnTaskStart: "ok.sh"},
+			wantOK:   true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeConfig(t, tc.toml)
+			got, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(got.Plan, tc.wantPlan) {
+				t.Errorf("Plan = %+v, want %+v", got.Plan, tc.wantPlan)
+			}
+			if got.Plan.Enabled() != tc.wantOK {
+				t.Errorf("Enabled() = %v, want %v", got.Plan.Enabled(), tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestProfile_KeepsPlanFromRoot(t *testing.T) {
+	// PlanConfig must always come from the root table; profile blocks must
+	// not override it, mirroring PomodoroConfig.
+	root := config.Config{
+		APIURL: "http://root.example.com",
+		APIKey: "root-key",
+		Plan: config.PlanConfig{
+			OnTaskStart: "root-task-start.sh",
+		},
+		Profiles: map[string]config.Profile{
+			"work": {APIURL: "http://work.example.com", APIKey: "work-key"},
+		},
+	}
+	got, ok := root.Profile("work")
+	if !ok {
+		t.Fatal(`Profile("work") returned ok=false`)
+	}
+	if got.Plan.OnTaskStart != "root-task-start.sh" {
+		t.Errorf("Plan.OnTaskStart = %q, want root value %q", got.Plan.OnTaskStart, "root-task-start.sh")
+	}
+	if !got.Plan.Enabled() {
+		t.Error("Enabled() = false; want true (Plan came from root)")
+	}
+}
+
 func TestResolve(t *testing.T) {
 	tests := []struct {
 		name    string

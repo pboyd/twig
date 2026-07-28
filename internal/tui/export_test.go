@@ -37,7 +37,7 @@ func ExportBuildVisibleOn(tree []*cli.TreeNode, expanded map[int64]bool, showAll
 
 // ExportNewModel creates a Model with a fake tree for unit tests.
 func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode) Model {
-	m := newModel(client, nil, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(client, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.tree = tree
 	m.visible = buildVisible(tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
 	return m
@@ -45,7 +45,7 @@ func ExportNewModel(client taskv1connect.TaskServiceClient, tree []*cli.TreeNode
 
 // ExportNewPlanModel creates a Model wired for planning tab tests.
 func ExportNewPlanModel(taskClient taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, day string) Model {
-	m := newModel(taskClient, planClient, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(taskClient, planClient, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabPlanning
 	m.plan.day = day
 	return m
@@ -234,7 +234,7 @@ const ExportTabReport = int(tabReport)
 
 // ExportNewReportModel creates a Model in the Report tab for unit tests.
 func ExportNewReportModel(client taskv1connect.TaskServiceClient) Model {
-	m := newModel(client, nil, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(client, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabReport
 	m.keys.ReportMode = true
 	return m
@@ -247,7 +247,7 @@ func ExportSetReportData(m *Model, data reportState) {
 
 // ExportNewGoalModel creates a Model in the Goals tab for unit tests.
 func ExportNewGoalModel(taskClient taskv1connect.TaskServiceClient, goals []*goalv1.Goal) Model {
-	m := newModel(taskClient, nil, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(taskClient, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabGoals
 	m.goal.goals = goals
 	m.goal.loaded = true

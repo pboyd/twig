@@ -144,7 +144,7 @@ func TestCT09_AddPlanTaskFailsTaskStaysCreated(t *testing.T) {
 func TestHandleEditSaved_WithPlanDay_AlsoRefreshesScheduledDays(t *testing.T) {
 	tc := &fakeTaskClient{createTaskID: 42}
 	pc := &fakePlanClient{}
-	m := newModel(tc, pc, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(tc, pc, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 
 	msg := editSavedMsg{name: "new task", planDay: "2026-07-20"}
 	_, cmd := m.handleEditSaved(msg)
@@ -179,7 +179,7 @@ func TestHandleEditSaved_WithPlanDay_AlsoRefreshesScheduledDays(t *testing.T) {
 func TestHandleEditSaved_WithoutPlanDay_NoScheduledDaysRefresh(t *testing.T) {
 	tc := &fakeTaskClient{createTaskID: 42}
 	pc := &fakePlanClient{}
-	m := newModel(tc, pc, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(tc, pc, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 
 	msg := editSavedMsg{name: "new task"}
 	_, cmd := m.handleEditSaved(msg)

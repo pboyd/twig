@@ -848,6 +848,9 @@ func (m Model) Init() tea.Cmd {
 	if m.goalClient != nil {
 		cmds = append(cmds, listGoalsCmd(m.goalClient, false))
 	}
+	if m.planHooks.cfg.Enabled() {
+		cmds = append(cmds, planHookTickCmd())
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -1049,6 +1052,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case planEntriesMsg:
 		m = m.handlePlanEntriesMsg(msg, msg.highlightID)
+		return m, nil
+
+	case planHookTickMsg:
+		return m.handlePlanHookTick()
+
+	case planHookEntriesMsg:
+		m = m.handlePlanHookEntriesMsg(msg)
+		return m, nil
+
+	case planHookErrMsg:
+		m.notice = msg.key + " went off the rails (" + msg.err.Error() + ") — check that command in your config."
 		return m, nil
 
 	case planTasksMsg:
