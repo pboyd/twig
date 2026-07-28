@@ -61,6 +61,8 @@ The CLI requires:
 
 Both can also be set in the optional config file at `~/.config/twig/config.toml`; env vars take precedence. See `specs/015-pomodoro-config-file/contracts/config-schema.md` for the full schema including pomodoro lifecycle hooks (`on_start`, `on_cancel`, `on_complete`).
 
+A `[plan]` section adds optional `on_task_start`, `on_task_end`, `on_event_start`, `on_event_end` commands that run at the start and end of timed entries on the current day's plan while the TUI is open. Placeholders: `%s` raw name, `%q` shell-safe quoted name, `%t` `HH:MM` (scheduled time), `%%` literal `%`. Full schema in `specs/070-plan-entry-hooks/contracts/config-schema.md`.
+
 **Alternate profiles**: The CLI supports multiple accounts in one config file via `[profile.<name>]` TOML tables. Select a profile at launch with `--profile <name>` (flag wins) or `TWIG_PROFILE=<name>` (env var). Omitting the flag/env uses the root/default account. See `specs/033-alternate-profiles/contracts/config-schema.md` for the full profile schema and precedence rules.
 
 ## Architecture

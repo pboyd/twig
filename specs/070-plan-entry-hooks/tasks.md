@@ -85,8 +85,8 @@ Root Go module `github.com/pboyd/twig` only. `api/` and `services/twig/` are unt
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Extend `hookFor` in `internal/tui/plan_hook.go` to return `OnEventStart`/`OnEventEnd` for boundaries where `task` is false (FR-003)
-- [ ] T021 [US2] Extend `internal/tui/plan_hook_test.go`: an event entry routes to the event keys; a task entry never fires an event key and vice versa; with only event keys configured, a task boundary dispatches nothing
+- [X] T020 [US2] Extend `hookFor` in `internal/tui/plan_hook.go` to return `OnEventStart`/`OnEventEnd` for boundaries where `task` is false (FR-003)
+  - [X] T021 [US2] Extend `internal/tui/plan_hook_test.go`: an event entry routes to the event keys; a task entry never fires an event key and vice versa; with only event keys configured, a task boundary dispatches nothing
 
 **Checkpoint**: US1 and US2 both work, independently of each other.
 
@@ -100,11 +100,11 @@ Root Go module `github.com/pboyd/twig` only. `api/` and `services/twig/` are unt
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Add `shellEscapeDoubleQuoted(name string) string` to `internal/tui/plan_hook.go` — backslash-escapes `"`, `\`, `$`, and `` ` ``, the exact set the POSIX shell reinterprets inside double quotes (FR-010)
-- [ ] T023 [US3] Add `expandHookCmd(cmd, name string, at time.Time) string` to `internal/tui/plan_hook.go` — a **single left-to-right pass** into a `strings.Builder`: `%s` → name verbatim, `%q` → `"` + escaped name + `"`, `%t` → `at.Format("15:04")`, `%%` → `%`, any other `%X` → both characters emitted unchanged, trailing bare `%` emitted as-is. Do not use `strings.ReplaceAll` chains — they re-scan substituted text and reopen the injection hole FR-013 closes (research.md D5)
-- [ ] T024 [US3] Pass each due boundary's command through `expandHookCmd(cmd, b.name, b.at)` before handing it to `runPlanHook` in the tick reducer in `internal/tui/plan_hook.go` (FR-011: `%t` is the scheduled boundary time, not the wall-clock time of execution)
-- [ ] T025 [US3] Extend `internal/tui/plan_hook_test.go`: each of `%s`, `%q`, `%t`, `%%`; unknown `%z` passes through; trailing bare `%`; non-recursion (a name of `100%s done` must not expand again); `%q` escapes `"`, `\`, `$`, and `` ` ``; `%t` zero-pads (`09:05`); `%t` reports the scheduled time when `now` is later; empty name yields `""` for `%q`
-- [ ] T026 [US3] Verify the worked example in `contracts/config-schema.md` — `notify-send "%t: start %q"` with a task named `Fix "auth" $bug` at 14:00 — as an explicit test case in `internal/tui/plan_hook_test.go`
+- [X] T022 [US3] Add `shellEscapeDoubleQuoted(name string) string` to `internal/tui/plan_hook.go` — backslash-escapes `"`, `\`, `$`, and `` ` ``, the exact set the POSIX shell reinterprets inside double quotes (FR-010)
+  - [X] T023 [US3] Add `expandHookCmd(cmd, name string, at time.Time) string` to `internal/tui/plan_hook.go` — a **single left-to-right pass** into a `strings.Builder`: `%s` → name verbatim, `%q` → `"` + escaped name + `"`, `%t` → `at.Format("15:04")`, `%%` → `%`, any other `%X` → both characters emitted unchanged, trailing bare `%` emitted as-is. Do not use `strings.ReplaceAll` chains — they re-scan substituted text and reopen the injection hole FR-013 closes (research.md D5)
+  - [X] T024 [US3] Pass each due boundary's command through `expandHookCmd(cmd, b.name, b.at)` before handing it to `runPlanHook` in the tick reducer in `internal/tui/plan_hook.go` (FR-011: `%t` is the scheduled boundary time, not the wall-clock time of execution)
+  - [X] T025 [US3] Extend `internal/tui/plan_hook_test.go`: each of `%s`, `%q`, `%t`, `%%`; unknown `%z` passes through; trailing bare `%`; non-recursion (a name of `100%s done` must not expand again); `%q` escapes `"`, `\`, `$`, and `` ` ``; `%t` zero-pads (`09:05`); `%t` reports the scheduled time when `now` is later; empty name yields `""` for `%q`
+  - [X] T026 [US3] Verify the worked example in `contracts/config-schema.md` — `notify-send "%t: start %q"` with a task named `Fix "auth" $bug` at 14:00 — as an explicit test case in `internal/tui/plan_hook_test.go`
 
 **Checkpoint**: All three user stories are independently functional.
 
@@ -112,12 +112,12 @@ Root Go module `github.com/pboyd/twig` only. `api/` and `services/twig/` are unt
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T027 Add the hook-failure notice in the `planHookErrMsg` handler in `internal/tui/update.go` — set `m.notice` (not `m.err`; this is the user's config misbehaving, not twig), naming the offending key and staying actionable in the warm tone Principle IV requires, e.g. `on_task_start went off the rails (exit 127) — check that command in your config.`
-- [ ] T028 [P] Document the `[plan]` section in `AGENTS.md` alongside the existing pomodoro-hooks pointer, referencing `specs/070-plan-entry-hooks/contracts/config-schema.md`. **Edit `AGENTS.md` directly — `CLAUDE.md` is a symlink to it** and tooling refuses to write through the link
-- [ ] T029 Run `go test ./...` from the repository root and confirm green
-- [ ] T030 Manual validation per `quickstart.md`: build with `go build -o twig ./cmd/twig`, run through the US1/US2/US3 acceptance scenarios with a file-writing hook, and confirm back-to-back entries fire end-before-start (FR-016)
-- [ ] T031 Verify SC-006: with **no** `[plan]` section in the config, confirm no hook ticker starts, no extra `ListPlanEntries` traffic is issued, and nothing is executed
-- [ ] T032 Verify FR-008 day scope: with the Plan tab navigated to tomorrow, confirm today's boundaries still fire (this is the failure mode that ruled out reusing `m.plan.entries` — research.md D2)
+- [X] T027 Add the hook-failure notice in the `planHookErrMsg` handler in `internal/tui/update.go` — set `m.notice` (not `m.err`; this is the user's config misbehaving, not twig), naming the offending key and staying actionable in the warm tone Principle IV requires, e.g. `on_task_start went off the rails (exit 127) — check that command in your config.`
+  - [X] T028 [P] Document the `[plan]` section in `AGENTS.md` alongside the existing pomodoro-hooks pointer, referencing `specs/070-plan-entry-hooks/contracts/config-schema.md`. **Edit `AGENTS.md` directly — `CLAUDE.md` is a symlink to it** and tooling refuses to write through the link
+  - [X] T029 Run `go test ./...` from the repository root and confirm green
+  - [X] T030 Manual validation per `quickstart.md`: build with `go build -o twig ./cmd/twig`, run through the US1/US2/US3 acceptance scenarios with a file-writing hook, and confirm back-to-back entries fire end-before-start (FR-016)
+  - [X] T031 Verify SC-006: with **no** `[plan]` section in the config, confirm no hook ticker starts, no extra `ListPlanEntries` traffic is issued, and nothing is executed
+  - [X] T032 Verify FR-008 day scope: with the Plan tab navigated to tomorrow, confirm today's boundaries still fire (this is the failure mode that ruled out reusing `m.plan.entries` — research.md D2)
 
 ---
 

@@ -109,7 +109,7 @@ func TestPlanBoundaries_UntimedEntryProducesNoBoundaries(t *testing.T) {
 func TestPlanBoundaries_TimedTaskEntryProducesStartAndEnd(t *testing.T) {
 	day := "2026-07-28"
 	startMin := int32(14 * 60) // 14:00
-	dur := int32(30)            // 30 minutes → ends at 14:30
+	dur := int32(30)           // 30 minutes → ends at 14:30
 	entries := []*planv1.PlanEntry{
 		makeEntry(1, 10, &startMin, dur, "Write report"),
 	}
@@ -193,13 +193,172 @@ func TestHookFor_TaskBoundaries(t *testing.T) {
 	}
 }
 
-func TestHookFor_EventBoundariesReturnEmptyForUS1(t *testing.T) {
-	// US1 ships literal command strings via task keys only; event hooks
-	// stay empty until US2 adds them.
-	cfg := config.PlanConfig{OnTaskStart: "task.sh"}
+func TestHookFor_EventBoundariesRouteToEventKeys(t *testing.T) {
+	// FR-003: an entry that does not link a task (an event) routes to the
+	// on_event_* keys, independent of any task keys that may also be set.
+	cfg := config.PlanConfig{
+		OnTaskStart:  "task-start.sh",
+		OnTaskEnd:    "task-end.sh",
+		OnEventStart: "event-start.sh",
+		OnEventEnd:   "event-end.sh",
+	}
+
+	startCmd, startKey := hookFor(cfg, planBoundary{task: false, edge: edgeStart})
+	if startCmd != "event-start.sh" || startKey != "on_event_start" {
+		t.Errorf("event start: got (%q, %q), want (event-start.sh, on_event_start)", startCmd, startKey)
+	}
+
+	endCmd, endKey := hookFor(cfg, planBoundary{task: false, edge: edgeEnd})
+	if endCmd != "event-end.sh" || endKey != "on_event_end" {
+		t.Errorf("event end: got (%q, %q), want (event-end.sh, on_event_end)", endCmd, endKey)
+	}
+}
+
+func TestHookFor_TaskBoundaryNeverFiresEventKey(t *testing.T) {
+	// A task entry must never route to an event key, regardless of what
+	// event keys are configured.
+	cfg := config.PlanConfig{
+		OnTaskStart:  "task-start.sh",
+		OnEventStart: "event-start.sh",
+	}
+
+	cmd, key := hookFor(cfg, planBoundary{task: true, edge: edgeStart})
+	if cmd != "task-start.sh" || key != "on_task_start" {
+		t.Errorf("task boundary must not pick event key: got (%q, %q)", cmd, key)
+	}
+}
+
+func TestHookFor_EventBoundaryNeverFiresTaskKey(t *testing.T) {
+	// An event entry must never route to a task key, regardless of what
+	// task keys are configured.
+	cfg := config.PlanConfig{
+		OnTaskStart:  "task-start.sh",
+		OnEventStart: "event-start.sh",
+	}
+
 	cmd, key := hookFor(cfg, planBoundary{task: false, edge: edgeStart})
+	if cmd != "event-start.sh" || key != "on_event_start" {
+		t.Errorf("event boundary must not pick task key: got (%q, %q)", cmd, key)
+	}
+}
+
+func TestHookFor_OnlyEventKeysConfiguredTaskBoundaryDispatchesNothing(t *testing.T) {
+	// With only event keys configured, a task boundary returns ("", "") so
+	// the tick reducer skips dispatch (data-model.md §1: empty = do nothing).
+	cfg := config.PlanConfig{OnEventStart: "event-start.sh"}
+
+	cmd, key := hookFor(cfg, planBoundary{task: true, edge: edgeStart})
 	if cmd != "" || key != "" {
-		t.Errorf("event start (US1): got (%q, %q), want (\"\", \"\")", cmd, key)
+		t.Errorf("only event keys + task boundary: got (%q, %q), want (\"\", \"\")", cmd, key)
+	}
+}
+
+// ── T025: placeholder expansion (US3) ───────────────────────────────────────
+
+func TestExpandHookCmd_PercentSInsertsNameVerbatim(t *testing.T) {
+	got := expandHookCmd(`echo %s`, `Write report`, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `echo Write report` {
+		t.Errorf("%%s: got %q, want %q", got, `echo Write report`)
+	}
+}
+
+func TestExpandHookCmd_PercentQWrapsAndEscapes(t *testing.T) {
+	got := expandHookCmd(`echo %q`, `Write report`, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `echo "Write report"` {
+		t.Errorf("%%q: got %q, want %q", got, `echo "Write report"`)
+	}
+}
+
+func TestExpandHookCmd_PercentTFormatsScheduledTime(t *testing.T) {
+	at := time.Date(2026, 7, 28, 9, 5, 0, 0, time.Local)
+	got := expandHookCmd(`echo %t`, ``, at)
+	if got != `echo 09:05` {
+		t.Errorf("%%t zero-padding: got %q, want %q", got, `echo 09:05`)
+	}
+}
+
+func TestExpandHookCmd_PercentTReportsScheduledNotExecution(t *testing.T) {
+	// FR-011: %t uses the boundary's scheduled time even when now is later.
+	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
+	got := expandHookCmd(`echo %t`, ``, at)
+	if got != `echo 14:00` {
+		t.Errorf("%%t scheduled: got %q, want %q", got, `echo 14:00`)
+	}
+}
+
+func TestExpandHookCmd_PercentPercentEmitsLiteralPercent(t *testing.T) {
+	got := expandHookCmd(`100%% done`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `100% done` {
+		t.Errorf("%%%%: got %q, want %q", got, `100% done`)
+	}
+}
+
+func TestExpandHookCmd_UnknownPercentXPassesThrough(t *testing.T) {
+	got := expandHookCmd(`save %z today`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `save %z today` {
+		t.Errorf("unknown %%z passthrough: got %q, want %q", got, `save %z today`)
+	}
+}
+
+func TestExpandHookCmd_TrailingBarePercentEmittedAsIs(t *testing.T) {
+	got := expandHookCmd(`100%`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `100%` {
+		t.Errorf("trailing bare %%: got %q, want %q", got, `100%`)
+	}
+}
+
+// FR-013: substitution is not re-scanned, so a name containing %s cannot
+// inject a placeholder. Only one expand pass over the original command.
+func TestExpandHookCmd_NonRecursiveOnNameContainingPlaceholder(t *testing.T) {
+	got := expandHookCmd(`echo %s`, `100%s done`, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `echo 100%s done` {
+		t.Errorf("non-recursion: got %q, want %q", got, `echo 100%s done`)
+	}
+}
+
+// FR-010: the four POSIX-shell-reinterpreted characters inside double quotes
+// must all be escaped by %q.
+func TestExpandHookCmd_PercentQEscapesAllFourChars(t *testing.T) {
+	// name = a"b\c$d`e — all four escapable chars present.
+	name := "a\"b\\c$d`e"
+	got := expandHookCmd("echo %q", name, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	// expected literal:
+	//   echo "a\"b\\c\$d\`e"
+	want := "echo " + `"` + `a\"b\\c\$d\` + "`" + `e"`
+	if got != want {
+		t.Errorf("%%q escape four chars: got %q, want %q", got, want)
+	}
+}
+
+func TestExpandHookCmd_PercentQWithEmptyNameYieldsEmptyQuotedString(t *testing.T) {
+	got := expandHookCmd(`echo %q`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	if got != `echo ""` {
+		t.Errorf("%%q empty name: got %q, want %q", got, `echo ""`)
+	}
+}
+
+// ── T026: contracts/config-schema.md worked example ─────────────────────────
+
+// The worked example from contracts/config-schema.md:
+//
+//	on_task_start = 'notify-send "%t: start %q"'
+//	task named:    Fix "auth" $bug
+//	scheduled at:  14:00
+//
+// expandHookCmd renders %t as the scheduled HH:MM and %q as the name wrapped
+// in double quotes with " $ (and \ and `) escaped — once. The literal outer
+// string is therefore:
+//
+//	notify-send "14:00: start "Fix \"auth\" \$bug""
+//
+// (outer-quote closes after the time string; %q opens its own outer quote
+// around the name; the shell sees a balanced pair).
+func TestExpandHookCmd_WorkedExampleFromConfigSchema(t *testing.T) {
+	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
+	got := expandHookCmd(`notify-send "%t: start %q"`, `Fix "auth" $bug`, at)
+	want := `notify-send "14:00: start "Fix \"auth\" \$bug""`
+	if got != want {
+		t.Errorf("worked example: got %q, want %q", got, want)
 	}
 }
 
@@ -256,7 +415,7 @@ func TestHandlePlanHookEntriesMsg_StaleDayResponseDropped(t *testing.T) {
 	m.planHooks.day = "2026-07-29" // fetch was for an older day
 
 	m = m.handlePlanHookEntriesMsg(planHookEntriesMsg{
-		day:   "2026-07-28",
+		day:     "2026-07-28",
 		entries: []*planv1.PlanEntry{},
 	})
 

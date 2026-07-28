@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	tea "charm.land/bubbletea/v2"
+	"connectrpc.com/connect"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	planv1connect "github.com/pboyd/twig/api/gen/plan/v1/planv1connect"
 	"github.com/pboyd/twig/internal/cli"
@@ -158,18 +158,25 @@ func planBoundaries(entries []*planv1.PlanEntry, day string, tree []*cli.TreeNod
 }
 
 // hookFor picks the (cmd, key) pair for a single boundary according to the
-// task-vs-event routing in data-model.md §3. US1 implements the task keys;
-// US2 fills in the event keys. Returns ("", "") for event boundaries until
-// US2, or when the appropriate task key is empty (caller skips dispatch).
+// task-vs-event routing in data-model.md §3. A task boundary never fires an
+// event key (and vice versa). When the routed-to command string is empty
+// (the user did not configure the corresponding key), the key is reported
+// as empty too — the caller skips dispatch on cmd == "".
 func hookFor(cfg config.PlanConfig, b planBoundary) (cmd, key string) {
 	switch {
 	case b.task && b.edge == edgeStart:
-		return cfg.OnTaskStart, "on_task_start"
+		cmd, key = cfg.OnTaskStart, "on_task_start"
 	case b.task && b.edge == edgeEnd:
-		return cfg.OnTaskEnd, "on_task_end"
+		cmd, key = cfg.OnTaskEnd, "on_task_end"
+	case !b.task && b.edge == edgeStart:
+		cmd, key = cfg.OnEventStart, "on_event_start"
+	case !b.task && b.edge == edgeEnd:
+		cmd, key = cfg.OnEventEnd, "on_event_end"
 	}
-	// Event hooks: deferred to US2.
-	return "", ""
+	if cmd == "" {
+		return "", ""
+	}
+	return cmd, key
 }
 
 // dueBoundaries applies the watermark filter and sort. Returns the boundaries
