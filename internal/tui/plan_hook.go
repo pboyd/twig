@@ -132,13 +132,19 @@ func planBoundaries(entries []*planv1.PlanEntry, day string, tree []*cli.TreeNod
 	if err != nil {
 		return nil
 	}
+	y, mo, d := midnight.Date()
 	var out []planBoundary
 	for _, e := range entries {
 		if e == nil || e.StartMinute == nil {
 			continue
 		}
-		start := midnight.Add(time.Duration(*e.StartMinute) * time.Minute)
-		end := start.Add(time.Duration(e.DurationMinute) * time.Minute)
+		// StartMinute/DurationMinute are wall-clock minutes-of-day, which is
+		// how the plan grid renders them. Build the instants with time.Date
+		// rather than adding a Duration to midnight: on a DST-transition day
+		// adding absolute time would fire an entry the plan shows as 14:00 at
+		// 15:00 (spring forward) or 13:00 (fall back).
+		start := time.Date(y, mo, d, 0, int(*e.StartMinute), 0, 0, time.Local)
+		end := time.Date(y, mo, d, 0, int(*e.StartMinute)+int(e.DurationMinute), 0, 0, time.Local)
 		name := e.Name
 		if name == "" && e.TaskId != 0 {
 			name = findTaskName(tree, e.TaskId)
@@ -265,6 +271,11 @@ func (m Model) handlePlanHookTick() (Model, tea.Cmd) {
 		m.planHooks.day = today
 		m.planHooks.entries = nil
 		m.planHooks.loaded = false
+		// Zero lastFetch so the new day's entries are fetched on this tick
+		// rather than up to a full fetch interval later. Combined with the
+		// 2-minute lateness guard in dueBoundaries, a throttled refetch could
+		// otherwise drop a boundary sitting just after midnight.
+		m.planHooks.lastFetch = time.Time{}
 	}
 
 	var cmds []tea.Cmd
@@ -288,13 +299,21 @@ func (m Model) handlePlanHookTick() (Model, tea.Cmd) {
 
 	boundaries := planBoundaries(m.planHooks.entries, m.planHooks.day, m.tree)
 	due := dueBoundaries(boundaries, m.planHooks.watermark, now)
+	var hooks []tea.Cmd
 	for _, b := range due {
 		cmd, key := hookFor(m.planHooks.cfg, b)
 		if cmd == "" {
 			continue
 		}
 		expanded := expandHookCmd(cmd, b.name, b.at)
-		cmds = append(cmds, runPlanHook(expanded, key))
+		hooks = append(hooks, runPlanHook(expanded, key))
+	}
+	// tea.Sequence, not tea.Batch: dueBoundaries returns ends before starts
+	// (FR-016), and Batch would run them concurrently with no ordering, so
+	// "start B" could notify before "end A" for back-to-back entries. The
+	// sequence still runs off the UI goroutine, so the interface never blocks.
+	if len(hooks) > 0 {
+		cmds = append(cmds, tea.Sequence(hooks...))
 	}
 	m.planHooks.watermark = now
 

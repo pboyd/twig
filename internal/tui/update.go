@@ -1096,6 +1096,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.notice != "" {
 			m.notice = msg.notice
 		}
+		// Invalidate the hook watcher's cache so the next tick refetches
+		// (FR-017). Without this, an entry added within the fetch interval of
+		// its own start time is discovered after the watermark has already
+		// moved past it, and never fires.
+		m.planHooks.lastFetch = time.Time{}
 		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID, false, ""), listScheduledDaysCmd(m.planClient))
 
 	case planTickMsg:

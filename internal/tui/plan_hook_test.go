@@ -284,3 +284,72 @@ func TestPlanHookErrMsg_RoutesToNotice(t *testing.T) {
 		t.Errorf("notice should carry the error, got %q", nm.notice)
 	}
 }
+
+// ── code-review fixes ──────────────────────────────────────────────────────
+
+// A DST-transition day must not shift boundaries. StartMinute is a wall-clock
+// minute-of-day, so an entry the plan grid renders as 14:00 must fire at 14:00
+// wall clock even when the day is only 23 hours long.
+func TestPlanBoundaries_DSTSpringForwardKeepsWallClock(t *testing.T) {
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	orig := time.Local
+	time.Local = nyc
+	defer func() { time.Local = orig }()
+
+	// 2026-03-08 is the US spring-forward date: 02:00 EST jumps to 03:00 EDT.
+	start := int32(14 * 60)
+	entries := []*planv1.PlanEntry{makeEntry(7, 1, &start, 30, "Afternoon block")}
+
+	got := planBoundaries(entries, "2026-03-08", nil)
+	if len(got) != 2 {
+		t.Fatalf("want 2 boundaries, got %d", len(got))
+	}
+	for _, b := range got {
+		wantHour, wantMin := 14, 0
+		if b.edge == edgeEnd {
+			wantMin = 30
+		}
+		if b.at.Hour() != wantHour || b.at.Minute() != wantMin {
+			t.Errorf("edge %v: got %02d:%02d, want %02d:%02d (adding absolute duration to midnight shifts across the DST gap)",
+				b.edge, b.at.Hour(), b.at.Minute(), wantHour, wantMin)
+		}
+	}
+}
+
+// Rolling over to a new day must zero lastFetch so the new day's entries are
+// fetched immediately, not up to a full fetch interval later.
+func TestHandlePlanHookTick_DayRolloverForcesImmediateRefetch(t *testing.T) {
+	t0 := time.Date(2026, 7, 28, 23, 59, 45, 0, time.Local)
+	t1 := t0.Add(45 * time.Second) // 2026-07-29 00:00:30
+	m := Model{nowFunc: func() time.Time { return t1 }}
+	m.planHooks.cfg = config.PlanConfig{OnTaskStart: "x.sh"}
+	m.planHooks.day = "2026-07-28"
+	m.planHooks.loaded = true
+	m.planHooks.watermark = t0.Add(-time.Minute)
+	m.planHooks.lastFetch = t0 // recent: the throttle would otherwise skip
+
+	m, _ = m.handlePlanHookTick()
+
+	if !m.planHooks.lastFetch.Equal(t1) {
+		t.Errorf("rollover did not force a refetch: lastFetch=%v, want %v", m.planHooks.lastFetch, t1)
+	}
+}
+
+// A plan mutation must invalidate the hook cache, or an entry added within the
+// fetch interval of its own start time is discovered after the watermark has
+// already moved past it and never fires (FR-017).
+func TestPlanMutatedMsg_InvalidatesHookCache(t *testing.T) {
+	now := time.Date(2026, 7, 28, 13, 59, 20, 0, time.Local)
+	m := Model{nowFunc: func() time.Time { return now }}
+	m.planHooks.lastFetch = now.Add(-10 * time.Second)
+
+	next, _ := m.Update(planMutatedMsg{highlightID: 3})
+	nm := next.(Model)
+
+	if !nm.planHooks.lastFetch.IsZero() {
+		t.Errorf("plan mutation did not invalidate the hook cache: lastFetch=%v", nm.planHooks.lastFetch)
+	}
+}
