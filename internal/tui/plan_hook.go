@@ -88,8 +88,11 @@ func planHookTickCmd() tea.Cmd {
 }
 
 // listPlanHooksCmd fetches today's plan entries for the hook watcher. Kept
-// deliberately separate from listPlanCmd so the visible-plan reducer does
-// not need to learn about this subscriber (research.md D2).
+// deliberately separate from listPlanCmd (research.md D2):
+//   - the visible plan refetches every autoRefreshInterval (10 min) and only
+//     while the Plan tab is active, while hooks need today's entries every
+//     60s regardless of the active tab;
+//   - m.plan.day follows day navigation, planHooks.day is always today.
 func listPlanHooksCmd(client planv1connect.PlanServiceClient, day string) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListPlanEntries(context.Background(), connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
@@ -101,6 +104,13 @@ func listPlanHooksCmd(client planv1connect.PlanServiceClient, day string) tea.Cm
 }
 
 // ── hook runner ────────────────────────────────────────────────────────────
+
+// hookCommand builds the exec.Cmd for a user-configured hook: always via
+// `sh -c` so pipes and redirects work, with stdio left unassigned so a chatty
+// hook cannot scribble over the alt-screen. Both the pomodoro and plan-entry
+// hook runners must go through this — it is the one place the subprocess
+// policy is defined.
+func hookCommand(cmd string) *exec.Cmd { return exec.Command("sh", "-c", cmd) }
 
 // plannedHook pairs an expanded shell command with the config key that
 // produced it (used to name the key in a failure notice), in the order the
@@ -141,7 +151,7 @@ func runPlanHooks(hooks []plannedHook) tea.Cmd {
 		var running []started
 		var firstErr *planHookErrMsg
 		for _, h := range pending {
-			c := exec.Command("sh", "-c", h.cmd)
+			c := hookCommand(h.cmd)
 			// Do not assign Stdout/Stderr — leave stdio detached from the
 			// alt-screen so a chatty hook cannot scribble over the UI.
 			if err := c.Start(); err != nil {

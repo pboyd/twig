@@ -36,6 +36,8 @@ A separate cache keyed to the local date sidesteps all three without touching th
 
 **Cost control**: the fetch is dispatched only when at least one of the four keys is non-empty, so an unconfigured user issues zero extra RPCs (SC-006).
 
+**Follow-up (post-review)**: a later review proposed collapsing this cache into the visible-plan cache to save a duplicate `ListPlanEntries` RPC. That premise didn't hold up: the visible plan refetches on `autoRefreshInterval` (10 min) and only while the Plan tab is active, while the hook watcher polls every 60s regardless of the active tab, and `m.plan.day` follows user day navigation while hooks always need today. The two caches have different refresh cadences, different trigger conditions, and different days — collapsing them isn't viable, and the RPC cost at stake is at most one extra request per 10 minutes.
+
 ---
 
 ## D3: Firing cadence and the "not before, within 60s" window

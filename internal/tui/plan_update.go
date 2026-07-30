@@ -20,14 +20,14 @@ import (
 // ── message types ──────────────────────────────────────────────────────────
 
 // planEntriesMsg carries the result of a ListPlanEntries call.
-// bg marks a clock-initiated background load; bgDay records which day the
-// background load was dispatched for.
+// bg marks a clock-initiated background load; day records which day the
+// call was dispatched for.
 type planEntriesMsg struct {
 	entries     []*planv1.PlanEntry
 	highlightID int32 // entry to highlight after loading; 0 = clamp cursor
 	err         error
 	bg          bool
-	bgDay       string
+	day         string
 }
 
 // planMutatedMsg is returned after a plan mutation: carries the entry to highlight on reload.
@@ -49,17 +49,17 @@ type planTickMsg struct{}
 
 // ── command factories ──────────────────────────────────────────────────────
 
-func listPlanCmd(client planv1connect.PlanServiceClient, day string, bg bool, bgDay string) tea.Cmd {
-	return listPlanHighlightCmd(client, day, 0, bg, bgDay)
+func listPlanCmd(client planv1connect.PlanServiceClient, day string, bg bool) tea.Cmd {
+	return listPlanHighlightCmd(client, day, 0, bg)
 }
 
-func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, highlightID int32, bg bool, bgDay string) tea.Cmd {
+func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, highlightID int32, bg bool) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := client.ListPlanEntries(context.Background(), connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
 		if err != nil {
-			return planEntriesMsg{err: err, bg: bg, bgDay: bgDay}
+			return planEntriesMsg{err: err, bg: bg, day: day}
 		}
-		return planEntriesMsg{entries: resp.Msg.Entries, highlightID: highlightID, bg: bg, bgDay: bgDay}
+		return planEntriesMsg{entries: resp.Msg.Entries, highlightID: highlightID, bg: bg, day: day}
 	}
 }
 
@@ -520,7 +520,11 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 	if msg.bg && m.activeTab != tabPlanning {
 		return m
 	}
-	if msg.bg && msg.bgDay != "" && msg.bgDay != m.plan.day {
+	// Drop a response for a day the user has already navigated away from.
+	// Applies to user-initiated loads too: two fast day-nav presses leave two
+	// fetches in flight, and without this the last to land wins regardless of
+	// which day is on screen.
+	if msg.day != "" && msg.day != m.plan.day {
 		return m
 	}
 	// Background failures are silent: keep the existing data on screen.

@@ -971,14 +971,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			startAt:  msg.startAt,
 		}
 		m.err = nil
-		return m, tea.Batch(pomTickCmd(), runPomHook(m.pomConfig.OnStart, "on_start"))
+		return m, tea.Batch(pomTickCmd(), runPomHook(m.pomConfig.OnStart))
 
 	case pomCancelledMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
-		hookCmd := runPomHook(m.pomConfig.OnCancel, "on_cancel")
+		hookCmd := runPomHook(m.pomConfig.OnCancel)
 		m.pom = nil
 		m.err = nil
 		return m, hookCmd
@@ -994,7 +994,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
-		hookCmd := runPomHook(m.pomConfig.OnComplete, "on_complete")
+		hookCmd := runPomHook(m.pomConfig.OnComplete)
 		return m, tea.Batch(hookCmd, pomBannerExpireCmd(), listTasksCmd(m.client, false))
 
 	case pomBannerExpireMsg:
@@ -1117,7 +1117,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.planHooks.lastFetch = time.Time{}
 		m.planHooks.loaded = false
 		m.planHooks.entries = nil
-		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID, false, ""), listScheduledDaysCmd(m.planClient))
+		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID, false), listScheduledDaysCmd(m.planClient))
 
 	case planTickMsg:
 		if m.activeTab == tabPlanning && planIsToday(m.plan.day) {
@@ -1463,7 +1463,7 @@ func (m Model) handleReportKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.ReportMode = false
 		m.keys.PlanningMode = true
 		m.reportData.err = nil
-		return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false, ""))
+		return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false))
 
 	case key.Matches(msg, m.keys.ReportPrevPreset):
 		idx := (m.reportData.presetIdx - 1 + len(presets)) % len(presets)
@@ -2083,7 +2083,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, -1).Format("2006-01-02")
 			m.plan.loaded = false
-			return m, listPlanCmd(m.planClient, m.plan.day, false, "")
+			return m, listPlanCmd(m.planClient, m.plan.day, false)
 		}
 	case key.Matches(msg, m.keys.PlanNextDay):
 		t, err := time.Parse("2006-01-02", m.plan.day)
@@ -2091,7 +2091,7 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan.pendingComplete = nil
 			m.plan.day = t.AddDate(0, 0, 1).Format("2006-01-02")
 			m.plan.loaded = false
-			return m, listPlanCmd(m.planClient, m.plan.day, false, "")
+			return m, listPlanCmd(m.planClient, m.plan.day, false)
 		}
 	case key.Matches(msg, m.keys.PlanToday):
 		m.plan.pendingComplete = nil
@@ -2099,11 +2099,11 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.plan.day != today {
 			m.plan.day = today
 			m.plan.loaded = false
-			return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false, ""), planTickCmd())
+			return m, tea.Batch(listPlanCmd(m.planClient, m.plan.day, false), planTickCmd())
 		}
 	case key.Matches(msg, m.keys.Refresh):
 		m.plan.loaded = false
-		return m, listPlanCmd(m.planClient, m.plan.day, false, "")
+		return m, listPlanCmd(m.planClient, m.plan.day, false)
 
 	// Entry actions.
 	case key.Matches(msg, m.keys.PlanAddTask):
@@ -2388,7 +2388,7 @@ func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.GoalMode = false
 		m.err = nil
 		var cmds []tea.Cmd
-		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day, false, ""))
+		cmds = append(cmds, listPlanCmd(m.planClient, m.plan.day, false))
 		if planIsToday(m.plan.day) {
 			cmds = append(cmds, planTickCmd())
 		}
@@ -2973,7 +2973,7 @@ func (m Model) autoRefreshBackgroundCmd() tea.Cmd {
 	case tabGoals:
 		return listGoalsCmd(m.goalClient, true)
 	case tabPlanning:
-		return listPlanCmd(m.planClient, m.plan.day, true, m.plan.day)
+		return listPlanCmd(m.planClient, m.plan.day, true)
 	case tabReport:
 		return fetchReportCmd(m.client, m.reportData.period, true)
 	default:
