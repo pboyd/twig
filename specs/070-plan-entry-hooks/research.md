@@ -58,7 +58,7 @@ A separate cache keyed to the local date sidesteps all three without touching th
 - **FR-005 (fire at most once)** — the watermark advances past a fired boundary, so the next tick's `>` test fails.
 - **FR-006 (nothing retroactive)** — the watermark is seeded at app start, so boundaries that already passed are behind it from the first tick.
 - **FR-017 / moved entries** — the schedule is re-derived from the freshly fetched entries every tick; an entry moved to a future time is simply a boundary ahead of the watermark and fires normally.
-- **Sleep / clock jump** — paired with a "not more than 2 minutes late" grace check, a forward clock jump skips the boundaries it flew over instead of firing a burst.
+- **Sleep / clock jump** — paired with a "not more than 60 seconds late" grace check (`planHookMaxLateness`, matching the contract's Timing row), a forward clock jump skips the boundaries it flew over instead of firing a burst; a backward clock jump is guarded separately by only ever advancing the watermark, never regressing it.
 
 Crucially this removes the need for a `map[boundaryKey]bool` fired-set and the key-invalidation rules that would come with it (what happens to the entry's key when it is renamed? moved? deleted and re-added with the same id?). Deleting that entire question is a direct Principle I win.
 

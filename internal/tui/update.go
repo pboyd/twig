@@ -432,7 +432,11 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, planClient planv1conn
 			}
 		}
 
-		// If a plan day was chosen, add the task to that day's plan.
+		// If a plan day was chosen, add the task to that day's plan. No
+		// StartMinute is sent, so this always creates an untimed entry —
+		// planBoundaries skips entries with a nil StartMinute, so unlike
+		// planMutatedMsg above, this path has no boundary to protect and
+		// does not need to invalidate the hook watcher's cache.
 		if msg.planDay != "" && planClient != nil {
 			_, err := planClient.AddPlanTask(context.Background(), connect.NewRequest(&planv1.AddPlanTaskRequest{
 				Day:            msg.planDay,
@@ -850,6 +854,14 @@ func (m Model) Init() tea.Cmd {
 	}
 	if m.planHooks.cfg.Enabled() {
 		cmds = append(cmds, planHookTickCmd())
+		// Fetch today's entries immediately rather than waiting for the
+		// first tick's throttled fetch: without this, the first
+		// ListPlanEntries doesn't go out until 15s in and the first
+		// evaluation later still, which can burn most of the 60s lateness
+		// budget (planHookMaxLateness) before entries are even loaded.
+		if m.planClient != nil {
+			cmds = append(cmds, listPlanHooksCmd(m.planClient, m.planHooks.day))
+		}
 	}
 	return tea.Batch(cmds...)
 }
@@ -1097,10 +1109,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice = msg.notice
 		}
 		// Invalidate the hook watcher's cache so the next tick refetches
-		// (FR-017). Without this, an entry added within the fetch interval of
-		// its own start time is discovered after the watermark has already
-		// moved past it, and never fires.
+		// (FR-017). Clearing loaded/entries too, not just lastFetch, matters:
+		// leaving loaded true lets the next tick evaluate the *stale* entries
+		// before the refetch lands, firing nothing and still advancing the
+		// watermark past the just-added boundary — the same "don't fire or
+		// advance while unloaded" guard the day-rollover path relies on.
 		m.planHooks.lastFetch = time.Time{}
+		m.planHooks.loaded = false
+		m.planHooks.entries = nil
 		return m, tea.Batch(listPlanHighlightCmd(m.planClient, m.plan.day, msg.highlightID, false, ""), listScheduledDaysCmd(m.planClient))
 
 	case planTickMsg:

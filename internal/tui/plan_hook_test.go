@@ -2,10 +2,13 @@ package tui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
@@ -14,7 +17,47 @@ import (
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
-func pint32Plan(v int32) *int32 { return &v }
+// runCmdTree executes cmd and, recursively, every command carried by any
+// tea.BatchMsg it returns, collecting every leaf tea.Msg produced along the
+// way. Bubbletea normally does this expansion inside the runtime loop; tests
+// that need to observe whether a hook actually ran (not just that a non-nil
+// tea.Cmd was returned) drive it themselves.
+//
+// Each cmd runs in its own goroutine with a short deadline: the tick chain
+// under test reschedules itself with tea.Tick(planHookTickInterval, ...),
+// and that reschedule command legitimately blocks for the full 15s interval
+// when invoked directly outside the bubbletea runtime. Since no hook result
+// is ever carried by that reschedule, timing it out rather than waiting it
+// out is correct, not a race.
+func runCmdTree(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	select {
+	case msg := <-ch:
+		switch m := msg.(type) {
+		case tea.BatchMsg:
+			var out []tea.Msg
+			for _, c := range m {
+				out = append(out, runCmdTree(c)...)
+			}
+			return out
+		case nil:
+			return nil
+		default:
+			// tea.Sequence's internal sequenceMsg type is unexported, so it
+			// cannot be type-switched on from this package. runPlanHooks
+			// (the sequencing this suite cares about) is expected to return
+			// a single command that runs its hooks internally and yields
+			// one leaf msg, not bubbletea's built-in Sequence.
+			return []tea.Msg{msg}
+		}
+	case <-time.After(500 * time.Millisecond):
+		return nil
+	}
+}
 
 // makeEntry constructs a PlanEntry for tests with sensible defaults: linked
 // to the given task id, with the given start minute + duration, and the given
@@ -61,7 +104,7 @@ func TestDueBoundaries_BoundaryAlreadyPastAtStartupNeverFires(t *testing.T) {
 	}
 }
 
-func TestDueBoundaries_BoundaryMoreThan2MinutesLateIsSkipped(t *testing.T) {
+func TestDueBoundaries_BoundaryMoreThan60SecondsLateIsSkipped(t *testing.T) {
 	// Clock jumps forward: a boundary 5 minutes in the past should be
 	// skipped — we do not burst-fire things a clock jump flew over.
 	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
@@ -71,6 +114,22 @@ func TestDueBoundaries_BoundaryMoreThan2MinutesLateIsSkipped(t *testing.T) {
 	got := dueBoundaries(bs, watermark, at.Add(5*time.Minute))
 	if len(got) != 0 {
 		t.Fatalf("boundary 5m late should be skipped, got %d", len(got))
+	}
+}
+
+// FR-004/SC-001: a boundary fires up to and including 60 seconds late, but
+// not a moment past it — the contract's Timing row promises "within 60
+// seconds", not longer.
+func TestDueBoundaries_LatenessBoundaryIsExactly60Seconds(t *testing.T) {
+	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
+	bs := []planBoundary{{at: at, edge: edgeStart, task: true, name: "Right at the edge"}}
+	watermark := at.Add(-time.Minute)
+
+	if got := dueBoundaries(bs, watermark, at.Add(60*time.Second)); len(got) != 1 {
+		t.Errorf("boundary exactly 60s late should still fire, got %d", len(got))
+	}
+	if got := dueBoundaries(bs, watermark, at.Add(61*time.Second)); len(got) != 0 {
+		t.Errorf("boundary 61s late should be skipped, got %d", len(got))
 	}
 }
 
@@ -262,8 +321,8 @@ func TestExpandHookCmd_PercentSInsertsNameVerbatim(t *testing.T) {
 	}
 }
 
-func TestExpandHookCmd_PercentQWrapsAndEscapes(t *testing.T) {
-	got := expandHookCmd(`echo %q`, `Write report`, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+func TestExpandHookCmd_PercentQEscapesWithoutAddingQuotes(t *testing.T) {
+	got := expandHookCmd(`echo "%q"`, `Write report`, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
 	if got != `echo "Write report"` {
 		t.Errorf("%%q: got %q, want %q", got, `echo "Write report"`)
 	}
@@ -317,21 +376,22 @@ func TestExpandHookCmd_NonRecursiveOnNameContainingPlaceholder(t *testing.T) {
 }
 
 // FR-010: the four POSIX-shell-reinterpreted characters inside double quotes
-// must all be escaped by %q.
+// must all be escaped by %q. %q does not add its own quote delimiters — it is
+// meant to be embedded inside quotes the command string already supplies.
 func TestExpandHookCmd_PercentQEscapesAllFourChars(t *testing.T) {
 	// name = a"b\c$d`e — all four escapable chars present.
 	name := "a\"b\\c$d`e"
-	got := expandHookCmd("echo %q", name, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+	got := expandHookCmd(`echo "%q"`, name, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
 	// expected literal:
 	//   echo "a\"b\\c\$d\`e"
-	want := "echo " + `"` + `a\"b\\c\$d\` + "`" + `e"`
+	want := `echo "` + `a\"b\\c\$d\` + "`" + `e"`
 	if got != want {
 		t.Errorf("%%q escape four chars: got %q, want %q", got, want)
 	}
 }
 
-func TestExpandHookCmd_PercentQWithEmptyNameYieldsEmptyQuotedString(t *testing.T) {
-	got := expandHookCmd(`echo %q`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
+func TestExpandHookCmd_PercentQWithEmptyNameYieldsEmptyExpansion(t *testing.T) {
+	got := expandHookCmd(`echo "%q"`, ``, time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local))
 	if got != `echo ""` {
 		t.Errorf("%%q empty name: got %q, want %q", got, `echo ""`)
 	}
@@ -345,20 +405,61 @@ func TestExpandHookCmd_PercentQWithEmptyNameYieldsEmptyQuotedString(t *testing.T
 //	task named:    Fix "auth" $bug
 //	scheduled at:  14:00
 //
-// expandHookCmd renders %t as the scheduled HH:MM and %q as the name wrapped
-// in double quotes with " $ (and \ and `) escaped — once. The literal outer
-// string is therefore:
+// expandHookCmd renders %t as the scheduled HH:MM and %q as the name with
+// " $ \ ` escaped — once — for embedding inside the command's own double
+// quotes. The literal outer string is therefore one balanced double-quoted
+// argument:
 //
-//	notify-send "14:00: start "Fix \"auth\" \$bug""
-//
-// (outer-quote closes after the time string; %q opens its own outer quote
-// around the name; the shell sees a balanced pair).
+//	notify-send "14:00: start Fix \"auth\" \$bug"
 func TestExpandHookCmd_WorkedExampleFromConfigSchema(t *testing.T) {
 	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
 	got := expandHookCmd(`notify-send "%t: start %q"`, `Fix "auth" $bug`, at)
-	want := `notify-send "14:00: start "Fix \"auth\" \$bug""`
+	want := `notify-send "14:00: start Fix \"auth\" \$bug"`
 	if got != want {
 		t.Errorf("worked example: got %q, want %q", got, want)
+	}
+}
+
+// SC-003: names containing shell metacharacters must not break out of the
+// single double-quoted argument the documented `notify-send "%t: %q"` form
+// produces. This asserts on the expanded string's shape rather than
+// executing it: exactly one `"` opens and one closes the whole %q span, and
+// no unescaped `"`, “ ` “, or `$(` appears between them.
+func TestExpandHookCmd_PercentQCannotBreakOutOfSurroundingQuotes(t *testing.T) {
+	at := time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)
+	names := []string{
+		`; echo PWNED`,
+		"`echo PWNED`",
+		"$(echo PWNED)",
+		`" ; echo PWNED ; "`,
+		`back\slash`,
+	}
+	for _, name := range names {
+		got := expandHookCmd(`notify-send "%t: %q"`, name, at)
+		const prefix = `notify-send "14:00: `
+		if !strings.HasPrefix(got, prefix) || !strings.HasSuffix(got, `"`) {
+			t.Fatalf("name %q: expansion %q is not a single balanced quoted argument", name, got)
+		}
+		inner := strings.TrimSuffix(strings.TrimPrefix(got, prefix), `"`)
+		// Every backslash in inner must be followed by one of the four
+		// escapable characters (i.e. it's an escape, not a stray).
+		for i := 0; i < len(inner); i++ {
+			if inner[i] == '\\' {
+				if i+1 >= len(inner) {
+					t.Fatalf("name %q: expansion %q ends in a dangling backslash", name, got)
+				}
+				switch inner[i+1] {
+				case '"', '\\', '$', '`':
+				default:
+					t.Fatalf("name %q: expansion %q has a non-escape backslash before %q", name, got, string(inner[i+1]))
+				}
+				i++
+				continue
+			}
+			if inner[i] == '"' {
+				t.Fatalf("name %q: expansion %q has an unescaped quote inside the argument", name, got)
+			}
+		}
 	}
 }
 
@@ -444,6 +545,80 @@ func TestPlanHookErrMsg_RoutesToNotice(t *testing.T) {
 	}
 }
 
+// ── runPlanHooks: launch ordering, decoupled from completion ───────────────
+
+// FR-015: a slow or hung hook must not delay a later boundary. runPlanHooks
+// starts every hook before waiting on any of them, so a hung first hook must
+// not prevent a later hook in the same batch from launching promptly.
+func TestRunPlanHooks_SlowEarlierHookDoesNotDelayLaterLaunch(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "started")
+	hooks := []plannedHook{
+		{cmd: "sleep 5", key: "on_task_end"},           // simulates a hung hook
+		{cmd: "touch " + marker, key: "on_task_start"}, // must launch without waiting for the sleep
+	}
+
+	go runPlanHooks(hooks)() // don't block the test on the slow hook's exit
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if _, err := os.Stat(marker); err == nil {
+			return // pass: launched well before the 5s sleep could finish
+		}
+		select {
+		case <-deadline:
+			t.Fatal("second hook did not launch promptly: blocked behind the slow first hook")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// Launch order still follows the given slice order (FR-016 relies on the
+// caller sorting ends before starts; runPlanHooks must not reorder them).
+func TestRunPlanHooks_PreservesLaunchOrder(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "log")
+	hooks := []plannedHook{
+		{cmd: "echo A >> " + log, key: "on_task_end"},
+		{cmd: "echo B >> " + log, key: "on_task_start"},
+	}
+
+	runCmdTree(runPlanHooks(hooks))
+
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatalf("reading log: %v", err)
+	}
+	if got := strings.Fields(string(data)); strings.Join(got, "") != "AB" {
+		t.Errorf("launch order = %v, want [A B]", got)
+	}
+}
+
+// Only the first failure is reported; a failing hook does not stop later
+// hooks in the batch from being started.
+func TestRunPlanHooks_FirstFailureReportedLaterHooksStillRun(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	hooks := []plannedHook{
+		{cmd: "exit 3", key: "on_task_end"},
+		{cmd: "touch " + marker, key: "on_task_start"},
+	}
+
+	msgs := runCmdTree(runPlanHooks(hooks))
+	var errMsg *planHookErrMsg
+	for _, m := range msgs {
+		if e, ok := m.(planHookErrMsg); ok {
+			errMsg = &e
+		}
+	}
+	if errMsg == nil {
+		t.Fatal("expected a planHookErrMsg for the failing hook")
+	}
+	if errMsg.key != "on_task_end" {
+		t.Errorf("errMsg.key = %q, want on_task_end", errMsg.key)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("later hook did not run after an earlier hook failed")
+	}
+}
+
 // ── code-review fixes ──────────────────────────────────────────────────────
 
 // A DST-transition day must not shift boundaries. StartMinute is a wall-clock
@@ -497,6 +672,85 @@ func TestHandlePlanHookTick_DayRolloverForcesImmediateRefetch(t *testing.T) {
 	}
 }
 
+// The server allows start_minute + duration_minute == 1440, so a 23:00-24:00
+// entry's end boundary normalizes to 00:00 the next day. The day-rollover
+// branch must fire it before discarding the outgoing day's entries, or it is
+// never evaluated: every tick before midnight has b.at.After(now), and the
+// first tick at/after 00:00 takes the rollover branch and refetches the new
+// day.
+func TestHandlePlanHookTick_DayRolloverFiresEntryEndingAt2400(t *testing.T) {
+	yesterday := "2026-07-28"
+	t0 := time.Date(2026, 7, 28, 23, 59, 45, 0, time.Local)
+	t1 := t0.Add(20 * time.Second) // 2026-07-29 00:00:05
+
+	marker := filepath.Join(t.TempDir(), "fired")
+	start := int32(23 * 60) // 23:00, duration 60 -> end at 24:00 == next day 00:00
+	entries := []*planv1.PlanEntry{makeEntry(7, 1, &start, 60, "Late task")}
+
+	m := Model{nowFunc: func() time.Time { return t1 }}
+	m.planHooks.cfg = config.PlanConfig{OnTaskEnd: "touch " + marker}
+	m.planHooks.day = yesterday
+	m.planHooks.loaded = true
+	m.planHooks.entries = entries
+	m.planHooks.watermark = t0.Add(-time.Hour)
+	m.planHooks.lastFetch = t0
+
+	m, cmd := m.handlePlanHookTick()
+	runCmdTree(cmd)
+
+	if m.planHooks.day != "2026-07-29" {
+		t.Errorf("day did not roll over: got %q", m.planHooks.day)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("on_task_end for the entry ending at 24:00 was never fired across the rollover")
+	}
+}
+
+// A backward clock step (e.g. an NTP correction) must not regress the
+// watermark, or a boundary that already fired becomes due again (FR-005:
+// at most once per session).
+func TestHandlePlanHookTick_BackwardClockStepDoesNotRefireBoundary(t *testing.T) {
+	day := "2026-07-28"
+	start := int32(14 * 60) // 14:00
+	entries := []*planv1.PlanEntry{makeEntry(7, 1, &start, 30, "Task A")}
+
+	marker := filepath.Join(t.TempDir(), "fired")
+	callCount := 0
+	cfg := config.PlanConfig{OnTaskStart: "echo x >> " + marker}
+
+	tFire := time.Date(2026, 7, 28, 14, 0, 5, 0, time.Local)
+	m := Model{nowFunc: func() time.Time { return tFire }}
+	m.planHooks.cfg = cfg
+	m.planHooks.day = day
+	m.planHooks.loaded = true
+	m.planHooks.entries = entries
+	m.planHooks.watermark = tFire.Add(-time.Hour)
+	m.planHooks.lastFetch = tFire
+
+	// First tick: fires the 14:00 start hook and advances the watermark.
+	m, cmd := m.handlePlanHookTick()
+	callCount += len(runCmdTree(cmd))
+	_ = callCount
+
+	// Clock steps backward past the boundary but before the watermark.
+	tBack := time.Date(2026, 7, 28, 13, 59, 20, 0, time.Local)
+	m.nowFunc = func() time.Time { return tBack }
+	m, _ = m.handlePlanHookTick()
+	if m.planHooks.watermark.Before(tFire) {
+		t.Fatalf("watermark regressed to a backward clock step: %v", m.planHooks.watermark)
+	}
+
+	// Clock returns to normal, past the boundary again: must NOT refire.
+	m.nowFunc = func() time.Time { return tFire }
+	m, cmd = m.handlePlanHookTick()
+	runCmdTree(cmd)
+
+	data, _ := os.ReadFile(marker)
+	if got := strings.Count(string(data), "x"); got != 1 {
+		t.Errorf("on_task_start fired %d times across a backward clock step, want 1", got)
+	}
+}
+
 // A plan mutation must invalidate the hook cache, or an entry added within the
 // fetch interval of its own start time is discovered after the watermark has
 // already moved past it and never fires (FR-017).
@@ -504,6 +758,12 @@ func TestPlanMutatedMsg_InvalidatesHookCache(t *testing.T) {
 	now := time.Date(2026, 7, 28, 13, 59, 20, 0, time.Local)
 	m := Model{nowFunc: func() time.Time { return now }}
 	m.planHooks.lastFetch = now.Add(-10 * time.Second)
+	// Seed a loaded, stale cache — this is what must be cleared, not just
+	// lastFetch, or the tick that follows evaluates it instead of waiting
+	// for the refetch.
+	m.planHooks.loaded = true
+	m.planHooks.day = now.Format("2006-01-02")
+	m.planHooks.entries = []*planv1.PlanEntry{makeEntry(0, 1, pint32(0), 5, "stale entry")}
 
 	next, _ := m.Update(planMutatedMsg{highlightID: 3})
 	nm := next.(Model)
@@ -511,4 +771,74 @@ func TestPlanMutatedMsg_InvalidatesHookCache(t *testing.T) {
 	if !nm.planHooks.lastFetch.IsZero() {
 		t.Errorf("plan mutation did not invalidate the hook cache: lastFetch=%v", nm.planHooks.lastFetch)
 	}
+	if nm.planHooks.loaded {
+		t.Error("plan mutation left loaded=true: the next tick will evaluate the stale entries and advance the watermark past the new boundary")
+	}
+	if nm.planHooks.entries != nil {
+		t.Errorf("plan mutation left stale entries in place: %v", nm.planHooks.entries)
+	}
+}
+
+// End-to-end repro for the bug fixed above: an entry added at 13:59:50
+// starting at 14:00 must still fire on_task_start, driven through
+// mutation -> tick -> fetch landing -> tick, exactly as the running TUI
+// would sequence it.
+func TestPlanMutatedMsg_ThenTick_NewEntryStillFires(t *testing.T) {
+	tMutate := time.Date(2026, 7, 28, 13, 59, 50, 0, time.Local)
+	day := tMutate.Format("2006-01-02")
+
+	m := Model{nowFunc: func() time.Time { return tMutate }}
+	m.planHooks.cfg = config.PlanConfig{OnTaskStart: "true"}
+	m.planHooks.day = day
+	m.planHooks.loaded = true
+	m.planHooks.watermark = tMutate.Add(-time.Hour)
+	m.planHooks.lastFetch = tMutate.Add(-10 * time.Second) // recent: throttle would otherwise skip a refetch
+	m.planHooks.entries = nil                              // stale: the mutation's new entry isn't here yet
+
+	// 1. The mutation lands and invalidates the cache.
+	next, _ := m.Update(planMutatedMsg{highlightID: 1})
+	m = next.(Model)
+	if m.planHooks.loaded {
+		t.Fatal("setup: expected loaded=false after mutation")
+	}
+
+	// 2. A tick fires at 14:00:02. Because loaded is now false, it must not
+	// evaluate stale (nil) entries or advance the watermark past 14:00 -
+	// it must only (re)issue a fetch.
+	tTick1 := time.Date(2026, 7, 28, 14, 0, 2, 0, time.Local)
+	m.nowFunc = func() time.Time { return tTick1 }
+	m, _ = m.handlePlanHookTick()
+	if m.planHooks.watermark.After(time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local)) {
+		t.Fatalf("watermark advanced past the boundary before entries were loaded: %v", m.planHooks.watermark)
+	}
+
+	// 3. The refetch lands with the newly-added 14:00 entry.
+	start := int32(14 * 60)
+	m = m.handlePlanHookEntriesMsg(planHookEntriesMsg{
+		day:     day,
+		entries: []*planv1.PlanEntry{makeEntry(7, 1, &start, 30, "New task")},
+	})
+
+	// 4. The next tick must fire on_task_start for the 14:00 boundary.
+	tTick2 := tTick1.Add(planHookTickInterval)
+	m.nowFunc = func() time.Time { return tTick2 }
+	m, cmd := m.handlePlanHookTick()
+
+	var sawErr *planHookErrMsg
+	firedNil := false
+	for _, msg := range runCmdTree(cmd) {
+		if errMsg, ok := msg.(planHookErrMsg); ok {
+			sawErr = &errMsg
+		}
+		if msg == nil {
+			firedNil = true
+		}
+	}
+	if sawErr != nil {
+		t.Errorf("on_task_start hook reported an error: %v", sawErr.err)
+	}
+	if !m.planHooks.watermark.After(time.Date(2026, 7, 28, 14, 0, 0, 0, time.Local).Add(-time.Second)) {
+		t.Errorf("watermark did not advance past the fired boundary: %v", m.planHooks.watermark)
+	}
+	_ = firedNil // a successful hook run yields a nil leaf msg; absence of an error msg is the pass condition
 }

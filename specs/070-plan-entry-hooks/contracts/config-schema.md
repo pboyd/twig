@@ -40,7 +40,7 @@ Substituted into the command string immediately before execution.
 | Placeholder | Expands to | Example |
 |---|---|---|
 | `%s` | The entry's display name, **verbatim and unescaped** | `Write report` |
-| `%q` | The entry's display name, wrapped in double quotes and shell-escaped | `"Write report"` |
+| `%q` | The entry's display name, shell-escaped for embedding inside **your own** double quotes (no delimiters added) | `Write report`, or `Fix \"auth\"` for a name containing `"` |
 | `%t` | The boundary's scheduled time, zero-padded 24-hour `HH:MM` | `09:05`, `14:00` |
 | `%%` | A single literal `%` | `%` |
 | `%` + anything else | Passed through unchanged | `%z` → `%z` |
@@ -50,7 +50,7 @@ Substituted into the command string immediately before execution.
 **`%t` is the *scheduled* time, not the wall-clock time of execution.** A hook that fires a few seconds late still reports the minute the plan says.
 
 **`%s` vs `%q`**:
-- `%q` is the safe default. The name is wrapped in `"` and the characters `"`, `\`, `$`, and `` ` `` are backslash-escaped, so any entry name reaches the command verbatim.
+- `%q` is the safe default **when used inside a double-quoted string you supply**, e.g. `"%t: %q"`. The characters `"`, `\`, `$`, and `` ` `` in the name are backslash-escaped so the name cannot break out of your quotes — but `%q` does not add quote delimiters of its own. Used bare, with no surrounding `"..."`, it is not shell-safe.
 - `%s` inserts the raw name with no quoting or escaping. Use it inside quoting you have supplied yourself; keeping it shell-safe is your responsibility.
 
 **Substitution is not recursive.** Text introduced by a substitution is never re-scanned, so an entry named `100%s done` cannot inject a placeholder.
@@ -67,11 +67,11 @@ Plan entry: task named `Fix "auth" $bug`, scheduled 14:00–14:30.
 
 At 14:00 the shell receives:
 ```sh
-notify-send "14:00: start \"Fix \\\"auth\\\" \\$bug\""
+notify-send "14:00: start Fix \"auth\" \$bug"
 ```
 and the notification reads:
 ```text
-14:00: start "Fix "auth" $bug"
+14:00: start Fix "auth" $bug
 ```
 
 ---
