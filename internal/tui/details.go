@@ -12,6 +12,15 @@ import (
 	"github.com/pboyd/twig/internal/markdown"
 )
 
+// renderTaskDescription renders a task description for a detail pane: markdown
+// when md is non-nil, plain wrapped text otherwise.
+func renderTaskDescription(md *markdown.Renderer, text string, width int, styled bool) string {
+	if md != nil {
+		return md.Render(text, markdown.Options{Width: width, Styled: styled})
+	}
+	return wrapDescription(text, width)
+}
+
 // renderDetails formats the details pane for the given task, wrapping text to
 // the given width. When styled, the name is rendered as a bold accent header
 // and labels are dim and column-aligned. scheduledDays is the task's scheduled
@@ -23,10 +32,7 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 	}
 
 	renderDesc := func() string {
-		if md != nil {
-			return md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: styled})
-		}
-		return wrapDescription(task.GetDescription(), width)
+		return renderTaskDescription(md, task.GetDescription(), width, styled)
 	}
 
 	// Compute the display name with markup stripped for both paths.
@@ -62,7 +68,7 @@ func renderDetails(task *taskv1.Task, md *markdown.Renderer, width int, styled b
 			fmt.Fprintln(&sb, row)
 		}
 
-		if task.GetDescription() != "" {
+		if strings.TrimSpace(task.GetDescription()) != "" {
 			fmt.Fprintln(&sb)
 			fmt.Fprintln(&sb, renderDesc())
 		}

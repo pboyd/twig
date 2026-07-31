@@ -250,11 +250,7 @@ func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
 	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
-	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	return strings.Join(lines, "\n")
+	return clampLines(strings.TrimRight(combined, "\n"), height)
 }
 
 // untimedIDs returns a slice of int (len = len(entries)) used only to check
@@ -290,17 +286,18 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
 	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
-	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
-	if len(lines) > gridH {
-		lines = lines[:gridH]
-	}
-	return header + "\n" + strings.Join(lines, "\n")
+	return header + "\n" + clampLines(strings.TrimRight(combined, "\n"), gridH)
 }
 
 // renderPlanDetail renders a read-only details pane for the given PlanEntry.
 // When entry is nil (empty day or no selection), a placeholder is returned.
 // For event entries (TaskId == 0), task-specific fields are omitted.
 // task is the linked Task looked up from the in-memory tree (nil when absent or TaskId==0).
+//
+// When task has a non-empty description, it is rendered below the pomodoro row
+// using the shared markdown renderer (md.Render with block-level options), or
+// wrapDescription when md is nil. Both paths emit one blank separator line above
+// the description and never synthesize an empty-state placeholder.
 func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, styled bool, md *markdown.Renderer) string {
 	if entry == nil {
 		if styled {
@@ -310,7 +307,6 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 	}
 
 	dur := int(entry.DurationMinute)
-	_ = width
 
 	var window string
 	if entry.StartMinute != nil {
@@ -345,6 +341,10 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 				fmt.Fprintln(&sb, row)
 			}
 		}
+		if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
+			fmt.Fprintln(&sb)
+			fmt.Fprintln(&sb, renderTaskDescription(md, task.GetDescription(), width, false))
+		}
 		return sb.String()
 	}
 
@@ -369,6 +369,10 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 		if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), true); row != "" {
 			fmt.Fprintln(&sb, row)
 		}
+	}
+	if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
+		fmt.Fprintln(&sb)
+		fmt.Fprintln(&sb, renderTaskDescription(md, task.GetDescription(), width, true))
 	}
 	return sb.String()
 }
