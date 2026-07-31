@@ -55,4 +55,17 @@ describe("buildUpdatePayload", () => {
     const payload = buildUpdatePayload(task, "Name", "");
     expect(payload.parentId).toBeUndefined();
   });
+
+  it("preserves snoozeUntil when set", () => {
+    const snoozeUntil: Timestamp = { seconds: 12345n, nanos: 0, $typeName: "google.protobuf.Timestamp" };
+    const task = makeTask({ snoozeUntil });
+    const payload = buildUpdatePayload(task, "Name", "");
+    expect(payload.snoozeUntil).toBe(snoozeUntil);
+  });
+
+  it("preserves snoozeUntil as undefined when unset", () => {
+    const task = makeTask({ snoozeUntil: undefined });
+    const payload = buildUpdatePayload(task, "Name", "");
+    expect(payload.snoozeUntil).toBeUndefined();
+  });
 });
