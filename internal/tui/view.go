@@ -110,6 +110,11 @@ func (m Model) viewPlanning() string {
 			gridFocused = false
 		}
 
+		// paneBox's lipgloss.Height pads but does not truncate, so a tall
+		// rightContent would grow the right pane past the left and push the
+		// status off-screen (FR-006 / SC-004 / contract C4.1–C4.2).
+		rightContent = clampLines(rightContent, innerH)
+
 		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), gridFocused)
 		rightPane := paneBox(rightContent, rightWidth, innerH, rightTitle, !gridFocused)
 
@@ -761,6 +766,27 @@ func splitLines(s string, n int) []string {
 		lines = append(lines, "")
 	}
 	return lines
+}
+
+// clampLines truncates s to at most n newline-separated lines. Unlike
+// splitLines, it does not pad short content — content shorter than n lines
+// is returned unchanged. Content longer than n lines keeps only its leading
+// lines, joined by "\n" with no trailing newline.
+//
+// This is the helper Planning tab uses to feed paneBox: since lipgloss.Height
+// is a minimum (pads short content but does not truncate tall content),
+// anything taller than the pane's inner height must be cut before paneBox
+// sees it, or the right pane overflows the left and pushes the status off
+// screen.
+func clampLines(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return strings.Join(lines[:n], "\n")
 }
 
 // padRightAnsi pads s to at least width visible columns, using lipgloss.Width

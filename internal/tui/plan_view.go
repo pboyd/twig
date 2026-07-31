@@ -301,6 +301,11 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 // When entry is nil (empty day or no selection), a placeholder is returned.
 // For event entries (TaskId == 0), task-specific fields are omitted.
 // task is the linked Task looked up from the in-memory tree (nil when absent or TaskId==0).
+//
+// When task has a non-empty description, it is rendered below the pomodoro row
+// using the shared markdown renderer (md.Render with block-level options), or
+// wrapDescription when md is nil. Both paths emit one blank separator line above
+// the description and never synthesize an empty-state placeholder.
 func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, styled bool, md *markdown.Renderer) string {
 	if entry == nil {
 		if styled {
@@ -310,7 +315,6 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 	}
 
 	dur := int(entry.DurationMinute)
-	_ = width
 
 	var window string
 	if entry.StartMinute != nil {
@@ -345,6 +349,14 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 				fmt.Fprintln(&sb, row)
 			}
 		}
+		if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
+			fmt.Fprintln(&sb)
+			if md != nil {
+				fmt.Fprintln(&sb, md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: false}))
+			} else {
+				fmt.Fprintln(&sb, wrapDescription(task.GetDescription(), width))
+			}
+		}
 		return sb.String()
 	}
 
@@ -368,6 +380,14 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 	if task != nil {
 		if row := renderPomodoroRow(int(task.GetEstimate()), int(task.GetCompletedPomodoroCount()), true); row != "" {
 			fmt.Fprintln(&sb, row)
+		}
+	}
+	if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
+		fmt.Fprintln(&sb)
+		if md != nil {
+			fmt.Fprintln(&sb, md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: true}))
+		} else {
+			fmt.Fprintln(&sb, wrapDescription(task.GetDescription(), width))
 		}
 	}
 	return sb.String()

@@ -34,7 +34,7 @@ Root CLI module (`github.com/pboyd/twig`), package `internal/tui`. Only three fi
 
 **Purpose**: Establish a known-good baseline before changing anything.
 
-- [ ] T001 Run `go test ./internal/tui/` from the repo root and confirm it passes before any edit, so later failures are attributable to this feature
+- [X] T001 Run `go test ./internal/tui/` from the repo root and confirm it passes before any edit, so later failures are attributable to this feature
 
 ---
 
@@ -63,16 +63,16 @@ This phase is intentionally empty, and that is a finding rather than a gap. Ever
 
 > Write these first and confirm they FAIL before T005.
 
-- [ ] T002 [US1] Add `TestRenderPlanDetail_DescriptionShown` to `internal/tui/plan_view_test.go`: a `PlanEntry` with `TaskId != 0` and a `Task` whose `Description` is non-empty, `md == nil`, asserting the description text appears in the output (rule D5, contract C1.1)
-- [ ] T003 [US1] Add absence tests to `internal/tui/plan_view_test.go` covering rules D2–D4 and contract C1.2–C1.4: an event entry (`TaskId == 0`, `task == nil`), an entry whose task is missing from the tree (`TaskId != 0`, `task == nil`), a task with `Description == ""`, and a task with a whitespace-only description. Each asserts no description block AND no trailing blank separator line
-- [ ] T004 [US1] Extend the empty-description case in `internal/tui/plan_view_test.go` to assert output is byte-identical to a fixture captured from the current renderer, pinning contract C1.4's "unchanged pane" guarantee
+- [X] T002 [US1] Add `TestRenderPlanDetail_DescriptionShown` to `internal/tui/plan_view_test.go`: a `PlanEntry` with `TaskId != 0` and a `Task` whose `Description` is non-empty, `md == nil`, asserting the description text appears in the output (rule D5, contract C1.1)
+- [X] T003 [US1] Add absence tests to `internal/tui/plan_view_test.go` covering rules D2–D4 and contract C1.2–C1.4: an event entry (`TaskId == 0`, `task == nil`), an entry whose task is missing from the tree (`TaskId != 0`, `task == nil`), a task with `Description == ""`, and a task with a whitespace-only description. Each asserts no description block AND no trailing blank separator line
+- [X] T004 [US1] Extend the empty-description case in `internal/tui/plan_view_test.go` to assert output is byte-identical to a fixture captured from the current renderer, pinning contract C1.4's "unchanged pane" guarantee
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] In the unstyled path of `renderPlanDetail` (`internal/tui/plan_view.go`, after the pomodoro row near line 347), append the description block guarded by `entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != ""`, emitting one blank line then `md.Render(desc, markdown.Options{Width: width, Styled: false})` with a `wrapDescription(desc, width)` fallback when `md == nil`
-- [ ] T006 [US1] Apply the same block to the styled path of `renderPlanDetail` (`internal/tui/plan_view.go`, after the pomodoro row near line 372), passing `Styled: true`
-- [ ] T007 [US1] Delete the now-obsolete `_ = width` marker at `internal/tui/plan_view.go:313` — `width` is genuinely used once T005 lands
-- [ ] T008 [US1] Run `go test ./internal/tui/` and confirm T002–T004 now pass and all nine pre-existing `renderPlanDetail` test functions still pass unmodified (contract C5.4)
+- [X] T005 [US1] In the unstyled path of `renderPlanDetail` (`internal/tui/plan_view.go`, after the pomodoro row near line 347), append the description block guarded by `entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != ""`, emitting one blank line then `md.Render(desc, markdown.Options{Width: width, Styled: false})` with a `wrapDescription(desc, width)` fallback when `md == nil`
+- [X] T006 [US1] Apply the same block to the styled path of `renderPlanDetail` (`internal/tui/plan_view.go`, after the pomodoro row near line 372), passing `Styled: true`
+- [X] T007 [US1] Delete the now-obsolete `_ = width` marker at `internal/tui/plan_view.go:313` — `width` is genuinely used once T005 lands
+- [X] T008 [US1] Run `go test ./internal/tui/` and confirm T002–T004 now pass and all nine pre-existing `renderPlanDetail` test functions still pass unmodified (contract C5.4)
 
 **Checkpoint**: The description is on screen and the absence rules hold. This is a shippable MVP.
 
@@ -88,14 +88,14 @@ This phase is intentionally empty, and that is a finding rather than a gap. Ever
 
 ### Tests for User Story 2
 
-- [ ] T009 [US2] Add `TestRenderPlanDetail_DescriptionMatchesTaskDetail` to `internal/tui/plan_view_test.go`: construct a real `markdown.NewRenderer(buildMarkdownTheme())`, render a description containing a heading, bullet list, bold text, inline code, and a link through both `renderPlanDetail` and `renderDetails` at the same width, and assert the description portion is identical (contract C2.3, SC-003)
-- [ ] T010 [US2] Add `TestRenderPlanDetail_DescriptionUnstyledNoANSI` to `internal/tui/plan_view_test.go`: with a real renderer and `styled == false`, assert the output contains no ANSI escape sequences, extending the guarantee at `plan_view_test.go:423` to the new block (contract C2.5)
-- [ ] T011 [US2] Add `TestRenderPlanDetail_DescriptionNilRendererFallback` to `internal/tui/plan_view_test.go`: with `md == nil`, assert the description is present and wrapped to width via `wrapDescription` (contract C2.4)
-- [ ] T012 [US2] Add `TestRenderPlanDetail_DescriptionBlockLevel` to `internal/tui/plan_view_test.go`: assert a multi-line markdown list renders as multiple lines, proving `Render` was used rather than `RenderInline` — which the entry *name* still uses (contract C2.1)
+- [X] T009 [US2] Add `TestRenderPlanDetail_DescriptionMatchesTaskDetail` to `internal/tui/plan_view_test.go`: construct a real `markdown.NewRenderer(buildMarkdownTheme())`, render a description containing a heading, bullet list, bold text, inline code, and a link through both `renderPlanDetail` and `renderDetails` at the same width, and assert the description portion is identical (contract C2.3, SC-003)
+- [X] T010 [US2] Add `TestRenderPlanDetail_DescriptionUnstyledNoANSI` to `internal/tui/plan_view_test.go`: with a real renderer and `styled == false`, assert the output contains no ANSI escape sequences, extending the guarantee at `plan_view_test.go:423` to the new block (contract C2.5)
+- [X] T011 [US2] Add `TestRenderPlanDetail_DescriptionNilRendererFallback` to `internal/tui/plan_view_test.go`: with `md == nil`, assert the description is present and wrapped to width via `wrapDescription` (contract C2.4)
+- [X] T012 [US2] Add `TestRenderPlanDetail_DescriptionBlockLevel` to `internal/tui/plan_view_test.go`: assert a multi-line markdown list renders as multiple lines, proving `Render` was used rather than `RenderInline` — which the entry *name* still uses (contract C2.1)
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Run `go test ./internal/tui/`. If T009–T012 reveal any divergence from `renderDetails`, correct the call in `internal/tui/plan_view.go` so `Options.Width` and `Options.Styled` match `details.go:25-30` exactly. Do NOT introduce a feature-local renderer, theme, or options struct (contract C2.2, Principle III)
+- [X] T013 [US2] Run `go test ./internal/tui/`. If T009–T012 reveal any divergence from `renderDetails`, correct the call in `internal/tui/plan_view.go` so `Options.Width` and `Options.Styled` match `details.go:25-30` exactly. Do NOT introduce a feature-local renderer, theme, or options struct (contract C2.2, Principle III)
 
 **Checkpoint**: Descriptions render identically on the Planning and Tasks tabs. Both P1 stories are complete.
 
@@ -111,16 +111,16 @@ This phase is intentionally empty, and that is a finding rather than a gap. Ever
 
 ### Tests for User Story 3
 
-- [ ] T014 [US3] Add `TestPlanView_LongDescriptionDoesNotExceedHeight` to `internal/tui/plan_view_test.go`: build a `Model` on the Planning tab in `planList` mode with `styled == true`, fixed `width`/`height`, and a selected entry whose task has a 200-line description; assert the rendered view's line count does not exceed `m.height` (FR-006, SC-004, contract C4.2)
-- [ ] T015 [US3] Add `TestPlanView_LongDescriptionPreservesGridAlignment` to `internal/tui/plan_view_test.go`: with the same long description, assert every line of the joined view has the same visible width via `lipgloss.Width`, proving the grid pane and detail pane stay aligned
-- [ ] T016 [US3] Add `TestRenderPlanDetail_DescriptionWrapsToWidth` to `internal/tui/plan_view_test.go`: at a narrow width, assert no rendered description line exceeds the pane's inner width, including a case with a long unbroken URL (contract C3.4, spec edge case)
+- [X] T014 [US3] Add `TestPlanView_LongDescriptionDoesNotExceedHeight` to `internal/tui/plan_view_test.go`: build a `Model` on the Planning tab in `planList` mode with `styled == true`, fixed `width`/`height`, and a selected entry whose task has a 200-line description; assert the rendered view's line count does not exceed `m.height` (FR-006, SC-004, contract C4.2)
+- [X] T015 [US3] Add `TestPlanView_LongDescriptionPreservesGridAlignment` to `internal/tui/plan_view_test.go`: with the same long description, assert every line of the joined view has the same visible width via `lipgloss.Width`, proving the grid pane and detail pane stay aligned
+- [X] T016 [US3] Add `TestRenderPlanDetail_DescriptionWrapsToWidth` to `internal/tui/plan_view_test.go`: at a narrow width, assert no rendered description line exceeds the pane's inner width, including a case with a long unbroken URL (contract C3.4, spec edge case)
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Add a `clampLines(s string, n int) string` helper to `internal/tui/view.go` that truncates to at most `n` lines without padding — distinct from the existing `splitLines`, which pads to exactly `n` and returns a slice. Document the distinction in a comment so the two are not confused later
-- [ ] T018 [US3] In the styled Planning path of `internal/tui/view.go` (near line 104–114), clamp `rightContent` to `innerH` with `clampLines` before passing it to `paneBox`. Apply the clamp to whichever content occupies the pane so forms and pickers are covered too (contract C4.1)
-- [ ] T019 [US3] Confirm the plain-text Planning path at `internal/tui/view.go:142` still clamps via `splitLines(rightContent, maxLines)` and leave it unchanged (contract C4.3)
-- [ ] T020 [US3] Run `go test ./internal/tui/` and confirm T014–T016 pass and the existing form, picker, and move-pane tests are unaffected (contract C5.1)
+- [X] T017 [US3] Add a `clampLines(s string, n int) string` helper to `internal/tui/view.go` that truncates to at most `n` lines without padding — distinct from the existing `splitLines`, which pads to exactly `n` and returns a slice. Document the distinction in a comment so the two are not confused later
+- [X] T018 [US3] In the styled Planning path of `internal/tui/view.go` (near line 104–114), clamp `rightContent` to `innerH` with `clampLines` before passing it to `paneBox`. Apply the clamp to whichever content occupies the pane so forms and pickers are covered too (contract C4.1)
+- [X] T019 [US3] Confirm the plain-text Planning path at `internal/tui/view.go:142` still clamps via `splitLines(rightContent, maxLines)` and leave it unchanged (contract C4.3)
+- [X] T020 [US3] Run `go test ./internal/tui/` and confirm T014–T016 pass and the existing form, picker, and move-pane tests are unaffected (contract C5.1)
 
 **Checkpoint**: All three user stories are complete and independently verified.
 
@@ -128,11 +128,11 @@ This phase is intentionally empty, and that is a finding rather than a gap. Ever
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T021 Run `go test ./...` from the repo root and `cd services/twig && go test ./...`, confirming the server module is untouched as `plan.md` claims
-- [ ] T022 [P] Run `gofmt -l internal/tui/` and confirm no files are listed
-- [ ] T023 Build with `go build -o twig ./cmd/twig` and walk the full verification table in `quickstart.md` against a running stack (`make dev`): formatted description, Tasks-tab comparison, event entry, description-less task, cursor movement, 200-line description, ~60-column terminal, and non-TTY plain output
-- [ ] T024 [P] Re-verify the Constitution Check in `plan.md`: no new abstraction beyond `clampLines` (I), contract committed before implementation (II), shared `m.md` renderer and theme with no ad-hoc styles (III), and **no new user-facing string added** — confirm no cheerful empty-state copy crept in, since that would violate contract C1.4 (IV)
-- [ ] T025 [P] Confirm the pre-existing Tasks-tab height overflow at `internal/tui/view.go:245-248` was deliberately left unfixed, and that `research.md` R4 and `quickstart.md` still record it as out of scope. Do not fix it here
+- [X] T021 Run `go test ./...` from the repo root and `cd services/twig && go test ./...`, confirming the server module is untouched as `plan.md` claims
+- [X] T022 [P] Run `gofmt -l internal/tui/` and confirm no files are listed
+- [X] T023 Build with `go build -o twig ./cmd/twig` and walk the full verification table in `quickstart.md` against a running stack (`make dev`): formatted description, Tasks-tab comparison, event entry, description-less task, cursor movement, 200-line description, ~60-column terminal, and non-TTY plain output
+- [X] T024 [P] Re-verify the Constitution Check in `plan.md`: no new abstraction beyond `clampLines` (I), contract committed before implementation (II), shared `m.md` renderer and theme with no ad-hoc styles (III), and **no new user-facing string added** — confirm no cheerful empty-state copy crept in, since that would violate contract C1.4 (IV)
+- [X] T025 [P] Confirm the pre-existing Tasks-tab height overflow at `internal/tui/view.go:245-248` was deliberately left unfixed, and that `research.md` R4 and `quickstart.md` still record it as out of scope. Do not fix it here
 
 ---
 

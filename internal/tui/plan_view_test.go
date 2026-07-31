@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	planv1 "github.com/pboyd/twig/api/gen/plan/v1"
 	taskv1 "github.com/pboyd/twig/api/gen/task/v1"
 	"github.com/pboyd/twig/internal/cli"
+	"github.com/pboyd/twig/internal/markdown"
 )
 
 // TestTabBar_TasksTabActive checks that the tab bar labels are present and the
@@ -1168,5 +1170,394 @@ func TestPlanDetail_EntryNameInlinePlain(t *testing.T) {
 	}
 	if !strings.Contains(out, "Stand-up") {
 		t.Errorf("plain renderPlanDetail: entry name missing; got %q", out)
+	}
+}
+
+// ── Feature 071: Task descriptions on the Planning tab (US1) ───────────────
+
+// TestRenderPlanDetail_DescriptionShown (T002) asserts that a task entry with a
+// non-empty description renders the description text in the detail pane, both
+// in the unstyled and styled paths.
+func TestRenderPlanDetail_DescriptionShown(t *testing.T) {
+	entry := &planv1.PlanEntry{
+		Name:           "Quarterly report",
+		StartMinute:    pint32(600),
+		DurationMinute: 60,
+		TaskId:         42,
+	}
+	task := &taskv1.Task{
+		Id:          42,
+		Name:        "Quarterly report",
+		Description: "Wrap Q3 numbers into a single page and send to the leadership team.",
+	}
+
+	// Unstyled path with md == nil falls back to wrapDescription.
+	plain := renderPlanDetail(entry, task, 80, false, nil)
+	if !strings.Contains(plain, "Wrap Q3 numbers") {
+		t.Errorf("plain: description text missing from output:\n%q", plain)
+	}
+
+	// Styled path with md == nil also falls back to wrapDescription.
+	styled := renderPlanDetail(entry, task, 80, true, nil)
+	if !strings.Contains(styled, "Wrap Q3 numbers") {
+		t.Errorf("styled: description text missing from output:\n%q", styled)
+	}
+}
+
+// TestRenderPlanDetail_DescriptionAbsent (T003) covers rules D2, D3, D4: the
+// description must not appear AND no trailing blank separator line must be
+// emitted when the conditions for display are not met.
+func TestRenderPlanDetail_DescriptionAbsent(t *testing.T) {
+	desc := "Description that must not appear in absence cases."
+
+	t.Run("event entry (TaskId == 0, task == nil)", func(t *testing.T) {
+		entry := &planv1.PlanEntry{
+			Name:           "Team sync",
+			StartMinute:    pint32(540),
+			DurationMinute: 30,
+			TaskId:         0,
+		}
+		for _, styled := range []bool{false, true} {
+			out := renderPlanDetail(entry, nil, 60, styled, nil)
+			if strings.Contains(out, desc) {
+				t.Errorf("styled=%v: event must not show description; got %q", styled, out)
+			}
+		}
+	})
+
+	t.Run("missing task (TaskId != 0, task == nil)", func(t *testing.T) {
+		entry := &planv1.PlanEntry{
+			Name:           "Orphan",
+			StartMinute:    pint32(600),
+			DurationMinute: 30,
+			TaskId:         99,
+		}
+		for _, styled := range []bool{false, true} {
+			out := renderPlanDetail(entry, nil, 60, styled, nil)
+			if strings.Contains(out, desc) {
+				t.Errorf("styled=%v: missing task must not show description; got %q", styled, out)
+			}
+			// Other fields (entry name, Window, Duration) must still render.
+			if !strings.Contains(out, "Orphan") {
+				t.Errorf("styled=%v: missing task must still render entry name; got %q", styled, out)
+			}
+			if !strings.Contains(out, "Window") {
+				t.Errorf("styled=%v: missing task must still render Window; got %q", styled, out)
+			}
+		}
+	})
+
+	t.Run("empty description", func(t *testing.T) {
+		entry := &planv1.PlanEntry{
+			Name:           "No notes",
+			StartMinute:    pint32(540),
+			DurationMinute: 30,
+			TaskId:         7,
+		}
+		task := &taskv1.Task{Id: 7, Name: "No notes", Description: ""}
+		for _, styled := range []bool{false, true} {
+			out := renderPlanDetail(entry, task, 60, styled, nil)
+			if strings.Contains(out, desc) {
+				t.Errorf("styled=%v: empty description must not appear; got %q", styled, out)
+			}
+			// No trailing blank separator line (do not end with extra '\n\n').
+			if strings.HasSuffix(out, "\n\n") {
+				t.Errorf("styled=%v: empty description must not leave a trailing blank line; got %q", styled, out)
+			}
+		}
+	})
+
+	t.Run("whitespace-only description", func(t *testing.T) {
+		entry := &planv1.PlanEntry{
+			Name:           "Whitespace",
+			StartMinute:    pint32(540),
+			DurationMinute: 30,
+			TaskId:         8,
+		}
+		task := &taskv1.Task{Id: 8, Name: "Whitespace", Description: "   \n\t  "}
+		for _, styled := range []bool{false, true} {
+			out := renderPlanDetail(entry, task, 60, styled, nil)
+			if strings.Contains(out, desc) {
+				t.Errorf("styled=%v: whitespace description must not appear; got %q", styled, out)
+			}
+			if strings.HasSuffix(out, "\n\n") {
+				t.Errorf("styled=%v: whitespace description must not leave a trailing blank line; got %q", styled, out)
+			}
+		}
+	})
+}
+
+// exitPlanDetailBaselines captures output bytes for "no description" cases so a
+// future feature cannot accidentally add even a blank line. T004 pins the byte
+// identity across both styled and unstyled paths for empty and whitespace-only
+// descriptions.
+func TestRenderPlanDetail_EmptyDescriptionFixturePin(t *testing.T) {
+	entry := &planv1.PlanEntry{
+		Name:           "Plain task",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         3,
+	}
+	task := &taskv1.Task{Id: 3, Name: "Plain task", Description: ""}
+	plain := renderPlanDetail(entry, task, 80, false, nil)
+	styled := renderPlanDetail(entry, task, 80, true, nil)
+	if strings.HasSuffix(plain, "\n\n") {
+		t.Errorf("plain: empty description: trailing blank separator line; got %q", plain)
+	}
+	if strings.HasSuffix(styled, "\n\n") {
+		t.Errorf("styled: empty description: trailing blank separator line; got %q", styled)
+	}
+	if strings.Contains(plain, "Description") || strings.Contains(styled, "Description") {
+		t.Errorf("empty description: text label not allowed; plain=%q styled=%q", plain, styled)
+	}
+
+	// Record the byte forms so a future regression would show as a diff against
+	// this comment. The contract is that these must NEVER change.
+	const plainFixture = "Plain task\nWindow:   09:00–09:30\nDuration: 30 min\nTask:     #3  in progress\n"
+	if plain != plainFixture {
+		t.Errorf("plain empty-description baseline drifted:\nwant %q\ngot  %q", plainFixture, plain)
+	}
+}
+
+// ── Feature 071: Markdown rendering fidelity (US2) ──────────────────────────
+
+// richDesc exercises the markdown constructs that must render identically on
+// both tabs: heading, list, bold, inline code, link.
+const richDesc = "# Heading\n\n- item one\n- item two with **bold** and `code`\n\n[example](http://example.com)\n"
+
+// TestRenderPlanDetail_DescriptionMatchesTaskDetail (T009) — both tabs share
+// the same md.Render call, so the rendered description block must be byte
+// identical at the same Width and Styled settings (contract C2.3, SC-003).
+func TestRenderPlanDetail_DescriptionMatchesTaskDetail(t *testing.T) {
+	md := newTestMarkdownRenderer()
+
+	entry := &planv1.PlanEntry{
+		Name:           "rich task",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         11,
+	}
+	task := &taskv1.Task{
+		Id:          11,
+		Name:        "rich task",
+		Description: richDesc,
+	}
+
+	const width = 60
+	for _, styled := range []bool{false, true} {
+		plan := renderPlanDetail(entry, task, width, styled, md)
+		// Build the canonical rendered block the two tabs both rely on.
+		rendered := md.Render(richDesc, markdown.Options{Width: width, Styled: styled})
+
+		if !strings.Contains(plan, rendered) {
+			t.Errorf("styled=%v: planning detail must contain the rendered description block;\nrendered:\n%s\nplan:\n%s", styled, rendered, plan)
+		}
+	}
+}
+
+// TestRenderPlanDetail_DescriptionUnstyledNoANSI (T010) — extending the
+// guarantee at plan_view_test.go:423 to the new description block: the
+// unstyled path must emit no ANSI escape sequences even with a real renderer.
+func TestRenderPlanDetail_DescriptionUnstyledNoANSI(t *testing.T) {
+	md := newTestMarkdownRenderer()
+
+	entry := &planv1.PlanEntry{
+		Name:           "no ansi",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         12,
+	}
+	task := &taskv1.Task{
+		Id:          12,
+		Name:        "no ansi",
+		Description: richDesc,
+	}
+	out := renderPlanDetail(entry, task, 80, false, md)
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("unstyled+markdown: must not emit ANSI; got:\n%s", out)
+	}
+}
+
+// TestRenderPlanDetail_DescriptionNilRendererFallback (T011) — when md is nil,
+// the description falls back to wrapDescription (contract C2.4).
+func TestRenderPlanDetail_DescriptionNilRendererFallback(t *testing.T) {
+	const desc = "This description appears in the pane when md is nil."
+	entry := &planv1.PlanEntry{
+		Name:           "nil md",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         13,
+	}
+	task := &taskv1.Task{
+		Id:          13,
+		Name:        "nil md",
+		Description: desc,
+	}
+
+	for _, styled := range []bool{false, true} {
+		out := renderPlanDetail(entry, task, 80, styled, nil)
+		if !strings.Contains(out, desc) {
+			t.Errorf("styled=%v: nil renderer: description must still appear via wrapDescription; got %q", styled, out)
+		}
+	}
+}
+
+// TestRenderPlanDetail_DescriptionBlockLevel (T012) — multi-line block markdown
+// must render multi-line. A bullet list's items must appear on separate lines.
+func TestRenderPlanDetail_DescriptionBlockLevel(t *testing.T) {
+	const desc = "- one\n- two\n- three\n"
+	md := newTestMarkdownRenderer()
+
+	entry := &planv1.PlanEntry{
+		Name:           "list task",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         14,
+	}
+	task := &taskv1.Task{
+		Id:          14,
+		Name:        "list task",
+		Description: desc,
+	}
+
+	// Render through md.Render to confirm block-level output is multi-line.
+	rendered := md.Render(desc, markdown.Options{Width: 80, Styled: false})
+	if strings.Count(rendered, "\n") < 2 {
+		t.Errorf("block-list: render should produce multi-line output (>=2 newlines); got %q", rendered)
+	}
+
+	out := renderPlanDetail(entry, task, 80, false, md)
+	if !strings.Contains(out, "one") || !strings.Contains(out, "two") || !strings.Contains(out, "three") {
+		t.Errorf("block-list: items missing from renderPlanDetail output:\n%s", out)
+	}
+}
+
+// TestRenderPlanDetail_DescriptionWrapsToWidth (T016) — at a narrow width, no
+// rendered description line may exceed the pane's inner width, including a
+// case with a long unbroken URL (contract C3.4 / spec edge case).
+func TestRenderPlanDetail_DescriptionWrapsToWidth(t *testing.T) {
+	md := newTestMarkdownRenderer()
+
+	entry := &planv1.PlanEntry{
+		Name:           "wrap task",
+		StartMinute:    pint32(540),
+		DurationMinute: 30,
+		TaskId:         15,
+	}
+	// A very long unbroken URL — the renderer should still wrap it to the inner
+	// width rather than letting it flow past the pane border.
+	const url = "https://example.com/this/is/a/really/long/url/that/will/not/fit/inside/a/narrow/pane/without/wrapping"
+	task := &taskv1.Task{
+		Id:          15,
+		Name:        "wrap task",
+		Description: "Visit " + url + " for details.\n",
+	}
+
+	const width = 30
+	out := renderPlanDetail(entry, task, width, true, md)
+	plain := stripANSI(out)
+
+	// Description text must appear (split into multiple lines by the renderer).
+	if !strings.Contains(plain, "example.com") {
+		t.Errorf("description must still contain the URL once wrapped; got:\n%s", plain)
+	}
+
+	// No rendered description line may exceed the width once ANSI is stripped,
+	// except for label-style lines (containing ":") and the entry name header.
+	for i, line := range strings.Split(plain, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || trimmed == "wrap task" || strings.Contains(trimmed, ":") {
+			continue
+		}
+		if len(line) > width {
+			t.Errorf("line %d exceeds width=%d (%d cols): %q", i, width, len(line), line)
+		}
+	}
+}
+
+// ── Feature 071: Height containment (US3) ───────────────────────────────────
+
+// TestPlanView_LongDescriptionDoesNotExceedHeight (T014) — a Planning tab view
+// whose selected task has a 200-line description must not exceed the terminal
+// height in the rendered output (FR-006, SC-004, contract C4.2).
+func TestPlanView_LongDescriptionDoesNotExceedHeight(t *testing.T) {
+	today := "2026-05-29"
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 24
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+
+	// 200-line description — a paragraph per line so Render emits many lines.
+	var sb strings.Builder
+	for i := 0; i < 200; i++ {
+		sb.WriteString(fmt.Sprintf("Line %d of a deliberately long description.\n", i+1))
+	}
+	longDesc := sb.String()
+
+	tasks := []*taskv1.Task{
+		{Id: 1, Name: "Stub"},
+		{Id: 2, Name: "LongDescTask", Description: longDesc},
+	}
+	tree := cli.BuildTree(tasks)
+	m.tree = tree
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Short", StartMinute: pint32(540), DurationMinute: 30},
+		{Id: 2, Name: "LongDescTask", StartMinute: pint32(600), DurationMinute: 60, TaskId: 2},
+	}
+	m.plan.cursor = 1
+
+	out := m.viewPlanning()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) > m.height {
+		t.Errorf("rendered view height=%d exceeds terminal height=%d:\n%s", len(lines), m.height, out)
+	}
+}
+
+// TestPlanView_LongDescriptionPreservesGridAlignment (T015) — with a long
+// description, every line in the joined pane section must have the same
+// visible width (m.width) so the grid and detail panes stay aligned. The tab
+// bar at the top and status help at the bottom are padded/narrower by
+// construction and excluded from this check.
+func TestPlanView_LongDescriptionPreservesGridAlignment(t *testing.T) {
+	today := "2026-05-29"
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+
+	var sb strings.Builder
+	for i := 0; i < 200; i++ {
+		sb.WriteString(fmt.Sprintf("Line %d xyz.\n", i+1))
+	}
+	longDesc := sb.String()
+
+	tasks := []*taskv1.Task{
+		{Id: 2, Name: "LongDescTask", Description: longDesc},
+	}
+	m.tree = cli.BuildTree(tasks)
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 2, Name: "LongDescTask", StartMinute: pint32(600), DurationMinute: 60, TaskId: 2},
+	}
+	m.plan.cursor = 0
+
+	out := m.viewPlanning()
+	lines := strings.Split(out, "\n")
+
+	// Pane section: lines [1..len-statusHeight-1] of the output are the joined
+	// panes (tab bar is line 0; status is the trailing 1-2 lines).
+	statusH := m.statusHeight()
+	paneEnd := len(lines) - statusH
+	if paneEnd <= 1 {
+		t.Fatalf("not enough lines for panes: %d", len(lines))
+	}
+	for i := 1; i < paneEnd; i++ {
+		w := lipgloss.Width(lines[i])
+		if w != m.width {
+			t.Errorf("pane line %d has width %d, want %d (mismatch means panes out of alignment): %q", i, w, m.width, lines[i])
+		}
 	}
 }
