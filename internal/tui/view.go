@@ -110,11 +110,6 @@ func (m Model) viewPlanning() string {
 			gridFocused = false
 		}
 
-		// paneBox's lipgloss.Height pads but does not truncate, so a tall
-		// rightContent would grow the right pane past the left and push the
-		// status off-screen (FR-006 / SC-004 / contract C4.1–C4.2).
-		rightContent = clampLines(rightContent, innerH)
-
 		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), gridFocused)
 		rightPane := paneBox(rightContent, rightWidth, innerH, rightTitle, !gridFocused)
 
@@ -722,6 +717,8 @@ func paneBox(content string, outerWidth, innerHeight int, title string, focused 
 		borderColor = borderActive
 	}
 
+	content = fitPane(content, innerW, innerHeight)
+
 	// In lipgloss v2, Width and Height are total dimensions including the border
 	// (v1 treated them as content dimensions, with the border added outside).
 	// Pass outerWidth and innerHeight+2 so the content area is outerWidth-2 wide
@@ -766,6 +763,20 @@ func splitLines(s string, n int) []string {
 		lines = append(lines, "")
 	}
 	return lines
+}
+
+// fitPane wraps content to innerW columns (ANSI-aware, breaking words that are
+// wider than the pane, matching what paneBox's own lipgloss style would do)
+// and then truncates the result to innerH lines. paneBox's lipgloss Height is
+// a minimum, not a maximum — its wrap can turn a single over-wide line into
+// several, re-expanding content past a line-count clamp taken before wrapping.
+// Wrapping first and clamping the wrapped result closes that gap, so paneBox
+// never renders content that can grow past its box on either axis.
+func fitPane(content string, innerW, innerH int) string {
+	if innerW > 0 {
+		content = lipgloss.Wrap(content, innerW, "")
+	}
+	return clampLines(content, innerH)
 }
 
 // clampLines truncates s to at most n newline-separated lines. Unlike

@@ -250,11 +250,7 @@ func (m Model) renderPlanGrid(width, height int, now time.Time) string {
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
 	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
-	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	return strings.Join(lines, "\n")
+	return clampLines(strings.TrimRight(combined, "\n"), height)
 }
 
 // untimedIDs returns a slice of int (len = len(entries)) used only to check
@@ -290,11 +286,7 @@ func (m Model) renderPlanGridContent(width, height int, now time.Time) string {
 	opts.WindowStartMin = &start
 	opts.WindowEndMin = &end
 	combined := untimedStr + sep + cli.RenderGrid(renderTimed, m.plan.day, now, width, m.styled, opts)
-	lines := strings.Split(strings.TrimRight(combined, "\n"), "\n")
-	if len(lines) > gridH {
-		lines = lines[:gridH]
-	}
-	return header + "\n" + strings.Join(lines, "\n")
+	return header + "\n" + clampLines(strings.TrimRight(combined, "\n"), gridH)
 }
 
 // renderPlanDetail renders a read-only details pane for the given PlanEntry.
@@ -351,11 +343,7 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 		}
 		if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
 			fmt.Fprintln(&sb)
-			if md != nil {
-				fmt.Fprintln(&sb, md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: false}))
-			} else {
-				fmt.Fprintln(&sb, wrapDescription(task.GetDescription(), width))
-			}
+			fmt.Fprintln(&sb, renderTaskDescription(md, task.GetDescription(), width, false))
 		}
 		return sb.String()
 	}
@@ -384,11 +372,7 @@ func renderPlanDetail(entry *planv1.PlanEntry, task *taskv1.Task, width int, sty
 	}
 	if entry.TaskId != 0 && task != nil && strings.TrimSpace(task.GetDescription()) != "" {
 		fmt.Fprintln(&sb)
-		if md != nil {
-			fmt.Fprintln(&sb, md.Render(task.GetDescription(), markdown.Options{Width: width, Styled: true}))
-		} else {
-			fmt.Fprintln(&sb, wrapDescription(task.GetDescription(), width))
-		}
+		fmt.Fprintln(&sb, renderTaskDescription(md, task.GetDescription(), width, true))
 	}
 	return sb.String()
 }

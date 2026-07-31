@@ -1435,6 +1435,14 @@ func TestRenderPlanDetail_DescriptionBlockLevel(t *testing.T) {
 // TestRenderPlanDetail_DescriptionWrapsToWidth (T016) — at a narrow width, no
 // rendered description line may exceed the pane's inner width, including a
 // case with a long unbroken URL (contract C3.4 / spec edge case).
+// TestRenderPlanDetail_DescriptionWrapsToWidth covers two layers: that
+// renderPlanDetail's markdown rendering preserves an unbreakable URL rather
+// than losing it, and that fitPane — the mechanism paneBox actually uses to
+// guarantee width containment (see Fix 1 / internal/tui/view.go) — brings the
+// result within width. renderPlanDetail itself is not required to keep every
+// line within width: internal/markdown/wrap.go intentionally leaves words
+// wider than the target width unbroken, on their own line; wrapping that line
+// to fit the pane is fitPane's job, applied inside paneBox.
 func TestRenderPlanDetail_DescriptionWrapsToWidth(t *testing.T) {
 	md := newTestMarkdownRenderer()
 
@@ -1444,7 +1452,7 @@ func TestRenderPlanDetail_DescriptionWrapsToWidth(t *testing.T) {
 		DurationMinute: 30,
 		TaskId:         15,
 	}
-	// A very long unbroken URL — the renderer should still wrap it to the inner
+	// A very long unbroken URL — fitPane should still wrap it to the pane
 	// width rather than letting it flow past the pane border.
 	const url = "https://example.com/this/is/a/really/long/url/that/will/not/fit/inside/a/narrow/pane/without/wrapping"
 	task := &taskv1.Task{
@@ -1457,20 +1465,19 @@ func TestRenderPlanDetail_DescriptionWrapsToWidth(t *testing.T) {
 	out := renderPlanDetail(entry, task, width, true, md)
 	plain := stripANSI(out)
 
-	// Description text must appear (split into multiple lines by the renderer).
+	// Description text must appear (split into multiple lines once wrapped).
 	if !strings.Contains(plain, "example.com") {
 		t.Errorf("description must still contain the URL once wrapped; got:\n%s", plain)
 	}
 
-	// No rendered description line may exceed the width once ANSI is stripped,
-	// except for label-style lines (containing ":") and the entry name header.
-	for i, line := range strings.Split(plain, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || trimmed == "wrap task" || strings.Contains(trimmed, ":") {
-			continue
-		}
-		if len(line) > width {
-			t.Errorf("line %d exceeds width=%d (%d cols): %q", i, width, len(line), line)
+	// fitPane is what paneBox applies before rendering into the box; every
+	// line it produces must fit within width, measured by visible columns
+	// (lipgloss.Width), not len (which counts bytes and mis-measures styled
+	// or UTF-8 output).
+	fitted := fitPane(out, width, 1000)
+	for i, line := range strings.Split(fitted, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Errorf("line %d exceeds width=%d (%d cols): %q", i, width, w, line)
 		}
 	}
 }
@@ -1558,6 +1565,89 @@ func TestPlanView_LongDescriptionPreservesGridAlignment(t *testing.T) {
 		w := lipgloss.Width(lines[i])
 		if w != m.width {
 			t.Errorf("pane line %d has width %d, want %d (mismatch means panes out of alignment): %q", i, w, m.width, lines[i])
+		}
+	}
+}
+
+// repeatedUnbreakableLines builds a description of n paragraphs, each a single
+// ~100-column unbreakable token (no space to break on). clampLines budgets one
+// raw line per paragraph, but paneBox's lipgloss hard-wrap later splits each
+// token into several lines, so n lines like this expand well past whatever
+// line count clampLines allowed for — enough to blow the pane height budget
+// even though each individual wrapped line stays within the pane width.
+func repeatedUnbreakableLines(n int) string {
+	var sb strings.Builder
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&sb, "https://example.com/unbreakable/token/number/%03d/that/is/far/wider/than/any/reasonable/pane/width\n", i)
+	}
+	return sb.String()
+}
+
+// TestPlanView_WidthHostileDescriptionFitsPane pins the width axis of pane
+// containment (FR-005/FR-006/SC-004, spec edge case "very long single word or
+// URL with no break opportunity"). A description containing an unbreakable
+// URL and a wide fenced-code-block line must not push any rendered pane line
+// past m.width, nor the overall view past m.height.
+func TestPlanView_WidthHostileDescriptionFitsPane(t *testing.T) {
+	today := "2026-05-29"
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 90
+	m.height = 24
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+
+	desc := repeatedUnbreakableLines(30)
+
+	tasks := []*taskv1.Task{
+		{Id: 2, Name: "WideDescTask", Description: desc},
+	}
+	m.tree = cli.BuildTree(tasks)
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 2, Name: "WideDescTask", StartMinute: pint32(600), DurationMinute: 60, TaskId: 2},
+	}
+	m.plan.cursor = 0
+
+	out := m.viewPlanning()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	if len(lines) > m.height {
+		t.Errorf("rendered view height=%d exceeds terminal height=%d:\n%s", len(lines), m.height, out)
+	}
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w > m.width {
+			t.Errorf("line %d has width %d, exceeds terminal width %d: %q", i, w, m.width, line)
+		}
+	}
+}
+
+// TestViewList_WidthHostileDescriptionFitsPane is the Tasks-tab counterpart of
+// TestPlanView_WidthHostileDescriptionFitsPane: the same shared paneBox
+// guarantee must hold on the Tasks tab's detail pane.
+func TestViewList_WidthHostileDescriptionFitsPane(t *testing.T) {
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 90
+	m.height = 24
+	m.activeTab = tabTasks
+
+	desc := repeatedUnbreakableLines(30)
+
+	tasks := []*taskv1.Task{
+		{Id: 2, Name: "WideDescTask", Description: desc},
+	}
+	m.tree = cli.BuildTree(tasks)
+	m.visible = buildVisible(m.tree, m.expanded, m.showAll, m.pendingComplete, time.Now().Local())
+	m.cursor = 0
+
+	out := m.viewList()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	if len(lines) > m.height {
+		t.Errorf("rendered view height=%d exceeds terminal height=%d:\n%s", len(lines), m.height, out)
+	}
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w > m.width {
+			t.Errorf("line %d has width %d, exceeds terminal width %d: %q", i, w, m.width, line)
 		}
 	}
 }
