@@ -11,5 +11,6 @@ export function buildUpdatePayload(
     description: editedDescription,
     due: task.due,
     parentId: task.parentId,
+    snoozeUntil: task.snoozeUntil,
   };
 }
