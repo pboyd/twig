@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository. `CLAUDE.md` is a symlink to it.
 
 Running `twig` with no arguments launches the interactive TUI on a TTY. The TUI has four tabs: **Goals · Tasks · Plan · Report** (opens on Tasks by default; `shift+tab` from Tasks reaches the Goals tab).
 
@@ -118,7 +118,9 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 
 ## Frontend (services/twig-web/)
 
-A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It consumes the existing `task.v1.TaskService` ConnectRPC endpoints and `/auth/*` HTTP endpoints.
+A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It talks to the server over the same ConnectRPC services the CLI uses, plus the `/auth/*` HTTP endpoints.
+
+The SPA does not yet cover everything the CLI and TUI can do. To see which RPCs it actually calls, grep the imports from `src/gen/` — don't assume parity in either direction.
 
 **Distribution:** the server image (`services/twig/Dockerfile`) builds the SPA in a Node stage and bakes the output into `/web`, alongside the CLI binary at `/cli`. `cmd/server/main.go` serves it from `handler.WebUI` at `/` (unauthenticated, with SPA history-fallback to `index.html`), while every `*.v1.*Service` path, `/cli/*`, and the Connect/health routes stay behind `auth.Middleware`. One image ships both the API and the UI — see `make dev` / `make build`.
 
@@ -131,7 +133,7 @@ npm install
 # Generate TypeScript from proto (re-run when api/proto changes)
 npm run gen
 
-# Run the Vite dev server (proxies /auth, /task.v1, /health.v1 → :8080)
+# Run the Vite dev server (proxies /auth, /cli and the *.v1 services → :8080)
 npm run dev        # → http://localhost:5173
 
 # Run unit/interaction tests
@@ -141,18 +143,18 @@ npm test
 npm run build
 ```
 
-The dev proxy (`vite.config.ts`) keeps the SPA and API on one origin so the `SameSite=Strict` session cookie works. Never call `:8080` cross-origin. The proxy covers `/auth`, `/task.v1`, `/health.v1`, `/plan.v1`, and `/cli`.
+The dev proxy (`vite.config.ts`) keeps the SPA and API on one origin so the `SameSite=Strict` session cookie works. Never call `:8080` cross-origin.
 
-Generated TS lives in `src/gen/` — do not edit by hand; regenerate with `npm run gen`.
+**Adding a new `*.v1` service means adding a matching proxy entry in `vite.config.ts`** — without one the dev server returns a 404 that looks like an auth failure. See that file for the current entries.
 
-Key frontend source paths:
-- `src/lib/tree.ts` — flat `ListTasks` → nested tree builder (unit-tested)
-- `src/lib/updatePayload.ts` — `UpdateTask` full-replace payload builder (unit-tested)
-- `src/lib/cliInfo.ts` — typed `fetchCliInfo()` wrapper for `GET /cli/info`
-- `src/theme/messages.ts` — all user-facing copy (warm/playful tone)
-- `src/theme/tokens.ts` — color/spacing design tokens
-- `src/components/` — Button, Field, Spinner, ErrorBanner, AppHeader, TaskForm, TreeRow, EmptyState, CompletionToggle, PlanTimeline
-- `src/pages/` — LoginPage, TaskTreePage, TaskDetailPage, DownloadPage (`/download` route)
+Frontend layout and conventions:
+- `src/lib/` — pure logic extracted out of components so it can be unit-tested: tree building, plan-day resolution, reorder anchors, filtering, persisted prefs. Put non-trivial logic here with a test, not inline in a component.
+- `src/theme/messages.ts` — **all** user-facing copy (warm/playful tone). Don't hardcode strings in components.
+- `src/theme/tokens.ts` — color/spacing design tokens.
+- `src/components/`, `src/pages/` — presentational components and route pages; `src/App.tsx` is the route table.
+- `src/gen/` — generated TS; do not edit by hand, regenerate with `npm run gen`.
+
+Two files worth knowing before you touch task editing: `src/lib/tree.ts` (flat `ListTasks` → nested tree) and `src/lib/updatePayload.ts` (builds the **full-replace** `UpdateTask` payload — every editable field must be carried through, or it gets cleared).
 
 The server exposes two plain-HTTP authenticated endpoints consumed by the web app:
 - `GET /cli/info` — JSON metadata (version, size, sha256) for the downloadable binary
