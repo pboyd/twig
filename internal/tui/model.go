@@ -202,9 +202,14 @@ type Model struct {
 	filterGen     int             // generation counter to discard stale FilterTasks responses
 	filteredIDs   map[int64]bool  // set of task IDs in filterMatches for O(1) lookup
 	filterFocus   filterFocus     // where to put the cursor when the pending result lands
+	// planHooks holds the in-memory state for the plan entry boundary hooks
+	// (see internal/tui/plan_hook.go). cfg is seeded from config; the
+	// ticker is gated on cfg.Enabled(). watermark is seeded to time.Now()
+	// at init so nothing retroactive fires (FR-006).
+	planHooks planHookState
 }
 
-func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, hasDarkBg bool, expanded map[int64]bool) Model {
+func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, addr string, pomConfig config.PomodoroConfig, planConfig config.PlanConfig, hasDarkBg bool, expanded map[int64]bool) Model {
 	if expanded == nil {
 		expanded = make(map[int64]bool)
 	}
@@ -223,6 +228,14 @@ func newModel(client taskv1connect.TaskServiceClient, planClient planv1connect.P
 		scheduledDays:     make(map[int64][]string),
 		plan: planState{
 			day: time.Now().Format("2006-01-02"),
+		},
+		planHooks: planHookState{
+			cfg:       planConfig,
+			day:       time.Now().Format("2006-01-02"),
+			watermark: time.Now(),
+			// Seeded so the first tick (15s later) doesn't immediately
+			// re-issue the fetch Init already dispatches (research.md D3).
+			lastFetch: time.Now(),
 		},
 		md:          markdown.NewRenderer(buildMarkdownTheme()),
 		filterInput: newPlanInput("search, or try completed=false AND ^goal_id=1"),

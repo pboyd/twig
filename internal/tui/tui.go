@@ -47,7 +47,7 @@ func Run(_ context.Context, profile string) error {
 	expanded := tsf.expandedSet(pKey)
 
 	taskClient, planClient, goalClient, addr := NewClient(cfg)
-	m := newModel(taskClient, planClient, addr, cfg.Pomodoro, hasDarkBg, expanded)
+	m := newModel(taskClient, planClient, addr, cfg.Pomodoro, cfg.Plan, hasDarkBg, expanded)
 	m.goalClient = goalClient
 	m.statePath = statePath
 	m.activeProfile = pKey

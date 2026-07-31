@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	APIURL    string             `toml:"api_url"`
-	APIKey    string             `toml:"api_key"`
-	Pomodoro  PomodoroConfig     `toml:"pomodoro"`
-	Profiles  map[string]Profile `toml:"profile"`
+	APIURL   string             `toml:"api_url"`
+	APIKey   string             `toml:"api_key"`
+	Pomodoro PomodoroConfig     `toml:"pomodoro"`
+	Plan     PlanConfig         `toml:"plan"`
+	Profiles map[string]Profile `toml:"profile"`
 }
 
 type Profile struct {
@@ -25,6 +26,19 @@ type PomodoroConfig struct {
 	OnStart    string `toml:"on_start"`
 	OnCancel   string `toml:"on_cancel"`
 	OnComplete string `toml:"on_complete"`
+}
+
+type PlanConfig struct {
+	OnEventStart string `toml:"on_event_start"`
+	OnEventEnd   string `toml:"on_event_end"`
+	OnTaskStart  string `toml:"on_task_start"`
+	OnTaskEnd    string `toml:"on_task_end"`
+}
+
+// Enabled reports whether any plan hook is configured. Gates the TUI ticker
+// and background fetch so an unconfigured user pays nothing (SC-006).
+func (p PlanConfig) Enabled() bool {
+	return p.OnEventStart != "" || p.OnEventEnd != "" || p.OnTaskStart != "" || p.OnTaskEnd != ""
 }
 
 // DefaultPath returns the platform-standard path for the config file:

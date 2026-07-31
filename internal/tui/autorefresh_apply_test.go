@@ -57,7 +57,7 @@ func TestBackgroundLoad_PreservesCursorIdentity(t *testing.T) {
 		ExportSetPlanEntries(&m, entries, 1)
 
 		newEntries := []*planv1.PlanEntry{{Id: 3, Name: "c"}, {Id: 1, Name: "a"}, {Id: 2, Name: "b"}}
-		next, _ := m.Update(planEntriesMsg{entries: newEntries, bg: true, bgDay: "2026-05-27"})
+		next, _ := m.Update(planEntriesMsg{entries: newEntries, bg: true, day: "2026-05-27"})
 		nm := next.(Model)
 		if nm.plan.cursor != 2 {
 			t.Errorf("expected plan cursor 2 (still on entry b), got %d", nm.plan.cursor)
@@ -111,7 +111,7 @@ func TestBackgroundLoad_CursorClampsWhenItemMissing(t *testing.T) {
 		m := ExportNewPlanModel(&fakeTaskClient{}, &fakePlanClient{}, "2026-05-27")
 		ExportSetPlanEntries(&m, entries, 1)
 
-		next, _ := m.Update(planEntriesMsg{entries: []*planv1.PlanEntry{{Id: 3, Name: "c"}}, bg: true, bgDay: "2026-05-27"})
+		next, _ := m.Update(planEntriesMsg{entries: []*planv1.PlanEntry{{Id: 3, Name: "c"}}, bg: true, day: "2026-05-27"})
 		nm := next.(Model)
 		if nm.plan.cursor != 0 {
 			t.Errorf("expected plan cursor clamped to 0, got %d", nm.plan.cursor)
@@ -165,7 +165,7 @@ func TestBackgroundLoad_ErrorDiscarded(t *testing.T) {
 		m.plan.loaded = true
 		m.plan.err = errors.New("existing")
 
-		next, _ := m.Update(planEntriesMsg{err: boom, bg: true, bgDay: "2026-05-27"})
+		next, _ := m.Update(planEntriesMsg{err: boom, bg: true, day: "2026-05-27"})
 		nm := next.(Model)
 		if nm.plan.err == nil || nm.plan.err.Error() != "existing" {
 			t.Errorf("bg error should not replace existing plan err, got %v", nm.plan.err)
@@ -174,7 +174,7 @@ func TestBackgroundLoad_ErrorDiscarded(t *testing.T) {
 			t.Errorf("bg error should not change plan entries, got %d", len(nm.plan.entries))
 		}
 
-		next, _ = m.Update(planEntriesMsg{err: boom, bg: false, bgDay: ""})
+		next, _ = m.Update(planEntriesMsg{err: boom, bg: false, day: ""})
 		nm = next.(Model)
 		if nm.plan.err == nil || nm.plan.err.Error() != "boom" {
 			t.Errorf("user error should set plan err, got %v", nm.plan.err)
@@ -232,7 +232,7 @@ func TestBackgroundLoad_SuccessKeepsExistingError(t *testing.T) {
 		m := ExportNewPlanModel(&fakeTaskClient{}, &fakePlanClient{}, "2026-05-27")
 		m.plan.err = errors.New("existing")
 
-		next, _ := m.Update(planEntriesMsg{entries: []*planv1.PlanEntry{}, bg: true, bgDay: "2026-05-27"})
+		next, _ := m.Update(planEntriesMsg{entries: []*planv1.PlanEntry{}, bg: true, day: "2026-05-27"})
 		nm := next.(Model)
 		if nm.plan.err == nil || nm.plan.err.Error() != "existing" {
 			t.Errorf("expected existing plan err preserved, got %v", nm.plan.err)
@@ -278,10 +278,57 @@ func TestBackgroundLoad_PlanWrongDayDiscarded(t *testing.T) {
 	ExportSetPlanEntries(&m, entries, 0)
 
 	newEntries := []*planv1.PlanEntry{{Id: 2, Name: "b"}}
-	next, _ := m.Update(planEntriesMsg{entries: newEntries, bg: true, bgDay: "2026-05-28"})
+	next, _ := m.Update(planEntriesMsg{entries: newEntries, bg: true, day: "2026-05-28"})
 	nm := next.(Model)
 	if len(nm.plan.entries) != 1 || nm.plan.entries[0].Id != 1 {
 		t.Errorf("plan entries should not be overwritten by wrong-day bg load, got %v", nm.plan.entries)
+	}
+}
+
+// TestPlanDayNav_StaleResponseDiscarded checks that fast next-day/prev-day
+// navigation doesn't let a stale in-flight fetch overwrite the entries for
+// the day currently on screen, even for user-initiated (non-bg) loads.
+func TestPlanDayNav_StaleResponseDiscarded(t *testing.T) {
+	fc := &fakePlanClient{}
+	m := buildPlanTestModel(fc)
+	m.plan.day = "2026-06-09"
+	m.plan.loaded = true
+
+	// Navigate next then back to the original day, as if the user bounced
+	// quickly between days; this leaves two fetches in flight, one for
+	// 2026-06-10 (from the next-day press) and one for 2026-06-09 (from the
+	// prev-day press).
+	m2, _ := pressKeyStr(m, "]")
+	if m2.plan.day != "2026-06-10" {
+		t.Fatalf("expected day 2026-06-10 after next-day, got %s", m2.plan.day)
+	}
+	m3, _ := pressKeyStr(m2, "[")
+	if m3.plan.day != "2026-06-09" {
+		t.Fatalf("expected day 2026-06-09 after prev-day, got %s", m3.plan.day)
+	}
+
+	// The stale 2026-06-10 fetch lands last. Without day-attribution on
+	// user-initiated loads, this would overwrite the entries shown for
+	// 2026-06-09 with 2026-06-10's data.
+	staleEntries := []*planv1.PlanEntry{{Id: 99, Name: "wrong day"}}
+	next, _ := m3.Update(planEntriesMsg{entries: staleEntries, bg: false, day: "2026-06-10"})
+	nm := next.(Model)
+
+	if nm.plan.day != "2026-06-09" {
+		t.Fatalf("day on screen changed unexpectedly, got %s", nm.plan.day)
+	}
+	for _, e := range nm.plan.entries {
+		if e.Id == 99 {
+			t.Errorf("stale day's response was applied to the current day's entries: %v", nm.plan.entries)
+		}
+	}
+
+	// The correct day's response, landing after, must still apply normally.
+	correctEntries := []*planv1.PlanEntry{{Id: 1, Name: "right day"}}
+	next2, _ := nm.Update(planEntriesMsg{entries: correctEntries, bg: false, day: "2026-06-09"})
+	nm2 := next2.(Model)
+	if len(nm2.plan.entries) != 1 || nm2.plan.entries[0].Id != 1 {
+		t.Errorf("expected current day's response to apply, got %v", nm2.plan.entries)
 	}
 }
 
@@ -316,7 +363,7 @@ func TestLoad_PreservesMode(t *testing.T) {
 		},
 		{
 			name: "planEntriesMsg",
-			msg:  planEntriesMsg{entries: []*planv1.PlanEntry{}, bg: true, bgDay: "2026-05-27"},
+			msg:  planEntriesMsg{entries: []*planv1.PlanEntry{}, bg: true, day: "2026-05-27"},
 			setMode: func(m *Model) {
 				m.activeTab = tabPlanning
 				m.mode = modeEdit

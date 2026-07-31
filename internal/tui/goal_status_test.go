@@ -15,7 +15,7 @@ import (
 
 // newGoalTestModel creates a model in the Goals tab for status-update unit tests.
 func newGoalTestModel(goals []*goalv1.Goal) Model {
-	m := newModel(nil, nil, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(nil, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabGoals
 	m.goal.goals = goals
 	m.goal.loaded = true

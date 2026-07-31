@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"os/exec"
 	"time"
 
 	"connectrpc.com/connect"
@@ -55,13 +54,12 @@ func pomTickCmd() tea.Cmd {
 
 // runPomHook runs sh -c <cmd> with stdio detached from the TUI terminal so it
 // cannot corrupt the alt-screen. Returns nil for an empty command string.
-func runPomHook(cmd, name string) tea.Cmd {
+func runPomHook(cmd string) tea.Cmd {
 	if cmd == "" {
 		return nil
 	}
 	return func() tea.Msg {
-		c := exec.Command("sh", "-c", cmd)
-		// Detach stdio: do NOT assign os.Stdin/Stdout/Stderr.
+		c := hookCommand(cmd)
 		if err := c.Run(); err != nil {
 			return pomHookErrMsg{err: err}
 		}

@@ -1594,7 +1594,7 @@ func TestMove_SuccessfulResultReturnsModeList(t *testing.T) {
 func buildTasksModelWithPlan(fc *fakePlanClient) Model {
 	tasks := []*taskv1.Task{{Id: 1, Name: "Write the tests"}}
 	tree := cli.BuildTree(tasks)
-	m := newModel(nil, fc, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(nil, fc, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabTasks
 	m.tree = tree
 	m.visible = buildVisible(tree, m.expanded, false, nil, time.Now().Local())
@@ -1884,7 +1884,7 @@ func TestScheduledDays_ResultStoredOnModel(t *testing.T) {
 			{TaskId: 1, Day: "2026-06-11"},
 		},
 	}
-	m := newModel(nil, fc, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(nil, fc, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 
 	cmd := listScheduledDaysCmd(fc)
 	msg := cmd()
@@ -1950,7 +1950,7 @@ func TestPaste_DatePrompt(t *testing.T) {
 // TestPaste_PlanningForm verifies that pasting while a planning form is open
 // inserts text into the focused field.
 func TestPaste_PlanningForm(t *testing.T) {
-	m := newModel(nil, nil, "", config.PomodoroConfig{}, false, nil)
+	m := newModel(nil, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabPlanning
 	m.initAddEventForm() // opens planEventForm with focus on field 0 (name)
 

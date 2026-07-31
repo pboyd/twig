@@ -2272,9 +2272,9 @@ func TestPlanRankUp_UntimedEntry(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},                            // untimed A
-		{Id: 2, DurationMinute: 30},                            // untimed B
-		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
+		{Id: 1, DurationMinute: 30},                           // untimed A
+		{Id: 2, DurationMinute: 30},                           // untimed B
+		{Id: 3, StartMinute: pint32(480), DurationMinute: 30}, // timed C
 	}
 	ExportSetPlanEntries(&m, entries, 1) // cursor on B (index 1)
 
@@ -2311,9 +2311,9 @@ func TestPlanRankDown_UntimedEntry(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},                            // untimed A
-		{Id: 2, DurationMinute: 30},                            // untimed B
-		{Id: 3, StartMinute: pint32F(480), DurationMinute: 30}, // timed C
+		{Id: 1, DurationMinute: 30},                           // untimed A
+		{Id: 2, DurationMinute: 30},                           // untimed B
+		{Id: 3, StartMinute: pint32(480), DurationMinute: 30}, // timed C
 	}
 	ExportSetPlanEntries(&m, entries, 0) // cursor on A (index 0)
 
@@ -2349,8 +2349,8 @@ func TestPlanReorder_TimedEntryNoop(t *testing.T) {
 	m := buildPlanTestModel(fc)
 
 	entries := []*planv1.PlanEntry{
-		{Id: 1, DurationMinute: 30},                            // untimed
-		{Id: 2, StartMinute: pint32F(480), DurationMinute: 30}, // timed D
+		{Id: 1, DurationMinute: 30},                           // untimed
+		{Id: 2, StartMinute: pint32(480), DurationMinute: 30}, // timed D
 	}
 	ExportSetPlanEntries(&m, entries, 1) // cursor on timed entry
 
@@ -2401,8 +2401,6 @@ func TestPlanReorder_BoundaryNoop(t *testing.T) {
 		t.Error("last entry RankDown: expected no request, got one")
 	}
 }
-
-func pint32F(v int32) *int32 { return &v }
 
 // ── T006: Plan-tab ctrl+t regression guard (FR-008) ────────────────────────
 
