@@ -40,9 +40,9 @@ Per plan.md, all behavior change lands in `services/twig/`.
 
 **Purpose**: Confirm the dev stack and capture a green baseline before touching the move path
 
-- [ ] T001 Start the dev stack with `make dev` and confirm postgres on `localhost:5432` and the server on `:8080` are healthy
-- [ ] T002 Export `DATABASE_URL="postgres://twig:twig@localhost:5432/twig?sslmode=disable"` so the handler integration tests in `services/twig/internal/handler/` run instead of skipping (they call `t.Skip` when it is unset — a silent pass is the main hazard in this feature)
-- [ ] T003 Capture a green baseline: run `go test ./...` at repo root and `cd services/twig && go test ./...`, and record which `TestUpdateTask_*` / `TestReorderTask_*` tests currently pass
+- [x] T001 Start the dev stack with `make dev` and confirm postgres on `localhost:5432` and the server on `:8080` are healthy
+- [x] T002 Export `DATABASE_URL="postgres://twig:twig@localhost:5432/twig?sslmode=disable"` so the handler integration tests in `services/twig/internal/handler/` run instead of skipping (they call `t.Skip` when it is unset — a silent pass is the main hazard in this feature)
+- [x] T003 Capture a green baseline: run `go test ./...` at repo root and `cd services/twig && go test ./...`, and record which `TestUpdateTask_*` / `TestReorderTask_*` tests currently pass
 
 **Checkpoint**: Baseline green and integration tests confirmed running, not skipping
 
@@ -56,14 +56,14 @@ three user stories depend on
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete. Every story's behavior
 hangs off the parent-change comparison in T009.
 
-- [ ] T004 Add the `NearestAncestorGoal` recursive-CTE query to `services/twig/db/queries/task.sql` — walks `parent_id` upward from `$1` scoped to `user_id = $2`, tracks depth, returns the `goal_id` of the closest strict ancestor having one via `ORDER BY depth LIMIT 1`; model it on the existing `AncestorHasGoal` CTE in the same file but return the id rather than `EXISTS`
-- [ ] T005 Add the `ClearSubtreeGoals` recursive-CTE statement to `services/twig/db/queries/task.sql` — `UPDATE tasks SET goal_id = NULL` over all descendants of `$1` scoped to `user_id = $2`, excluding the row `$1` itself; model it on the existing `DescendantHasGoal` CTE (same file as T004, so run after it)
-- [ ] T006 Regenerate the query layer: `cd services/twig && sqlc generate`, producing `NearestAncestorGoal` and `ClearSubtreeGoals` in `services/twig/internal/db/task.sql.go` (generated — do not hand-edit)
-- [ ] T007 In `services/twig/internal/handler/task.go`, add a `t.Pool == nil` guard to `UpdateTask` **after** the `validateName` call and before any DB work, mirroring `ReorderTask` at line ~478 — `TestUpdateTask_NameValidation` constructs `&handler.Task{Queries: nil}` with no `Pool` and must keep returning `InvalidArgument`, not an internal error
-- [ ] T008 In `services/twig/internal/handler/task.go`, wrap the body of `UpdateTask` after the guard in `tx, err := t.Pool.Begin(ctx)` / `defer tx.Rollback(ctx)` / `q := t.Queries.WithTx(tx)` / `tx.Commit(ctx)`, converting every `t.Queries.X` call in the method to `q.X` (satisfies FR-011 / contract G6)
-- [ ] T009 In `services/twig/internal/handler/task.go`, load the stored task via `q.GetTask` at the top of the transaction and compute the parent-change classification — `noChange` / `descent` / `promotion` — by comparing stored `ParentID` against `req.Msg.ParentId`, per the table in data-model.md; **do not** branch on `req.Msg.ParentId != nil`, which means "field present" and is always true (research decision 1)
-- [ ] T010 In `services/twig/internal/handler/task.go`, change the repositioning block (currently guarded by `if req.Msg.ParentId != nil` at ~line 325) to run on any descent **or** promotion, using the T009 classification, so promotions to root stop keeping a stale position (research decision 6, contract G7)
-- [ ] T011 [P] Add a test helper to `services/twig/internal/handler/task_test.go` that creates a goal and links it to a task via the `Goal` handler from `newGoalTestHandlerWithPool`, plus a `t.Cleanup` that deletes rows from `goals` for the test user — the existing `newTestHandler` cleanup only removes `tasks` and `users`
+- [x] T004 Add the `NearestAncestorGoal` recursive-CTE query to `services/twig/db/queries/task.sql` — walks `parent_id` upward from `$1` scoped to `user_id = $2`, tracks depth, returns the `goal_id` of the closest strict ancestor having one via `ORDER BY depth LIMIT 1`; model it on the existing `AncestorHasGoal` CTE in the same file but return the id rather than `EXISTS`
+- [x] T005 Add the `ClearSubtreeGoals` recursive-CTE statement to `services/twig/db/queries/task.sql` — `UPDATE tasks SET goal_id = NULL` over all descendants of `$1` scoped to `user_id = $2`, excluding the row `$1` itself; model it on the existing `DescendantHasGoal` CTE (same file as T004, so run after it)
+- [x] T006 Regenerate the query layer: `cd services/twig && sqlc generate`, producing `NearestAncestorGoal` and `ClearSubtreeGoals` in `services/twig/internal/db/task.sql.go` (generated — do not hand-edit)
+- [x] T007 In `services/twig/internal/handler/task.go`, add a `t.Pool == nil` guard to `UpdateTask` **after** the `validateName` call and before any DB work, mirroring `ReorderTask` at line ~478 — `TestUpdateTask_NameValidation` constructs `&handler.Task{Queries: nil}` with no `Pool` and must keep returning `InvalidArgument`, not an internal error
+- [x] T008 In `services/twig/internal/handler/task.go`, wrap the body of `UpdateTask` after the guard in `tx, err := t.Pool.Begin(ctx)` / `defer tx.Rollback(ctx)` / `q := t.Queries.WithTx(tx)` / `tx.Commit(ctx)`, converting every `t.Queries.X` call in the method to `q.X` (satisfies FR-011 / contract G6)
+- [x] T009 In `services/twig/internal/handler/task.go`, load the stored task via `q.GetTask` at the top of the transaction and compute the parent-change classification — `noChange` / `descent` / `promotion` — by comparing stored `ParentID` against `req.Msg.ParentId`, per the table in data-model.md; **do not** branch on `req.Msg.ParentId != nil`, which means "field present" and is always true (research decision 1)
+- [x] T010 In `services/twig/internal/handler/task.go`, change the repositioning block (currently guarded by `if req.Msg.ParentId != nil` at ~line 325) to run on any descent **or** promotion, using the T009 classification, so promotions to root stop keeping a stale position (research decision 6, contract G7)
+- [x] T011 [P] Add a test helper to `services/twig/internal/handler/task_test.go` that creates a goal and links it to a task via the `Goal` handler from `newGoalTestHandlerWithPool`, plus a `t.Cleanup` that deletes rows from `goals` for the test user — the existing `newTestHandler` cleanup only removes `tasks` and `users`
 
 **Checkpoint**: `UpdateTask` is transactional, classifies parent changes correctly, repositions on
 both descent and promotion, and the goal queries exist. No goal-clearing behavior yet.
@@ -82,16 +82,16 @@ move succeeds and the moved task no longer holds its own goal link
 
 > Write these first and confirm they FAIL against the Phase 2 state
 
-- [ ] T012 [P] [US1] Add `TestUpdateTask_MoveGoalLinkedUnderGoalLinked` to `services/twig/internal/handler/task_test.go` — two top-level tasks with different goals, move one under the other, assert no error and moved task's `GoalId` is nil (spec US1 scenario 1)
-- [ ] T013 [P] [US1] Add `TestUpdateTask_MoveUnderSameGoal` to `services/twig/internal/handler/task_test.go` — both tasks linked to the *same* goal, assert the move succeeds with no error (spec US1 scenario 2; this is the case the old check rejected most confusingly)
-- [ ] T014 [P] [US1] Add `TestUpdateTask_MoveGoalLinkedUnderGoalFree` to `services/twig/internal/handler/task_test.go` — goal-linked task moved under a goal-free task, assert moved task's `GoalId` is nil afterward (spec US1 scenario 3, FR-002)
-- [ ] T015 [P] [US1] Add `TestUpdateTask_RenameDoesNotClearGoal` to `services/twig/internal/handler/task_test.go` — update only the `Name` of a goal-linked top-level task while passing its current `parent_id`, assert `GoalId` is unchanged; then repeat for a nested task and assert no goal link in its subtree is touched (FR-008, contract G5 — the regression that full-replace semantics make easy to introduce)
+- [x] T012 [P] [US1] Add `TestUpdateTask_MoveGoalLinkedUnderGoalLinked` to `services/twig/internal/handler/task_test.go` — two top-level tasks with different goals, move one under the other, assert no error and moved task's `GoalId` is nil (spec US1 scenario 1)
+- [x] T013 [P] [US1] Add `TestUpdateTask_MoveUnderSameGoal` to `services/twig/internal/handler/task_test.go` — both tasks linked to the *same* goal, assert the move succeeds with no error (spec US1 scenario 2; this is the case the old check rejected most confusingly)
+- [x] T014 [P] [US1] Add `TestUpdateTask_MoveGoalLinkedUnderGoalFree` to `services/twig/internal/handler/task_test.go` — goal-linked task moved under a goal-free task, assert moved task's `GoalId` is nil afterward (spec US1 scenario 3, FR-002)
+- [x] T015 [P] [US1] Add `TestUpdateTask_RenameDoesNotClearGoal` to `services/twig/internal/handler/task_test.go` — update only the `Name` of a goal-linked top-level task while passing its current `parent_id`, assert `GoalId` is unchanged; then repeat for a nested task and assert no goal link in its subtree is touched (FR-008, contract G5 — the regression that full-replace semantics make easy to introduce)
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] In `services/twig/internal/handler/task.go`, delete the nested-goal precondition block at ~lines 276-311 in its entirety, including the `GetTask`/`AncestorHasGoal`/`DescendantHasGoal` calls that feed it and the `"moving this task would nest goal associations — clear the goal link first"` error (FR-001, FR-012, contract G1)
-- [ ] T017 [US1] In `services/twig/internal/handler/task.go`, on a descent (per T009 classification) set the moved task's `goal_id` to NULL as part of the update, leaving it untouched on `noChange` (FR-002, contract G2)
-- [ ] T018 [US1] Confirm the retained validations still reject and change nothing — cycle, destination-not-found, and completed-destination paths must return before any goal write, and their errors must be unchanged (FR-009); verify `TestUpdateTask_CompleteParentRejected` in `services/twig/internal/handler/task_test.go` still passes
+- [x] T016 [US1] In `services/twig/internal/handler/task.go`, delete the nested-goal precondition block at ~lines 276-311 in its entirety, including the `GetTask`/`AncestorHasGoal`/`DescendantHasGoal` calls that feed it and the `"moving this task would nest goal associations — clear the goal link first"` error (FR-001, FR-012, contract G1)
+- [x] T017 [US1] In `services/twig/internal/handler/task.go`, on a descent (per T009 classification) set the moved task's `goal_id` to NULL as part of the update, leaving it untouched on `noChange` (FR-002, contract G2)
+- [x] T018 [US1] Confirm the retained validations still reject and change nothing — cycle, destination-not-found, and completed-destination paths must return before any goal write, and their errors must be unchanged (FR-009); verify `TestUpdateTask_CompleteParentRejected` in `services/twig/internal/handler/task_test.go` still passes
 
 **Checkpoint**: The reported blocking error is gone. Moves under any destination succeed and leave
 no goal link on the moved task. Renames are unaffected.
@@ -108,16 +108,16 @@ with no goal at all
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T019 [P] [US2] Add `TestUpdateTask_PromoteInheritsGoal` to `services/twig/internal/handler/task_test.go` — sub-task under a goal-linked parent, promoted by omitting `parent_id`, assert its `GoalId` equals the parent's goal (spec US2 scenario 1, FR-004)
-- [ ] T020 [P] [US2] Add `TestUpdateTask_PromoteFromDepthTwo` to `services/twig/internal/handler/task_test.go` — three-level chain `A(goal) → B → C`, promote `C`, assert it gets `A`'s goal, proving "nearest ancestor" resolves past a goal-free intermediate (spec US2 scenario 2)
-- [ ] T021 [P] [US2] Add `TestUpdateTask_PromoteWithNoGoalAnywhere` to `services/twig/internal/handler/task_test.go` — sub-task under a goal-free parent, promoted, assert `GoalId` is nil and no error is returned (spec US2 scenario 3, FR-005)
-- [ ] T022 [P] [US2] Add `TestUpdateTask_PromoteKeepsOwnGoal` to `services/twig/internal/handler/task_test.go` — a top-level goal-linked task "promoted" again (no-op move to root), assert its goal is unchanged (spec US2 scenario 5, FR-006)
-- [ ] T023 [P] [US2] Add `TestUpdateTask_PromoteCarriesClosedGoal` to `services/twig/internal/handler/task_test.go` — complete or archive the goal via the `Goal` handler, then promote a sub-task under it and assert the closed goal is still linked; also assert `SetTaskGoal` still rejects linking that goal directly with `"cannot link a task to a completed or archived goal"` (FR-007, FR-010, contract G4)
+- [x] T019 [P] [US2] Add `TestUpdateTask_PromoteInheritsGoal` to `services/twig/internal/handler/task_test.go` — sub-task under a goal-linked parent, promoted by omitting `parent_id`, assert its `GoalId` equals the parent's goal (spec US2 scenario 1, FR-004)
+- [x] T020 [P] [US2] Add `TestUpdateTask_PromoteFromDepthTwo` to `services/twig/internal/handler/task_test.go` — three-level chain `A(goal) → B → C`, promote `C`, assert it gets `A`'s goal, proving "nearest ancestor" resolves past a goal-free intermediate (spec US2 scenario 2)
+- [x] T021 [P] [US2] Add `TestUpdateTask_PromoteWithNoGoalAnywhere` to `services/twig/internal/handler/task_test.go` — sub-task under a goal-free parent, promoted, assert `GoalId` is nil and no error is returned (spec US2 scenario 3, FR-005)
+- [x] T022 [P] [US2] Add `TestUpdateTask_PromoteKeepsOwnGoal` to `services/twig/internal/handler/task_test.go` — a top-level goal-linked task "promoted" again (no-op move to root), assert its goal is unchanged (spec US2 scenario 5, FR-006)
+- [x] T023 [P] [US2] Add `TestUpdateTask_PromoteCarriesClosedGoal` to `services/twig/internal/handler/task_test.go` — complete or archive the goal via the `Goal` handler, then promote a sub-task under it and assert the closed goal is still linked; also assert `SetTaskGoal` still rejects linking that goal directly with `"cannot link a task to a completed or archived goal"` (FR-007, FR-010, contract G4)
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] In `services/twig/internal/handler/task.go`, on a promotion call `q.NearestAncestorGoal` for the moved task **before** the `UpdateTask` write rewrites `parent_id` — afterwards the task has no ancestors and the query always returns empty (data-model.md ordering note)
-- [ ] T025 [US2] In `services/twig/internal/handler/task.go`, on a promotion set the moved task's `goal_id` to the T024 result only when the task has no `goal_id` of its own; write it directly through the update rather than routing via `SetTaskGoal`, which would reject closed goals (FR-004, FR-006, FR-007, research decision 5)
+- [x] T024 [US2] In `services/twig/internal/handler/task.go`, on a promotion call `q.NearestAncestorGoal` for the moved task **before** the `UpdateTask` write rewrites `parent_id` — afterwards the task has no ancestors and the query always returns empty (data-model.md ordering note)
+- [x] T025 [US2] In `services/twig/internal/handler/task.go`, on a promotion set the moved task's `goal_id` to the T024 result only when the task has no `goal_id` of its own; write it directly through the update rather than routing via `SetTaskGoal`, which would reject closed goals (FR-004, FR-006, FR-007, research decision 5)
 
 **Checkpoint**: Both P1 stories done. Descent clears, promotion preserves. The two originally
 reported user-visible failures are fixed.
@@ -134,14 +134,14 @@ a non-NULL `parent_id` and a non-NULL `goal_id` — expect zero
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T026 [P] [US3] Add `TestUpdateTask_DescentClearsDescendantGoals` to `services/twig/internal/handler/task_test.go` — construct a legacy-shaped violation by writing `goal_id` onto a nested task directly through the pool, move its ancestor under another task, assert the nested task's `goal_id` is NULL (spec US3 scenarios 1-2, FR-003)
-- [ ] T027 [P] [US3] Add `TestUpdateTask_DescentClearsDeepDescendantGoals` to `services/twig/internal/handler/task_test.go` — same as T026 but with the violating row three levels down, proving the clear recurses rather than touching only direct children
-- [ ] T028 [P] [US3] Add `TestUpdateTask_InvariantAfterMoveSequence` to `services/twig/internal/handler/task_test.go` — run a mixed sequence of descents and promotions across goal-linked and goal-free tasks, then assert zero rows match `parent_id IS NOT NULL AND goal_id IS NOT NULL` for the test user (spec US3 scenario 3)
+- [x] T026 [P] [US3] Add `TestUpdateTask_DescentClearsDescendantGoals` to `services/twig/internal/handler/task_test.go` — construct a legacy-shaped violation by writing `goal_id` onto a nested task directly through the pool, move its ancestor under another task, assert the nested task's `goal_id` is NULL (spec US3 scenarios 1-2, FR-003)
+- [x] T027 [P] [US3] Add `TestUpdateTask_DescentClearsDeepDescendantGoals` to `services/twig/internal/handler/task_test.go` — same as T026 but with the violating row three levels down, proving the clear recurses rather than touching only direct children
+- [x] T028 [P] [US3] Add `TestUpdateTask_InvariantAfterMoveSequence` to `services/twig/internal/handler/task_test.go` — run a mixed sequence of descents and promotions across goal-linked and goal-free tasks, then assert zero rows match `parent_id IS NOT NULL AND goal_id IS NOT NULL` for the test user (spec US3 scenario 3)
 
 ### Implementation for User Story 3
 
-- [ ] T029 [US3] In `services/twig/internal/handler/task.go`, on a descent call `q.ClearSubtreeGoals` for the moved task inside the same transaction, so every descendant at any depth loses its own goal link alongside the moved task's (FR-003, contract G2)
-- [ ] T030 [US3] Verify atomicity end to end: confirm every goal read and write in `UpdateTask` uses the transactional `q` rather than `t.Queries`, and that a failure after the parent write rolls back both the move and the goal changes (FR-011, contract G6)
+- [x] T029 [US3] In `services/twig/internal/handler/task.go`, on a descent call `q.ClearSubtreeGoals` for the moved task inside the same transaction, so every descendant at any depth loses its own goal link alongside the moved task's (FR-003, contract G2)
+- [x] T030 [US3] Verify atomicity end to end: confirm every goal read and write in `UpdateTask` uses the transactional `q` rather than `t.Queries`, and that a failure after the parent write rolls back both the move and the goal changes (FR-011, contract G6)
 
 **Checkpoint**: All three stories complete. The invariant holds across move sequences and legacy
 rows are repaired opportunistically.
@@ -150,13 +150,13 @@ rows are repaired opportunistically.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T031 [P] Update the `Task.goal_id` comment in `api/proto/task/v1/task.proto` (~line 135) to note that a move may change it — descent clears, promotion assigns the inherited goal — then run `make proto`; the generated `api/gen/` output should be otherwise unchanged (research decision 7)
-- [ ] T032 [P] Add a `parent_id` note to `services/twig-web/src/lib/updatePayload.ts` recording that it is full-replace and that omitting `parent_id` promotes the task to the top level, matching the "Full-replace semantics" section of `specs/072-move-task-goal-rules/contracts/update-task-goal-behavior.md`
-- [ ] T033 Run the full suite: `go test ./...` at repo root and `cd services/twig && go test ./...` with `DATABASE_URL` set, and confirm no previously passing test regressed against the T003 baseline
-- [ ] T034 Walk `specs/072-move-task-goal-rules/quickstart.md` scenarios 1-12 against a live stack, confirming each "Expect" and each "Before this change" contrast
-- [ ] T035 Verify via the web UI (`cd services/twig-web && npm run dev`) that renaming a goal-linked task inline does not drop its goal badge — the SPA sends a full-replace payload on every edit, so this is the real-world FR-008 check (quickstart scenario 7)
-- [ ] T036 [P] Review every user-facing string touched by this feature for Constitution Principle IV tone; the feature only deletes a message, so confirm no dry replacement text was introduced and the retained move errors in `services/twig/internal/handler/task.go` are unchanged
-- [ ] T037 Confirm no leftover dead code in `services/twig/internal/handler/task.go` — specifically that `AncestorHasGoal` and `DescendantHasGoal` are still referenced by `SetTaskGoal` (~lines 612, 621) and were not removed along with the deleted precondition block in T016
+- [x] T031 [P] Update the `Task.goal_id` comment in `api/proto/task/v1/task.proto` (~line 135) to note that a move may change it — descent clears, promotion assigns the inherited goal — then run `make proto`; the generated `api/gen/` output should be otherwise unchanged (research decision 7)
+- [x] T032 [P] Add a `parent_id` note to `services/twig-web/src/lib/updatePayload.ts` recording that it is full-replace and that omitting `parent_id` promotes the task to the top level, matching the "Full-replace semantics" section of `specs/072-move-task-goal-rules/contracts/update-task-goal-behavior.md`
+- [x] T033 Run the full suite: `go test ./...` at repo root and `cd services/twig && go test ./...` with `DATABASE_URL` set, and confirm no previously passing test regressed against the T003 baseline
+- [x] T034 Walk `specs/072-move-task-goal-rules/quickstart.md` scenarios 1-12 against a live stack, confirming each "Expect" and each "Before this change" contrast
+- [x] T035 Verify via the web UI (`cd services/twig-web && npm run dev`) that renaming a goal-linked task inline does not drop its goal badge — the SPA sends a full-replace payload on every edit, so this is the real-world FR-008 check (quickstart scenario 7)
+- [x] T036 [P] Review every user-facing string touched by this feature for Constitution Principle IV tone; the feature only deletes a message, so confirm no dry replacement text was introduced and the retained move errors in `services/twig/internal/handler/task.go` are unchanged
+- [x] T037 Confirm no leftover dead code in `services/twig/internal/handler/task.go` — specifically that `AncestorHasGoal` and `DescendantHasGoal` are still referenced by `SetTaskGoal` (~lines 612, 621) and were not removed along with the deleted precondition block in T016
 
 ---
 

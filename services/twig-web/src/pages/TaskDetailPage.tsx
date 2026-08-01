@@ -9,7 +9,9 @@ import {
   completeTask,
   uncompleteTask,
 } from "../gen/task/v1/task-TaskService_connectquery";
-import { ConnectError, Code } from "@connectrpc/connect";
+import { TaskService } from "../gen/task/v1/task_pb";
+import { createClient, ConnectError, Code } from "@connectrpc/connect";
+import { transport } from "../lib/transport";
 import { AppHeader } from "../components/AppHeader";
 import { Spinner } from "../components/Spinner";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -51,7 +53,20 @@ export default function TaskDetailPage() {
 
   async function handleSaveEdit(editedName: string, editedDesc: string) {
     if (!task) return;
-    const payload = buildUpdatePayload(task, editedName, editedDesc);
+    // UpdateTask is full-replace on parentId (see updatePayload.ts). The
+    // cached `task` can be stale if the parent changed elsewhere while this
+    // page was open, so refetch immediately before building the payload —
+    // otherwise a plain rename can replay a stale parentId and the server
+    // reads it as a promotion, rewriting the task's goal link.
+    let current = task;
+    try {
+      const fresh = await createClient(TaskService, transport).getTask({ id: taskId! });
+      if (fresh.task) current = fresh.task;
+    } catch {
+      setToggleError(messages.connectivityError);
+      return;
+    }
+    const payload = buildUpdatePayload(current, editedName, editedDesc);
     await doUpdate(payload);
     await queryClient.invalidateQueries({
       queryKey: createConnectQueryKey({ schema: getTask, input: { id: taskId }, cardinality: "finite" }),

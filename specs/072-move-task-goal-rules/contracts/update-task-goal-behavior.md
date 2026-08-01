@@ -33,8 +33,10 @@ the server derives it from the move.
 `parent_id` is asking to make the task top-level, not asking to leave the parent alone.
 
 Clients MUST send the task's current `parent_id` on any update that is not intended as a move. This
-is already what `buildUpdatePayload` (`services/twig-web/src/lib/updatePayload.ts`) and
-`moveTaskCmd` (`internal/tui/update.go:539`) do.
+is already what `buildUpdatePayload` (`services/twig-web/src/lib/updatePayload.ts`),
+`internal/cli/task.go:356`, and `updateTaskCmd` (`internal/tui/update.go:350`) do.
+`moveTaskCmd` (`internal/tui/update.go:539`) is the move path itself — it deliberately sends the
+destination `parent_id` (or omits it, for promotion), not the task's current one.
 
 ## Definition: parent change
 
@@ -66,6 +68,10 @@ whether or not it is the same goal.
 On a promotion, if the moved task has no `goal_id` of its own, it is assigned the `goal_id` of its
 nearest goal-bearing ancestor as measured **before** the move. If it had no goal-bearing ancestor, it
 stays unset and this is not an error. If it already had its own `goal_id`, that value is kept.
+
+Symmetrically with G2, every descendant of the moved task gives up its own `goal_id`, regardless of
+what the moved task ends up with. This also repairs any legacy row that already violated the
+invariant below.
 
 ### G4 — Closed goals are carried, not dropped
 

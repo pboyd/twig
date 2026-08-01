@@ -131,6 +131,12 @@ message Task {
   // belongs to. Unset when the task is not directly associated with a goal
   // (descendants inherit the nearest ancestor's goal client-side).
   // Read-only: populated on reads, ignored on CreateTask/UpdateTask writes.
+  // UpdateTask writes goal_id as part of a move: descent clears it on the
+  // moved task and every descendant; promotion writes the goal inherited
+  // from the nearest goal-bearing ancestor (the write always uses an
+  // internal direct UPDATE rather than SetTaskGoal, which is why a
+  // promotion may link a task to a completed or archived goal that
+  // SetTaskGoal would refuse). See specs/072-move-task-goal-rules/contracts.
   optional int64 goal_id = 11;
 }
 

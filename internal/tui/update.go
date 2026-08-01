@@ -546,6 +546,9 @@ func moveTaskCmd(client taskv1connect.TaskServiceClient, task *taskv1.Task, newP
 		if task.Due != nil {
 			req.Due = task.Due
 		}
+		if task.SnoozeUntil != nil {
+			req.SnoozeUntil = task.SnoozeUntil
+		}
 		if newParentID != nil {
 			req.ParentId = newParentID
 		}
