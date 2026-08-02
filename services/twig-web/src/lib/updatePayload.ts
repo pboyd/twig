@@ -1,4 +1,5 @@
 import type { Task } from "../gen/task/v1/task_pb";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 // UpdateTask is full-replace on every editable field including parent_id.
 // Always pass the task's current parentId, even on a plain rename.
@@ -8,14 +9,16 @@ import type { Task } from "../gen/task/v1/task_pb";
 export function buildUpdatePayload(
   task: Task,
   editedName: string,
-  editedDescription: string
+  editedDescription: string,
+  editedDue?: Timestamp,
+  editedSnoozeUntil?: Timestamp
 ) {
   return {
     id: task.id,
     name: editedName,
     description: editedDescription,
-    due: task.due,
+    due: editedDue,
     parentId: task.parentId,
-    snoozeUntil: task.snoozeUntil,
+    snoozeUntil: editedSnoozeUntil,
   };
 }

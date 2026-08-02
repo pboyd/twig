@@ -21,6 +21,7 @@ import { messages } from "../theme/messages";
 import { Markdown } from "./Markdown";
 import { useToast } from "../context/ToastProvider";
 import { useAddTaskToPlan } from "../hooks/useAddTaskToPlan";
+import { isSnoozed } from "../lib/snooze";
 
 interface TreeRowProps {
   node: TaskNode;
@@ -101,14 +102,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
 
   const indentRem = depth * 1;
   const isComplete = !!task.completedAt;
-  const isSnoozed = (() => {
-    if (!task.snoozeUntil) return false;
-    const snooze = new Date(Number(task.snoozeUntil.seconds) * 1000);
-    const today = new Date();
-    if (snooze.getUTCFullYear() !== today.getFullYear()) return snooze.getUTCFullYear() > today.getFullYear();
-    if (snooze.getUTCMonth() !== today.getMonth()) return snooze.getUTCMonth() > today.getMonth();
-    return snooze.getUTCDate() > today.getDate();
-  })();
+  const snoozed = isSnoozed(task);
   const hasChildren = children.length > 0;
   const isExpanded = expandedIds.has(task.id);
   const isToggling = isCompleting || isUncompleting;
@@ -148,7 +142,7 @@ export function TreeRow({ node, expandedIds, onToggleExpand, onReorder }: TreeRo
           <span className={isComplete ? "line-through text-gray-400 dark:text-gray-500" : ""}>
             <Markdown mode="inline">{task.name}</Markdown>
           </span>
-          {isSnoozed && <span className="ml-1 text-base" aria-label="snoozed">💤</span>}
+          {snoozed && <span className="ml-1 text-base" aria-label="snoozed">💤</span>}
         </button>
 
         {/* Expand/collapse chevron — only for nodes with children */}

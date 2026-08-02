@@ -123,7 +123,7 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 
 A React 19 + TypeScript SPA at `services/twig-web/` — sibling to the server module. It talks to the server over the same ConnectRPC services the CLI uses, plus the `/auth/*` HTTP endpoints.
 
-The SPA does not yet cover everything the CLI and TUI can do. To see which RPCs it actually calls, grep the imports from `src/gen/` — don't assume parity in either direction.
+The SPA does not yet cover everything the CLI and TUI can do. To see which RPCs it actually calls, grep the imports from `src/gen/` — don't assume parity in either direction. From a task's detail page the SPA now also supports deleting a task (with subtask-cascade confirmation), setting/clearing its due and snooze dates, and linking/unlinking it with a goal.
 
 **Distribution:** the server image (`services/twig/Dockerfile`) builds the SPA in a Node stage and bakes the output into `/web`, alongside the CLI binary at `/cli`. `cmd/server/main.go` serves it from `handler.WebUI` at `/` (unauthenticated, with SPA history-fallback to `index.html`), while every `*.v1.*Service` path, `/cli/*`, and the Connect/health routes stay behind `auth.Middleware`. One image ships both the API and the UI — see `make dev` / `make build`.
 
@@ -166,5 +166,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/072-move-task-goal-rules/plan.md`.
+`specs/073-web-task-parity/plan.md`.
 <!-- SPECKIT END -->

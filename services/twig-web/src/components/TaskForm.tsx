@@ -7,13 +7,22 @@ import { todayIso, tomorrowIso } from "../lib/planDays";
 type PlanChoice = "none" | "today" | "tomorrow" | "date";
 
 interface TaskFormProps {
-  onSubmit: (name: string, description: string, planDay?: string) => Promise<void>;
+  onSubmit: (
+    name: string,
+    description: string,
+    planDay?: string,
+    due?: string,
+    snooze?: string
+  ) => Promise<void>;
   onCancel?: () => void;
   loading?: boolean;
   initialName?: string;
   initialDescription?: string;
   submitLabel?: string;
   showPlanControl?: boolean;
+  showScheduleFields?: boolean;
+  initialDue?: string;
+  initialSnooze?: string;
 }
 
 export function TaskForm({
@@ -24,12 +33,17 @@ export function TaskForm({
   initialDescription = "",
   submitLabel = "Add task",
   showPlanControl = false,
+  showScheduleFields = false,
+  initialDue = "",
+  initialSnooze = "",
 }: TaskFormProps) {
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [nameError, setNameError] = useState<string | null>(null);
   const [planChoice, setPlanChoice] = useState<PlanChoice>("none");
   const [planDate, setPlanDate] = useState("");
+  const [due, setDue] = useState(initialDue);
+  const [snooze, setSnooze] = useState(initialSnooze);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -56,7 +70,11 @@ export function TaskForm({
         break;
     }
 
-    await onSubmit(trimmed, description.trim(), planDay);
+    if (showScheduleFields) {
+      await onSubmit(trimmed, description.trim(), planDay, due, snooze);
+    } else {
+      await onSubmit(trimmed, description.trim(), planDay);
+    }
   }
 
   const planChoices: { value: PlanChoice; label: string }[] = [
@@ -88,6 +106,36 @@ export function TaskForm({
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Optional details…"
       />
+
+      {showScheduleFields && (
+        <div>
+          <label htmlFor="task-due" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {messages.dueLabel}
+          </label>
+          <input
+            id="task-due"
+            type="date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm min-h-[44px]"
+          />
+        </div>
+      )}
+
+      {showScheduleFields && (
+        <div>
+          <label htmlFor="task-snooze" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {messages.snoozeLabel}
+          </label>
+          <input
+            id="task-snooze"
+            type="date"
+            value={snooze}
+            onChange={(e) => setSnooze(e.target.value)}
+            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm min-h-[44px]"
+          />
+        </div>
+      )}
 
       {showPlanControl && (
         <div>

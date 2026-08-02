@@ -126,6 +126,82 @@ describe("TaskForm — US2 date affordance", () => {
     });
   });
 
+  it("Due field is absent in the default create flow", () => {
+    render(<TaskForm onSubmit={vi.fn()} />);
+    expect(screen.queryByLabelText(/^due$/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the Due date input only when showScheduleFields is set", () => {
+    render(<TaskForm showScheduleFields onSubmit={vi.fn()} />);
+    expect(screen.getByLabelText(/^due$/i)).toBeInTheDocument();
+  });
+
+  it("Due field is prefilled from initialDue", () => {
+    render(<TaskForm showScheduleFields initialDue="2026-08-02" onSubmit={vi.fn()} />);
+    const dueInput = screen.getByLabelText(/^due$/i) as HTMLInputElement;
+    expect(dueInput.value).toBe("2026-08-02");
+  });
+
+  it("submitting the Due value reaches onSubmit as an ISO day string", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showScheduleFields onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Task" } });
+    fireEvent.change(screen.getByLabelText(/^due$/i), { target: { value: "2026-09-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("Task", "", undefined, "2026-09-01", "");
+    });
+  });
+
+  it("clearing the Due value reaches onSubmit as an empty string", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showScheduleFields initialDue="2026-08-02" onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Task" } });
+    fireEvent.change(screen.getByLabelText(/^due$/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("Task", "", undefined, "", "");
+    });
+  });
+
+  it("renders the Snooze until date input only when showScheduleFields is set", () => {
+    render(<TaskForm showScheduleFields onSubmit={vi.fn()} />);
+    expect(screen.getByLabelText(/snooze until/i)).toBeInTheDocument();
+  });
+
+  it("Snooze field is absent in the default create flow", () => {
+    render(<TaskForm onSubmit={vi.fn()} />);
+    expect(screen.queryByLabelText(/snooze until/i)).not.toBeInTheDocument();
+  });
+
+  it("Snooze field is prefilled from initialSnooze", () => {
+    render(<TaskForm showScheduleFields initialSnooze="2026-08-03" onSubmit={vi.fn()} />);
+    const snoozeInput = screen.getByLabelText(/snooze until/i) as HTMLInputElement;
+    expect(snoozeInput.value).toBe("2026-08-03");
+  });
+
+  it("submitting the Snooze value reaches onSubmit as an ISO day string", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showScheduleFields onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Task" } });
+    fireEvent.change(screen.getByLabelText(/snooze until/i), { target: { value: "2026-09-05" } });
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("Task", "", undefined, "", "2026-09-05");
+    });
+  });
+
+  it("clearing the Snooze value reaches onSubmit as an empty string", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<TaskForm showScheduleFields initialSnooze="2026-08-03" onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Task" } });
+    fireEvent.change(screen.getByLabelText(/snooze until/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /add task/i }));
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith("Task", "", undefined, "", "");
+    });
+  });
+
   it("selecting a date makes it the active choice; clearing the input returns to previous", () => {
     render(<TaskForm showPlanControl onSubmit={vi.fn()} />);
 
