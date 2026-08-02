@@ -40,4 +40,13 @@ describe("formatDueDate", () => {
     const result = formatDueDate(t);
     expect(result).not.toMatch(/\d{1,2}:\d{2}/);
   });
+
+  it("renders the UTC calendar day regardless of local timezone", () => {
+    // 2026-08-03T00:00:00Z — in America/New_York (UTC-4/-5) this instant is
+    // still Aug 2 locally, but the day is pinned to UTC and must render as 3.
+    const t = ts(BigInt(Date.UTC(2026, 7, 3) / 1000));
+    const result = formatDueDate(t);
+    expect(result).toContain("3");
+    expect(result).not.toContain("2,");
+  });
 });

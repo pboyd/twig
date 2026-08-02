@@ -1,16 +1,5 @@
-import type { Task } from "../gen/task/v1/task_pb";
 import type { TaskNode } from "./tree";
-
-function isSnoozed(task: Task, refDate: Date): boolean {
-  if (!task.snoozeUntil) return false;
-  const snooze = new Date(Number(task.snoozeUntil.seconds) * 1000);
-  // Compare UTC calendar date of snoozeUntil to local calendar date of refDate.
-  if (snooze.getUTCFullYear() !== refDate.getFullYear())
-    return snooze.getUTCFullYear() > refDate.getFullYear();
-  if (snooze.getUTCMonth() !== refDate.getMonth())
-    return snooze.getUTCMonth() > refDate.getMonth();
-  return snooze.getUTCDate() > refDate.getDate();
-}
+import { isSnoozed } from "./snooze";
 
 export function filterTree(nodes: TaskNode[], showCompleted: boolean, refDate?: Date): TaskNode[] {
   if (showCompleted) return nodes;
