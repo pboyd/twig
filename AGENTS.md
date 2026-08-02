@@ -114,7 +114,10 @@ Auth sits outside ConnectRPC: `/auth/login` and `/auth/logout` are plain HTTP en
 ### Testing conventions
 
 - Handler tests and CLI tests use `export_test.go` shims to access unexported helpers.
-- No integration test infrastructure — tests do not require a running database.
+- `services/twig/internal/handler` tests are integration tests: they call `newTestHandler`,
+  which requires `DATABASE_URL` (e.g. `postgres://twig:twig@localhost:5432/twig?sslmode=disable`
+  with `make dev` running) and `t.Skip`s silently without it. Run with `DATABASE_URL` set to
+  actually exercise them — a plain `go test ./...` reports PASS even if every one of them skipped.
 
 ## Frontend (services/twig-web/)
 
@@ -163,5 +166,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/071-plan-task-descriptions/plan.md`.
+`specs/072-move-task-goal-rules/plan.md`.
 <!-- SPECKIT END -->

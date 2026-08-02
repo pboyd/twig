@@ -40,6 +40,35 @@ func (q *Queries) AncestorHasGoal(ctx context.Context, arg AncestorHasGoalParams
 	return has_goal, err
 }
 
+const clearSubtreeGoals = `-- name: ClearSubtreeGoals :exec
+WITH RECURSIVE descendants AS (
+    SELECT tasks.id
+      FROM tasks
+     WHERE tasks.parent_id = $1 AND tasks.user_id = $2
+    UNION ALL
+    SELECT t.id
+      FROM tasks t
+      JOIN descendants d ON t.parent_id = d.id
+     WHERE t.user_id = $2
+)
+UPDATE tasks SET goal_id = NULL
+ WHERE tasks.id IN (SELECT id FROM descendants)
+   AND tasks.user_id = $2
+`
+
+type ClearSubtreeGoalsParams struct {
+	ParentID pgtype.Int8
+	UserID   int64
+}
+
+// Recursive UPDATE that clears goal_id on every descendant of $1 (not
+// including $1 itself). Used by UpdateTask on a descent to repair
+// pre-existing rows whose goal link violated the invariant.
+func (q *Queries) ClearSubtreeGoals(ctx context.Context, arg ClearSubtreeGoalsParams) error {
+	_, err := q.db.Exec(ctx, clearSubtreeGoals, arg.ParentID, arg.UserID)
+	return err
+}
+
 const clearTaskGoal = `-- name: ClearTaskGoal :one
 UPDATE tasks SET goal_id = NULL WHERE id = $1 AND user_id = $2 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until, goal_id
 `
@@ -395,6 +424,40 @@ func (q *Queries) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 	return items, nil
 }
 
+const nearestAncestorGoal = `-- name: NearestAncestorGoal :one
+WITH RECURSIVE ancestors AS (
+    SELECT t.id, t.parent_id, t.goal_id, 1 AS depth
+      FROM tasks t
+      JOIN tasks seed ON t.id = seed.parent_id
+     WHERE seed.id = $1 AND seed.user_id = $2 AND t.user_id = $2
+    UNION ALL
+    SELECT t.id, t.parent_id, t.goal_id, ancestors.depth + 1
+      FROM tasks t
+      JOIN ancestors ON t.id = ancestors.parent_id
+     WHERE t.user_id = $2
+)
+SELECT (
+    SELECT goal_id FROM ancestors WHERE goal_id IS NOT NULL ORDER BY depth LIMIT 1
+)
+`
+
+type NearestAncestorGoalParams struct {
+	ID     int64
+	UserID int64
+}
+
+// Walks parent_id upward from $1 scoped to $2, tracks depth, and returns
+// the goal_id of the closest strict ancestor that has one. Used by UpdateTask
+// on a promotion-to-root, evaluated BEFORE the parent is rewritten.
+// Always returns one row: NULL when there is no ancestor carrying a goal
+// (top-level seed task, or every ancestor's goal_id is NULL).
+func (q *Queries) NearestAncestorGoal(ctx context.Context, arg NearestAncestorGoalParams) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, nearestAncestorGoal, arg.ID, arg.UserID)
+	var goal_id pgtype.Int8
+	err := row.Scan(&goal_id)
+	return goal_id, err
+}
+
 const setTaskEstimate = `-- name: SetTaskEstimate :one
 UPDATE tasks SET estimate = $2 WHERE id = $1 AND user_id = $3 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until, goal_id
 `
@@ -502,7 +565,7 @@ func (q *Queries) UncompleteTask(ctx context.Context, arg UncompleteTaskParams) 
 
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
-SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7
+SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7, goal_id = $8
 WHERE id = $1 AND user_id = $6
 RETURNING id, name, description, due, parent_id, user_id, completed_at, estimate, position, snooze_until, goal_id
 `
@@ -515,6 +578,7 @@ type UpdateTaskParams struct {
 	ParentID    pgtype.Int8
 	UserID      int64
 	SnoozeUntil pgtype.Timestamptz
+	GoalID      pgtype.Int8
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
@@ -526,6 +590,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.ParentID,
 		arg.UserID,
 		arg.SnoozeUntil,
+		arg.GoalID,
 	)
 	var i Task
 	err := row.Scan(

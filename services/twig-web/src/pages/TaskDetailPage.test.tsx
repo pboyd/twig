@@ -22,6 +22,16 @@ const mockCompleteTaskFn = vi.fn();
 const mockUncompleteTaskFn = vi.fn();
 const mockUpdateTaskFn = vi.fn();
 const mockInvalidateQueries = vi.fn();
+const mockGetTaskFn = vi.fn();
+
+vi.mock("../lib/transport", () => ({ transport: {} }));
+vi.mock("@connectrpc/connect", async (importActual) => {
+  const actual = await importActual<typeof import("@connectrpc/connect")>();
+  return {
+    ...actual,
+    createClient: vi.fn(() => ({ getTask: mockGetTaskFn })),
+  };
+});
 
 vi.mock("@tanstack/react-query", async (importActual) => {
   const actual = await importActual<typeof import("@tanstack/react-query")>();
@@ -98,6 +108,7 @@ beforeEach(() => {
   mockUpdateTaskFn.mockResolvedValue({ task: mockTask });
   mockCompleteTaskFn.mockResolvedValue({ task: { ...mockTask, completedAt: { seconds: 1n, nanos: 0 } } });
   mockUncompleteTaskFn.mockResolvedValue({ task: mockTask });
+  mockGetTaskFn.mockResolvedValue({ task: mockTask });
 });
 
 describe("TaskDetailPage — edit mode", () => {
@@ -242,6 +253,43 @@ describe("TaskDetailPage — completion toggle", () => {
     await waitFor(() => {
       expect(screen.getByText("Hold on — finish its sub-tasks first.")).toBeInTheDocument();
     });
+  });
+});
+
+describe("TaskDetailPage — save refetches before building the payload", () => {
+  it("sends the freshly-fetched parentId, not the stale cached one", async () => {
+    // Cached getTask result: top-level (no parentId). A fresh fetch reveals
+    // the task was moved under parent 99 elsewhere while this page was open.
+    mockGetTaskFn.mockResolvedValue({ task: { ...mockTask, parentId: 99n } });
+
+    renderDetailPage();
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    const nameInput = screen.getByLabelText(/title/i);
+    fireEvent.change(nameInput, { target: { value: "Renamed" } });
+    fireEvent.submit(nameInput.closest("form")!);
+
+    await waitFor(() => {
+      expect(mockUpdateTaskFn).toHaveBeenCalled();
+    });
+    expect(mockGetTaskFn).toHaveBeenCalledWith({ id: 1n });
+    expect(mockUpdateTaskFn.mock.calls[0][0].parentId).toBe(99n);
+  });
+
+  it("surfaces a connectivity error and does not save if the refetch fails", async () => {
+    mockGetTaskFn.mockRejectedValue(new Error("network down"));
+
+    renderDetailPage();
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    const nameInput = screen.getByLabelText(/title/i);
+    fireEvent.change(nameInput, { target: { value: "Renamed" } });
+    fireEvent.submit(nameInput.closest("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Couldn't reach the server. Want to try again?")).toBeInTheDocument();
+    });
+    expect(mockUpdateTaskFn).not.toHaveBeenCalled();
   });
 });
 

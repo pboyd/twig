@@ -65,13 +65,18 @@ func validateName(name string) (string, error) {
 	return trimmed, nil
 }
 
-func (t *Task) parentChainContains(ctx context.Context, userID, startID, targetID int64) (bool, error) {
+func (t *Task) parentChainContains(ctx context.Context, q *db.Queries, userID, startID, targetID int64) (bool, error) {
 	current := startID
+	visited := make(map[int64]struct{})
 	for {
 		if current == targetID {
 			return true, nil
 		}
-		task, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: current, UserID: userID})
+		if _, seen := visited[current]; seen {
+			return false, fmt.Errorf("parent chain for task %d contains a cycle", startID)
+		}
+		visited[current] = struct{}{}
+		task, err := q.GetTask(ctx, db.GetTaskParams{ID: current, UserID: userID})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
 		}
@@ -225,6 +230,34 @@ func (t *Task) ListTasks(
 	return connect.NewResponse(&taskv1.ListTasksResponse{Tasks: tasks}), nil
 }
 
+// parentChange classifies how an UpdateTask request's parent_id compares
+// against the stored value. Only a real change (descent or promotion)
+// triggers goal-link reconciliation and repositioning.
+type parentChange int
+
+const (
+	parentNoChange parentChange = iota
+	parentDescent
+	parentPromotion
+)
+
+func classifyParentChange(stored db.Task, reqParentID *int64) parentChange {
+	storeHasParent := stored.ParentID.Valid
+	reqHasParent := reqParentID != nil
+	switch {
+	case !storeHasParent && !reqHasParent:
+		return parentNoChange
+	case !storeHasParent && reqHasParent:
+		return parentDescent
+	case storeHasParent && !reqHasParent:
+		return parentPromotion
+	case storeHasParent && reqHasParent && stored.ParentID.Int64 != *reqParentID:
+		return parentDescent
+	default:
+		return parentNoChange
+	}
+}
+
 func (t *Task) UpdateTask(
 	ctx context.Context,
 	req *connect.Request[taskv1.UpdateTaskRequest],
@@ -236,84 +269,19 @@ func (t *Task) UpdateTask(
 		return nil, err
 	}
 
-	params := db.UpdateTaskParams{
-		ID:          req.Msg.Id,
-		Name:        name,
-		Description: req.Msg.Description,
-		UserID:      userID,
-	}
-	if req.Msg.Due != nil {
-		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
-	}
-	if req.Msg.SnoozeUntil != nil {
-		params.SnoozeUntil = pgtype.Timestamptz{Time: req.Msg.SnoozeUntil.AsTime(), Valid: true}
-	}
-	if req.Msg.ParentId != nil {
-		newParentID := *req.Msg.ParentId
-		exists, err := t.Queries.TaskExists(ctx, db.TaskExistsParams{ID: newParentID, UserID: userID})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if !exists {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent task not found"))
-		}
-		cycle, err := t.parentChainContains(ctx, userID, newParentID, req.Msg.Id)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if cycle {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent_id would create a cycle"))
-		}
-		parentCompletion, err := t.Queries.GetParentCompletion(ctx, db.GetParentCompletionParams{ID: newParentID, UserID: userID})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		if parentCompletion.Valid {
-			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("Task %d is already crossed off — nothing moves under a finished job.", newParentID))
-		}
-
-		// Check no-nested-goal-associations invariant.
-		// If the new parent or any of its ancestors has a goal association,
-		// the task being moved (or its descendants) cannot also have a goal.
-		newParentTask, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: newParentID, UserID: userID})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		newParentOrAncestorHasGoal := newParentTask.GoalID.Valid
-		if !newParentOrAncestorHasGoal {
-			ancestorHasGoal, err := t.Queries.AncestorHasGoal(ctx, db.AncestorHasGoalParams{ID: newParentID, UserID: userID})
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
-			}
-			newParentOrAncestorHasGoal = ancestorHasGoal
-		}
-		if newParentOrAncestorHasGoal {
-			movingTask, err := t.Queries.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
-			}
-			taskOrDescHasGoal := movingTask.GoalID.Valid
-			if !taskOrDescHasGoal {
-				descHasGoal, err := t.Queries.DescendantHasGoal(ctx, db.DescendantHasGoalParams{
-					ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
-					UserID:   userID,
-				})
-				if err != nil {
-					return nil, connect.NewError(connect.CodeInternal, err)
-				}
-				taskOrDescHasGoal = descHasGoal
-			}
-			if taskOrDescHasGoal {
-				return nil, connect.NewError(connect.CodeFailedPrecondition,
-					errors.New("moving this task would nest goal associations — clear the goal link first"))
-			}
-		}
-
-		params.ParentID = pgtype.Int8{Int64: newParentID, Valid: true}
+	if t.Pool == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("pool not configured"))
 	}
 
-	row, err := t.Queries.UpdateTask(ctx, params)
+	tx, err := t.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := t.Queries.WithTx(tx)
+
+	stored, err := q.GetTask(ctx, db.GetTaskParams{ID: req.Msg.Id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
 	}
@@ -321,16 +289,112 @@ func (t *Task) UpdateTask(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// When parent_id changed, place the task at the end of the destination group.
-	if req.Msg.ParentId != nil {
-		maxPos, err := t.Queries.GetMaxSiblingPosition(ctx, db.GetMaxSiblingPositionParams{
+	change := classifyParentChange(stored, req.Msg.ParentId)
+
+	if change == parentDescent {
+		newParentID := *req.Msg.ParentId
+
+		exists, err := q.TaskExists(ctx, db.TaskExistsParams{ID: newParentID, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if !exists {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent task not found"))
+		}
+
+		cycle, err := t.parentChainContains(ctx, q, userID, newParentID, req.Msg.Id)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if cycle {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("parent_id would create a cycle"))
+		}
+
+		parentCompletion, err := q.GetParentCompletion(ctx, db.GetParentCompletionParams{ID: newParentID, UserID: userID})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		if parentCompletion.Valid {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("Task %d is already crossed off — nothing moves under a finished job.", newParentID))
+		}
+	}
+
+	params := db.UpdateTaskParams{
+		ID:          req.Msg.Id,
+		Name:        name,
+		Description: req.Msg.Description,
+		UserID:      userID,
+		GoalID:      stored.GoalID,
+	}
+	if req.Msg.Due != nil {
+		params.Due = pgtype.Timestamptz{Time: req.Msg.Due.AsTime(), Valid: true}
+	}
+	if req.Msg.SnoozeUntil != nil {
+		params.SnoozeUntil = pgtype.Timestamptz{Time: req.Msg.SnoozeUntil.AsTime(), Valid: true}
+	}
+
+	switch change {
+	case parentDescent:
+		newParentID := *req.Msg.ParentId
+		params.ParentID = pgtype.Int8{Int64: newParentID, Valid: true}
+		// Descent: the moved task and every descendant give up their own goal link.
+		params.GoalID = pgtype.Int8{}
+		if err := q.ClearSubtreeGoals(ctx, db.ClearSubtreeGoalsParams{
+			ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
+			UserID:   userID,
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	case parentPromotion:
+		// Promotion: parent cleared explicitly (not left implicit-zero).
+		params.ParentID = pgtype.Int8{}
+		// If the task has no goal of its own, inherit the nearest goal-bearing
+		// ancestor's, read BEFORE the parent is rewritten. Closed goals are
+		// carried here on purpose — SetTaskGoal refuses new links to closed
+		// goals, but a move reorganizes existing association rather than
+		// creating one. params.GoalID already holds stored.GoalID otherwise.
+		if !stored.GoalID.Valid {
+			nearestGoal, err := q.NearestAncestorGoal(ctx, db.NearestAncestorGoalParams{
+				ID:     req.Msg.Id,
+				UserID: userID,
+			})
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, err)
+			}
+			params.GoalID = nearestGoal
+		}
+		// Whatever the moved task ends up with (its own goal or an inherited
+		// one), every descendant gives up its own goal link — mirrors descent,
+		// and repairs any legacy row that already violated the invariant.
+		if err := q.ClearSubtreeGoals(ctx, db.ClearSubtreeGoalsParams{
+			ParentID: pgtype.Int8{Int64: req.Msg.Id, Valid: true},
+			UserID:   userID,
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	case parentNoChange:
+		params.ParentID = stored.ParentID
+		params.GoalID = stored.GoalID
+	}
+
+	row, err := q.UpdateTask(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("task not found"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	if change == parentDescent || change == parentPromotion {
+		maxPos, err := q.GetMaxSiblingPosition(ctx, db.GetMaxSiblingPositionParams{
 			UserID:   userID,
 			ParentID: params.ParentID,
 		})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
-		if err := t.Queries.UpdateTaskPosition(ctx, db.UpdateTaskPositionParams{
+		if err := q.UpdateTaskPosition(ctx, db.UpdateTaskPositionParams{
 			ID:       row.ID,
 			UserID:   userID,
 			Position: maxPos + 1,
@@ -338,6 +402,10 @@ func (t *Task) UpdateTask(
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		row.Position = maxPos + 1
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	return connect.NewResponse(&taskv1.UpdateTaskResponse{Task: dbTaskToProto(row)}), nil

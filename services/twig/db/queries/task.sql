@@ -12,7 +12,7 @@ SELECT * FROM tasks WHERE user_id = $1 ORDER BY id;
 
 -- name: UpdateTask :one
 UPDATE tasks
-SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7
+SET name = $2, description = $3, due = $4, parent_id = $5, snooze_until = $7, goal_id = $8
 WHERE id = $1 AND user_id = $6
 RETURNING *;
 
@@ -119,3 +119,42 @@ WITH RECURSIVE descendants AS (
 SELECT EXISTS (
     SELECT 1 FROM descendants WHERE goal_id IS NOT NULL
 ) AS has_goal;
+
+-- name: NearestAncestorGoal :one
+-- Walks parent_id upward from $1 scoped to $2, tracks depth, and returns
+-- the goal_id of the closest strict ancestor that has one. Used by UpdateTask
+-- on a promotion-to-root, evaluated BEFORE the parent is rewritten.
+-- Always returns one row: NULL when there is no ancestor carrying a goal
+-- (top-level seed task, or every ancestor's goal_id is NULL).
+WITH RECURSIVE ancestors AS (
+    SELECT t.id, t.parent_id, t.goal_id, 1 AS depth
+      FROM tasks t
+      JOIN tasks seed ON t.id = seed.parent_id
+     WHERE seed.id = $1 AND seed.user_id = $2 AND t.user_id = $2
+    UNION ALL
+    SELECT t.id, t.parent_id, t.goal_id, ancestors.depth + 1
+      FROM tasks t
+      JOIN ancestors ON t.id = ancestors.parent_id
+     WHERE t.user_id = $2
+)
+SELECT (
+    SELECT goal_id FROM ancestors WHERE goal_id IS NOT NULL ORDER BY depth LIMIT 1
+);
+
+-- name: ClearSubtreeGoals :exec
+-- Recursive UPDATE that clears goal_id on every descendant of $1 (not
+-- including $1 itself). Used by UpdateTask on a descent to repair
+-- pre-existing rows whose goal link violated the invariant.
+WITH RECURSIVE descendants AS (
+    SELECT tasks.id
+      FROM tasks
+     WHERE tasks.parent_id = $1 AND tasks.user_id = $2
+    UNION ALL
+    SELECT t.id
+      FROM tasks t
+      JOIN descendants d ON t.parent_id = d.id
+     WHERE t.user_id = $2
+)
+UPDATE tasks SET goal_id = NULL
+ WHERE tasks.id IN (SELECT id FROM descendants)
+   AND tasks.user_id = $2;

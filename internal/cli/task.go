@@ -357,6 +357,7 @@ func runMod(client taskv1connect.TaskServiceClient, addr string, args []string) 
 		Id:          id,
 		Name:        name,
 		Description: existing.Description,
+		SnoozeUntil: existing.SnoozeUntil,
 		Due:         existing.Due,
 		ParentId:    existing.ParentId,
 	}

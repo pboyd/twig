@@ -68,9 +68,44 @@ func newTestHandler(t *testing.T) (*handler.Task, int64) {
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(), "DELETE FROM tasks WHERE user_id = $1", userID)
+		_, _ = pool.Exec(context.Background(), "DELETE FROM goals WHERE user_id = $1", userID)
 		_, _ = pool.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
 	})
 	return &handler.Task{Queries: queries, Pool: pool}, userID
+}
+
+// linkGoalForTest creates a goal with the given name, links it to the
+// supplied top-level task, and returns the goal id. Used by move/goal
+// tests that need a fully wired goal association.
+func linkGoalForTest(t *testing.T, ctx context.Context, h *handler.Task, taskID int64, goalName string) int64 {
+	t.Helper()
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+	resp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: goalName}))
+	if err != nil {
+		t.Fatalf("CreateGoal %q: %v", goalName, err)
+	}
+	goalID := resp.Msg.Goal.Id
+	if _, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+		TaskId: taskID,
+		GoalId: &goalID,
+	})); err != nil {
+		t.Fatalf("SetTaskGoal %q → task %d: %v", goalName, taskID, err)
+	}
+	return goalID
+}
+
+// mustCreateTask creates a task and fails the test immediately on error,
+// instead of letting a discarded error surface later as a nil-pointer panic.
+func mustCreateTask(t *testing.T, ctx context.Context, h *handler.Task, name string, parentID *int64) int64 {
+	t.Helper()
+	resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{
+		Name:     name,
+		ParentId: parentID,
+	}))
+	if err != nil {
+		t.Fatalf("CreateTask %q: %v", name, err)
+	}
+	return resp.Msg.Task.Id
 }
 
 // ctxWithUser returns a context carrying the given user_id and a dummy client IP,
@@ -1694,61 +1729,6 @@ func TestSetTaskGoal_DescendantNestingRejected(t *testing.T) {
 	}
 }
 
-func TestUpdateTask_ReparentGoalNestingRejected(t *testing.T) {
-	h, userID := newTestHandler(t)
-	ctx := ctxWithUser(userID)
-	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
-
-	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Reparent goal"}))
-	if err != nil {
-		t.Fatalf("CreateGoal: %v", err)
-	}
-	goalID := goalResp.Msg.Goal.Id
-
-	// Create two separate tasks, each linked to the same goal (different subtrees).
-	t1Resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task1"}))
-	if err != nil {
-		t.Fatalf("CreateTask task1: %v", err)
-	}
-	t1ID := t1Resp.Msg.Task.Id
-
-	t2Resp, err := h.CreateTask(ctx, connect.NewRequest(&taskv1.CreateTaskRequest{Name: "task2"}))
-	if err != nil {
-		t.Fatalf("CreateTask task2: %v", err)
-	}
-	t2ID := t2Resp.Msg.Task.Id
-
-	// Each root task gets its own goal assignment.
-	goal2Resp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Second goal"}))
-	if err != nil {
-		t.Fatalf("CreateGoal second: %v", err)
-	}
-	goal2ID := goal2Resp.Msg.Goal.Id
-
-	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{TaskId: t1ID, GoalId: &goalID}))
-	if err != nil {
-		t.Fatalf("SetTaskGoal task1: %v", err)
-	}
-	_, err = h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{TaskId: t2ID, GoalId: &goal2ID}))
-	if err != nil {
-		t.Fatalf("SetTaskGoal task2: %v", err)
-	}
-
-	// Moving task2 under task1 would nest two goal associations — must fail.
-	_, err = h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
-		Id:       t2ID,
-		Name:     "task2",
-		ParentId: &t1ID,
-	}))
-	if err == nil {
-		t.Fatal("expected FailedPrecondition for goal nesting on re-parent, got nil")
-	}
-	ce, ok := err.(*connect.Error)
-	if !ok || ce.Code() != connect.CodeFailedPrecondition {
-		t.Errorf("expected CodeFailedPrecondition, got %v", err)
-	}
-}
-
 func TestSetTaskGoal_NotFound(t *testing.T) {
 	h, userID := newTestHandler(t)
 	ctx := ctxWithUser(userID)
@@ -1880,6 +1860,605 @@ func TestSetTaskGoal_RejectsArchivedGoal(t *testing.T) {
 	ce, ok := err.(*connect.Error)
 	if !ok || ce.Code() != connect.CodeInvalidArgument {
 		t.Errorf("expected CodeInvalidArgument for archived goal, got %v", err)
+	}
+}
+
+// ---- Spec 072: goal handling on parent change ----
+
+// requireTask queries the stored row for verification.
+func requireTask(t *testing.T, pool *pgxpool.Pool, userID, taskID int64) db.Task {
+	t.Helper()
+	var row db.Task
+	err := pool.QueryRow(context.Background(),
+		`SELECT id, parent_id, user_id, goal_id, position FROM tasks WHERE id = $1 AND user_id = $2`,
+		taskID, userID).Scan(&row.ID, &row.ParentID, &row.UserID, &row.GoalID, &row.Position)
+	if err != nil {
+		t.Fatalf("query task %d: %v", taskID, err)
+	}
+	return row
+}
+
+// countGoalLinksBelow runs the invariant query and returns how many rows
+// in the user's tree have parent_id IS NOT NULL AND goal_id IS NOT NULL.
+func countGoalLinksBelow(t *testing.T, pool *pgxpool.Pool, userID int64) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM tasks WHERE user_id = $1 AND parent_id IS NOT NULL AND goal_id IS NOT NULL`,
+		userID).Scan(&n); err != nil {
+		t.Fatalf("count invariant violations: %v", err)
+	}
+	return n
+}
+
+// ----- US1: descent clears goal link -----
+
+func TestUpdateTask_MoveGoalLinkedUnderGoalLinked(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	t1ID := mustCreateTask(t, ctx, h, "Fitness task", nil)
+	fitnessID := linkGoalForTest(t, ctx, h, t1ID, "Fitness")
+
+	t2ID := mustCreateTask(t, ctx, h, "Health task", nil)
+	linkGoalForTest(t, ctx, h, t2ID, "Health")
+
+	// Move Health (t2) under Fitness (t1). The two goals differ — used to fail.
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       t2ID,
+		Name:     "Health task",
+		ParentId: &t1ID,
+	}))
+	if err != nil {
+		t.Fatalf("UpdateTask reparent: %v", err)
+	}
+	if ur.Msg.Task.GoalId != nil {
+		t.Errorf("moved task goal_id = %v, want nil", ur.Msg.Task.GoalId)
+	}
+	if ur.Msg.Task.ParentId == nil || *ur.Msg.Task.ParentId != t1ID {
+		t.Errorf("moved task parent_id = %v, want %d", ur.Msg.Task.ParentId, t1ID)
+	}
+	// The destination's own goal link must be untouched by the move.
+	t1Row := requireTask(t, h.Pool, userID, t1ID)
+	if !t1Row.GoalID.Valid || t1Row.GoalID.Int64 != fitnessID {
+		t.Errorf("t1 goal_id = %v, want %d (Fitness link must survive the move)", t1Row.GoalID, fitnessID)
+	}
+}
+
+func TestUpdateTask_MoveUnderSameGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	t1ID := mustCreateTask(t, ctx, h, "first", nil)
+	fitnessID := linkGoalForTest(t, ctx, h, t1ID, "Fitness")
+
+	t2ID := mustCreateTask(t, ctx, h, "second", nil)
+	linkGoalForTest(t, ctx, h, t2ID, "Fitness")
+
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       t2ID,
+		Name:     "second",
+		ParentId: &t1ID,
+	})); err != nil {
+		t.Fatalf("UpdateTask (same goal on both sides): %v", err)
+	}
+	t2Row := requireTask(t, h.Pool, userID, t2ID)
+	if t2Row.GoalID.Valid {
+		t.Errorf("t2 goal_id = %v, want NULL — descent always clears the moved task's own link", t2Row.GoalID.Int64)
+	}
+	t1Row := requireTask(t, h.Pool, userID, t1ID)
+	if !t1Row.GoalID.Valid || t1Row.GoalID.Int64 != fitnessID {
+		t.Errorf("t1 goal_id = %v, want %d (effective goal for t2 should still resolve to Fitness)", t1Row.GoalID, fitnessID)
+	}
+}
+
+func TestUpdateTask_MoveGoalLinkedUnderGoalFree(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	fitnessID := mustCreateTask(t, ctx, h, "fitness", nil)
+	linkGoalForTest(t, ctx, h, fitnessID, "Fitness")
+
+	freeID := mustCreateTask(t, ctx, h, "free", nil)
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       fitnessID,
+		Name:     "fitness",
+		ParentId: &freeID,
+	}))
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if ur.Msg.Task.GoalId != nil {
+		t.Errorf("moved task goal_id = %v, want nil", ur.Msg.Task.GoalId)
+	}
+	row := requireTask(t, h.Pool, userID, fitnessID)
+	if row.GoalID.Valid {
+		t.Errorf("row goal_id = %v, want NULL — a regression in the SQL write would slip past the RPC response alone", row.GoalID)
+	}
+}
+
+func TestUpdateTask_RenameDoesNotClearGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	topID := mustCreateTask(t, ctx, h, "Run a 5k", nil)
+	goalID := linkGoalForTest(t, ctx, h, topID, "Fitness")
+
+	// Rename the goal-linked top-level task while sending nil parent_id.
+	// Top-level + nil parent_id → noChange → goal preserved.
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   topID,
+		Name: "Run a 10k",
+	}))
+	if err != nil {
+		t.Fatalf("rename top: %v", err)
+	}
+	if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != goalID {
+		t.Errorf("top goal_id = %v, want %d", ur.Msg.Task.GoalId, goalID)
+	}
+
+	// Now nested case: child under top, rename while sending its current parent_id.
+	childID := mustCreateTask(t, ctx, h, "Buy shoes", &topID)
+
+	// Hand-craft a stray grandchild holding its own goal_id — a violation of
+	// the doc's invariant that no parented task holds its own goal_id — to
+	// detect a spurious ClearSubtreeGoals firing on noChange. G5 says a
+	// no-change update must leave descendant goal links exactly as they are.
+	otherGoalID := linkGoalForTest(t, ctx, h, mustCreateTask(t, ctx, h, "temp root for goal", nil), "Side quest")
+	grandchildID := mustCreateTask(t, ctx, h, "Tie laces", &childID)
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		otherGoalID, grandchildID, userID); err != nil {
+		t.Fatalf("write stray goal_id on grandchild: %v", err)
+	}
+
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       childID,
+		Name:     "Buy better shoes",
+		ParentId: &topID,
+	})); err != nil {
+		t.Fatalf("rename child: %v", err)
+	}
+	grandchild := requireTask(t, h.Pool, userID, grandchildID)
+	if !grandchild.GoalID.Valid || grandchild.GoalID.Int64 != otherGoalID {
+		t.Errorf("grandchild goal_id = %v, want %d — noChange must not touch descendant goal links", grandchild.GoalID, otherGoalID)
+	}
+}
+
+// ----- US2: promotion preserves the inherited goal -----
+
+func TestUpdateTask_PromoteInheritsGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentID := mustCreateTask(t, ctx, h, "parent", nil)
+	goalID := linkGoalForTest(t, ctx, h, parentID, "Fitness")
+
+	childID := mustCreateTask(t, ctx, h, "child", &parentID)
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   childID,
+		Name: "child",
+		// ParentId omitted → promotion to root.
+	}))
+	if err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != goalID {
+		t.Errorf("promoted goal_id = %v, want %d", ur.Msg.Task.GoalId, goalID)
+	}
+	if ur.Msg.Task.ParentId != nil {
+		t.Errorf("promoted parent_id = %v, want nil", ur.Msg.Task.ParentId)
+	}
+	row := requireTask(t, h.Pool, userID, childID)
+	if row.ParentID.Valid {
+		t.Errorf("row parent_id still valid after promote")
+	}
+	if !row.GoalID.Valid || row.GoalID.Int64 != goalID {
+		t.Errorf("row goal_id = %v, want %d", row.GoalID.Int64, goalID)
+	}
+}
+
+func TestUpdateTask_PromoteFromDepthTwo(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	aID := mustCreateTask(t, ctx, h, "A", nil)
+	goalID := linkGoalForTest(t, ctx, h, aID, "Fitness")
+
+	bID := mustCreateTask(t, ctx, h, "B", &aID)
+	cID := mustCreateTask(t, ctx, h, "C", &bID)
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   cID,
+		Name: "C",
+		// ParentId omitted → promote
+	}))
+	if err != nil {
+		t.Fatalf("promote C: %v", err)
+	}
+	if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != goalID {
+		t.Errorf("promoted C goal_id = %v, want %d", ur.Msg.Task.GoalId, goalID)
+	}
+}
+
+func TestUpdateTask_PromoteWithNoGoalAnywhere(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentID := mustCreateTask(t, ctx, h, "parent (no goal)", nil)
+	childID := mustCreateTask(t, ctx, h, "child", &parentID)
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   childID,
+		Name: "child",
+	}))
+	if err != nil {
+		t.Fatalf("promote (no ancestor goal): %v", err)
+	}
+	if ur.Msg.Task.GoalId != nil {
+		t.Errorf("goal_id = %v, want nil", ur.Msg.Task.GoalId)
+	}
+}
+
+func TestUpdateTask_NoChangeKeepsGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	topID := mustCreateTask(t, ctx, h, "top", nil)
+	goalID := linkGoalForTest(t, ctx, h, topID, "Fitness")
+
+	// Already top-level: send again with nil parent_id — must be noChange,
+	// not a promotion (classifyParentChange: !storeHasParent && !reqHasParent).
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   topID,
+		Name: "top",
+	}))
+	if err != nil {
+		t.Fatalf("UpdateTask (no-op promote): %v", err)
+	}
+	if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != goalID {
+		t.Errorf("goal_id = %v, want %d", ur.Msg.Task.GoalId, goalID)
+	}
+}
+
+// TestUpdateTask_PromoteKeepsOwnGoal exercises an actual promotion
+// (parentPromotion, not parentNoChange): a child that already holds its own
+// goal_id — a legacy row, since SetTaskGoal refuses this on a parented task —
+// must keep that goal rather than inherit its ancestor's on promotion. This
+// is the `stored.GoalID.Valid` branch of the promotion path.
+func TestUpdateTask_PromoteKeepsOwnGoal(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentID := mustCreateTask(t, ctx, h, "parent", nil)
+	linkGoalForTest(t, ctx, h, parentID, "Fitness")
+
+	childID := mustCreateTask(t, ctx, h, "child", &parentID)
+	ownGoalID := linkGoalForTest(t, ctx, h, mustCreateTask(t, ctx, h, "temp root for own goal", nil), "Own goal")
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		ownGoalID, childID, userID); err != nil {
+		t.Fatalf("write own goal_id on child: %v", err)
+	}
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   childID,
+		Name: "child",
+		// ParentId omitted → promotion to root.
+	}))
+	if err != nil {
+		t.Fatalf("promote (own goal): %v", err)
+	}
+	if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != ownGoalID {
+		t.Errorf("promoted goal_id = %v, want %d (own goal kept, not parent's Fitness)", ur.Msg.Task.GoalId, ownGoalID)
+	}
+}
+
+// TestUpdateTask_PromoteRepositions covers G7 for a promotion: the task
+// lands at the end of the (populated) root sibling group. Before the fix
+// promotions kept a stale position; nothing previously read Position after
+// a promotion, so this arm of task.go's repositioning block had no coverage.
+func TestUpdateTask_PromoteRepositions(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Populate the root group with two siblings ahead of the promoted task.
+	mustCreateTask(t, ctx, h, "root sibling 1", nil)
+	mustCreateTask(t, ctx, h, "root sibling 2", nil)
+
+	parentID := mustCreateTask(t, ctx, h, "parent", nil)
+	childID := mustCreateTask(t, ctx, h, "child", &parentID)
+
+	ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   childID,
+		Name: "child",
+		// ParentId omitted → promotion to root.
+	}))
+	if err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	// Root group at promote time: sibling1, sibling2, parent → max position 2.
+	if ur.Msg.Task.Position != 3 {
+		t.Errorf("promoted task position = %d, want 3 (end of root group)", ur.Msg.Task.Position)
+	}
+	row := requireTask(t, h.Pool, userID, childID)
+	if row.Position != 3 {
+		t.Errorf("row position = %d, want 3", row.Position)
+	}
+}
+
+// TestUpdateTask_PromoteRepairsDescendantGoals covers the promotion half of
+// G3's symmetry with G2: promoting T must clear stray goal links on T's
+// descendants too, the same way ClearSubtreeGoals already runs on descent.
+// Without this, a subtree can end up with two competing goal links — a state
+// SetTaskGoal refuses to create.
+func TestUpdateTask_PromoteRepairsDescendantGoals(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	parentID := mustCreateTask(t, ctx, h, "parent", nil)
+	fitnessID := linkGoalForTest(t, ctx, h, parentID, "Fitness")
+
+	movedID := mustCreateTask(t, ctx, h, "moved", &parentID)
+	grandchildID := mustCreateTask(t, ctx, h, "grandchild", &movedID)
+
+	// Hand-craft a legacy stray goal_id on the grandchild — no API path
+	// reaches this state today, but old rows may already be in it.
+	strayGoalID := linkGoalForTest(t, ctx, h, mustCreateTask(t, ctx, h, "temp root for stray goal", nil), "Stray")
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		strayGoalID, grandchildID, userID); err != nil {
+		t.Fatalf("write stray goal_id on grandchild: %v", err)
+	}
+
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:   movedID,
+		Name: "moved",
+		// ParentId omitted → promotion to root.
+	})); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	moved := requireTask(t, h.Pool, userID, movedID)
+	if !moved.GoalID.Valid || moved.GoalID.Int64 != fitnessID {
+		t.Errorf("moved goal_id = %v, want %d (inherited from parent)", moved.GoalID, fitnessID)
+	}
+	grandchild := requireTask(t, h.Pool, userID, grandchildID)
+	if grandchild.GoalID.Valid {
+		t.Errorf("grandchild goal_id = %v, want NULL — promotion must clear descendant goal links same as descent", grandchild.GoalID.Int64)
+	}
+}
+
+func TestUpdateTask_PromoteCarriesClosedGoal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state goalv1.GoalState
+	}{
+		{"completed", goalv1.GoalState_GOAL_STATE_COMPLETED},
+		{"archived", goalv1.GoalState_GOAL_STATE_ARCHIVED},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, userID := newTestHandler(t)
+			ctx := ctxWithUser(userID)
+			gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+
+			parentID := mustCreateTask(t, ctx, h, "parent", nil)
+			goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "Closed goal"}))
+			if err != nil {
+				t.Fatalf("CreateGoal: %v", err)
+			}
+			goalID := goalResp.Msg.Goal.Id
+			if _, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+				TaskId: parentID, GoalId: &goalID,
+			})); err != nil {
+				t.Fatalf("SetTaskGoal parent: %v", err)
+			}
+
+			childID := mustCreateTask(t, ctx, h, "child", &parentID)
+
+			// Close the goal — direct SetTaskGoal must now refuse.
+			if _, err := gh.SetGoalState(ctx, connect.NewRequest(&goalv1.SetGoalStateRequest{
+				Id: goalID, State: tc.state,
+			})); err != nil {
+				t.Fatalf("SetGoalState: %v", err)
+			}
+			freshTaskID := mustCreateTask(t, ctx, h, "fresh task", nil)
+			if _, err := h.SetTaskGoal(ctx, connect.NewRequest(&taskv1.SetTaskGoalRequest{
+				TaskId: freshTaskID, GoalId: &goalID,
+			})); err == nil {
+				t.Fatal("SetTaskGoal to closed goal should fail")
+			}
+
+			// But promotion still carries it.
+			ur, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+				Id:   childID,
+				Name: "child",
+			}))
+			if err != nil {
+				t.Fatalf("promote under closed-goal parent: %v", err)
+			}
+			if ur.Msg.Task.GoalId == nil || *ur.Msg.Task.GoalId != goalID {
+				t.Errorf("promoted child goal_id = %v, want %d (closed, still inherited)", ur.Msg.Task.GoalId, goalID)
+			}
+		})
+	}
+}
+
+// ----- US3: invariant holds across moves and repairs legacy rows -----
+
+func TestUpdateTask_DescentClearsDescendantGoals(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "legacy goal"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	topID := mustCreateTask(t, ctx, h, "top", nil)
+	midID := mustCreateTask(t, ctx, h, "mid", &topID)
+	leafID := mustCreateTask(t, ctx, h, "leaf", &midID)
+	freeID := mustCreateTask(t, ctx, h, "free top", nil)
+
+	// Hand-craft a legacy-shaped violation by writing goal_id directly on a
+	// nested task; no code path today reaches this state via the API.
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		goalID, leafID, userID); err != nil {
+		t.Fatalf("write legacy goal_id: %v", err)
+	}
+
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       topID,
+		Name:     "top",
+		ParentId: &freeID,
+	})); err != nil {
+		t.Fatalf("UpdateTask (descent): %v", err)
+	}
+	leaf := requireTask(t, h.Pool, userID, leafID)
+	if leaf.GoalID.Valid {
+		t.Errorf("leaf goal_id = %v, want NULL after subtree clear", leaf.GoalID.Int64)
+	}
+}
+
+func TestUpdateTask_DescentClearsDeepDescendantGoals(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	gh := &handler.Goal{Queries: h.Queries, Pool: h.Pool}
+	goalResp, err := gh.CreateGoal(ctx, connect.NewRequest(&goalv1.CreateGoalRequest{Name: "deep legacy"}))
+	if err != nil {
+		t.Fatalf("CreateGoal: %v", err)
+	}
+	goalID := goalResp.Msg.Goal.Id
+
+	aID := mustCreateTask(t, ctx, h, "A", nil)
+	bID := mustCreateTask(t, ctx, h, "B", &aID)
+	cID := mustCreateTask(t, ctx, h, "C", &bID)
+	dID := mustCreateTask(t, ctx, h, "D", &cID)
+	freeID := mustCreateTask(t, ctx, h, "free", nil)
+
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		goalID, dID, userID); err != nil {
+		t.Fatalf("write legacy goal_id on deep row: %v", err)
+	}
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       aID,
+		Name:     "A",
+		ParentId: &freeID,
+	})); err != nil {
+		t.Fatalf("UpdateTask (descent): %v", err)
+	}
+	deep := requireTask(t, h.Pool, userID, dID)
+	if deep.GoalID.Valid {
+		t.Errorf("deep leaf goal_id = %v, want NULL — ClearSubtreeGoals should recurse", deep.GoalID.Int64)
+	}
+}
+
+// TestUpdateTask_DescentRollsBackOnFailure covers G6: ClearSubtreeGoals runs
+// before the row UPDATE, inside the same transaction. If a later step in
+// that transaction fails, the subtree clear must not be left in effect. A
+// second connection holds a row lock on the moved task itself so the
+// handler's own UPDATE blocks; a short context deadline then forces the
+// handler's call to fail, and the descendant's goal link must survive.
+func TestUpdateTask_DescentRollsBackOnFailure(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	freeID := mustCreateTask(t, ctx, h, "free top", nil)
+	movedID := mustCreateTask(t, ctx, h, "moved", nil)
+	childID := mustCreateTask(t, ctx, h, "child", &movedID)
+	strayGoalID := linkGoalForTest(t, ctx, h, mustCreateTask(t, ctx, h, "temp root for stray goal", nil), "Stray")
+	if _, err := h.Pool.Exec(context.Background(),
+		`UPDATE tasks SET goal_id = $1 WHERE id = $2 AND user_id = $3`,
+		strayGoalID, childID, userID); err != nil {
+		t.Fatalf("write stray goal_id on child: %v", err)
+	}
+
+	// Hold a row lock on the moved task from a separate connection so the
+	// handler's own UPDATE of that row blocks until this lock is released.
+	conn, err := h.Pool.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	defer conn.Release()
+	lockTx, err := conn.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("Begin lock tx: %v", err)
+	}
+	defer lockTx.Rollback(context.Background())
+	if _, err := lockTx.Exec(context.Background(),
+		`SELECT id FROM tasks WHERE id = $1 FOR UPDATE`, movedID); err != nil {
+		t.Fatalf("lock moved row: %v", err)
+	}
+
+	shortCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	if _, err := h.UpdateTask(shortCtx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id:       movedID,
+		Name:     "moved",
+		ParentId: &freeID,
+	})); err == nil {
+		t.Fatal("UpdateTask should have failed while the row was locked")
+	}
+
+	// Release the lock so the read below is not itself blocked.
+	if err := lockTx.Rollback(context.Background()); err != nil {
+		t.Fatalf("release lock: %v", err)
+	}
+
+	child := requireTask(t, h.Pool, userID, childID)
+	if !child.GoalID.Valid || child.GoalID.Int64 != strayGoalID {
+		t.Errorf("child goal_id = %v, want %d — ClearSubtreeGoals must roll back with the rest of the failed transaction", child.GoalID, strayGoalID)
+	}
+}
+
+func TestUpdateTask_InvariantAfterMoveSequence(t *testing.T) {
+	h, userID := newTestHandler(t)
+	ctx := ctxWithUser(userID)
+
+	// Seed: A (goal Fitness), B (goal Health) at root. C under A. D under C.
+	aID := mustCreateTask(t, ctx, h, "A", nil)
+	linkGoalForTest(t, ctx, h, aID, "Fitness")
+
+	bID := mustCreateTask(t, ctx, h, "B", nil)
+	linkGoalForTest(t, ctx, h, bID, "Health")
+
+	cID := mustCreateTask(t, ctx, h, "C", &aID)
+	dID := mustCreateTask(t, ctx, h, "D", &cID)
+
+	// 1. Promote C → inherits Fitness.
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id: cID, Name: "C",
+	})); err != nil {
+		t.Fatalf("promote C: %v", err)
+	}
+
+	// 2. Descent: A under B → Fitness carried via B; A loses its own link.
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id: aID, Name: "A", ParentId: &bID,
+	})); err != nil {
+		t.Fatalf("move A under B: %v", err)
+	}
+
+	// 3. Promote D to root → walks up: D's parent is C (top, goal=Fitness).
+	if _, err := h.UpdateTask(ctx, connect.NewRequest(&taskv1.UpdateTaskRequest{
+		Id: dID, Name: "D",
+	})); err != nil {
+		t.Fatalf("promote D: %v", err)
+	}
+
+	if n := countGoalLinksBelow(t, h.Pool, userID); n != 0 {
+		t.Errorf("invariant violations after move sequence: %d", n)
+	}
+	cRow := requireTask(t, h.Pool, userID, cID)
+	if !cRow.GoalID.Valid {
+		t.Errorf("C should retain goal_id after promotion, got NULL")
 	}
 }
 
