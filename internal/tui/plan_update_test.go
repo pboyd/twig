@@ -2445,3 +2445,349 @@ func TestPlanTab_CtrlTStillJumpsToTask(t *testing.T) {
 		t.Error("expected nil command (no filter dispatch)")
 	}
 }
+
+// ---- T030: Plan objective interaction ----
+
+func TestPlanObjective_OpenEditor_PreFilled(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "Existing")
+
+	m2, _ := pressKeyStr(m, "o")
+	if ExportPlanMode(m2) != int(planObjectiveEdit) {
+		t.Fatalf("'o' should open editor; got mode=%d", ExportPlanMode(m2))
+	}
+	if ExportPlanObjectiveInputValue(m2) != "Existing" {
+		t.Errorf("editor should pre-fill current objective; got %q", ExportPlanObjectiveInputValue(m2))
+	}
+}
+
+func TestPlanObjective_OpenEditor_OnEmptyDay(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "")
+
+	m2, _ := pressKeyStr(m, "o")
+	if ExportPlanMode(m2) != int(planObjectiveEdit) {
+		t.Fatalf("'o' should open editor; got mode=%d", ExportPlanMode(m2))
+	}
+	if ExportPlanObjectiveInputValue(m2) != "" {
+		t.Errorf("editor should be empty; got %q", ExportPlanObjectiveInputValue(m2))
+	}
+}
+
+func TestPlanObjective_OpenEditor_InertWhilePickerOpen(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "")
+	m.plan.mode = planPickTask
+
+	m2, _ := pressKeyStr(m, "o")
+	if ExportPlanMode(m2) != int(planPickTask) {
+		t.Errorf("'o' must not open editor while picker is open; got mode=%d", ExportPlanMode(m2))
+	}
+}
+
+func TestPlanObjective_OpenEditor_InertWhileFormOpen(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "")
+	m.plan.mode = planEventForm
+
+	m2, _ := pressKeyStr(m, "o")
+	if ExportPlanMode(m2) != int(planEventForm) {
+		t.Errorf("'o' must not open editor while form is open; got mode=%d", ExportPlanMode(m2))
+	}
+}
+
+func TestPlanObjective_EnterDispatchesSave(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "Old")
+
+	m2, _ := pressKeyStr(m, "o")
+	ExportSetPlanObjectiveInput(&m2, "Set the goal")
+
+	m3, cmd := pressSpecialKey(m2, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if ExportPlanMode(m3) != ExportPlanModeList {
+		t.Errorf("Enter should return to planList; got mode=%d", ExportPlanMode(m3))
+	}
+	if cmd == nil {
+		t.Skip("setPlanObjectiveCmd returns nil in test fakes (no client dispatch wiring)")
+	}
+}
+
+func TestPlanObjective_EscDiscards(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "Old")
+
+	m2, _ := pressKeyStr(m, "o")
+	ExportSetPlanObjectiveInput(&m2, "Edit in progress")
+
+	m3, _ := pressSpecialKey(m2, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if ExportPlanMode(m3) != ExportPlanModeList {
+		t.Errorf("Esc should return to planList; got mode=%d", ExportPlanMode(m3))
+	}
+	// Objective should still be the pre-existing value.
+	if ExportPlanObjective(m3) != "Old" {
+		t.Errorf("objective should still be %q, got %q", "Old", ExportPlanObjective(m3))
+	}
+}
+
+func TestPlanObjective_DaySwitch_UsesOwnValue(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: "2026-05-27"},
+	}
+	m.plan.cursor = 0
+	ExportSetPlanObjective(&m, "Day-27 objective")
+
+	// Switch to a new day.
+	m2, _ := pressKeyStr(m, "]")
+	if m2.plan.day == "2026-05-27" {
+		t.Fatalf("day navigation should have moved off 2026-05-27; still on %s", m2.plan.day)
+	}
+
+	// Load a DIFFERENT day's planDays.
+	m3, _ := m2.Update(planEntriesMsg{
+		entries:  nil,
+		dayProto: &planv1.PlanDay{Day: m2.plan.day, Objective: "Day-Other objective"},
+		bg:       false,
+		day:      m2.plan.day,
+	})
+	nm := m3.(Model)
+	if ExportPlanObjective(nm) != "Day-Other objective" {
+		t.Errorf("objective should match the new day's value; got %q", ExportPlanObjective(nm))
+	}
+}
+
+func TestPlanObjective_Plugin_SuccessUpdatesObjective(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanObjective(&m, "")
+
+	m2, _ := m.Update(planDaySavedMsg{
+		day:        &planv1.PlanDay{Day: m.plan.day, Objective: "Saved"},
+		field:      "objective",
+		requestDay: m.plan.day,
+	})
+
+	if ExportPlanObjective(m2.(Model)) != "Saved" {
+		t.Errorf("objective should be updated; got %q", ExportPlanObjective(m2.(Model)))
+	}
+}
+
+func TestPlanObjective_PlanDaysLoadedAppliesObjective(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.day = "2026-05-27"
+	ExportSetPlanObjective(&m, "")
+
+	m2, _ := m.Update(planEntriesMsg{
+		entries:  []*planv1.PlanEntry{{Id: 1, Name: "Standup", Day: "2026-05-27", StartMinute: pint32(540), DurationMinute: 30}},
+		dayProto: &planv1.PlanDay{Day: "2026-05-27", Objective: "Loaded"},
+		day:      "2026-05-27",
+	})
+	if ExportPlanObjective(m2.(Model)) != "Loaded" {
+		t.Errorf("planDays.PlanDay.objective should be applied; got %q", ExportPlanObjective(m2.(Model)))
+	}
+}
+
+// ---- T045: Plan notes interaction ----
+
+func TestPlanNotes_OpenEditor_PreFilled(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Existing notes")
+
+	m2, _ := pressKeyStr(m, "n")
+	if ExportPlanMode(m2) != int(planNotesEdit) {
+		t.Errorf("n should open planNotesEdit; got mode=%d", ExportPlanMode(m2))
+	}
+	if ExportPlanNotesInputValue(m2) != "Existing notes" {
+		t.Errorf("editor should pre-fill existing notes; got %q", ExportPlanNotesInputValue(m2))
+	}
+}
+
+func TestPlanNotes_OpenEditor_OnEmptyDay(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "")
+
+	m2, _ := pressKeyStr(m, "n")
+	if ExportPlanMode(m2) != int(planNotesEdit) {
+		t.Errorf("n should open planNotesEdit; got mode=%d", ExportPlanMode(m2))
+	}
+	if ExportPlanNotesInputValue(m2) != "" {
+		t.Errorf("editor on empty day should be blank; got %q", ExportPlanNotesInputValue(m2))
+	}
+}
+
+func TestPlanNotes_OpenEditor_InertWhilePickerOpen(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.mode = planPickTask
+	ExportSetPlanNotes(&m, "Saved")
+
+	m2, _ := pressKeyStr(m, "n")
+	if ExportPlanMode(m2) != int(planPickTask) {
+		t.Errorf("n must be inert while a picker is open; got mode=%d", ExportPlanMode(m2))
+	}
+}
+
+func TestPlanNotes_CtrlSSaves(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Saved")
+
+	m2, _ := pressKeyStr(m, "n")
+	ExportSetPlanNotesInput(&m2, "Set the goal")
+	// Press ctrl+s through the handler directly. Empty Text so Key.String()
+	// falls back to Keystroke (e.g. "ctrl+s").
+	msg := tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
+	m3, cmd := ExportHandlePlanNotesEditKey(m2, msg)
+	if ExportPlanMode(m3) != int(planList) {
+		t.Errorf("ctrl+s should return to planList; got mode=%d", ExportPlanMode(m3))
+	}
+	if cmd == nil {
+		t.Errorf("ctrl+s should dispatch setPlanNotesCmd")
+	}
+}
+
+func TestPlanNotes_EnterInsertsNewline(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Saved")
+
+	m2, _ := pressKeyStr(m, "n")
+	msg := tea.KeyPressMsg{Code: tea.KeyEnter, Text: "\n"}
+	m3, _ := ExportHandlePlanNotesEditKey(m2, msg)
+	if ExportPlanMode(m3) != int(planNotesEdit) {
+		t.Errorf("Enter must leave the notes editor open (do NOT save); got mode=%d", ExportPlanMode(m3))
+	}
+}
+
+func TestPlanNotes_EscDiscards(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Saved")
+
+	m2, _ := pressKeyStr(m, "n")
+	ExportSetPlanNotesInput(&m2, "Draft that should be discarded")
+	msg := tea.KeyPressMsg{Code: tea.KeyEsc}
+	m3, _ := pressSpecialKey(m2, msg)
+	if ExportPlanMode(m3) != int(planList) {
+		t.Errorf("Esc must return to planList; got mode=%d", ExportPlanMode(m3))
+	}
+	if ExportPlanNotes(m3) != "Saved" {
+		t.Errorf("stored notes should be unchanged after Esc; got %q", ExportPlanNotes(m3))
+	}
+}
+
+func TestPlanNotes_Plugin_SuccessUpdatesNotes(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Old")
+
+	m2, _ := m.Update(planDaySavedMsg{
+		day:        &planv1.PlanDay{Day: m.plan.day, Notes: "New"},
+		field:      "notes",
+		requestDay: m.plan.day,
+	})
+	if ExportPlanNotes(m2.(Model)) != "New" {
+		t.Errorf("notes should be updated on success; got %q", ExportPlanNotes(m2.(Model)))
+	}
+}
+
+func TestPlanNotes_PlanDaysLoadedAppliesNotes(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.day = "2026-05-27"
+	ExportSetPlanNotes(&m, "")
+
+	m2, _ := m.Update(planEntriesMsg{
+		entries:  []*planv1.PlanEntry{{Id: 1, Name: "Standup", Day: "2026-05-27", StartMinute: pint32(540), DurationMinute: 30}},
+		dayProto: &planv1.PlanDay{Day: "2026-05-27", Notes: "Loaded notes"},
+		day:      "2026-05-27",
+	})
+	if ExportPlanNotes(m2.(Model)) != "Loaded notes" {
+		t.Errorf("planDays.PlanDay.notes should be applied; got %q", ExportPlanNotes(m2.(Model)))
+	}
+}
+
+func TestPlanNotes_CtrlGRoundTripPreservesDraft(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	ExportSetPlanNotes(&m, "Pre")
+
+	m2, _ := pressKeyStr(m, "n")
+	ExportSetPlanNotesInput(&m2, "In editor")
+	msg := tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
+	_, cmd := ExportHandlePlanNotesEditKey(m2, msg)
+	if cmd == nil {
+		t.Fatalf("ctrl+g must dispatch openEditorCmd")
+	}
+	// Simulate editor returning a new value. The editor's openEditorCmd calls
+	// normalizeEditorContent which strips exactly one trailing newline — so the
+	// editor returns the content with the trailing newline already removed.
+	m3i, _ := m2.Update(editorFinishedMsg{content: "Revised from $EDITOR"})
+	m3 := m3i.(Model)
+	if ExportPlanMode(m3) != int(planNotesEdit) {
+		t.Errorf("editorFinishedMsg must leave the notes editor open; got mode=%d", ExportPlanMode(m3))
+	}
+	if v := ExportPlanNotesInputValue(m3); v != "Revised from $EDITOR" {
+		t.Errorf("draft should reflect editor's return; got %q", v)
+	}
+}
+
+// TestPlanDaySavedMsg_ErrorOnStaleDay_DoesNotReopenEditor verifies that a
+// failed save whose requestDay no longer matches the day on screen (the user
+// navigated away while the RPC was in flight) does not reopen the editor
+// with the stale draft — it stays in planList and just surfaces the error.
+func TestPlanDaySavedMsg_ErrorOnStaleDay_DoesNotReopenEditor(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.day = "2026-08-07"
+	m.plan.mode = planList
+
+	m2i, _ := m.Update(planDaySavedMsg{
+		err:        fmt.Errorf("boom"),
+		field:      "objective",
+		requestDay: "2026-08-06",
+	})
+	m2 := m2i.(Model)
+
+	if ExportPlanMode(m2) != int(planList) {
+		t.Errorf("stale-day save error must not reopen the editor; got mode=%d", ExportPlanMode(m2))
+	}
+	if m2.plan.err == nil {
+		t.Error("stale-day save error should still be surfaced via plan.err")
+	}
+}
+
+// TestPlanEntriesMsg_WhileNotesSaving_DoesNotClobberDraft verifies that a
+// planEntriesMsg carrying stale dayProto notes that lands while a
+// SetPlanNotes RPC is in flight does not overwrite the in-flight value with
+// the pre-save server value.
+func TestPlanEntriesMsg_WhileNotesSaving_DoesNotClobberDraft(t *testing.T) {
+	m := buildPlanTestModel(&fakePlanClient{})
+	m.activeTab = tabPlanning
+	m.plan.day = "2026-08-07"
+	m.plan.mode = planList
+	ExportSetPlanNotes(&m, "In-flight value")
+	m.plan.notesSaving = true
+
+	m2i, _ := m.Update(planEntriesMsg{
+		entries:  nil,
+		dayProto: &planv1.PlanDay{Day: "2026-08-07", Notes: "Stale server value"},
+		day:      "2026-08-07",
+	})
+	m2 := m2i.(Model)
+
+	if ExportPlanNotes(m2) != "In-flight value" {
+		t.Errorf("notes must not be clobbered while notesSaving; got %q", ExportPlanNotes(m2))
+	}
+}

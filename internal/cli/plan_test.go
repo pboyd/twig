@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"connectrpc.com/connect"
 
@@ -25,14 +26,20 @@ type fakePlanService struct {
 	mu           sync.Mutex
 	entries      map[string][]*planv1.PlanEntry // key: day
 	nextIDPerDay map[string]int32
+	objectives   map[string]string // key: day
+	notes        map[string]string
 	// Captured request fields for assertion.
-	lastListDay   string
-	lastMvRequest *planv1.MovePlanEntryRequest
+	lastListDay         string
+	lastMvRequest       *planv1.MovePlanEntryRequest
+	lastObjectiveReq    *planv1.SetPlanObjectiveRequest
+	lastListReturnedDay *planv1.PlanDay
 }
 
 func newFakePlanService() *fakePlanService {
 	return &fakePlanService{
-		entries:      make(map[string][]*planv1.PlanEntry),
+		entries:    make(map[string][]*planv1.PlanEntry),
+		objectives: make(map[string]string),
+		notes:      make(map[string]string),
 		nextIDPerDay: make(map[string]int32),
 	}
 }
@@ -50,7 +57,20 @@ func (s *fakePlanService) ListPlanEntries(_ context.Context, req *connect.Reques
 	if entries == nil {
 		entries = []*planv1.PlanEntry{}
 	}
-	return connect.NewResponse(&planv1.ListPlanEntriesResponse{Entries: entries}), nil
+	day := &planv1.PlanDay{Day: req.Msg.Day, Objective: s.objectives[req.Msg.Day], Notes: s.notes[req.Msg.Day]}
+	s.lastListReturnedDay = day
+	return connect.NewResponse(&planv1.ListPlanEntriesResponse{Entries: entries, Day: day}), nil
+}
+
+func (s *fakePlanService) SetPlanObjective(_ context.Context, req *connect.Request[planv1.SetPlanObjectiveRequest]) (*connect.Response[planv1.SetPlanObjectiveResponse], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	trimmed := strings.TrimSpace(req.Msg.Objective)
+	if utf8.RuneCountInString(trimmed) > 255 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("objectives are limited to 255 characters"))
+	}
+	s.objectives[req.Msg.Day] = trimmed
+	return connect.NewResponse(&planv1.SetPlanObjectiveResponse{Day: &planv1.PlanDay{Day: req.Msg.Day, Objective: trimmed, Notes: s.notes[req.Msg.Day]}}), nil
 }
 
 func (s *fakePlanService) AddPlanTask(_ context.Context, req *connect.Request[planv1.AddPlanTaskRequest]) (*connect.Response[planv1.AddPlanTaskResponse], error) {
@@ -541,5 +561,132 @@ func TestRunPlanMv_UnschedulePreservesDuration(t *testing.T) {
 	// DurationMinute=0 means "keep existing" in the handler.
 	if h.svc.lastMvRequest.DurationMinute != 0 {
 		t.Errorf("unschedule: DurationMinute = %d, want 0 (preserve)", h.svc.lastMvRequest.DurationMinute)
+	}
+}
+
+// ---- T055: runPlanObjective CLI tests ----
+
+func TestRunPlanObjective_ReadEmptyPrintsNothing(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	stdout, stderr, code := runPlanCmd(runPlanObjective, h.client, day, nil)
+	if code != 0 {
+		t.Errorf("read on empty day should exit 0, got %d (stderr=%q)", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("read on empty day must print NOTHING; got %q", stdout)
+	}
+}
+
+func TestRunPlanObjective_SetThenRead(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+
+	out, _, code := runPlanCmd(runPlanObjective, h.client, day, []string{"Ship it"})
+	if code != 0 {
+		t.Fatalf("set should exit 0; got %d", code)
+	}
+	if !strings.Contains(out, "Objective set") {
+		t.Errorf("set should print a warm confirmation; got %q", out)
+	}
+
+	out, _, code = runPlanCmd(runPlanObjective, h.client, day, nil)
+	if code != 0 {
+		t.Fatalf("read should exit 0; got %d", code)
+	}
+	// Bare for piping — no label, no styling, just the source followed by \n.
+	if out != "Ship it\n" {
+		t.Errorf("read should print bare objective + newline; got %q", out)
+	}
+}
+
+func TestRunPlanObjective_ClearWithEmpty(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	_, _, _ = runPlanCmd(runPlanObjective, h.client, day, []string{"Ship it"})
+
+	out, _, code := runPlanCmd(runPlanObjective, h.client, day, []string{""})
+	if code != 0 {
+		t.Fatalf("clear should exit 0; got %d", code)
+	}
+	if !strings.Contains(out, "Objective cleared") {
+		t.Errorf("clear should print 'Objective cleared'; got %q", out)
+	}
+
+	// Read after clear should print nothing.
+	out, _, _ = runPlanCmd(runPlanObjective, h.client, day, nil)
+	if out != "" {
+		t.Errorf("read after clear should print nothing; got %q", out)
+	}
+}
+
+func TestRunPlanObjective_ReadNoAnsiOrLabel(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	_, _, _ = runPlanCmd(runPlanObjective, h.client, day, []string{"Ship it"})
+
+	out, _, _ := runPlanCmd(runPlanObjective, h.client, day, nil)
+	if strings.Contains(out, "\x1b[") {
+		t.Errorf("read output must not carry ANSI escape sequences; got %q", out)
+	}
+	if strings.HasPrefix(out, "Objective") {
+		t.Errorf("read output must NOT have a label prefix; got %q", out)
+	}
+}
+
+func TestRunPlanObjective_TooLongErrors(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	longArg := strings.Repeat("x", 256)
+	_, stderr, code := runPlanCmd(runPlanObjective, h.client, day, []string{longArg})
+	if code != 1 {
+		t.Errorf("over-long objective should exit 1; got %d (stderr=%q)", code, stderr)
+	}
+	if !strings.Contains(stderr, "255") {
+		t.Errorf("over-long error message should name the 255-character limit; got %q", stderr)
+	}
+}
+
+func TestRunPlanObjective_TooManyArgs(t *testing.T) {
+	h := newPlanTestHarness(t)
+	day := "2026-05-21"
+	_, stderr, code := runPlanCmd(runPlanObjective, h.client, day, []string{"one", "two"})
+	if code != 1 {
+		t.Errorf("two positional args should exit 1; got %d (stderr=%q)", code, stderr)
+	}
+	if !strings.Contains(stderr, "too many arguments") {
+		t.Errorf("usage error should mention 'too many arguments'; got %q", stderr)
+	}
+}
+
+func TestRunPlanObjective_RespectsDateFlag(t *testing.T) {
+	h := newPlanTestHarness(t)
+	// Pre-populate day "2026-05-30" with an objective.
+	_, _, _ = runPlanCmd(runPlanObjective, h.client, "2026-05-30", []string{"Prepare demo"})
+
+	// Read via --date 2026-05-30. The harness points at an httptest server but
+	// loadConfig reads the real config (TWIG_API_KEY env), so we set it to a
+	// dummy and override TWIG_ADDR to the test server's URL.
+	t.Setenv("TWIG_API_KEY", "dummy")
+	t.Setenv("TWIG_ADDR", h.server.URL)
+
+	oldOut, oldErr := os.Stdout, os.Stderr
+	rOut, wOut, _ := os.Pipe()
+	rErr, wErr, _ := os.Pipe()
+	os.Stdout = wOut
+	os.Stderr = wErr
+	code := runPlan("default", []string{"--date", "2026-05-30", "objective"})
+	wOut.Close()
+	wErr.Close()
+	os.Stdout = oldOut
+	os.Stderr = oldErr
+	var bufOut, bufErr bytes.Buffer
+	bufOut.ReadFrom(rOut)
+	bufErr.ReadFrom(rErr)
+	if code != 0 {
+		t.Errorf("--date 2026-05-30 should exit 0; got %d (stderr=%q)", code, bufErr.String())
+	}
+	if bufOut.String() != "Prepare demo\n" {
+		t.Errorf("--date should target that day; got stdout=%q", bufOut.String())
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"connectrpc.com/connect"
@@ -25,9 +26,19 @@ import (
 type planEntriesMsg struct {
 	entries     []*planv1.PlanEntry
 	highlightID int32 // entry to highlight after loading; 0 = clamp cursor
+	dayProto    *planv1.PlanDay
 	err         error
 	bg          bool
 	day         string
+}
+
+// planDaySavedMsg is returned after SetPlanObjective succeeds.
+type planDaySavedMsg struct {
+	day        *planv1.PlanDay
+	err        error
+	field      string // "objective" (reserved for future "notes"/etc.)
+	requestDay string
+	bg         bool
 }
 
 // planMutatedMsg is returned after a plan mutation: carries the entry to highlight on reload.
@@ -59,7 +70,39 @@ func listPlanHighlightCmd(client planv1connect.PlanServiceClient, day string, hi
 		if err != nil {
 			return planEntriesMsg{err: err, bg: bg, day: day}
 		}
-		return planEntriesMsg{entries: resp.Msg.Entries, highlightID: highlightID, bg: bg, day: day}
+		return planEntriesMsg{
+			entries:     resp.Msg.Entries,
+			highlightID: highlightID,
+			dayProto:    resp.Msg.Day,
+			bg:          bg,
+			day:         day,
+		}
+	}
+}
+
+func setPlanObjectiveCmd(client planv1connect.PlanServiceClient, day, value string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.SetPlanObjective(context.Background(), connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+			Day:       day,
+			Objective: value,
+		}))
+		if err != nil {
+			return planDaySavedMsg{err: err, field: "objective", requestDay: day}
+		}
+		return planDaySavedMsg{day: resp.Msg.Day, field: "objective", requestDay: day}
+	}
+}
+
+func setPlanNotesCmd(client planv1connect.PlanServiceClient, day, value string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := client.SetPlanNotes(context.Background(), connect.NewRequest(&planv1.SetPlanNotesRequest{
+			Day:   day,
+			Notes: value,
+		}))
+		if err != nil {
+			return planDaySavedMsg{err: err, field: "notes", requestDay: day}
+		}
+		return planDaySavedMsg{day: resp.Msg.Day, field: "notes", requestDay: day}
 	}
 }
 
@@ -229,6 +272,15 @@ func newPlanInput(placeholder string) textinput.Model {
 	return ti
 }
 
+// newPlanNotesTextarea returns a textarea.Model sized for the planning tab's
+// notes editor. The height is small here; view.go widens it for the actual
+// full-column rendering.
+func newPlanNotesTextarea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Notes for today (markdown)"
+	return ta
+}
+
 // planFormFieldValues returns the current value of each text field in the form.
 func planFormFieldValues(f planFormState) []string {
 	vals := make([]string, len(f.fields))
@@ -257,6 +309,35 @@ func planFormDirty(f planFormState) bool {
 func (m *Model) initAddTaskForm() {
 	m.plan.mode = planPickTask
 	m.plan.form = planFormState{}
+}
+
+// openPlanObjectiveEditor opens the single-field objective editor in the
+// band slot, pre-filled with the current objective. Only acts when no other
+// planning modal is open.
+func (m *Model) openPlanObjectiveEditor() {
+	if m.plan.mode != planList {
+		return
+	}
+	ti := newPlanInput("What's the one thing today?")
+	ti.SetValue(m.plan.objective)
+	ti.Focus()
+	m.plan.mode = planObjectiveEdit
+	m.plan.objectiveInput = ti
+	m.plan.objectiveSaving = false
+}
+
+// openPlanNotesEditor opens the full-column notes editor, pre-filled with the
+// current notes. Only acts when no other planning modal is open.
+func (m *Model) openPlanNotesEditor() {
+	if m.plan.mode != planList {
+		return
+	}
+	ta := newPlanNotesTextarea()
+	ta.SetValue(m.plan.notes)
+	ta.Focus()
+	m.plan.mode = planNotesEdit
+	m.plan.notesInput = ta
+	m.plan.notesSaving = false
 }
 
 // initAddEventForm opens the add-event form (name, start, duration).
@@ -546,6 +627,18 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 	}
 	m.plan.entries = displayedPlanEntries(msg.entries, m.plan.pendingComplete)
 	m.plan.loaded = true
+
+	// Apply the day's PlanDay when no objective or notes editor is open. An open
+	// draft is never overwritten by either background or foreground loads — see
+	// contracts/tui-planning-layout.md.
+	if msg.dayProto != nil {
+		if m.plan.mode != planObjectiveEdit && !m.plan.objectiveSaving {
+			m.plan.objective = msg.dayProto.GetObjective()
+		}
+		if m.plan.mode != planNotesEdit && !m.plan.notesSaving {
+			m.plan.notes = msg.dayProto.GetNotes()
+		}
+	}
 
 	if msg.highlightID != 0 {
 		for i, e := range m.plan.entries {

@@ -1041,6 +1041,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.goal.compose.active {
 			return m.handleGoalStatusEditorFinished(msg)
 		}
+		if m.plan.mode == planNotesEdit {
+			if msg.err != nil {
+				m.err = fmt.Errorf("couldn't open the editor — your notes are safe, though! (%w)", msg.err)
+			} else {
+				m.plan.notesInput.SetValue(msg.content)
+				m.err = nil
+			}
+			return m, nil
+		}
 		if m.mode == modeEdit || m.mode == modeNewSubtask || m.mode == modeNewRoot {
 			if msg.err != nil {
 				m.err = fmt.Errorf("couldn't open the editor — your description is safe, though! (%w)", msg.err)
@@ -1095,6 +1104,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			expanded: expanded,
 		}
 		// mode was already set to planPickTask by initAddTaskForm
+		return m, nil
+
+	case planDaySavedMsg:
+		m.plan.objectiveSaving = false
+		m.plan.notesSaving = false
+		if msg.err != nil {
+			m.plan.err = msg.err
+			// Re-open the editor so the user can retry with their draft intact,
+			// but only if the day hasn't moved on while the RPC was in flight —
+			// otherwise the draft belongs to a different day than the one shown.
+			if msg.requestDay == m.plan.day {
+				if msg.field == "notes" {
+					m.plan.mode = planNotesEdit
+					m.plan.notesInput.Focus()
+				} else {
+					m.plan.mode = planObjectiveEdit
+					m.plan.objectiveInput.Focus()
+				}
+			}
+			return m, nil
+		}
+		if msg.day != nil && msg.requestDay == m.plan.day {
+			m.plan.objective = msg.day.GetObjective()
+			m.plan.notes = msg.day.GetNotes()
+		}
+		m.plan.mode = planList
+		if msg.field == "objective" {
+			if m.plan.objective == "" {
+				m.notice = "Objective cleared."
+			} else {
+				m.notice = "Objective set — that's the one that matters today."
+			}
+		}
+		if msg.field == "notes" {
+			if m.plan.notes == "" {
+				m.notice = "Notes cleared."
+			} else {
+				m.notice = "Notes tucked away."
+			}
+		}
 		return m, nil
 
 	case planMutatedMsg:
@@ -2109,6 +2158,10 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, listPlanCmd(m.planClient, m.plan.day, false)
 
 	// Entry actions.
+	case key.Matches(msg, m.keys.PlanObjective):
+		m.openPlanObjectiveEditor()
+	case key.Matches(msg, m.keys.PlanNotes):
+		m.openPlanNotesEditor()
 	case key.Matches(msg, m.keys.PlanAddTask):
 		m.initAddTaskForm()
 		return m, listTasksForPickerCmd(m.client)
@@ -2286,6 +2339,10 @@ func (m Model) handlePlanModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handlePickerKey(msg)
 	case planTaskTime, planEventForm, planEdit:
 		return m.handlePlanFormKey(msg)
+	case planObjectiveEdit:
+		return m.handlePlanObjectiveEditKey(msg)
+	case planNotesEdit:
+		return m.handlePlanNotesEditKey(msg)
 	}
 	return m, nil
 }
@@ -2357,6 +2414,48 @@ func (m Model) handlePlanFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
+}
+
+// handlePlanObjectiveEditKey handles keys while the objective editor is open.
+// Enter saves, Esc (Cancel) discards, other keys forward to the textinput.
+func (m Model) handlePlanObjectiveEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Code == tea.KeyEnter:
+		value := m.plan.objectiveInput.Value()
+		m.plan.objectiveSaving = true
+		m.plan.mode = planList
+		m.plan.err = nil
+		return m, setPlanObjectiveCmd(m.planClient, m.plan.day, value)
+	case key.Matches(msg, m.keys.Cancel):
+		m.plan.mode = planList
+		m.plan.err = nil
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.plan.objectiveInput, cmd = m.plan.objectiveInput.Update(msg)
+	return m, cmd
+}
+
+// handlePlanNotesEditKey handles keys while the notes editor is open.
+// ctrl+s saves, Esc discards, Enter inserts a newline, ctrl+g opens $EDITOR.
+func (m Model) handlePlanNotesEditKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Save):
+		value := m.plan.notesInput.Value()
+		m.plan.notesSaving = true
+		m.plan.mode = planList
+		m.plan.err = nil
+		return m, setPlanNotesCmd(m.planClient, m.plan.day, value)
+	case key.Matches(msg, m.keys.Cancel):
+		m.plan.mode = planList
+		m.plan.err = nil
+		return m, nil
+	case key.Matches(msg, m.keys.Editor):
+		return m, openEditorCmd(m.plan.notesInput.Value())
+	}
+	var cmd tea.Cmd
+	m.plan.notesInput, cmd = m.plan.notesInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleListKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
