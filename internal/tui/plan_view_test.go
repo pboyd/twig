@@ -1624,6 +1624,123 @@ func TestPlanView_WidthHostileDescriptionFitsPane(t *testing.T) {
 // TestViewList_WidthHostileDescriptionFitsPane is the Tasks-tab counterpart of
 // TestPlanView_WidthHostileDescriptionFitsPane: the same shared paneBox
 // guarantee must hold on the Tasks tab's detail pane.
+
+// ---- T029: Plan objective band rendering ----
+
+func TestPlanObjective_OmittedWhenUnset_Styled(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 40
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: today},
+	}
+	m.plan.cursor = 0
+	m.plan.objective = ""
+
+	with := m.viewPlanning()
+
+	ExportSetPlanObjective(&m, "Ship it")
+	with2 := m.viewPlanning()
+
+	if with == with2 {
+		t.Errorf("objective band not present when objective is set; output should differ from empty baseline")
+	}
+}
+
+func TestPlanObjective_OmittedWhenUnset_Unstyled(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, false)
+	m.width = 80
+	m.height = 40
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: today},
+	}
+	m.plan.cursor = 0
+	m.plan.objective = ""
+
+	with := m.viewPlanning()
+
+	ExportSetPlanObjective(&m, "Ship it")
+	with2 := m.viewPlanning()
+
+	if with == with2 {
+		t.Errorf("unstyled: objective band not present when objective is set; output should differ")
+	}
+}
+
+func TestPlanObjective_EditorShownOnUnsetDay_Styled(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 40
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: today},
+	}
+	m.plan.cursor = 0
+	m.plan.objective = ""
+	m.plan.mode = planObjectiveEdit
+	ExportSetPlanObjectiveInput(&m, "")
+
+	v := m.viewPlanning()
+	if !strings.Contains(v, "Objective") {
+		t.Errorf("editor should appear even on a day without an objective; got:\n%s", v)
+	}
+}
+
+func TestPlanObjective_LongObjectiveStillRenders(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 40
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: today},
+	}
+	m.plan.cursor = 0
+	m.plan.objective = "line1\nline2\nline3\nline4\nline5\nline6\nline7"
+
+	v := m.viewPlanning()
+	if !strings.Contains(v, "Objective") {
+		t.Errorf("Objective band should appear; got:\n%s", v)
+	}
+}
+
+func TestPlanObjective_NarrowTerminalStaysIntact(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 24
+	m.activeTab = tabPlanning
+	m.plan.day = today
+	m.plan.loaded = true
+	m.plan.entries = []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", StartMinute: pint32(540), DurationMinute: 30, Day: today},
+	}
+	m.plan.cursor = 0
+	ExportSetPlanObjective(&m, "Ship the long-named thing today that would normally overflow a narrow terminal")
+
+	// The objective band's inner content is rendered at the available inner width.
+	band := ExportRenderPlanObjectiveBand(m, m.width-2)
+	lines := strings.Split(strings.TrimRight(band, "\n"), "\n")
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w > m.width {
+			t.Errorf("band line %d width=%d exceeds terminal width=%d: %q", i, w, m.width, line)
+		}
+	}
+}
+
 func TestViewList_WidthHostileDescriptionFitsPane(t *testing.T) {
 	m := ExportNewStyledModel(nil, nil, true)
 	m.width = 90
@@ -1649,5 +1766,277 @@ func TestViewList_WidthHostileDescriptionFitsPane(t *testing.T) {
 		if w := lipgloss.Width(line); w > m.width {
 			t.Errorf("line %d has width %d, exceeds terminal width %d: %q", i, w, m.width, line)
 		}
+	}
+}
+
+// ---- T044: Plan notes pane rendering ----
+
+func TestPlanNotes_PanePresentWhenEmpty_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if !strings.Contains(out, "Notes") {
+		t.Errorf("Notes pane should appear even when notes are empty; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Details") {
+		t.Errorf("Details pane should still appear above notes; got:\n%s", out)
+	}
+}
+
+func TestPlanNotes_PaneShowsContentWhenSet_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "Blocked on review for the migration PR.")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if !strings.Contains(out, "Blocked on review") {
+		t.Errorf("Notes pane should render notes content; got:\n%s", out)
+	}
+}
+
+func TestPlanNotes_EditorTakesColumn_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "Saved content")
+	ExportSetPlanNotesInput(&m, "Draft in progress")
+	m.plan.mode = planNotesEdit
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if !strings.Contains(out, "Draft in progress") {
+		t.Errorf("Notes editor should show draft; got:\n%s", out)
+	}
+}
+
+func TestPlanNotes_NoPaneWhenPickerOpen_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "Blocked on review")
+	m.plan.mode = planPickTask
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if strings.Contains(out, "Notes") {
+		t.Errorf("Notes pane must NOT appear while a picker is open; got:\n%s", out)
+	}
+}
+
+func TestPlanNotes_UnstyledLayout(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, false)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "hello")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if !strings.Contains(out, "Notes") {
+		t.Errorf("unstyled: Notes section must appear; got:\n%s", out)
+	}
+}
+
+// ---- T049: Markdown fidelity (objective and notes) ----
+
+func TestPlanObjective_RendersMarkdown_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanObjective(&m, "**bold** and `code` and [link](https://example.com)")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	// The renderer threads the styled theme, so bold should emit an ANSI code
+	// via the markdown theme, while the unstyled branch must produce plain text.
+	if !m.styled {
+		t.Skip("styled test")
+	}
+	band := ExportRenderPlanObjectiveBand(m, m.width-2)
+	if !strings.Contains(band, "bold") {
+		t.Errorf("band should contain raw 'bold' source; got:\n%s", band)
+	}
+	// styled branch wraps the text in a rounded border — verify a border run is
+	// visible even if the markdown theme is otherwise hard to introspect.
+	if band == "" {
+		t.Errorf("band rendering produced empty string")
+	}
+}
+
+func TestPlanObjective_RendersMarkdown_Unstyled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, false)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanObjective(&m, "**bold**")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	band := ExportRenderPlanObjectiveBand(m, m.width-2)
+	if strings.Contains(band, "\x1b[") {
+		t.Errorf("unstyled band must not carry ANSI escape sequences; got:\n%q", band)
+	}
+}
+
+func TestPlanNotes_RendersMarkdown_Styled(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "**bold** and a [link](https://example.com)")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	if !strings.Contains(out, "bold") {
+		t.Errorf("notes pane should render source text; got:\n%s", out)
+	}
+	if !strings.Contains(out, "https://example.com") {
+		t.Errorf("notes link text should be visible; got:\n%s", out)
+	}
+}
+
+// ---- T050: Editors show raw markdown source, not rendered output ----
+
+func TestPlanObjective_EditorShowsRawMarkdown(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanObjective(&m, "")
+	ExportSetPlanObjectiveInput(&m, "**bold** [link](https://example.com)")
+	m.plan.mode = planObjectiveEdit
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	band := ExportRenderPlanObjectiveBand(m, m.width-2)
+	if !strings.Contains(band, "**bold**") {
+		t.Errorf("objective editor should display raw markdown; got:\n%s", band)
+	}
+	if !strings.Contains(band, "[link]") {
+		t.Errorf("objective editor should not strip markdown link syntax; got:\n%s", band)
+	}
+}
+
+func TestPlanNotes_EditorShowsRawMarkdown(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 100
+	m.height = 30
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "Saved")
+	ExportSetPlanNotesInput(&m, "**bold** line\n\n- one\n- two")
+	m.plan.mode = planNotesEdit
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	editor := ExportRenderPlanNotesEditor(m, 80, 10)
+	if !strings.Contains(editor, "**bold**") {
+		t.Errorf("notes editor should display raw markdown; got:\n%s", editor)
+	}
+	if !strings.Contains(editor, "- one") {
+		t.Errorf("notes editor should show bullet list source; got:\n%s", editor)
+	}
+}
+
+// ---- T051: Resilience — long content, hostile URLs, narrow terminals ----
+
+func TestPlanNotes_LongContentClippedInsidePane(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 80
+	m.height = 24
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	long := strings.Repeat("A really long paragraph that should be wrapped and clipped to fit the pane. ", 20)
+	ExportSetPlanNotes(&m, long)
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) > m.height {
+		t.Errorf("rendered view height=%d exceeds terminal height=%d:\n%s", len(lines), m.height, out)
+	}
+}
+
+func TestPlanNotes_NarrowTerminalIntact(t *testing.T) {
+	day := time.Now().Format("2006-01-02")
+	m := ExportNewStyledModel(nil, nil, true)
+	m.width = 40
+	m.height = 20
+	m.activeTab = tabPlanning
+	m.plan.day = day
+	m.plan.loaded = true
+	ExportSetPlanNotes(&m, "Long-named note that should still render at narrow widths without breaking the layout.")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{
+		{Id: 1, Name: "Standup", Day: day, StartMinute: pint32(540), DurationMinute: 30},
+	}, 0)
+
+	out := m.viewPlanning()
+	// Tab bar must still appear.
+	if !strings.Contains(out, "Planning") {
+		t.Errorf("narrow terminal: tab bar must still be present; got:\n%s", out)
+	}
+	// Notes pane must still appear.
+	if !strings.Contains(out, "Notes") {
+		t.Errorf("narrow terminal: Notes pane must still be present; got:\n%s", out)
 	}
 }

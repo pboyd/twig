@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	goalv1 "github.com/pboyd/twig/api/gen/goal/v1"
 	goalv1connect "github.com/pboyd/twig/api/gen/goal/v1/goalv1connect"
@@ -81,11 +82,13 @@ type goalState struct {
 type planMode int
 
 const (
-	planList      planMode = iota // grid shown; selection nav + action keys
-	planPickTask                  // task tree picker open (step 1 of add-task)
-	planTaskTime                  // start/duration form (step 2 of add-task)
-	planEventForm                 // name + start + duration form (add-event)
-	planEdit                      // name + start + duration form (edit selected entry)
+	planList          planMode = iota // grid shown; selection nav + action keys
+	planPickTask                      // task tree picker open (step 1 of add-task)
+	planTaskTime                      // start/duration form (step 2 of add-task)
+	planEventForm                     // name + start + duration form (add-event)
+	planEdit                          // name + start + duration form (edit selected entry)
+	planObjectiveEdit                 // `o`: single-field editor above grid for day's objective
+	planNotesEdit                     // `n`: full-column notes editor for the day
 )
 
 // activePom holds the TUI's in-memory view of the one running pomodoro.
@@ -123,6 +126,14 @@ type planState struct {
 	err             error
 	pendingComplete *int32    // entry id of a just-completed untimed entry to retain while highlighted
 	lastLoad        time.Time // when the Plan tab's data was last loaded or a refresh was dispatched
+	// Plan objective (US1): `o` opens planObjectiveEdit in the same slot as the band.
+	objective       string
+	objectiveInput  textinput.Model
+	objectiveSaving bool // true while a SetPlanObjective RPC is in flight
+	// Plan notes (US2): `n` opens planNotesEdit as a full-column editor for the day.
+	notes       string
+	notesInput  textarea.Model
+	notesSaving bool // true while a SetPlanNotes RPC is in flight
 }
 
 // reportState holds all state for the Report tab.

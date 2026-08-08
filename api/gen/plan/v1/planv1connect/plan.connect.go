@@ -56,6 +56,12 @@ const (
 	// PlanServiceListScheduledDaysProcedure is the fully-qualified name of the PlanService's
 	// ListScheduledDays RPC.
 	PlanServiceListScheduledDaysProcedure = "/plan.v1.PlanService/ListScheduledDays"
+	// PlanServiceSetPlanObjectiveProcedure is the fully-qualified name of the PlanService's
+	// SetPlanObjective RPC.
+	PlanServiceSetPlanObjectiveProcedure = "/plan.v1.PlanService/SetPlanObjective"
+	// PlanServiceSetPlanNotesProcedure is the fully-qualified name of the PlanService's SetPlanNotes
+	// RPC.
+	PlanServiceSetPlanNotesProcedure = "/plan.v1.PlanService/SetPlanNotes"
 )
 
 // PlanServiceClient is a client for the plan.v1.PlanService service.
@@ -82,6 +88,12 @@ type PlanServiceClient interface {
 	// Untimed entries count. Results are ordered by task_id then day ascending,
 	// with no duplicate (task_id, day) pairs.
 	ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error)
+	// SetPlanObjective replaces the day's objective. An empty or whitespace-only
+	// objective clears it. Leaves notes untouched.
+	SetPlanObjective(context.Context, *connect.Request[v1.SetPlanObjectiveRequest]) (*connect.Response[v1.SetPlanObjectiveResponse], error)
+	// SetPlanNotes replaces the day's notes. Empty or whitespace-only notes clear
+	// them. Leaves the objective untouched.
+	SetPlanNotes(context.Context, *connect.Request[v1.SetPlanNotesRequest]) (*connect.Response[v1.SetPlanNotesResponse], error)
 }
 
 // NewPlanServiceClient constructs a client for the plan.v1.PlanService service. By default, it uses
@@ -143,6 +155,18 @@ func NewPlanServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(planServiceMethods.ByName("ListScheduledDays")),
 			connect.WithClientOptions(opts...),
 		),
+		setPlanObjective: connect.NewClient[v1.SetPlanObjectiveRequest, v1.SetPlanObjectiveResponse](
+			httpClient,
+			baseURL+PlanServiceSetPlanObjectiveProcedure,
+			connect.WithSchema(planServiceMethods.ByName("SetPlanObjective")),
+			connect.WithClientOptions(opts...),
+		),
+		setPlanNotes: connect.NewClient[v1.SetPlanNotesRequest, v1.SetPlanNotesResponse](
+			httpClient,
+			baseURL+PlanServiceSetPlanNotesProcedure,
+			connect.WithSchema(planServiceMethods.ByName("SetPlanNotes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -156,6 +180,8 @@ type planServiceClient struct {
 	movePlanEntry     *connect.Client[v1.MovePlanEntryRequest, v1.MovePlanEntryResponse]
 	reorderPlanEntry  *connect.Client[v1.ReorderPlanEntryRequest, v1.ReorderPlanEntryResponse]
 	listScheduledDays *connect.Client[v1.ListScheduledDaysRequest, v1.ListScheduledDaysResponse]
+	setPlanObjective  *connect.Client[v1.SetPlanObjectiveRequest, v1.SetPlanObjectiveResponse]
+	setPlanNotes      *connect.Client[v1.SetPlanNotesRequest, v1.SetPlanNotesResponse]
 }
 
 // ListPlanEntries calls plan.v1.PlanService.ListPlanEntries.
@@ -198,6 +224,16 @@ func (c *planServiceClient) ListScheduledDays(ctx context.Context, req *connect.
 	return c.listScheduledDays.CallUnary(ctx, req)
 }
 
+// SetPlanObjective calls plan.v1.PlanService.SetPlanObjective.
+func (c *planServiceClient) SetPlanObjective(ctx context.Context, req *connect.Request[v1.SetPlanObjectiveRequest]) (*connect.Response[v1.SetPlanObjectiveResponse], error) {
+	return c.setPlanObjective.CallUnary(ctx, req)
+}
+
+// SetPlanNotes calls plan.v1.PlanService.SetPlanNotes.
+func (c *planServiceClient) SetPlanNotes(ctx context.Context, req *connect.Request[v1.SetPlanNotesRequest]) (*connect.Response[v1.SetPlanNotesResponse], error) {
+	return c.setPlanNotes.CallUnary(ctx, req)
+}
+
 // PlanServiceHandler is an implementation of the plan.v1.PlanService service.
 type PlanServiceHandler interface {
 	// ListPlanEntries returns every entry on the given day, ordered by start_minute ascending.
@@ -222,6 +258,12 @@ type PlanServiceHandler interface {
 	// Untimed entries count. Results are ordered by task_id then day ascending,
 	// with no duplicate (task_id, day) pairs.
 	ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error)
+	// SetPlanObjective replaces the day's objective. An empty or whitespace-only
+	// objective clears it. Leaves notes untouched.
+	SetPlanObjective(context.Context, *connect.Request[v1.SetPlanObjectiveRequest]) (*connect.Response[v1.SetPlanObjectiveResponse], error)
+	// SetPlanNotes replaces the day's notes. Empty or whitespace-only notes clear
+	// them. Leaves the objective untouched.
+	SetPlanNotes(context.Context, *connect.Request[v1.SetPlanNotesRequest]) (*connect.Response[v1.SetPlanNotesResponse], error)
 }
 
 // NewPlanServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -279,6 +321,18 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(planServiceMethods.ByName("ListScheduledDays")),
 		connect.WithHandlerOptions(opts...),
 	)
+	planServiceSetPlanObjectiveHandler := connect.NewUnaryHandler(
+		PlanServiceSetPlanObjectiveProcedure,
+		svc.SetPlanObjective,
+		connect.WithSchema(planServiceMethods.ByName("SetPlanObjective")),
+		connect.WithHandlerOptions(opts...),
+	)
+	planServiceSetPlanNotesHandler := connect.NewUnaryHandler(
+		PlanServiceSetPlanNotesProcedure,
+		svc.SetPlanNotes,
+		connect.WithSchema(planServiceMethods.ByName("SetPlanNotes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/plan.v1.PlanService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PlanServiceListPlanEntriesProcedure:
@@ -297,6 +351,10 @@ func NewPlanServiceHandler(svc PlanServiceHandler, opts ...connect.HandlerOption
 			planServiceReorderPlanEntryHandler.ServeHTTP(w, r)
 		case PlanServiceListScheduledDaysProcedure:
 			planServiceListScheduledDaysHandler.ServeHTTP(w, r)
+		case PlanServiceSetPlanObjectiveProcedure:
+			planServiceSetPlanObjectiveHandler.ServeHTTP(w, r)
+		case PlanServiceSetPlanNotesProcedure:
+			planServiceSetPlanNotesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -336,4 +394,12 @@ func (UnimplementedPlanServiceHandler) ReorderPlanEntry(context.Context, *connec
 
 func (UnimplementedPlanServiceHandler) ListScheduledDays(context.Context, *connect.Request[v1.ListScheduledDaysRequest]) (*connect.Response[v1.ListScheduledDaysResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.ListScheduledDays is not implemented"))
+}
+
+func (UnimplementedPlanServiceHandler) SetPlanObjective(context.Context, *connect.Request[v1.SetPlanObjectiveRequest]) (*connect.Response[v1.SetPlanObjectiveResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.SetPlanObjective is not implemented"))
+}
+
+func (UnimplementedPlanServiceHandler) SetPlanNotes(context.Context, *connect.Request[v1.SetPlanNotesRequest]) (*connect.Response[v1.SetPlanNotesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("plan.v1.PlanService.SetPlanNotes is not implemented"))
 }

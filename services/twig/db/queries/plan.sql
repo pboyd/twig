@@ -45,3 +45,16 @@ WHERE user_id = $1
   AND task_id IS NOT NULL
   AND day >= $2
 ORDER BY task_id, day;
+
+-- name: GetPlanDay :one
+SELECT * FROM plan_days WHERE user_id = $1 AND day = $2;
+
+-- name: UpsertPlanDayObjective :one
+INSERT INTO plan_days (user_id, day, objective) VALUES ($1, $2, $3)
+ON CONFLICT (user_id, day) DO UPDATE SET objective = EXCLUDED.objective
+RETURNING *;
+
+-- name: UpsertPlanDayNotes :one
+INSERT INTO plan_days (user_id, day, notes) VALUES ($1, $2, $3)
+ON CONFLICT (user_id, day) DO UPDATE SET notes = EXCLUDED.notes
+RETURNING *;

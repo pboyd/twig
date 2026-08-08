@@ -86,6 +86,54 @@ func ExportPlanMode(m Model) int {
 // ExportPlanModeList is the planList constant for tests.
 const ExportPlanModeList = int(planList)
 
+// ExportSetPlanObjective sets the loaded objective for tests.
+func ExportSetPlanObjective(m *Model, objective string) {
+	m.plan.objective = objective
+}
+
+// ExportPlanObjective returns the displayed objective.
+func ExportPlanObjective(m Model) string {
+	return m.plan.objective
+}
+
+// ExportSetPlanNotes sets the loaded notes for tests.
+func ExportSetPlanNotes(m *Model, notes string) {
+	m.plan.notes = notes
+}
+
+// ExportPlanNotes returns the displayed notes.
+func ExportPlanNotes(m Model) string {
+	return m.plan.notes
+}
+
+// ExportSetPlanNotesInput sets the notes editor's current draft and value.
+func ExportSetPlanNotesInput(m *Model, value string) {
+	ta := newPlanNotesTextarea()
+	ta.SetValue(value)
+	m.plan.notesInput = ta
+}
+
+// ExportHandlePlanNotesEditKey exposes handlePlanNotesEditKey for unit tests.
+func ExportHandlePlanNotesEditKey(m Model, msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	res, cmd := m.handlePlanNotesEditKey(msg)
+	return res.(Model), cmd
+}
+
+// ExportPlanNotesInputValue returns the notes editor's draft value.
+func ExportPlanNotesInputValue(m Model) string {
+	return m.plan.notesInput.Value()
+}
+
+// ExportSetPlanObjectiveInput sets the editor's current draft and value.
+func ExportSetPlanObjectiveInput(m *Model, value string) {
+	m.plan.objectiveInput.SetValue(value)
+}
+
+// ExportPlanObjectiveInputValue returns the editor's draft value.
+func ExportPlanObjectiveInputValue(m Model) string {
+	return m.plan.objectiveInput.Value()
+}
+
 // ExportSelectedPlanEntry returns the currently selected plan entry, or nil.
 func ExportSelectedPlanEntry(m Model) *planv1.PlanEntry {
 	if len(m.plan.entries) == 0 {
@@ -137,6 +185,21 @@ func ExportNewStyledModel(client taskv1connect.TaskServiceClient, tree []*cli.Tr
 // ExportRenderList exposes renderList for unit tests.
 func ExportRenderList(m Model, width int) string {
 	return m.renderList(width)
+}
+
+// ExportRenderPlanObjectiveBand exposes renderPlanObjectiveBand for unit tests.
+func ExportRenderPlanObjectiveBand(m Model, width int) string {
+	return m.renderPlanObjectiveBand(width)
+}
+
+// ExportRenderPlanNotesPane exposes renderPlanNotesPane for unit tests.
+func ExportRenderPlanNotesPane(m Model, innerW, innerH int) string {
+	return m.renderPlanNotesPane(innerW, innerH)
+}
+
+// ExportRenderPlanNotesEditor exposes renderPlanNotesEditor for unit tests.
+func ExportRenderPlanNotesEditor(m Model, width, height int) string {
+	return m.renderPlanNotesEditor(width, height)
 }
 
 // ExportRenderDetails exposes renderDetails for unit tests.

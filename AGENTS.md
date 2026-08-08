@@ -4,6 +4,8 @@ This file provides guidance to coding agents when working with code in this repo
 
 Running `twig` with no arguments launches the interactive TUI on a TTY. The TUI has four tabs: **Goals · Tasks · Plan · Report** (opens on Tasks by default; `shift+tab` from Tasks reaches the Goals tab).
 
+On the **Plan** tab each day carries its own markdown **objective** (full-width band above the grid; `o` opens a single-line editor — Enter saves, Esc cancels; band is omitted entirely on days without one) and **notes** (a Notes pane in the right column under Details; `n` opens a multi-line textarea — `ctrl+s` saves, `esc` cancels, `ctrl+g` hands the draft to `$EDITOR`; the pane is always rendered, even when empty). Both fields render through the same markdown renderer the Tasks tab uses.
+
 ## Commands
 
 ```bash
@@ -166,5 +168,5 @@ The server exposes two plain-HTTP authenticated endpoints consumed by the web ap
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/073-web-task-parity/plan.md`.
+`specs/074-plan-objective-notes/plan.md`.
 <!-- SPECKIT END -->

@@ -2794,3 +2794,20 @@ func TestScroll_CollapseReconcilesScroll(t *testing.T) {
 	}
 	assertScrollInvariant(t, m, "after collapse")
 }
+
+// ---- T047: regression — `n` on the Tasks tab still creates a subtask ----
+
+// TestTasksTab_NIsNewSubtask pins FR-023: adding `n` to the planning tab's
+// keybinding must not collide with `n`'s existing Jobs on the Tasks tab.
+func TestTasksTab_NIsNewSubtask(t *testing.T) {
+	m := buildTestModel()
+	m.cursor = 0
+
+	m = pressKey(m, "n")
+	if m.mode != modeNewSubtask {
+		t.Errorf("expected modeNewSubtask on Tasks tab after pressing 'n', got %v", m.mode)
+	}
+	if m.edit.parentID == nil || *m.edit.parentID != 1 {
+		t.Errorf("parentID: want 1, got %v", m.edit.parentID)
+	}
+}

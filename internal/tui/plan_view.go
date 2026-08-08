@@ -13,6 +13,87 @@ import (
 	"github.com/pboyd/twig/internal/markdown"
 )
 
+// renderPlanNotesPane renders the Notes pane for the planning tab. Returns
+// either the notes content (when set) or an empty placeholder pane. The pane is
+// always rendered when notes editing is not active and the right column is
+// showing details. Width is the pane's inner content width; height bounds the
+// rendered content.
+func (m Model) renderPlanNotesPane(innerWidth, innerHeight int) string {
+	if m.md != nil {
+		rendered := m.md.Render(m.plan.notes, markdown.Options{Width: innerWidth, Styled: m.styled})
+		return clampLines(rendered, innerHeight)
+	}
+	return clampLines(m.plan.notes, innerHeight)
+}
+
+// renderPlanNotesEditor renders the full-right-column notes editor for use
+// while mode == planNotesEdit. The textarea fills the available height.
+func (m Model) renderPlanNotesEditor(width, height int) string {
+	ta := m.plan.notesInput
+	ta.SetWidth(width)
+	ta.SetHeight(height)
+	return ta.View()
+}
+
+// renderPlanObjectiveBand renders the day's objective band above the planning
+// tab. Returns "" when not shown (objective empty AND no editor open).
+// innerWidth is the content width available inside the surrounding border.
+func (m Model) renderPlanObjectiveBand(innerWidth int) string {
+	editing := m.plan.mode == planObjectiveEdit
+	if !editing && m.plan.objective == "" {
+		return ""
+	}
+
+	var inner string
+	if editing {
+		m.plan.objectiveInput.SetWidth(innerWidth)
+		inner = m.plan.objectiveInput.View()
+	} else if m.md != nil {
+		inner = m.md.Render(m.plan.objective, markdown.Options{Width: innerWidth, Styled: m.styled})
+	} else {
+		inner = m.plan.objective
+	}
+
+	// 2 lines of border (top + bottom); clamped to 3 inner.
+	inner = clampLines(inner, 3)
+
+	if !m.styled {
+		// Unstyled: render as a plain block — a heading line plus body, no border.
+		header := "Objective:"
+		if editing {
+			header = "Objective (Enter to save, Esc to cancel):"
+		}
+		body := clampLines(inner, 3)
+		return header + "\n" + body + "\n"
+	}
+
+	renderedH := strings.Count(inner, "\n") + 1
+	rendered := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(border).
+		Width(innerWidth + 2).
+		Height(renderedH + 2).
+		Render(inner)
+
+	// Embed title in top border.
+	title := " Objective "
+	if editing {
+		title = " Objective (Enter to save, Esc to cancel) "
+	}
+	innerW := innerWidth
+	titleW := lipgloss.Width(title)
+	dashCount := innerW - titleW
+	if dashCount < 0 {
+		dashCount = 0
+	}
+	topBorder := "╭" + title + strings.Repeat("─", dashCount) + "╮"
+	lines := strings.Split(rendered, "\n")
+	if len(lines) > 0 {
+		lines[0] = lipgloss.NewStyle().Foreground(border).Render(topBorder)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // renderTabBar renders the one-line tab bar: " Goals │ Tasks │ Planning │ Report "
 // with the active tab highlighted in accent color (styled) or plain text (unstyled).
 func (m Model) renderTabBar(width int) string {

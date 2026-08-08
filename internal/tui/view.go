@@ -89,31 +89,37 @@ func (m Model) viewPlanning() string {
 		if innerRightW < 0 {
 			innerRightW = 0
 		}
-
-		gridContent := m.renderPlanGrid(innerGridW, innerH, now)
-
-		var rightContent string
-		var rightTitle string
-		var gridFocused bool
-		if m.plan.mode == planList {
-			sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
-			var linkedTask *taskv1.Task
-			if sel != nil && sel.TaskId != 0 {
-				linkedTask = findTask(m.tree, sel.TaskId)
+		// Reserve space for the objective band above the row when shown.
+		innerBandW := m.width - 2
+		if innerBandW < 0 {
+			innerBandW = 0
+		}
+		showBand := m.plan.objective != "" || m.plan.mode == planObjectiveEdit
+		bandStr := ""
+		bandH := 0
+		if showBand {
+			bandStr = m.renderPlanObjectiveBand(innerBandW)
+			bandH = strings.Count(bandStr, "\n") + 1
+			if bandH < 0 {
+				bandH = 0
 			}
-			rightContent = renderPlanDetail(sel, linkedTask, innerRightW, m.styled, m.md)
-			rightTitle = "Details"
-			gridFocused = true
-		} else {
-			rightContent = m.renderPlanRightPane(innerRightW)
-			rightTitle = m.planFormPaneTitle()
-			gridFocused = false
+		}
+		rowH := innerH - bandH
+		if rowH < 1 {
+			rowH = 1
 		}
 
-		gridPane := paneBox(gridContent, gridWidth, innerH, m.planDayTitle(now), gridFocused)
-		rightPane := paneBox(rightContent, rightWidth, innerH, rightTitle, !gridFocused)
+		gridContent := m.renderPlanGrid(innerGridW, rowH, now)
 
-		joined := lipgloss.JoinHorizontal(lipgloss.Top, gridPane, rightPane)
+		rightBlock, gridFocused := m.renderPlanRightBlock(innerRightW, rowH)
+
+		gridPane := paneBox(gridContent, gridWidth, rowH, m.planDayTitle(now), gridFocused)
+
+		joined := lipgloss.JoinHorizontal(lipgloss.Top, gridPane, rightBlock)
+
+		if showBand {
+			return m.renderTabBar(m.width) + "\n" + bandStr + "\n" + joined + "\n" + m.renderStatus()
+		}
 		return m.renderTabBar(m.width) + "\n" + joined + "\n" + m.renderStatus()
 	}
 
@@ -123,35 +129,152 @@ func (m Model) viewPlanning() string {
 	if maxLines < 1 {
 		maxLines = 1
 	}
-
-	gridContent := m.renderPlanGridContent(gridWidth, maxLines, now)
-
-	var rightContent string
-	if m.plan.mode == planList {
-		sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
-		var linkedTask *taskv1.Task
-		if sel != nil && sel.TaskId != 0 {
-			linkedTask = findTask(m.tree, sel.TaskId)
+	showBandUnstyled := m.plan.objective != "" || m.plan.mode == planObjectiveEdit
+	bandLinesUnstyled := []string{}
+	if showBandUnstyled {
+		// Render the band into unstyled lines: 1 header + up to 3 body lines.
+		bandStrUnstyled := m.renderPlanObjectiveBand(m.width)
+		bandLinesUnstyled = strings.Split(strings.TrimRight(bandStrUnstyled, "\n"), "\n")
+		if len(bandLinesUnstyled) > 4 {
+			bandLinesUnstyled = bandLinesUnstyled[:4]
 		}
-		rightContent = renderPlanDetail(sel, linkedTask, rightWidth, m.styled, m.md)
-	} else {
-		rightContent = m.renderPlanRightPane(rightWidth)
+	}
+	rowH := maxLines - len(bandLinesUnstyled)
+	if rowH < 1 {
+		rowH = 1
 	}
 
-	gridLines := splitLines(gridContent, maxLines)
-	rightLines := splitLines(rightContent, maxLines)
+	gridContent := m.renderPlanGridContent(gridWidth, rowH, now)
 
+	rightLines := m.renderPlanRightBlockUnstyled(gridWidth, rowH)
+
+	gridLines := splitLines(gridContent, rowH)
 	var rows []string
-	for i := 0; i < maxLines; i++ {
-		l := padRightAnsi(gridLines[i], gridWidth)
+	for i := 0; i < rowH; i++ {
 		r := ""
 		if i < len(rightLines) {
 			r = rightLines[i]
 		}
-		rows = append(rows, fmt.Sprintf("%s %s", l, r))
+		rows = append(rows, fmt.Sprintf("%s %s", padRightAnsi(gridLines[i], gridWidth), r))
 	}
 
-	return m.renderTabBar(m.width) + "\n" + strings.Join(rows, "\n") + "\n" + m.renderStatus()
+	body := strings.Join(rows, "\n")
+	if showBandUnstyled {
+		return m.renderTabBar(m.width) + "\n" + strings.Join(bandLinesUnstyled, "\n") + "\n" + body + "\n" + m.renderStatus()
+	}
+	return m.renderTabBar(m.width) + "\n" + body + "\n" + m.renderStatus()
+}
+
+// planRightSplit divides the right column into Details (top) + Notes (bottom).
+// rowH is the grid pane's innerHeight; the grid renders rowH+2 lines including
+// its border, so the two stacked panes must total rowH+2 lines as well.
+func planRightSplit(rowH int) (detailsInner, notesInner int) {
+	total := rowH + 2
+	detailsOuter := (total + 1) / 2
+	if detailsOuter < 5 {
+		detailsOuter = 5
+	}
+	if detailsOuter > total-3 {
+		detailsOuter = total - 3
+	}
+	if detailsOuter < 3 {
+		detailsOuter = 3
+	}
+	detailsInner = detailsOuter - 2
+	if detailsInner < 1 {
+		detailsInner = 1
+	}
+	notesOuter := total - detailsOuter
+	if notesOuter < 3 {
+		notesOuter = 3
+	}
+	notesInner = notesOuter - 2
+	if notesInner < 1 {
+		notesInner = 1
+	}
+	return detailsInner, notesInner
+}
+
+// renderPlanRightBlock returns the right-column content for the styled branch:
+// either the stacked details+notes panes, or a single picker/form pane, or the
+// full-column notes editor. gridFocused is returned so the caller can flip
+// focus between grid and right column.
+func (m Model) renderPlanRightBlock(innerW, rowH int) (string, bool) {
+	// Notes editor owns the whole right column.
+	if m.plan.mode == planNotesEdit {
+		content := m.renderPlanNotesEditor(innerW, rowH)
+		box := paneBox(content, m.width-m.width/2, rowH, "Notes (ctrl+s to save, esc to cancel)", false)
+		return box, false
+	}
+
+	// Picker or entry form: a single pane, no notes pane.
+	if m.plan.mode != planList && m.plan.mode != planObjectiveEdit {
+		content := m.renderPlanRightPane(innerW)
+		title := m.planFormPaneTitle()
+		box := paneBox(content, m.width-m.width/2, rowH, title, false)
+		return box, false
+	}
+
+	// List or objective-edit: split the right column into Details (top) + Notes (bottom).
+	// Per contracts/tui-planning-layout.md:
+	//   detailsInner = ceil(h/2) floored at 3; notesInner = h - detailsInner - 2
+	detailsInner, notesInner := planRightSplit(rowH)
+
+	sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
+	var linkedTask *taskv1.Task
+	if sel != nil && sel.TaskId != 0 {
+		linkedTask = findTask(m.tree, sel.TaskId)
+	}
+	detailsContent := renderPlanDetail(sel, linkedTask, innerW, m.styled, m.md)
+	notesContent := m.renderPlanNotesPane(innerW, notesInner)
+
+	detailsBox := paneBox(detailsContent, m.width-m.width/2, detailsInner, "Details", false)
+	notesBox := paneBox(notesContent, m.width-m.width/2, notesInner, "Notes", false)
+	return lipgloss.JoinVertical(lipgloss.Left, detailsBox, notesBox), true
+}
+
+// renderPlanRightBlockUnstyled returns the right-column lines for the unstyled
+// branch: a row-joined layout either showing details + notes blocks, a single
+// picker/form block, or a full-column notes editor view.
+func (m Model) renderPlanRightBlockUnstyled(gridWidth, rowH int) []string {
+	rightWidth := m.width - gridWidth - 1
+	if rightWidth < 1 {
+		rightWidth = 1
+	}
+
+	if m.plan.mode == planNotesEdit {
+		content := m.renderPlanNotesEditor(rightWidth, rowH)
+		return splitLines(content, rowH)
+	}
+
+	if m.plan.mode != planList && m.plan.mode != planObjectiveEdit {
+		content := m.renderPlanRightPane(rightWidth)
+		return splitLines(content, rowH)
+	}
+
+	detailsInner, notesInner := planRightSplit(rowH)
+
+	sel := selectedPlanEntry(m.plan.entries, m.plan.cursor)
+	var linkedTask *taskv1.Task
+	if sel != nil && sel.TaskId != 0 {
+		linkedTask = findTask(m.tree, sel.TaskId)
+	}
+	detailsContent := renderPlanDetail(sel, linkedTask, rightWidth, m.styled, m.md)
+	notesContent := m.renderPlanNotesPane(rightWidth, notesInner)
+
+	lines := []string{}
+	lines = append(lines, splitLines("===== Details =====", 1)...)
+	lines = append(lines, splitLines(detailsContent, detailsInner)...)
+	lines = append(lines, splitLines("", 1)...)
+	lines = append(lines, splitLines("===== Notes =====", 1)...)
+	lines = append(lines, splitLines(notesContent, notesInner)...)
+	out := make([]string, rowH)
+	for i := 0; i < rowH; i++ {
+		if i < len(lines) {
+			out[i] = lines[i]
+		}
+	}
+	return out
 }
 
 // statusHeight returns 2 while a pomodoro is active (timer + help line), else 1.

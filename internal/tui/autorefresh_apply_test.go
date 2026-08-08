@@ -517,3 +517,84 @@ func reportPeriodForTest() report.Period {
 		To:   time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC),
 	}
 }
+
+// ---- T031: Background load must not clobber the open PlanDay updates ----
+
+// TestBackgroundLoad_PlanDayDoesNotClobberObjectiveEditor checks that a bg
+// planEntriesMsg (background auto-refresh) does not overwrite the
+// PlanDay data while the objective editor is open (T031, contracts/tui-planning-layout.md).
+func TestBackgroundLoad_PlanDayDoesNotClobberObjectiveEditor(t *testing.T) {
+	m := ExportNewPlanModel(&fakeTaskClient{}, &fakePlanClient{}, "2026-05-27")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{{Id: 1, Name: "a"}}, 0)
+	m.plan.mode = planObjectiveEdit
+	m.plan.objectiveInput.SetValue("Draft in progress")
+
+	bgMsg := planEntriesMsg{
+		entries:  []*planv1.PlanEntry{{Id: 1, Name: "a"}},
+		dayProto: &planv1.PlanDay{Day: "2026-05-27", Objective: "ServerSide value"},
+		bg:       true,
+		day:      "2026-05-27",
+	}
+	next, _ := m.Update(bgMsg)
+	nm := next.(Model)
+
+	if nm.plan.objective != "" {
+		t.Errorf("bg load must not overwrite the displayed objective while editor is open; got %q", nm.plan.objective)
+	}
+	if nm.plan.objectiveInput.Value() != "Draft in progress" {
+		t.Errorf("bg load must not overwrite the editor draft; got %q", nm.plan.objectiveInput.Value())
+	}
+}
+
+// TestBackgroundLoad_PlanDayDiscardedOnWrongDay ensures a bg load for another
+// day does not touch the open draft (T031).
+func TestBackgroundLoad_PlanDayDiscardedOnWrongDay(t *testing.T) {
+	m := ExportNewPlanModel(&fakeTaskClient{}, &fakePlanClient{}, "2026-05-27")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{{Id: 1, Name: "a"}}, 0)
+	m.plan.mode = planObjectiveEdit
+	m.plan.objectiveInput.SetValue("Draft in progress")
+
+	bgMsg := planEntriesMsg{
+		entries:  []*planv1.PlanEntry{{Id: 99, Name: "wrong day"}},
+		dayProto: &planv1.PlanDay{Day: "2026-05-28", Objective: "Other"},
+		bg:       true,
+		day:      "2026-05-28",
+	}
+	next, _ := m.Update(bgMsg)
+	nm := next.(Model)
+
+	if nm.plan.objective != "" {
+		t.Errorf("bg load for a different day must not overwrite; got %q", nm.plan.objective)
+	}
+	if nm.plan.objectiveInput.Value() != "Draft in progress" {
+		t.Errorf("wrong-day bg must not overwrite the editor draft; got %q", nm.plan.objectiveInput.Value())
+	}
+}
+
+// ---- T046: Background load must not clobber an open Plan notes draft. ----
+
+// TestBackgroundLoad_PlanDayDoesNotClobberNotesEditor checks the bg path for
+// the notes editor mirrors the objective one: an in-progress draft is never
+// overwritten by a server-side response.
+func TestBackgroundLoad_PlanDayDoesNotClobberNotesEditor(t *testing.T) {
+	m := ExportNewPlanModel(&fakeTaskClient{}, &fakePlanClient{}, "2026-05-27")
+	ExportSetPlanEntries(&m, []*planv1.PlanEntry{{Id: 1, Name: "a"}}, 0)
+	m.plan.mode = planNotesEdit
+	ExportSetPlanNotesInput(&m, "Draft in progress")
+
+	bgMsg := planEntriesMsg{
+		entries:  []*planv1.PlanEntry{{Id: 1, Name: "a"}},
+		dayProto: &planv1.PlanDay{Day: "2026-05-27", Notes: "ServerSide value"},
+		bg:       true,
+		day:      "2026-05-27",
+	}
+	next, _ := m.Update(bgMsg)
+	nm := next.(Model)
+
+	if nm.plan.notes != "" {
+		t.Errorf("bg load must not overwrite the displayed notes while editor is open; got %q", nm.plan.notes)
+	}
+	if v := nm.plan.notesInput.Value(); v != "Draft in progress" {
+		t.Errorf("bg load must not overwrite the notes editor draft; got %q", v)
+	}
+}

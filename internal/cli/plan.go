@@ -64,6 +64,8 @@ func runPlan(profile string, args []string) int {
 		return runPlanRename(client, day, args[1:])
 	case "mv":
 		return runPlanMv(client, day, args[1:])
+	case "objective":
+		return runPlanObjective(client, day, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown plan subcommand: %s\n", args[0])
 		fmt.Fprintln(os.Stderr, "Run 'twig help plan' for usage.")
@@ -81,6 +83,7 @@ func printPlanUsage(w io.Writer) {
 	fmt.Fprintln(w, "  rm <n>                              Remove entry n")
 	fmt.Fprintln(w, "  rename <n> <name>                   Rename entry n")
 	fmt.Fprintln(w, "  mv <n> [start|null] [dur|end]        Move entry n (omit start or 'null' to unschedule)")
+	fmt.Fprintln(w, "  objective [text]                    Print or set the day's objective")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  --date YYYY-MM-DD    Target a specific day (default: today)")
@@ -322,4 +325,52 @@ func printPlanError(err error) int {
 		fmt.Fprintln(os.Stderr, "error:", err)
 	}
 	return 1
+}
+
+// runPlanObjective prints or sets the day's objective. With no positional
+// argument it prints the stored objective verbatim (bare, no label, no
+// styling); with one argument it calls SetPlanObjective and prints a warm
+// confirmation. More than one argument is a usage error.
+//
+// The day is parsed by the calling runPlan before this is invoked, so it
+// always inherits the existing --date flag and today default.
+func runPlanObjective(client planv1connect.PlanServiceClient, day string, args []string) int {
+	if len(args) == 0 {
+		resp, err := client.ListPlanEntries(context.Background(), connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		obj := resp.Msg.GetDay().GetObjective()
+		if obj == "" {
+			return 0
+		}
+		fmt.Println(obj)
+		return 0
+	}
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "objective: too many arguments (expected 0 or 1)")
+		return 1
+	}
+	value := args[0]
+	resp, err := client.SetPlanObjective(context.Background(), connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: value}))
+	if err != nil {
+		code := connect.CodeOf(err)
+		if code == connect.CodeInvalidArgument {
+			msg := UserMessage(err)
+			if msg == "" || msg == err.Error() {
+				msg = "That objective is a bit long — keep it under 255 characters."
+			}
+			fmt.Fprintln(os.Stderr, msg)
+			return 1
+		}
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	if resp.Msg.GetDay().GetObjective() == "" {
+		fmt.Println("Objective cleared.")
+	} else {
+		fmt.Println("Objective set — that's the one that matters today.")
+	}
+	return 0
 }

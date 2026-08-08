@@ -24,6 +24,30 @@ type Plan struct {
 	Pool    *pgxpool.Pool
 }
 
+// dbPlanDayToProto turns a stored PlanDay row into the wire message.
+// `day` is `e.Day.Time.Format(...)` so callers can always echo the stored value.
+func dbPlanDayToProto(e db.PlanDay) *planv1.PlanDay {
+	return &planv1.PlanDay{
+		Day:       e.Day.Time.Format("2006-01-02"),
+		Objective: e.Objective,
+		Notes:     e.Notes,
+	}
+}
+
+// loadPlanDay returns the stored PlanDay for (userID, day), or a zero-value
+// PlanDay (with Day echoed in YYYY-MM-DD) if no row exists. It never returns
+// pgx.ErrNoRows.
+func (p *Plan) loadPlanDay(ctx context.Context, userID int64, day pgtype.Date) (*planv1.PlanDay, error) {
+	row, err := p.Queries.GetPlanDay(ctx, db.GetPlanDayParams{UserID: userID, Day: day})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &planv1.PlanDay{Day: day.Time.Format("2006-01-02")}, nil
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return dbPlanDayToProto(row), nil
+}
+
 func dbPlanEntryToProto(e db.PlanEntry) *planv1.PlanEntry {
 	pe := &planv1.PlanEntry{
 		Day:            e.Day.Time.Format("2006-01-02"),
@@ -121,6 +145,11 @@ func (p *Plan) ListPlanEntries(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
+	dayMsg, err := p.loadPlanDay(ctx, userID, day)
+	if err != nil {
+		return nil, err
+	}
+
 	// Collect task IDs that need name fallback.
 	taskNames := map[int64]string{}
 	for _, r := range rows {
@@ -158,7 +187,57 @@ func (p *Plan) ListPlanEntries(
 		}
 		entries[i] = pe
 	}
-	return connect.NewResponse(&planv1.ListPlanEntriesResponse{Entries: entries}), nil
+	return connect.NewResponse(&planv1.ListPlanEntriesResponse{Entries: entries, Day: dayMsg}), nil
+}
+
+func (p *Plan) SetPlanObjective(
+	ctx context.Context,
+	req *connect.Request[planv1.SetPlanObjectiveRequest],
+) (*connect.Response[planv1.SetPlanObjectiveResponse], error) {
+	userID := auth.UserID(ctx)
+
+	day, err := parseDay(req.Msg.Day)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(req.Msg.Objective)
+	if utf8.RuneCountInString(trimmed) > 255 {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("That objective is a bit long — keep it under 255 characters."))
+	}
+
+	row, err := p.Queries.UpsertPlanDayObjective(ctx, db.UpsertPlanDayObjectiveParams{
+		UserID:    userID,
+		Day:       day,
+		Objective: trimmed,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&planv1.SetPlanObjectiveResponse{Day: dbPlanDayToProto(row)}), nil
+}
+
+func (p *Plan) SetPlanNotes(
+	ctx context.Context,
+	req *connect.Request[planv1.SetPlanNotesRequest],
+) (*connect.Response[planv1.SetPlanNotesResponse], error) {
+	userID := auth.UserID(ctx)
+
+	day, err := parseDay(req.Msg.Day)
+	if err != nil {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(req.Msg.Notes)
+
+	row, err := p.Queries.UpsertPlanDayNotes(ctx, db.UpsertPlanDayNotesParams{
+		UserID: userID,
+		Day:    day,
+		Notes:  trimmed,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&planv1.SetPlanNotesResponse{Day: dbPlanDayToProto(row)}), nil
 }
 
 func (p *Plan) AddPlanEvent(

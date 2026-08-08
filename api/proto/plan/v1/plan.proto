@@ -35,6 +35,14 @@ service PlanService {
   // Untimed entries count. Results are ordered by task_id then day ascending,
   // with no duplicate (task_id, day) pairs.
   rpc ListScheduledDays(ListScheduledDaysRequest) returns (ListScheduledDaysResponse);
+
+  // SetPlanObjective replaces the day's objective. An empty or whitespace-only
+  // objective clears it. Leaves notes untouched.
+  rpc SetPlanObjective(SetPlanObjectiveRequest) returns (SetPlanObjectiveResponse);
+
+  // SetPlanNotes replaces the day's notes. Empty or whitespace-only notes clear
+  // them. Leaves the objective untouched.
+  rpc SetPlanNotes(SetPlanNotesRequest) returns (SetPlanNotesResponse);
 }
 
 // PlanEntry is a single scheduled segment of one day. Identity within a user's
@@ -60,7 +68,25 @@ message PlanEntry {
 }
 
 message ListPlanEntriesRequest { string day = 1; }
-message ListPlanEntriesResponse { repeated PlanEntry entries = 1; }
+message ListPlanEntriesResponse {
+  repeated PlanEntry entries = 1;
+  // Always populated. day.day echoes the request; objective and notes are ""
+  // when unset.
+  PlanDay day = 2;
+}
+
+// PlanDay carries the day-scoped fields a user can set on a plan day. It
+// exists independently of whether the day has any entries. Empty string means
+// "not set" for both text fields; there is no separate absent state.
+message PlanDay {
+  // The day these values belong to, in YYYY-MM-DD.
+  string day = 1;
+  // Short markdown reminder of the main thing to get done that day. ""
+  // when unset.
+  string objective = 2;
+  // Long-form markdown notes about the day. "" when unset.
+  string notes = 3;
+}
 
 message AddPlanTaskRequest {
   string day = 1;
@@ -138,3 +164,19 @@ message ReorderPlanEntryResponse {
   // them in the untimed pane.
   repeated PlanEntry untimed = 1;
 }
+
+message SetPlanObjectiveRequest {
+  string day = 1;
+  // Markdown source. Trimmed of surrounding whitespace by the server. At most
+  // 255 runes after trimming. Empty (or whitespace-only) clears the objective.
+  string objective = 2;
+}
+message SetPlanObjectiveResponse { PlanDay day = 1; }
+
+message SetPlanNotesRequest {
+  string day = 1;
+  // Markdown source. Trimmed of surrounding whitespace by the server. No length
+  // limit. Empty (or whitespace-only) clears the notes.
+  string notes = 2;
+}
+message SetPlanNotesResponse { PlanDay day = 1; }

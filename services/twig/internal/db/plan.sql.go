@@ -28,6 +28,27 @@ func (q *Queries) DeletePlanEntry(ctx context.Context, arg DeletePlanEntryParams
 	return id, err
 }
 
+const getPlanDay = `-- name: GetPlanDay :one
+SELECT user_id, day, objective, notes FROM plan_days WHERE user_id = $1 AND day = $2
+`
+
+type GetPlanDayParams struct {
+	UserID int64
+	Day    pgtype.Date
+}
+
+func (q *Queries) GetPlanDay(ctx context.Context, arg GetPlanDayParams) (PlanDay, error) {
+	row := q.db.QueryRow(ctx, getPlanDay, arg.UserID, arg.Day)
+	var i PlanDay
+	err := row.Scan(
+		&i.UserID,
+		&i.Day,
+		&i.Objective,
+		&i.Notes,
+	)
+	return i, err
+}
+
 const getPlanEntry = `-- name: GetPlanEntry :one
 SELECT user_id, day, id, task_id, name, start_minute, duration_minute, position FROM plan_entries WHERE user_id = $1 AND day = $2 AND id = $3
 `
@@ -400,6 +421,54 @@ func (q *Queries) UpdatePlanEntryTimeAndPosition(ctx context.Context, arg Update
 		&i.StartMinute,
 		&i.DurationMinute,
 		&i.Position,
+	)
+	return i, err
+}
+
+const upsertPlanDayNotes = `-- name: UpsertPlanDayNotes :one
+INSERT INTO plan_days (user_id, day, notes) VALUES ($1, $2, $3)
+ON CONFLICT (user_id, day) DO UPDATE SET notes = EXCLUDED.notes
+RETURNING user_id, day, objective, notes
+`
+
+type UpsertPlanDayNotesParams struct {
+	UserID int64
+	Day    pgtype.Date
+	Notes  string
+}
+
+func (q *Queries) UpsertPlanDayNotes(ctx context.Context, arg UpsertPlanDayNotesParams) (PlanDay, error) {
+	row := q.db.QueryRow(ctx, upsertPlanDayNotes, arg.UserID, arg.Day, arg.Notes)
+	var i PlanDay
+	err := row.Scan(
+		&i.UserID,
+		&i.Day,
+		&i.Objective,
+		&i.Notes,
+	)
+	return i, err
+}
+
+const upsertPlanDayObjective = `-- name: UpsertPlanDayObjective :one
+INSERT INTO plan_days (user_id, day, objective) VALUES ($1, $2, $3)
+ON CONFLICT (user_id, day) DO UPDATE SET objective = EXCLUDED.objective
+RETURNING user_id, day, objective, notes
+`
+
+type UpsertPlanDayObjectiveParams struct {
+	UserID    int64
+	Day       pgtype.Date
+	Objective string
+}
+
+func (q *Queries) UpsertPlanDayObjective(ctx context.Context, arg UpsertPlanDayObjectiveParams) (PlanDay, error) {
+	row := q.db.QueryRow(ctx, upsertPlanDayObjective, arg.UserID, arg.Day, arg.Objective)
+	var i PlanDay
+	err := row.Scan(
+		&i.UserID,
+		&i.Day,
+		&i.Objective,
+		&i.Notes,
 	)
 	return i, err
 }

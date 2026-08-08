@@ -33,6 +33,13 @@ type GoalStatusUpdate struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PlanDay struct {
+	UserID    int64
+	Day       pgtype.Date
+	Objective string
+	Notes     string
+}
+
 type PlanEntry struct {
 	UserID         int64
 	Day            pgtype.Date

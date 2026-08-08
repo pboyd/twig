@@ -30,6 +30,7 @@ func newTestPlanHandler(t *testing.T) (*handler.Plan, *handler.Task, int64) {
 		Pool:    pool,
 	}
 	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM plan_days WHERE user_id = $1", userID)
 		pool.Exec(context.Background(), "DELETE FROM plan_entries WHERE user_id = $1", userID)
 	})
 	return planH, taskH, userID
@@ -44,6 +45,7 @@ func newTestPlanPool(t *testing.T) (*handler.Plan, *handler.Task, int64, *pgxpoo
 		Pool:    pool,
 	}
 	t.Cleanup(func() {
+		pool.Exec(context.Background(), "DELETE FROM plan_days WHERE user_id = $1", userID)
 		pool.Exec(context.Background(), "DELETE FROM plan_entries WHERE user_id = $1", userID)
 	})
 	return planH, taskH, userID, pool
@@ -1685,5 +1687,388 @@ func TestListScheduledDays_Distinct(t *testing.T) {
 	if resp.Msg.Days[0].Day != day1 || resp.Msg.Days[1].Day != day2 {
 		t.Errorf("expected ascending order [%s, %s], got [%s, %s]",
 			day1, day2, resp.Msg.Days[0].Day, resp.Msg.Days[1].Day)
+	}
+}
+
+// ---- T013: ListPlanEntries populates Day ----
+
+func TestListPlanEntries_DayForStoredRow(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	// Set objective + notes via SetPlanObjective/SetPlanNotes.
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+		Day:       day,
+		Objective: "Ship the migration",
+	})); err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	if _, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{
+		Day:  day,
+		Notes: "Blocked on review",
+	})); err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	insertPlanEntry(t, planH.Queries, userID, day, 0, "Lunch", 720, 60)
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if resp.Msg.Day == nil {
+		t.Fatal("day should be non-nil")
+	}
+	if resp.Msg.Day.Day != day {
+		t.Errorf("day.day = %q, want %q", resp.Msg.Day.Day, day)
+	}
+	if resp.Msg.Day.Objective != "Ship the migration" {
+		t.Errorf("day.objective = %q, want %q", resp.Msg.Day.Objective, "Ship the migration")
+	}
+	if resp.Msg.Day.Notes != "Blocked on review" {
+		t.Errorf("day.notes = %q, want %q", resp.Msg.Day.Notes, "Blocked on review")
+	}
+}
+
+func TestListPlanEntries_DayForMissingRow(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if resp.Msg.Day == nil {
+		t.Fatal("day should be non-nil even with no row")
+	}
+	if resp.Msg.Day.Day != day {
+		t.Errorf("day.day = %q, want %q", resp.Msg.Day.Day, day)
+	}
+	if resp.Msg.Day.Objective != "" || resp.Msg.Day.Notes != "" {
+		t.Errorf("day.objective=%q day.notes=%q, want both empty",
+			resp.Msg.Day.Objective, resp.Msg.Day.Notes)
+	}
+}
+
+func TestListPlanEntries_DayNoRowWithEntries(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	// Entries but no plan_days row.
+	insertPlanEntry(t, planH.Queries, userID, day, 0, "Lunch", 720, 60)
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if len(resp.Msg.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(resp.Msg.Entries))
+	}
+	if resp.Msg.Day.GetObjective() != "" || resp.Msg.Day.GetNotes() != "" {
+		t.Errorf("day should be empty, got objective=%q notes=%q",
+			resp.Msg.Day.GetObjective(), resp.Msg.Day.GetNotes())
+	}
+}
+
+func TestListPlanEntries_DayRowWithoutEntries(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	// plan_days row but no entries.
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+		Day:       day,
+		Objective: "X",
+	})); err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+
+	resp, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if len(resp.Msg.Entries) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(resp.Msg.Entries))
+	}
+	if resp.Msg.Day.GetObjective() != "X" {
+		t.Errorf("day.objective = %q, want %q", resp.Msg.Day.GetObjective(), "X")
+	}
+}
+
+// ---- T014: SetPlanObjective ----
+
+func TestSetPlanObjective(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+		Day:       day,
+		Objective: "Ship it",
+	}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "Ship it" {
+		t.Errorf("objective = %q, want %q", resp.Msg.Day.GetObjective(), "Ship it")
+	}
+}
+
+func TestSetPlanObjective_Overwrite(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "First"})); err != nil {
+		t.Fatalf("SetPlanObjective first: %v", err)
+	}
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "Second"}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective second: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "Second" {
+		t.Errorf("objective = %q, want %q", resp.Msg.Day.GetObjective(), "Second")
+	}
+}
+
+func TestSetPlanObjective_ClearEmpty(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "X"})); err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: ""}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective clear: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "" {
+		t.Errorf("objective = %q, want empty", resp.Msg.Day.GetObjective())
+	}
+}
+
+func TestSetPlanObjective_ClearWhitespaceOnly(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "X"})); err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "   \t  "}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective whitespace: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "" {
+		t.Errorf("objective = %q, want empty", resp.Msg.Day.GetObjective())
+	}
+}
+
+func TestSetPlanObjective_TrimsSurrounding(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+		Day:       day,
+		Objective: "  Ship it  ",
+	}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "Ship it" {
+		t.Errorf("objective = %q, want %q (trimmed)", resp.Msg.Day.GetObjective(), "Ship it")
+	}
+}
+
+func TestSetPlanObjective_LengthBoundary(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	max255 := strings.Repeat("a", 255)
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: max255}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective 255 chars: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != max255 {
+		t.Errorf("objective length = %d, want 255", len(resp.Msg.Day.GetObjective()))
+	}
+
+	twosix := strings.Repeat("a", 256)
+	_, err = planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: twosix}))
+	if err == nil {
+		t.Fatal("SetPlanObjective 256 chars: expected error, got nil")
+	}
+	connectErr, ok := err.(*connect.Error)
+	if !ok {
+		t.Fatalf("expected connect.Error, got %T: %v", err, err)
+	}
+	if connectErr.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument, got %s", connectErr.Code())
+	}
+	// Verify nothing was written.
+	resp2, err := planH.ListPlanEntries(ctx, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries: %v", err)
+	}
+	if resp2.Msg.Day.GetObjective() != max255 {
+		t.Errorf("objective should remain %q, got %q", max255, resp2.Msg.Day.GetObjective())
+	}
+}
+
+func TestSetPlanObjective_InvalidDay(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+
+	_, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{
+		Day:       "nope",
+		Objective: "X",
+	}))
+	if err == nil {
+		t.Fatal("expected error for invalid day, got nil")
+	}
+	connectErr, ok := err.(*connect.Error)
+	if !ok {
+		t.Fatalf("expected connect.Error, got %T: %v", err, err)
+	}
+	if connectErr.Code() != connect.CodeInvalidArgument {
+		t.Errorf("expected CodeInvalidArgument, got %s", connectErr.Code())
+	}
+}
+
+func TestSetPlanObjective_LeavesNotesUntouched(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "Keep me"})); err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	resp, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "Obj"}))
+	if err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	if resp.Msg.Day.GetNotes() != "Keep me" {
+		t.Errorf("notes = %q, want %q (unchanged)", resp.Msg.Day.GetNotes(), "Keep me")
+	}
+}
+
+// ---- T015: SetPlanNotes ----
+
+func TestSetPlanNotes(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	resp, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "hello\nworld"}))
+	if err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	if resp.Msg.Day.GetNotes() != "hello\nworld" {
+		t.Errorf("notes = %q, want %q", resp.Msg.Day.GetNotes(), "hello\nworld")
+	}
+}
+
+func TestSetPlanNotes_Clear(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "hi"})); err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	resp, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: ""}))
+	if err != nil {
+		t.Fatalf("SetPlanNotes clear: %v", err)
+	}
+	if resp.Msg.Day.GetNotes() != "" {
+		t.Errorf("notes = %q, want empty", resp.Msg.Day.GetNotes())
+	}
+}
+
+func TestSetPlanNotes_TrimsSurrounding(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	resp, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{
+		Day:  day,
+		Notes: "  hi there  ",
+	}))
+	if err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	if resp.Msg.Day.GetNotes() != "hi there" {
+		t.Errorf("notes = %q, want %q (trimmed)", resp.Msg.Day.GetNotes(), "hi there")
+	}
+}
+
+func TestSetPlanNotes_PreservesMultiline(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	src := "line one\nline two\n   indented\n\nblank then text"
+	resp, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: src}))
+	if err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	if resp.Msg.Day.GetNotes() != src {
+		t.Errorf("notes = %q, want %q (verbatim)", resp.Msg.Day.GetNotes(), src)
+	}
+}
+
+func TestSetPlanNotes_LeavesObjectiveUntouched(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	ctx := ctxWithUser(userID)
+	day := todayStr()
+
+	if _, err := planH.SetPlanObjective(ctx, connect.NewRequest(&planv1.SetPlanObjectiveRequest{Day: day, Objective: "Obj"})); err != nil {
+		t.Fatalf("SetPlanObjective: %v", err)
+	}
+	resp, err := planH.SetPlanNotes(ctx, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "Note"}))
+	if err != nil {
+		t.Fatalf("SetPlanNotes: %v", err)
+	}
+	if resp.Msg.Day.GetObjective() != "Obj" {
+		t.Errorf("objective = %q, want %q (unchanged)", resp.Msg.Day.GetObjective(), "Obj")
+	}
+}
+
+func TestSetPlanNotes_PerUserIsolation(t *testing.T) {
+	planH, _, userID := newTestPlanHandler(t)
+	taskH2, userID2 := newTestHandler(t)
+	pool2 := testPool(t)
+	planH2 := &handler.Plan{Queries: taskH2.Queries, Pool: pool2}
+	ctx2 := ctxWithUser(userID2)
+	t.Cleanup(func() {
+		pool2.Exec(context.Background(), "DELETE FROM plan_days WHERE user_id = $1", userID2)
+	})
+
+	day := todayStr()
+	if _, err := planH.SetPlanNotes(ctxWithUser(userID), connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "user1 notes"})); err != nil {
+		t.Fatalf("SetPlanNotes user1: %v", err)
+	}
+	if _, err := planH2.SetPlanNotes(ctx2, connect.NewRequest(&planv1.SetPlanNotesRequest{Day: day, Notes: "user2 notes"})); err != nil {
+		t.Fatalf("SetPlanNotes user2: %v", err)
+	}
+
+	r1, err := planH.ListPlanEntries(ctxWithUser(userID), connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries user1: %v", err)
+	}
+	r2, err := planH2.ListPlanEntries(ctx2, connect.NewRequest(&planv1.ListPlanEntriesRequest{Day: day}))
+	if err != nil {
+		t.Fatalf("ListPlanEntries user2: %v", err)
+	}
+	if r1.Msg.Day.GetNotes() != "user1 notes" {
+		t.Errorf("user1 notes = %q, want %q", r1.Msg.Day.GetNotes(), "user1 notes")
+	}
+	if r2.Msg.Day.GetNotes() != "user2 notes" {
+		t.Errorf("user2 notes = %q, want %q", r2.Msg.Day.GetNotes(), "user2 notes")
 	}
 }
