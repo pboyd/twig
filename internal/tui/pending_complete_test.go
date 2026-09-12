@@ -120,6 +120,76 @@ func TestCursorDown_ClearsPendingComplete(t *testing.T) {
 	}
 }
 
+// TestCursorDown_AfterComplete_LandsOnNextEntry verifies that pressing Down after
+// completing the highlighted untimed entry lands on the entry directly below it,
+// not the one after that (regression: cursor was incremented before the completed
+// entry was dropped, shifting the target index).
+func TestCursorDown_AfterComplete_LandsOnNextEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(1)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", Completed: true, TaskId: 5}, // pending complete, lingering
+		{Id: 2, Name: "B", TaskId: 6},
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 2 || m2.plan.entries[1].Id != 3 {
+		t.Fatalf("expected entries [B, C] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 0 || m2.plan.entries[m2.plan.cursor].Id != 2 {
+		t.Errorf("cursor Down after complete: expected to land on entry B (id 2), got cursor=%d entries=%+v", m2.plan.cursor, m2.plan.entries)
+	}
+}
+
+// TestCursorDown_AfterCompletingLastEntry verifies Down from the last (pending-complete)
+// entry clamps onto the new last entry after it is dropped.
+func TestCursorDown_AfterCompletingLastEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(2)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6}, // pending complete, lingering, at cursor
+	}
+	m := buildCompleteTestModel(fc, entries, 1)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 1 || m2.plan.entries[0].Id != 1 {
+		t.Fatalf("expected entries [A] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 0 {
+		t.Errorf("cursor Down after completing last entry: expected cursor 0, got %d", m2.plan.cursor)
+	}
+}
+
+// TestCursorUp_AfterComplete_LandsOnPrevEntry verifies Up after completing the
+// highlighted untimed entry lands on the entry directly above it.
+func TestCursorUp_AfterComplete_LandsOnPrevEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(3)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", TaskId: 6},
+		{Id: 3, Name: "C", Completed: true, TaskId: 7}, // pending complete, lingering, at cursor
+	}
+	m := buildCompleteTestModel(fc, entries, 2)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "k")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 1 || m2.plan.entries[1].Id != 2 {
+		t.Fatalf("expected entries [A, B] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 1 || m2.plan.entries[m2.plan.cursor].Id != 2 {
+		t.Errorf("cursor Up after complete: expected to land on entry B (id 2), got cursor=%d entries=%+v", m2.plan.cursor, m2.plan.entries)
+	}
+}
+
 // TestPlanPrevDay_ClearsPendingComplete verifies that day navigation clears pendingComplete.
 func TestPlanPrevDay_ClearsPendingComplete(t *testing.T) {
 	fc := &fakePlanClient{}

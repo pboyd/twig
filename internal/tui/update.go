@@ -2096,37 +2096,32 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Navigation.
 	switch {
 	case key.Matches(msg, m.keys.Up):
+		m.plan.pendingComplete = nil
+		m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
 		if m.plan.cursor > 0 {
 			m.plan.cursor--
 		}
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
+		m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 	case key.Matches(msg, m.keys.Down):
-		if m.plan.cursor < len(m.plan.entries)-1 {
-			m.plan.cursor++
+		var targetID int32
+		if m.plan.cursor+1 < len(m.plan.entries) {
+			targetID = m.plan.entries[m.plan.cursor+1].Id
 		}
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+		m.plan.pendingComplete = nil
+		m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+		if targetID != 0 {
+			m.plan.cursor = findPlanCursor(m.plan.entries, targetID)
+		} else {
 			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 		}
 	case key.Matches(msg, m.keys.First):
+		m.plan.pendingComplete = nil
+		m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
 		m.plan.cursor = clampCursor(0, len(m.plan.entries))
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
 	case key.Matches(msg, m.keys.Last):
+		m.plan.pendingComplete = nil
+		m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
 		m.plan.cursor = clampCursor(len(m.plan.entries)-1, len(m.plan.entries))
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
 
 	// Day navigation.
 	case key.Matches(msg, m.keys.PlanPrevDay):

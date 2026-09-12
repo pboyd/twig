@@ -592,6 +592,16 @@ func displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) [
 	return result
 }
 
+// findPlanCursor returns the index of the entry with the given id, or 0 if absent.
+func findPlanCursor(entries []*planv1.PlanEntry, id int32) int {
+	for i, e := range entries {
+		if e.Id == id {
+			return i
+		}
+	}
+	return 0
+}
+
 // ── plan reducer ──────────────────────────────────────────────────────────
 
 // handlePlanEntriesMsg processes a ListPlanEntries response: replaces the
