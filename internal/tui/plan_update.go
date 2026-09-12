@@ -592,6 +592,18 @@ func displayedPlanEntries(entries []*planv1.PlanEntry, pendingComplete *int32) [
 	return result
 }
 
+// findPlanCursor returns the index of the entry with the given id, or -1 if
+// absent — callers must handle "not found" explicitly rather than defaulting
+// to the top of the list.
+func findPlanCursor(entries []*planv1.PlanEntry, id int32) int {
+	for i, e := range entries {
+		if e.Id == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // ── plan reducer ──────────────────────────────────────────────────────────
 
 // handlePlanEntriesMsg processes a ListPlanEntries response: replaces the
@@ -641,21 +653,17 @@ func (m Model) handlePlanEntriesMsg(msg planEntriesMsg, _ int32) Model {
 	}
 
 	if msg.highlightID != 0 {
-		for i, e := range m.plan.entries {
-			if e.Id == msg.highlightID {
-				m.plan.cursor = i
-				m.plan.lastLoad = m.nowOrDefault()
-				return m
-			}
+		if i := findPlanCursor(m.plan.entries, msg.highlightID); i >= 0 {
+			m.plan.cursor = i
+			m.plan.lastLoad = m.nowOrDefault()
+			return m
 		}
 	}
 	if curID != 0 {
-		for i, e := range m.plan.entries {
-			if e.Id == curID {
-				m.plan.cursor = i
-				m.plan.lastLoad = m.nowOrDefault()
-				return m
-			}
+		if i := findPlanCursor(m.plan.entries, curID); i >= 0 {
+			m.plan.cursor = i
+			m.plan.lastLoad = m.nowOrDefault()
+			return m
 		}
 	}
 	m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))

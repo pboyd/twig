@@ -390,6 +390,18 @@ func updateTaskCmd(client taskv1connect.TaskServiceClient, msg editSavedMsg) tea
 			}
 		}
 
+		// UpdateTaskRequest has no estimate field, so the form's Pomodoro
+		// estimate is sent separately via SetEstimate. Full-replace: an empty
+		// field clears the estimate, matching the rest of the form's semantics.
+		if est, err := parseEstimateStr(msg.estimateStr); err == nil {
+			if _, err := client.SetEstimate(context.Background(), connect.NewRequest(&taskv1.SetEstimateRequest{
+				TaskId:   id,
+				Estimate: est,
+			})); err != nil {
+				return refreshedMsg{err: err}
+			}
+		}
+
 		return fetchAfterMutation(client, id)
 	}
 }
@@ -429,6 +441,17 @@ func createTaskCmd(client taskv1connect.TaskServiceClient, planClient planv1conn
 			goalReq := &taskv1.SetTaskGoalRequest{TaskId: newID, GoalId: msg.newGoalID}
 			if _, err := client.SetTaskGoal(context.Background(), connect.NewRequest(goalReq)); err != nil {
 				return taskGoalMutationMsg{err: err}
+			}
+		}
+
+		// CreateTaskRequest has no estimate field, so the form's Pomodoro
+		// estimate (if any) is set separately via SetEstimate.
+		if est, err := parseEstimateStr(msg.estimateStr); err == nil && est != 0 {
+			if _, err := client.SetEstimate(context.Background(), connect.NewRequest(&taskv1.SetEstimateRequest{
+				TaskId:   newID,
+				Estimate: est,
+			})); err != nil {
+				return refreshedMsg{highlightID: newID, err: err}
 			}
 		}
 
@@ -505,6 +528,20 @@ func uncompleteTaskCmd(client taskv1connect.TaskServiceClient, id int64) tea.Cmd
 		}
 		return fetchAfterMutation(client, id)
 	}
+}
+
+// parseEstimateStr validates an editSavedMsg.estimateStr the way the server
+// will: an empty string means "no estimate" (0); otherwise it must parse as
+// an integer in [0, 10] (see api/proto/task/v1/task.proto's Estimate field).
+func parseEstimateStr(s string) (int32, error) {
+	if s == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseInt(s, 10, 32)
+	if err != nil || v < 0 || v > 10 {
+		return 0, fmt.Errorf("estimate must be an integer between 0 and 10")
+	}
+	return int32(v), nil
 }
 
 func setEstimateCmd(client taskv1connect.TaskServiceClient, id int64, estimate int32) tea.Cmd {
@@ -737,36 +774,6 @@ func setTaskGoalAndRefreshCmd(taskClient taskv1connect.TaskServiceClient, taskID
 			return taskGoalMutationMsg{err: err}
 		}
 		return taskGoalMutationMsg{}
-	}
-}
-
-// createAndLinkTaskCmd creates a task then associates it with goalID via SetTaskGoal.
-func createAndLinkTaskCmd(taskClient taskv1connect.TaskServiceClient, msg editSavedMsg, goalID int64) tea.Cmd {
-	return func() tea.Msg {
-		req := &taskv1.CreateTaskRequest{
-			Name:        msg.name,
-			Description: msg.description,
-		}
-		if msg.dueStr != "" {
-			ts, err := cli.ParseDue(msg.dueStr)
-			if err != nil {
-				return refreshedMsg{err: err}
-			}
-			req.Due = ts
-		}
-		createResp, err := taskClient.CreateTask(context.Background(), connect.NewRequest(req))
-		if err != nil {
-			return refreshedMsg{err: err}
-		}
-		newTaskID := createResp.Msg.Task.Id
-		_, err = taskClient.SetTaskGoal(context.Background(), connect.NewRequest(&taskv1.SetTaskGoalRequest{
-			TaskId: newTaskID,
-			GoalId: &goalID,
-		}))
-		if err != nil {
-			return refreshedMsg{err: err}
-		}
-		return fetchAfterMutation(taskClient, newTaskID)
 	}
 }
 
@@ -1988,6 +1995,24 @@ func (m Model) handleGoalNewTaskSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 		m.goal.err = fmt.Errorf("task name cannot be empty")
 		return m, nil
 	}
+	// Validate estimate/due/snooze here (mirroring handleEditSaved) so a bad
+	// value keeps the form open instead of failing inside the create command.
+	if _, err := parseEstimateStr(msg.estimateStr); err != nil {
+		m.goal.err = err
+		return m, nil
+	}
+	if msg.dueStr != "" {
+		if _, err := cli.ParseDue(msg.dueStr); err != nil {
+			m.goal.err = err
+			return m, nil
+		}
+	}
+	if msg.snoozeStr != "" {
+		if _, err := cli.ParseDue(msg.snoozeStr); err != nil {
+			m.goal.err = fmt.Errorf("snooze: %w", err)
+			return m, nil
+		}
+	}
 	visible := visibleGoals(m.goal.goals, m.goal.showAll)
 	if len(visible) == 0 || m.goal.cursor >= len(visible) {
 		m.goal.mode = goalList
@@ -1995,10 +2020,16 @@ func (m Model) handleGoalNewTaskSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	goalID := visible[m.goal.cursor].Id
+	msg.newGoalID = &goalID
 	m.goal.err = nil
 	m.goal.mode = goalList
 	m.mode = modeList
-	return m, createAndLinkTaskCmd(m.client, msg, goalID)
+	if msg.planDay != "" {
+		// Refresh the Plan tab's scheduled-days markers alongside the task
+		// tree, matching the Tasks tab create path (handleEditSaved).
+		return m, tea.Batch(createTaskCmd(m.client, m.planClient, msg), listScheduledDaysCmd(m.planClient))
+	}
+	return m, createTaskCmd(m.client, m.planClient, msg)
 }
 
 // handleGoalEditSaved handles an editSavedMsg when the Goals tab is active.
@@ -2094,39 +2125,35 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Navigation.
+	// Up/Down/First/Last all drop the pending-complete reprieve and re-filter
+	// the displayed entries first, so a completed untimed entry disappears on
+	// the next nav key press.
+	isPlanNavKey := key.Matches(msg, m.keys.Up) || key.Matches(msg, m.keys.Down) ||
+		key.Matches(msg, m.keys.First) || key.Matches(msg, m.keys.Last)
+	var downTargetID int32
+	if key.Matches(msg, m.keys.Down) && m.plan.cursor+1 < len(m.plan.entries) {
+		downTargetID = m.plan.entries[m.plan.cursor+1].Id
+	}
+	if isPlanNavKey {
+		m.plan.pendingComplete = nil
+		m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+	}
 	switch {
 	case key.Matches(msg, m.keys.Up):
 		if m.plan.cursor > 0 {
 			m.plan.cursor--
 		}
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
+		m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 	case key.Matches(msg, m.keys.Down):
-		if m.plan.cursor < len(m.plan.entries)-1 {
-			m.plan.cursor++
-		}
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
+		if i := findPlanCursor(m.plan.entries, downTargetID); downTargetID != 0 && i >= 0 {
+			m.plan.cursor = i
+		} else {
 			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
 		}
 	case key.Matches(msg, m.keys.First):
 		m.plan.cursor = clampCursor(0, len(m.plan.entries))
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
 	case key.Matches(msg, m.keys.Last):
 		m.plan.cursor = clampCursor(len(m.plan.entries)-1, len(m.plan.entries))
-		if m.plan.pendingComplete != nil {
-			m.plan.pendingComplete = nil
-			m.plan.entries = displayedPlanEntries(m.plan.entries, nil)
-			m.plan.cursor = clampCursor(m.plan.cursor, len(m.plan.entries))
-		}
 
 	// Day navigation.
 	case key.Matches(msg, m.keys.PlanPrevDay):
@@ -2218,6 +2245,10 @@ func (m Model) handlePlanningKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			} else {
 				notice = "Marked '" + entry.Name + "' as incomplete."
 				m.plan.pendingComplete = nil
+				// Optimistic: flip the local flag now so displayedPlanEntries
+				// doesn't filter the entry out while UncompleteTask is in
+				// flight. The refresh confirms it.
+				entry.Completed = false
 			}
 			return m, completePlanTaskCmd(m.client, m.plan.day, entry.TaskId, complete, entry.Id, notice)
 		}
@@ -2826,12 +2857,9 @@ func (m Model) handleEditSaved(msg editSavedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Validate estimate if provided.
-	if msg.estimateStr != "" {
-		_, err := strconv.ParseInt(msg.estimateStr, 10, 32)
-		if err != nil {
-			m.err = fmt.Errorf("estimate must be an integer")
-			return m, nil
-		}
+	if _, err := parseEstimateStr(msg.estimateStr); err != nil {
+		m.err = err
+		return m, nil
 	}
 
 	// Validate due if provided (ParseDue is called inside the cmd; we do a

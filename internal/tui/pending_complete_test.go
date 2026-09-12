@@ -120,6 +120,76 @@ func TestCursorDown_ClearsPendingComplete(t *testing.T) {
 	}
 }
 
+// TestCursorDown_AfterComplete_LandsOnNextEntry verifies that pressing Down after
+// completing the highlighted untimed entry lands on the entry directly below it,
+// not the one after that (regression: cursor was incremented before the completed
+// entry was dropped, shifting the target index).
+func TestCursorDown_AfterComplete_LandsOnNextEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(1)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", Completed: true, TaskId: 5}, // pending complete, lingering
+		{Id: 2, Name: "B", TaskId: 6},
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 2 || m2.plan.entries[1].Id != 3 {
+		t.Fatalf("expected entries [B, C] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 0 || m2.plan.entries[m2.plan.cursor].Id != 2 {
+		t.Errorf("cursor Down after complete: expected to land on entry B (id 2), got cursor=%d entries=%+v", m2.plan.cursor, m2.plan.entries)
+	}
+}
+
+// TestCursorDown_AfterCompletingLastEntry verifies Down from the last (pending-complete)
+// entry clamps onto the new last entry after it is dropped.
+func TestCursorDown_AfterCompletingLastEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(2)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6}, // pending complete, lingering, at cursor
+	}
+	m := buildCompleteTestModel(fc, entries, 1)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 1 || m2.plan.entries[0].Id != 1 {
+		t.Fatalf("expected entries [A] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 0 {
+		t.Errorf("cursor Down after completing last entry: expected cursor 0, got %d", m2.plan.cursor)
+	}
+}
+
+// TestCursorUp_AfterComplete_LandsOnPrevEntry verifies Up after completing the
+// highlighted untimed entry lands on the entry directly above it.
+func TestCursorUp_AfterComplete_LandsOnPrevEntry(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(3)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", TaskId: 6},
+		{Id: 3, Name: "C", Completed: true, TaskId: 7}, // pending complete, lingering, at cursor
+	}
+	m := buildCompleteTestModel(fc, entries, 2)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressKeyStr(m, "k")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 1 || m2.plan.entries[1].Id != 2 {
+		t.Fatalf("expected entries [A, B] after drop, got %+v", m2.plan.entries)
+	}
+	if m2.plan.cursor != 1 || m2.plan.entries[m2.plan.cursor].Id != 2 {
+		t.Errorf("cursor Up after complete: expected to land on entry B (id 2), got cursor=%d entries=%+v", m2.plan.cursor, m2.plan.entries)
+	}
+}
+
 // TestPlanPrevDay_ClearsPendingComplete verifies that day navigation clears pendingComplete.
 func TestPlanPrevDay_ClearsPendingComplete(t *testing.T) {
 	fc := &fakePlanClient{}
@@ -221,6 +291,109 @@ func TestUncomplete_EntryAppearsAfterReload(t *testing.T) {
 	}
 	if !found {
 		t.Error("reopened entry (Completed=false) should appear in displayed plan")
+	}
+}
+
+// TestFindPlanCursor_NotFoundReturnsNegativeOne verifies that findPlanCursor
+// signals a missing id with -1 rather than teleporting the cursor to the top
+// of the list.
+func TestFindPlanCursor_NotFoundReturnsNegativeOne(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A"},
+		{Id: 2, Name: "B"},
+	}
+	if got := findPlanCursor(entries, 99); got != -1 {
+		t.Errorf("findPlanCursor: want -1 for missing id, got %d", got)
+	}
+	if got := findPlanCursor(entries, 1); got != 0 {
+		t.Errorf("findPlanCursor: want 0 for entry at index 0, got %d", got)
+	}
+}
+
+// TestCursorDown_TargetFilteredOut_PreservesCursor verifies that when Down's
+// target entry gets filtered out by the same keypress (e.g. it was the
+// pending-complete entry and something else also drops it), the cursor is
+// clamped rather than reset to 0.
+func TestCursorDown_TargetFilteredOut_PreservesCursor(t *testing.T) {
+	fc := &fakePlanClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6}, // will be filtered out
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	// No pendingComplete set: entry 2 is dropped by the very first
+	// displayedPlanEntries(nil) call inside the Down handler itself.
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 1 || m2.plan.entries[1].Id != 3 {
+		t.Fatalf("expected entries [A, C] after drop, got %+v", m2.plan.entries)
+	}
+	// Target (id 2) is gone; cursor should clamp to a valid index, not jump to 0
+	// in a way that silently relands on A when the user meant to move down.
+	if m2.plan.cursor < 0 || m2.plan.cursor >= len(m2.plan.entries) {
+		t.Fatalf("cursor out of range: %d", m2.plan.cursor)
+	}
+}
+
+// TestUncomplete_SurvivesNavBeforeRefresh verifies that un-completing an
+// untimed entry keeps it visible across a subsequent nav keypress, even
+// before the UncompleteTask refresh lands (regression: displayedPlanEntries
+// became unconditional on nav keys, dropping the entry while it was still
+// locally marked Completed).
+func TestUncomplete_SurvivesNavBeforeRefresh(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(2)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6},
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	tc := &fakeTaskClient{}
+	m := buildCompleteTestModel(fc, entries, 1) // cursor on entry B
+	m.client = tc
+	m.plan.pendingComplete = &pending
+
+	// Un-complete B via space.
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m2.plan.pendingComplete != nil {
+		t.Fatalf("expected pendingComplete cleared, got %v", *m2.plan.pendingComplete)
+	}
+
+	// Before the UncompleteTask refresh lands, press Down: B must still be
+	// visible (its local Completed flag was flipped optimistically).
+	m3, _ := pressKeyStr(m2, "j")
+	found := false
+	for _, e := range m3.plan.entries {
+		if e.Id == 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("un-completed entry should remain visible across a nav keypress before the refresh lands")
+	}
+}
+
+// TestUncomplete_SingleEntryDay_SurvivesNavBeforeRefresh is the one-entry
+// variant: the list must not go empty while the refresh is in flight.
+func TestUncomplete_SingleEntryDay_SurvivesNavBeforeRefresh(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(5)
+	entries := []*planv1.PlanEntry{
+		{Id: 5, Name: "Only entry", Completed: true, TaskId: 10},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m2.plan.pendingComplete != nil {
+		t.Fatalf("expected pendingComplete cleared, got %v", *m2.plan.pendingComplete)
+	}
+
+	m3, _ := pressKeyStr(m2, "j")
+	if len(m3.plan.entries) != 1 {
+		t.Fatalf("expected the single entry to remain visible, got %+v", m3.plan.entries)
 	}
 }
 
