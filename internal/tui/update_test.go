@@ -819,7 +819,9 @@ type fakeTaskClient struct {
 	// filterErr, if non-nil, is returned by FilterTasks.
 	filterErr error
 	// createTaskID is the ID returned for the newly created task.
-	createTaskID int64
+	createTaskID       int64
+	lastSetEstimateReq *taskv1.SetEstimateRequest // last request received by SetEstimate
+	setEstimateErr     error                      // if non-nil, SetEstimate returns this error
 }
 
 func (f *fakeTaskClient) UpdateTask(_ context.Context, req *connect.Request[taskv1.UpdateTaskRequest]) (*connect.Response[taskv1.UpdateTaskResponse], error) {
@@ -878,6 +880,14 @@ func (f *fakeTaskClient) SetTaskGoal(_ context.Context, req *connect.Request[tas
 		return nil, f.setTaskGoalErr
 	}
 	return connect.NewResponse(&taskv1.SetTaskGoalResponse{Task: &taskv1.Task{Id: req.Msg.TaskId}}), nil
+}
+
+func (f *fakeTaskClient) SetEstimate(_ context.Context, req *connect.Request[taskv1.SetEstimateRequest]) (*connect.Response[taskv1.SetEstimateResponse], error) {
+	f.lastSetEstimateReq = req.Msg
+	if f.setEstimateErr != nil {
+		return nil, f.setEstimateErr
+	}
+	return connect.NewResponse(&taskv1.SetEstimateResponse{Task: &taskv1.Task{Id: req.Msg.TaskId, Estimate: req.Msg.Estimate}}), nil
 }
 
 func (f *fakeTaskClient) FilterTasks(_ context.Context, req *connect.Request[taskv1.FilterTasksRequest]) (*connect.Response[taskv1.FilterTasksResponse], error) {

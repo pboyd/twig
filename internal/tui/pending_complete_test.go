@@ -294,6 +294,109 @@ func TestUncomplete_EntryAppearsAfterReload(t *testing.T) {
 	}
 }
 
+// TestFindPlanCursor_NotFoundReturnsNegativeOne verifies that findPlanCursor
+// signals a missing id with -1 rather than teleporting the cursor to the top
+// of the list.
+func TestFindPlanCursor_NotFoundReturnsNegativeOne(t *testing.T) {
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A"},
+		{Id: 2, Name: "B"},
+	}
+	if got := findPlanCursor(entries, 99); got != -1 {
+		t.Errorf("findPlanCursor: want -1 for missing id, got %d", got)
+	}
+	if got := findPlanCursor(entries, 1); got != 0 {
+		t.Errorf("findPlanCursor: want 0 for entry at index 0, got %d", got)
+	}
+}
+
+// TestCursorDown_TargetFilteredOut_PreservesCursor verifies that when Down's
+// target entry gets filtered out by the same keypress (e.g. it was the
+// pending-complete entry and something else also drops it), the cursor is
+// clamped rather than reset to 0.
+func TestCursorDown_TargetFilteredOut_PreservesCursor(t *testing.T) {
+	fc := &fakePlanClient{}
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6}, // will be filtered out
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	// No pendingComplete set: entry 2 is dropped by the very first
+	// displayedPlanEntries(nil) call inside the Down handler itself.
+
+	m2, _ := pressKeyStr(m, "j")
+
+	if len(m2.plan.entries) != 2 || m2.plan.entries[0].Id != 1 || m2.plan.entries[1].Id != 3 {
+		t.Fatalf("expected entries [A, C] after drop, got %+v", m2.plan.entries)
+	}
+	// Target (id 2) is gone; cursor should clamp to a valid index, not jump to 0
+	// in a way that silently relands on A when the user meant to move down.
+	if m2.plan.cursor < 0 || m2.plan.cursor >= len(m2.plan.entries) {
+		t.Fatalf("cursor out of range: %d", m2.plan.cursor)
+	}
+}
+
+// TestUncomplete_SurvivesNavBeforeRefresh verifies that un-completing an
+// untimed entry keeps it visible across a subsequent nav keypress, even
+// before the UncompleteTask refresh lands (regression: displayedPlanEntries
+// became unconditional on nav keys, dropping the entry while it was still
+// locally marked Completed).
+func TestUncomplete_SurvivesNavBeforeRefresh(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(2)
+	entries := []*planv1.PlanEntry{
+		{Id: 1, Name: "A", TaskId: 5},
+		{Id: 2, Name: "B", Completed: true, TaskId: 6},
+		{Id: 3, Name: "C", TaskId: 7},
+	}
+	tc := &fakeTaskClient{}
+	m := buildCompleteTestModel(fc, entries, 1) // cursor on entry B
+	m.client = tc
+	m.plan.pendingComplete = &pending
+
+	// Un-complete B via space.
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m2.plan.pendingComplete != nil {
+		t.Fatalf("expected pendingComplete cleared, got %v", *m2.plan.pendingComplete)
+	}
+
+	// Before the UncompleteTask refresh lands, press Down: B must still be
+	// visible (its local Completed flag was flipped optimistically).
+	m3, _ := pressKeyStr(m2, "j")
+	found := false
+	for _, e := range m3.plan.entries {
+		if e.Id == 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("un-completed entry should remain visible across a nav keypress before the refresh lands")
+	}
+}
+
+// TestUncomplete_SingleEntryDay_SurvivesNavBeforeRefresh is the one-entry
+// variant: the list must not go empty while the refresh is in flight.
+func TestUncomplete_SingleEntryDay_SurvivesNavBeforeRefresh(t *testing.T) {
+	fc := &fakePlanClient{}
+	pending := int32(5)
+	entries := []*planv1.PlanEntry{
+		{Id: 5, Name: "Only entry", Completed: true, TaskId: 10},
+	}
+	m := buildCompleteTestModel(fc, entries, 0)
+	m.plan.pendingComplete = &pending
+
+	m2, _ := pressSpecialKey(m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if m2.plan.pendingComplete != nil {
+		t.Fatalf("expected pendingComplete cleared, got %v", *m2.plan.pendingComplete)
+	}
+
+	m3, _ := pressKeyStr(m2, "j")
+	if len(m3.plan.entries) != 1 {
+		t.Fatalf("expected the single entry to remain visible, got %+v", m3.plan.entries)
+	}
+}
+
 // TestPlanGoToTask_ClearsPendingComplete verifies go-to-task clears pendingComplete.
 func TestPlanGoToTask_ClearsPendingComplete(t *testing.T) {
 	fc := &fakePlanClient{}
