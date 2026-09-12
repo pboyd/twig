@@ -310,7 +310,14 @@ func ExportSetReportData(m *Model, data reportState) {
 
 // ExportNewGoalModel creates a Model in the Goals tab for unit tests.
 func ExportNewGoalModel(taskClient taskv1connect.TaskServiceClient, goals []*goalv1.Goal) Model {
-	m := newModel(taskClient, nil, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
+	return ExportNewGoalModelWithPlan(taskClient, nil, goals)
+}
+
+// ExportNewGoalModelWithPlan creates a Model in the Goals tab, wired with a
+// plan client, for unit tests that exercise plan-day scheduling from the
+// Goals tab's new-task form.
+func ExportNewGoalModelWithPlan(taskClient taskv1connect.TaskServiceClient, planClient planv1connect.PlanServiceClient, goals []*goalv1.Goal) Model {
+	m := newModel(taskClient, planClient, "", config.PomodoroConfig{}, config.PlanConfig{}, false, nil)
 	m.activeTab = tabGoals
 	m.goal.goals = goals
 	m.goal.loaded = true
